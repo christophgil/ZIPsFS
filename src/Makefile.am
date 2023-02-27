@@ -1,0 +1,4 @@
+bin_PROGRAMS = ZIPsFS
+ZIPsFS_SOURCES = ZIPsFS.c  ZIPsFS.h log.c log.h  params.h 
+AM_CFLAGS = @FUSE_CFLAGS@
+LDADD = @FUSE_LIBS@
