@@ -1,0 +1,5 @@
+// https://www.cs.cmu.edu/afs/cs/academic/class/15492-f07/www/pthreads.html#BASICS
+// /usr/include/pthread.h
+// /usr/include/fuse3/fuse.h   /local/filesystem/fuse-3.14.0/lib/fuse.c
+
+//  All the paths    are relative to the root of the mounted filesystem.
