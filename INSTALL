@@ -1,0 +1,5 @@
+Install libfuse3
+
+./configure
+cd src
+make
