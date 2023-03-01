@@ -99,7 +99,7 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_ZIPsFS_OBJECTS = ZIPsFS.$(OBJEXT) log.$(OBJEXT)
+am_ZIPsFS_OBJECTS = ZIPsFS.$(OBJEXT)
 ZIPsFS_OBJECTS = $(am_ZIPsFS_OBJECTS)
 ZIPsFS_LDADD = $(LDADD)
 ZIPsFS_DEPENDENCIES =
@@ -118,7 +118,7 @@ am__v_at_1 =
 DEFAULT_INCLUDES = -I.
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
-am__depfiles_remade = ./$(DEPDIR)/ZIPsFS.Po ./$(DEPDIR)/log.Po
+am__depfiles_remade = ./$(DEPDIR)/ZIPsFS.Po
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -255,8 +255,8 @@ target_alias =
 top_build_prefix = ../
 top_builddir = ..
 top_srcdir = ..
-ZIPsFS_SOURCES = ZIPsFS.c  ZIPsFS.h log.c log.h  params.h 
-AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -I/usr/include/fuse
+ZIPsFS_SOURCES = ZIPsFS.c  log.h
+AM_CFLAGS = -g3 -O0 -D_FILE_OFFSET_BITS=64 
 LDADD = -lfuse -pthread
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am
@@ -361,7 +361,6 @@ distclean-compile:
 	-rm -f *.tab.c
 
 include ./$(DEPDIR)/ZIPsFS.Po # am--include-marker
-include ./$(DEPDIR)/log.Po # am--include-marker
 
 $(am__depfiles_remade):
 	@$(MKDIR_P) $(@D)
@@ -511,7 +510,6 @@ clean-am: clean-binPROGRAMS clean-generic mostlyclean-am
 
 distclean: distclean-am
 		-rm -f ./$(DEPDIR)/ZIPsFS.Po
-	-rm -f ./$(DEPDIR)/log.Po
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-hdr distclean-tags
@@ -558,7 +556,6 @@ installcheck-am:
 
 maintainer-clean: maintainer-clean-am
 		-rm -f ./$(DEPDIR)/ZIPsFS.Po
-	-rm -f ./$(DEPDIR)/log.Po
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 
