@@ -18,6 +18,6 @@ ulimit -c unlimited
 
 
 sudo umount ~/test/fuse/mnt/
-/home/cgille/git_projects/ZIPsFS/src/ZIPsFS  -f ~/test/fuse/rootdir_writable/ ~/test/fuse/root{1,2,3}  ~/test/fuse/mnt
+/home/cgille/git_projects/ZIPsFS/src/ZIPsFS  -f  ~/test/fuse/root_*  ~/test/fuse/mnt
 
 ls -l core 2>/dev/null
