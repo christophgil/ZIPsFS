@@ -182,8 +182,8 @@ ECHO_N = -n
 ECHO_T = 
 EGREP = /usr/bin/grep -E
 EXEEXT = 
-FUSE_CFLAGS = -D_FILE_OFFSET_BITS=64 -I/usr/include/fuse
-FUSE_LIBS = -lfuse -pthread
+FUSE_CFLAGS = -I/usr/local/include/fuse3
+FUSE_LIBS = -L/usr/local/lib/x86_64-linux-gnu -lfuse3 -lpthread
 GREP = /usr/bin/grep
 INSTALL = /usr/bin/install -c
 INSTALL_DATA = ${INSTALL} -m 644
@@ -193,6 +193,8 @@ INSTALL_STRIP_PROGRAM = $(install_sh) -c -s
 LDFLAGS = 
 LIBOBJS = 
 LIBS = 
+LIBZIP_CFLAGS = -I/usr/local/include
+LIBZIP_LIBS = -L/usr/local/lib -lzip
 LTLIBOBJS = 
 MAKEINFO = ${SHELL} /home/cgille/git_projects/ZIPsFS/missing makeinfo
 MKDIR_P = /usr/bin/mkdir -p
@@ -256,8 +258,8 @@ top_build_prefix = ../
 top_builddir = ..
 top_srcdir = ..
 ZIPsFS_SOURCES = ZIPsFS.c  log.h
-AM_CFLAGS = -g3 -O0 -D_FILE_OFFSET_BITS=64 
-LDADD = -lfuse -pthread
+LDADD = -L/usr/local/lib/x86_64-linux-gnu -lfuse3 -lpthread -L/usr/local/lib -lzip
+AM_CFLAGS = -I/usr/local/include/fuse3 -g3 -O0 -D_FILE_OFFSET_BITS=64 
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am
 

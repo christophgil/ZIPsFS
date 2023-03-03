@@ -626,6 +626,8 @@ ac_subst_vars='am__EXEEXT_FALSE
 am__EXEEXT_TRUE
 LTLIBOBJS
 LIBOBJS
+LIBZIP_LIBS
+LIBZIP_CFLAGS
 FUSE_LIBS
 FUSE_CFLAGS
 PKG_CONFIG_LIBDIR
@@ -736,7 +738,9 @@ PKG_CONFIG
 PKG_CONFIG_PATH
 PKG_CONFIG_LIBDIR
 FUSE_CFLAGS
-FUSE_LIBS'
+FUSE_LIBS
+LIBZIP_CFLAGS
+LIBZIP_LIBS'
 
 
 # Initialize some variables set by options.
@@ -1385,6 +1389,9 @@ Some influential environment variables:
               path overriding pkg-config's built-in search path
   FUSE_CFLAGS C compiler flags for FUSE, overriding pkg-config
   FUSE_LIBS   linker flags for FUSE, overriding pkg-config
+  LIBZIP_CFLAGS
+              C compiler flags for LIBZIP, overriding pkg-config
+  LIBZIP_LIBS linker flags for LIBZIP, overriding pkg-config
 
 Use these variables to override the choices made by `configure' or to help
 it to find libraries and programs with nonstandard names/locations.
@@ -4530,12 +4537,12 @@ if test -n "$FUSE_CFLAGS"; then
     pkg_cv_FUSE_CFLAGS="$FUSE_CFLAGS"
  elif test -n "$PKG_CONFIG"; then
     if test -n "$PKG_CONFIG" && \
-    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"fuse\""; } >&5
-  ($PKG_CONFIG --exists --print-errors "fuse") 2>&5
+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"fuse3\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "fuse3") 2>&5
   ac_status=$?
   $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
   test $ac_status = 0; }; then
-  pkg_cv_FUSE_CFLAGS=`$PKG_CONFIG --cflags "fuse" 2>/dev/null`
+  pkg_cv_FUSE_CFLAGS=`$PKG_CONFIG --cflags "fuse3" 2>/dev/null`
 		      test "x$?" != "x0" && pkg_failed=yes
 else
   pkg_failed=yes
@@ -4547,12 +4554,12 @@ if test -n "$FUSE_LIBS"; then
     pkg_cv_FUSE_LIBS="$FUSE_LIBS"
  elif test -n "$PKG_CONFIG"; then
     if test -n "$PKG_CONFIG" && \
-    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"fuse\""; } >&5
-  ($PKG_CONFIG --exists --print-errors "fuse") 2>&5
+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"fuse3\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "fuse3") 2>&5
   ac_status=$?
   $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
   test $ac_status = 0; }; then
-  pkg_cv_FUSE_LIBS=`$PKG_CONFIG --libs "fuse" 2>/dev/null`
+  pkg_cv_FUSE_LIBS=`$PKG_CONFIG --libs "fuse3" 2>/dev/null`
 		      test "x$?" != "x0" && pkg_failed=yes
 else
   pkg_failed=yes
@@ -4573,14 +4580,14 @@ else
         _pkg_short_errors_supported=no
 fi
         if test $_pkg_short_errors_supported = yes; then
-	        FUSE_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "fuse" 2>&1`
+	        FUSE_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "fuse3" 2>&1`
         else
-	        FUSE_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "fuse" 2>&1`
+	        FUSE_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "fuse3" 2>&1`
         fi
 	# Put the nasty error message in config.log where it belongs
 	echo "$FUSE_PKG_ERRORS" >&5
 
-	as_fn_error $? "Package requirements (fuse) were not met:
+	as_fn_error $? "Package requirements (fuse3) were not met:
 
 $FUSE_PKG_ERRORS
 
@@ -4608,6 +4615,97 @@ See \`config.log' for more details" "$LINENO" 5; }
 else
 	FUSE_CFLAGS=$pkg_cv_FUSE_CFLAGS
 	FUSE_LIBS=$pkg_cv_FUSE_LIBS
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+fi
+
+pkg_failed=no
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for LIBZIP" >&5
+$as_echo_n "checking for LIBZIP... " >&6; }
+
+if test -n "$LIBZIP_CFLAGS"; then
+    pkg_cv_LIBZIP_CFLAGS="$LIBZIP_CFLAGS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"libzip\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "libzip") 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_LIBZIP_CFLAGS=`$PKG_CONFIG --cflags "libzip" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+if test -n "$LIBZIP_LIBS"; then
+    pkg_cv_LIBZIP_LIBS="$LIBZIP_LIBS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"libzip\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "libzip") 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_LIBZIP_LIBS=`$PKG_CONFIG --libs "libzip" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+
+
+
+if test $pkg_failed = yes; then
+   	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+if $PKG_CONFIG --atleast-pkgconfig-version 0.20; then
+        _pkg_short_errors_supported=yes
+else
+        _pkg_short_errors_supported=no
+fi
+        if test $_pkg_short_errors_supported = yes; then
+	        LIBZIP_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "libzip" 2>&1`
+        else
+	        LIBZIP_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "libzip" 2>&1`
+        fi
+	# Put the nasty error message in config.log where it belongs
+	echo "$LIBZIP_PKG_ERRORS" >&5
+
+	as_fn_error $? "Package requirements (libzip) were not met:
+
+$LIBZIP_PKG_ERRORS
+
+Consider adjusting the PKG_CONFIG_PATH environment variable if you
+installed software in a non-standard prefix.
+
+Alternatively, you may set the environment variables LIBZIP_CFLAGS
+and LIBZIP_LIBS to avoid the need to call pkg-config.
+See the pkg-config man page for more details." "$LINENO" 5
+elif test $pkg_failed = untried; then
+     	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+	{ { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
+$as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
+as_fn_error $? "The pkg-config script could not be found or is too old.  Make sure it
+is in your PATH or set the PKG_CONFIG environment variable to the full
+path to pkg-config.
+
+Alternatively, you may set the environment variables LIBZIP_CFLAGS
+and LIBZIP_LIBS to avoid the need to call pkg-config.
+See the pkg-config man page for more details.
+
+To get pkg-config, see <http://pkg-config.freedesktop.org/>.
+See \`config.log' for more details" "$LINENO" 5; }
+else
+	LIBZIP_CFLAGS=$pkg_cv_LIBZIP_CFLAGS
+	LIBZIP_LIBS=$pkg_cv_LIBZIP_LIBS
         { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
 

@@ -1,62 +1,154 @@
-#include "ZIPsFS.h"
-#include "config.h"
-#include "params.h"
-#include <ctype.h>
-#include <dirent.h>
-#include <pthread.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <fuse.h>
-#include <libgen.h>
-#include <limits.h>
+/*
+  FUSE: Filesystem in Userspace
+  Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
+  Copyright (C) 2011       Sebastian Pipping <sebastian@pipping.org>
+  ZIPsFS
+  Copyright (C) 2023   christoph Gille
+  This program can be distributed under the terms of the GNU GPLv2.
+*/
+#define FUSE_USE_VERSION 31
+#define _GNU_SOURCE
+#ifdef linux
+/* For pread()/pwrite()/utimensat() */
+#define _XOPEN_SOURCE 700
+#endif
 #include <stdlib.h>
+#include "config.h"
+#include <fuse.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
-
-#ifdef HAVE_SYS_XATTR_H
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <pthread.h>
+#include <dirent.h>
+#include <errno.h>
+#ifdef __FreeBSD__
+#include <sys/socket.h>
+#include <sys/un.h>
+#endif
+#include <sys/time.h>
+#ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
 #endif
+#include <fuse.h>
+#include <zip.h>
 
+// https://android.googlesource.com/kernel/lk/+/dima/for-travis/include/errno.h
+///////////////////////////////////////////////////////////
+//
+// utils
+#define DEBUG_NOW 1
+#define MAX_PATHLEN 512
+struct zip_path{
+  int path_capacity;
+  char *path;
+  char *zipfile;
+  struct zip_stat zstat;
+  struct zip *zarchive;
+};
+unsigned int my_strlen(const char *s){ return !s?0:strnlen(s,MAX_PATHLEN);}
+void prints(char *s){ if (s) fputs(s,stdout);}
+static int last_slash(const char *path){
+  int i;
+  for(i=my_strlen(path);--i>=0;){
+    if (path[i]=='/') return i;
+  }
+  return -1;
+}
+int pathlen_ignore_trailing_slash(const char *p){
+  int n=my_strlen(p);
+  if (n && p[n-1]=='/') n--;
+  return n;
+}
+int is_regular_file(const char *path){
+  struct stat path_stat;
+  stat(path,&path_stat);
+  return S_ISREG(path_stat.st_mode);
+}
+int is_dir(const char *path){
+  struct stat path_stat;
+  stat(path,&path_stat);
+  return S_ISDIR(path_stat.st_mode);
+}
+static void recursive_mkdir(char *path) {
+  int n=my_strlen(path);
+  if (n<2) return;
+  char *p=path+n-1;
+  int res=0;
+  if (*p=='/') *p=0;
+  for (p=path+1;*p;p++){
+    if (*p=='/') {
+      *p=0;
+      mkdir(path,S_IRWXU);
+      *p='/';
+    }
+  }
+  mkdir(path,S_IRWXU);
+}
 #include "log.h"
+int exceeds_max_path(int need_len,const char *path){
+  if (need_len>MAX_PATHLEN){
+    log_warn("Path length=%d>MAX_PATHLEN=%d  %s \n"ANSI_RESET,need_len,MAX_PATHLEN,path);
+    return ENAMETOOLONG;
+  }
+  return 0;
+}
 
+void my_zip_close(struct zip_path *zpath){
+  struct zip *z=zpath->zarchive;
+  if (z && zip_close(z)==-1) log_zip_path(ANSI_FG_RED"Can't close zip archive'/n"ANSI_RESET,*zpath);
+  zpath->zarchive=NULL;
+}
+#define NEW_ZIP_PATH() struct zip_path zpath={.path=NULL,.path_capacity=0,.zarchive=NULL,.zipfile=NULL}
 
-// https://www.cs.cmu.edu/afs/cs/academic/class/15492-f07/www/pthreads.html#BASICS
-// /usr/include/pthread.h
-// /usr/include/fuse3/fuse.h   /local/filesystem/fuse-3.14.0/lib/fuse.c
+#define FIND_REAL()  NEW_ZIP_PATH();  res=real_file(&zpath,path)
+void ensure_path_capacity(struct zip_path *zpath,int n){
+  if (n>=zpath->path_capacity){
+    free(zpath->path);
+    zpath->path=malloc(zpath->path_capacity=n+10);
+  }
+}
+void destroy_zip_path(struct zip_path *zpath){
+  my_zip_close(zpath);
+  free(zpath->zipfile);  zpath->zipfile=NULL;
+  free(zpath->path);     zpath->path=NULL;
+}
 
-//  All the paths    are relative to the root of the mounted filesystem.
-
+///////////////////////////////////////////////////////////
+//
+// When the same file is accessed from two different programs,
+// We see different fi->fh
+// Wee use this as a key to obtain a data structure "stream_data"
+//
+// One might think that : fuse_get_context()->private_data serves the same purpose.
+// However, it returns always the same pointer address
+//
+pthread_mutex_t _mutex_dir, _mutex;
 int _stream_data_n=0;
 struct stream_data{
   long fh,offset;
   FILE *file;
-
 };
-#define  STREAM_DATA_MAX 1000
+const struct stream_data  STREAM_DATA_EMPTY={.fh=0,.offset=0,.file=NULL};
+void stream_data_dispose(struct stream_data *d){
+}
+#define STREAM_DATA_MAX 1000
 #define STREAM_DATA_GET 0
 #define STREAM_DATA_CREATE 1
 #define STREAM_DATA_RELEASE 2
-
-
-// Useless: fuse_get_context()->private_data same address for different file accesses
-const struct stream_data  STREAM_DATA_EMPTY={.fh=0,.offset=0,.file=NULL};
 struct stream_data _stream_data[STREAM_DATA_MAX];
-pthread_mutex_t _mutex;
-
-struct stream_data stream_data(int op,struct fuse_file_info *fi){
-
+static struct stream_data stream_data(int op,struct fuse_file_info *fi){
   int i,j;
   uint64_t fh=fi->fh;
-  printf(ANSI_FG_GRAY" stream_data %d  %lu\n"ANSI_RESET,op,fh);
+  log_msg(ANSI_FG_GRAY" stream_data %d  %lu\n"ANSI_RESET,op,fh);
   for(i=_stream_data_n;--i>=0;){
-    printf(ANSI_FG_GRAY"fh=%lu  [%d].fh=%lu "ANSI_RESET,fh, i,_stream_data[i].fh  );
-    if (fh==_stream_data[i].fh)  printf("GREEN_SUCCESS"); else  printf("RED_FAILED");
+    log_msg(ANSI_FG_GRAY"fh=%lu  [%d].fh=%lu "ANSI_RESET,fh,i,_stream_data[i].fh  );
+    if (fh==_stream_data[i].fh) log_succes(" "); else log_failed(" ");
     if (fh==_stream_data[i].fh){
       struct stream_data d=_stream_data[i];
       if(op==STREAM_DATA_RELEASE){
-        printf(ANSI_FG_RED"Release stream_data %lu\n"ANSI_RESET,fh);
+        log_msg(ANSI_FG_RED"Release stream_data %lu\n"ANSI_RESET,fh);
         for(j=i+1;j<_stream_data_n;j++) _stream_data[j-1]=_stream_data[j];
         _stream_data_n--;
       }
@@ -64,799 +156,486 @@ struct stream_data stream_data(int op,struct fuse_file_info *fi){
     }
   }
   if (op==STREAM_DATA_CREATE && _stream_data_n<STREAM_DATA_MAX){
-    printf(ANSI_FG_GREEN"New stream_data %lu\n"ANSI_RESET,fh);
+    log_msg(ANSI_FG_GREEN"New stream_data %lu\n"ANSI_RESET,fh);
     _stream_data[_stream_data_n]=STREAM_DATA_EMPTY;
     _stream_data[_stream_data_n].fh=fh;;
     return _stream_data[_stream_data_n++];
   }
   return STREAM_DATA_EMPTY;
 }
-
 #define stream_data_synchronized(op,fi) pthread_mutex_lock(&_mutex); struct stream_data d=stream_data(op,fi);  pthread_mutex_unlock(&_mutex);
-
-
-
-
-
-
-
-
-static void bb_fullpath(char fpath[PATH_MAX], const char *path){
-  strcpy(fpath, BB_DATA->rootdir);
-  strncat(fpath,path, PATH_MAX); // ridiculously long paths will
-  // break here
-
-  //log_msg("    bb_fullpath:  rootdir=\"%s\",path=\"%s\",fpath=\"%s\"\n",BB_DATA->rootdir,path, fpath);
-}
-
 ///////////////////////////////////////////////////////////
 //
-// Prototypes for all these functions, and the C-style comments,
-// come from /usr/include/fuse.h
+// The root. They are specified as program arguments
+// The _root[0] is read/write, and can be empty string
+// The others are read-only
 //
-/** Get file attributes.
- *
- * Similar to stat().  The 'st_dev' and 'st_blksize' fields are
- * ignored.  The 'st_ino' field is ignored except if the 'use_ino'
- * mount option is given.
- */
-int bb_getattr(const char *path, struct stat *statbuf){
-  int retstat;
-  char fpath[PATH_MAX];
+#define ROOTS 9
+#define ROOT_WRITABLE (1<<1)
+#define ROOT_REMOTE (1<<2)
+int _root_n=0, _root_feature[ROOTS];
+char *_root[ROOTS];
 
-  ////log_msg("\nbb_getattr(path=\"%s\",statbuf=0x%08x)\n",path,statbuf);
-  bb_fullpath(fpath,path);
-
-  retstat=log_syscall("lstat", lstat(fpath,statbuf),0);
-
-  //log_stat(statbuf);
-
-  return retstat;
-}
-
-/** Read the target of a symbolic link
- *
- * The buffer should be filled with a null terminated string.  The
- * buffer size argument includes the space for the terminating
- * null character.  If the linkname is too long to fit in the
- * buffer, it should be truncated.  The return value should be 0
- * for success.
- */
-// Note the system readlink() will truncate and lose the terminating
-// null.  So, the size passed to to the system readlink() must be one
-// less than the size passed to bb_readlink()
-// bb_readlink() code by Bernardo F Costa (thanks!)
-int bb_readlink(const char *path, char *link, size_t size){
-  int retstat;
-  char fpath[PATH_MAX];
-
-  //log_msg("\nbb_readlink(path=\"%s\",link=\"%s\",size=%d)\n",path,link, size);
-  bb_fullpath(fpath,path);
-
-  retstat=log_syscall("readlink", readlink(fpath,link, size - 1),0);
-  if (retstat >= 0) {
-    link[retstat]='\0';
-    retstat=0;
-    //log_msg("    link=\"%s\"\n",link);
+////////////////////////////////////////////////////////////
+//
+// Iterate over all _root to construct the real path;
+// https://android.googlesource.com/kernel/lk/+/dima/for-travis/include/errno.h
+static int real_file(struct zip_path *zpath, const char *path){
+  log_entered_function("real_file %s\n",path);
+  int i,res=ENOENT;
+  for(i=0;i<_root_n;i++){
+    char *r=_root[i];
+    if (*r==0) continue;
+    if (*path=='/' && path[1]==0){
+      ensure_path_capacity(zpath,my_strlen(r));
+      strcpy(zpath->path,r);
+      return 0;
+    }
+    ensure_path_capacity(zpath,my_strlen(path)+my_strlen(r)+1);
+    strcpy(zpath->path,r);
+    strcat(zpath->path,path);
+    int acc=access(zpath->path,R_OK);
+    //log_debug_now("path=%s   Access(%s)=%d\n",path,zpath->path,acc);
+    if (!acc){
+      res=0;
+      break;
+    }
   }
-
-  return retstat;
+  if (res) log_msg("_real_file %s res=%d\n",path,res);
+  else log_msg("real_file %s ->%s \n",path,zpath->path);
+  log_exited_function("real_file\n");
+  return res;
+}
+static int mk_parentdirs_create_real_path(char *fpath, const char *path){
+  log_entered_function("mk_parentdirs_create_real_path %s\n",path);
+  int res=0;
+  int slash=last_slash(path);
+  *fpath=0;
+  //log_entered_function(" mk_parentdirs_create_real_path(%s) slash=%d  \n  ",path,slash);
+  if (slash<0){
+    log_error("Should not happen slash<0 for %s\n",path);
+    res=ENOENT;
+  }else if (slash){
+    char *dir=strdup(path);
+    dir[slash]=0;
+    log_debug_now("dir=%s\n",dir);
+    NEW_ZIP_PATH();
+    if (real_file(&zpath,dir)){
+      res=ENOENT;
+    }else if (!is_dir(fpath)){
+      res=ENOTDIR;
+    }else if (!(res=exceeds_max_path(my_strlen(_root[0])+my_strlen(path)+2,path))){
+      strcpy(fpath,_root[0]);
+      strcat(fpath,dir);
+      recursive_mkdir(fpath);
+      if(!is_dir(fpath)) res=ENOENT;
+    }
+    free(dir);
+  }
+  if(!res){
+    strcpy(fpath,_root[0]);
+    strcat(fpath,path);
+  }
+  log_debug_now(" mk_parentdirs_create_real_path  %s >> %s   %d\n",path, fpath,res);
+  return res;
+}
+static int real_path_readdir(int no_dots, struct zip_path zpath, void *buf, fuse_fill_dir_t filler){
+  char *path=zpath.path;
+  log_entered_function("real_path_readdir '%s;\n",path);
+  if (!path || !*path) return 0;
+  pthread_mutex_lock(&_mutex_dir);
+  int res=0;
+  DIR *dir=opendir(path);
+  if(dir==NULL){
+    perror("Unable to read directory");
+    res=ENOMEM;
+  }else{
+    struct dirent *de;
+    while((de=readdir(dir))){
+      char *fn=de->d_name;
+      if (!*fn) continue;
+      struct stat st;
+      memset(&st,0,sizeof(st));
+      st.st_ino=de->d_ino;
+      st.st_mode=de->d_type <<12;
+      if (no_dots && *fn=='.' && (!fn[1] || fn[1]=='.' && !fn[2])) continue;
+      //log_path(" while readdir",fn);
+      int fill_dir_plus=0;
+      if (filler(buf,fn,&st,0,fill_dir_plus)) { res=ENOMEM; break; }
+    }
+    closedir(dir);
+  }
+  pthread_mutex_unlock(&_mutex_dir);
+  log_exited_function("real_path_readdir %d\n",res);
+  return res;
 }
 
-/** Create a file node
- *
- * There is no create() operation, mknod() will be called for
- * creation of all non-directory, non-symlink nodes.
- */
-// shouldn't that comment be "if" there is no.... ?
-int bb_mknod(const char *path, mode_t mode, dev_t dev){
-  int retstat;
-  char fpath[PATH_MAX];
-  //log_msg("\nbb_mknod(path=\"%s\",mode=0%3o,dev=%lld)\n",path, mode,dev);
-  bb_fullpath(fpath,path);
-  if (S_ISREG(mode)) {
-    retstat=log_syscall("open", open(fpath, O_CREAT | O_EXCL | O_WRONLY,mode),0);
-    if (retstat >= 0)
-      retstat=log_syscall("close", close(retstat),0);
-  } else
-    if (S_ISFIFO(mode))
-      retstat=log_syscall("mkfifo", mkfifo(fpath,mode),0);
-    else
-      retstat=log_syscall("mknod", mknod(fpath,mode, dev),0);
+// ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+//
 
-  return retstat;
+int contained_zip_file_path(const char *path, char *append[1]){
+  int len=my_strlen(path);
+  char *p,*b=(char*)path;
+  append[0]="";
+  for(int i=4;i<=len;i++){
+    p=(char*)path+i;
+    if (*p=='/') b=p+1;
+    if (!*p || *p=='/'){
+      if (*b=='2' && b[1]=='0' && p[i-4]=='.' && p[i-3]|32=='z' && p[i-2]|32=='i' && p[i-1]|32=='p') return i;
+      if (p[i-2]=='.' && p[i-1]|32=='d') { *append=".Zip"; return i;}
+    }
+  }
+  return -1;
 }
 
-/** Create a directory */
-int bb_mkdir(const char *path, mode_t mode){
-  char fpath[PATH_MAX];
-
-  //log_msg("\nbb_mkdir(path=\"%s\",mode=0%3o)\n",path,mode);
-  bb_fullpath(fpath,path);
-
-  return log_syscall("mkdir", mkdir(fpath,mode),0);
+static int real_file_or_zipentry(struct zip_path *zpath, const char *path){
+  return real_file(zpath,path); // DEBUG_NOW
+  char *append[1];
+  int res=0,after_zip=contained_zip_file_path(path,append);
+  if (after_zip>0){
+    zpath->zipfile=malloc(after_zip+my_strlen(*append)+1);
+    strcat(strncpy(zpath->zipfile,path,after_zip),*append);
+    res=real_file(zpath,zpath->zipfile);
+    if (!res){
+      int err,found=0;
+      if (!(zpath->zarchive=zip_open(zpath->zipfile,0,&err))){
+        log_error("zip_open(%s)  %d\n",zpath->zipfile,err);
+      }else{
+        int i,len=my_strlen(path+after_zip+1);
+        for (i=zip_get_num_entries(zpath->zarchive,0);--i>=0;){
+          if (zip_stat_index(zpath->zarchive,i,0,&zpath->zstat)) continue;
+          if (len==pathlen_ignore_trailing_slash(zpath->zstat.name) && !strncpy((char*)zpath->zstat.name,path+after_zip+1,len)){
+            found=1;
+            break;
+          }
+        }
+        if (!found) {
+          my_zip_close(zpath);
+          zpath->zarchive=NULL;
+        }
+      }
+      log_zip_path("real_file_or_zipentry",*zpath);
+    }
+  }
+  return res;
 }
 
-/** Remove a file */
-int bb_unlink(const char *path){
-  char fpath[PATH_MAX];
+static void usage(){
+  log_msg("usage:  bbfs [FUSE and mount options] mountPoint\n");
+  abort();
+}
+static int fill_dir_plus=0;
+static void *xmp_init(struct fuse_conn_info *conn,struct fuse_config *cfg){
+  (void) conn;
+  cfg->use_ino=1;
+  /* Pick up changes from lower filesystem right away. This is
+     also necessary for better hardlink support. When the kernel
+     calls the unlink() handler, it does not know the inode of
+     the to-be-removed entry and can therefore not invalidate
+     the cache of the associated inode - resulting in an
+     incorrect st_nlink value being reported for any remaining
+     hardlinks to this inode. */
+  cfg->entry_timeout=0;
+  cfg->attr_timeout=0;
+  cfg->negative_timeout=0;
+  return NULL;
+}
+/////////////////////////////////////////////////
+//
+// Functions where Only single paths need to be  substituted
 
-  //log_msg("bb_unlink(path=\"%s\")\n",path);
-  bb_fullpath(fpath,path);
 
-  return log_syscall("unlink", unlink(fpath),0);
+
+static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi){
+  log_entered_function("xmp_getattr %s",path);
+  (void) fi;
+  int res;
+  log_debug_now("vor FIND_REAL \n");
+  FIND_REAL();
+  log_debug_now("nach FIND_REAL \n");
+  log_zip_path("xmp_getattr",zpath);
+  log_debug_now("nach log_zip_path \n");
+  if (zpath.path){
+
+    if(!res) res=lstat(zpath.path,stbuf);
+  }
+  destroy_zip_path(&zpath);
+  //log_msg("xmp_getattr   lstat(%s)=%d\n",zpath.path,res);
+  log_exited_function(" xmp_getattr res=%d\n",res);
+  return res==-1?-errno:-res;
+}
+static int xmp_access(const char *path, int mask){
+  log_entered_function("xmp_access %s",path);
+  int res;
+  FIND_REAL();
+  if (!res) res=access(zpath.path,mask);
+  destroy_zip_path(&zpath);
+  return res==-1?-errno:-res;
+}
+static int xmp_readlink(const char *path, char *buf, size_t size){
+  int res;
+  FIND_REAL();
+  if (!res && (res=readlink(zpath.path,buf,size-1))!=-1) buf[res]=0;
+  destroy_zip_path(&zpath);
+  return res==-1?-errno:-res;
+}
+static int xmp_unlink(const char *path){
+  int res;
+  FIND_REAL();
+  if (!res) res=unlink(zpath.path);
+  destroy_zip_path(&zpath);
+  return res==-1?-errno:-res;
+}
+static int xmp_rmdir(const char *path){
+  int res;
+  FIND_REAL();
+  if (!res) res=rmdir(zpath.path);
+  destroy_zip_path(&zpath);
+  return res==-1?-errno:-res;
+}
+static int xmp_open(const char *path, struct fuse_file_info *fi){
+  log_entered_function("xmp_open %s\n",path);
+  int res;
+  FIND_REAL();
+  if (!res) res=open(zpath.path,fi->flags);
+  destroy_zip_path(&zpath);
+  log_entered_function(" open(%s)=%d\n",zpath.path,res);
+  if (res==-1) return -errno;
+  fi->fh=res;
+  return 0;
+}
+static int xmp_truncate(const char *path, off_t size,struct fuse_file_info *fi){
+  log_entered_function("xmp_truncate %s\n",path);
+  int res;
+  if (fi!=NULL) res=ftruncate(fi->fh,size);
+  else{
+    FIND_REAL();
+    if (!res) res=truncate(zpath.path,size);
+    destroy_zip_path(&zpath);
+  }
+  return res==-1?-errno:-res;
+}
+static int xmp_statfs(const char *path, struct statvfs *stbuf){
+  log_entered_function("xmp_open %s\n",path);
+  int res;
+  FIND_REAL();
+  if (!res) res=statvfs(zpath.path,stbuf);
+  destroy_zip_path(&zpath);
+  return res==-1?-errno:-res;
 }
 
-/** Remove a directory */
-int bb_rmdir(const char *path){
-  char fpath[PATH_MAX];
-
-  //log_msg("bb_rmdir(path=\"%s\")\n",path);
-  bb_fullpath(fpath,path);
-
-  return log_syscall("rmdir", rmdir(fpath),0);
+/////////////////////////////////
+//
+// Readdir
+static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi,enum fuse_readdir_flags flags){
+  int res=0;
+  (void) offset;
+  (void) fi;
+  (void) flags;
+  FIND_REAL();
+  if(path[0]=='/' && !path[1]){
+    int no_dots=0;
+    for(int i=0;i<_root_n;i++){
+      strcpy(zpath.path,_root[i]);
+      real_path_readdir(no_dots++,zpath,buf,filler);
+    }
+    return 0;
+  }else{
+    res=real_path_readdir(0,zpath,buf,filler);
+  }
+  destroy_zip_path(&zpath);
+  return res;
 }
-
-/** Create a symbolic link */
-// The parameters here are a little bit confusing, but do correspond
-// to the symlink() system call.  The 'path' is where the link points,
-// while the 'link' is the link itself.  So we need to leave the path
-// unaltered, but insert the link into the mounted directory.
-int bb_symlink(const char *path, const char *link){
-  char flink[PATH_MAX];
-
-  //log_msg("\nbb_symlink(path=\"%s\",link=\"%s\")\n",path,link);
-  bb_fullpath(flink,link);
-
-  return log_syscall("symlink", symlink(path,flink),0);
+/////////////////////////////////
+//
+// Creating a new file object
+#define NEW_REAL_PATH() char cpath[MAX_PATHLEN];res=mk_parentdirs_create_real_path(cpath,create_path)
+static int xmp_mkdir(const char *create_path, mode_t mode){
+  log_entered_function("xmp_mkdir %s \n",create_path);
+  int res=0;
+  NEW_REAL_PATH();
+  if (!res){
+    res=mkdir(cpath,mode);
+    log_debug_now("mkdir(%s) = %d\n",cpath,res);
+    if (res==-1) res=errno;
+  }
+  return -res;
 }
-
-/** Rename a file */
-// both path and newpath are fs-relative
-int bb_rename(const char *path, const char *newpath){
-  char fpath[PATH_MAX];
-  char fnewpath[PATH_MAX];
-
-  //log_msg("\nbb_rename(fpath=\"%s\",newpath=\"%s\")\n",path,newpath);
-  bb_fullpath(fpath,path);
-  bb_fullpath(fnewpath,newpath);
-
-  return log_syscall("rename", rename(fpath,fnewpath),0);
+static int xmp_create(const char *create_path, mode_t mode,struct fuse_file_info *fi){
+  log_entered_function("xmp_create %s\n",create_path);
+  int res;
+  NEW_REAL_PATH();
+  if (!res){
+    res=open(cpath,fi->flags,mode);
+    if (res==-1) return -errno;
+    fi->fh=res;
+  }
+  return 0;
 }
-
-/** Create a hard link to a file */
-int bb_link(const char *path, const char *newpath){
-  char fpath[PATH_MAX], fnewpath[PATH_MAX];
-
-  //log_msg("\nbb_link(path=\"%s\",newpath=\"%s\")\n",path,newpath);
-  bb_fullpath(fpath,path);
-  bb_fullpath(fnewpath,newpath);
-
-  return log_syscall("link", link(fpath,fnewpath),0);
-}
-
-/** Change the permission bits of a file */
-int bb_chmod(const char *path, mode_t mode){
-  char fpath[PATH_MAX];
-
-  //log_msg("\nbb_chmod(fpath=\"%s\",mode=0%03o)\n",path,mode);
-  bb_fullpath(fpath,path);
-
-  return log_syscall("chmod", chmod(fpath,mode),0);
-}
-
-/** Change the owner and group of a file */
-int bb_chown(const char *path, uid_t uid, gid_t gid)
-
-{
-  char fpath[PATH_MAX];
-
-  //log_msg("\nbb_chown(path=\"%s\",uid=%d,gid=%d)\n",path,uid, gid);
-  bb_fullpath(fpath,path);
-
-  return log_syscall("chown", chown(fpath,uid, gid),0);
-}
-
-/** Change the size of a file */
-int bb_truncate(const char *path, off_t newsize){
-  char fpath[PATH_MAX];
-
-  //log_msg("\nbb_truncate(path=\"%s\",newsize=%lld)\n",path,newsize);
-  bb_fullpath(fpath,path);
-
-  return log_syscall("truncate", truncate(fpath,newsize),0);
-}
-
-/** Change the access and/or modification times of a file */
-/* note -- I'll want to change this as soon as 2.6 is in debian testing */
-int bb_utime(const char *path, struct utimbuf *ubuf){
-  char fpath[PATH_MAX];
-
-  //log_msg("\nbb_utime(path=\"%s\",ubuf=0x%08x)\n",        path,ubuf);
-  bb_fullpath(fpath,path);
-
-  return log_syscall("utime", utime(fpath,ubuf),0);
-}
-
-/** File open operation
- *
- * No creation, or truncation flags (O_CREAT,O_EXCL, O_TRUNC)
- * will be passed to open().  Open should check if the operation
- * is permitted for the given flags.  Optionally open may also
- * return an arbitrary filehandle in the fuse_file_info structure,
- * which will be passed to all file operations.
- *
- * Changed in version 2.2
- */
-int bb_open(const char *path, struct fuse_file_info *fi){
-  int retstat=0;
+static int xmp_write(const char *create_path, const char *buf, size_t size,off_t offset, struct fuse_file_info *fi){
   int fd;
-  char fpath[PATH_MAX];
-
-  //log_msg("\nbb_open(path\"%s\",fi=0x%08x)\n",path,fi);
-  bb_fullpath(fpath,path);
-
-  // if the open call succeeds, my retstat is the file descriptor,
-  // else it's -errno.  I'm making sure that in that case the saved
-  // file descriptor is exactly -1.
-  fd=log_syscall("open", open(fpath, fi->flags),0);
-
-  if (fd < 0) retstat=log_error("open");
-
-  fi->fh=fd;
-  stream_data_synchronized(STREAM_DATA_CREATE,fi);
-  //log_fi(fi);
-  return retstat;
+  int res;
+  (void) fi;
+  if(fi==NULL){
+    NEW_REAL_PATH();
+    if (res) return -res;
+    fd=open(cpath,O_WRONLY);
+  }else fd=fi->fh;
+  if (fd==-1) return -errno;
+  res=pwrite(fd,buf,size,offset);
+  if (res==-1) res=-errno;
+  if(fi==NULL) close(fd);
+  return res;
 }
-
-/** Read data from an open file
- *
- * Read should return exactly the number of bytes requested except
- * on EOF or error, otherwise the rest of the data will be
- * substituted with zeroes.  An exception to this is when the
- * 'direct_io' mount option is specified, in which case the return
- * value of the read system call will reflect the return value of
- * this operation.
- *
- * Changed in version 2.2
- */
-// I don't fully understand the documentation above -- it doesn't
-// match the documentation for the read() system call which says it
-// can return with anything up to the amount of data requested. nor
-// with the fusexmp code which returns the amount of data also
-// returned by read.
-int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi){
-  ////log_msg("\nbb_read(path=\"%s\",buf=0x%08x,size=%d,offset=%lld,fi=0x%08x)\n",path,buf, size,offset, fi);
-  // no need to get fpath on this one, since I work from fi->fh not the path
-  ////log_fi(fi);
-  stream_data_synchronized(0,fi);
-  int n=log_syscall("pread", pread(fi->fh,buf, size,offset),0);
-  usleep(1000*500);
-  return n;
+////////////////////////////////////////////////////////
+//
+// Two paths
+static int xmp_symlink(const char *target, const char *create_path){ // target,link
+  int res=0;
+  NEW_REAL_PATH();
+  if(!res){
+    res=symlink(target,cpath);
+    if (res==-1) return -errno;
+  }
+  return -res;
 }
+static int xmp_rename(const char *old_path, const char *neu_path, unsigned int flags){ // from,to
+  log_entered_function(" xmp_rename from=%s to=%s \n",old_path,neu_path);
+  if (flags) return -EINVAL;
+  char old[MAX_PATHLEN],neu[MAX_PATHLEN];
+  strcpy(old,_root[0]);
+  strcat(old,old_path);
 
-/** Write data to an open file
- *
- * Write should return exactly the number of bytes requested
- * except on error.  An exception to this is when the 'direct_io'
- * mount option is specified (see read operation).
- *
- * Changed in version 2.2
- */
-// As  with read(), the documentation above is inconsistent with the
-// documentation for the write() system call.
-int bb_write(const char *path, const char *buf, size_t size, off_t offset,struct fuse_file_info *fi){
-  int retstat=0;
+  strcpy(neu,_root[0]);
+  strcat(neu,neu_path);
+  int res=rename(old,neu);
+  if (res==-1) return -errno;
 
-  //log_msg("\nbb_write(path=\"%s\",buf=0x%08x,size=%d,offset=%lld,fi=0x%08x)\n",path,buf, size,offset, fi);
-  // no need to get fpath on this one, since I work from fi->fh not the path
-  //log_fi(fi);
-
-  return log_syscall("pwrite", pwrite(fi->fh,buf, size,offset),0);
+  return -res;
 }
-
-/** Get file system statistics
- *
- * The 'f_frsize', 'f_favail', 'f_fsid' and 'f_flag' fields are ignored
- *
- * Replaced 'struct statfs' parameter with 'struct statvfs' in
- * version 2.5
- */
-int bb_statfs(const char *path, struct statvfs *statv){
-  int retstat=0;
-  char fpath[PATH_MAX];
-
-  //log_msg("\nbb_statfs(path=\"%s\",statv=0x%08x)\n",path,statv);
-  bb_fullpath(fpath,path);
-
-  // get stats for underlying filesystem
-  retstat=log_syscall("statvfs", statvfs(fpath,statv),0);
-
-  //log_statvfs(statv);
-
-  return retstat;
+static int xmp_read(const char *path, char *buf, size_t size, off_t offset,struct fuse_file_info *fi){
+  int fd;
+  int res;
+  if(fi==NULL){
+    FIND_REAL();
+    fd=open(zpath.path,O_RDONLY);
+    destroy_zip_path(&zpath);
+  }else fd=fi->fh;
+  if (fd==-1) return -errno;
+  res=pread(fd,buf,size,offset);
+  if (res==-1) res=-errno;
+  if(fi==NULL) close(fd);
+  return res;
 }
-
-/** Possibly flush cached data
- *
- * BIG NOTE: This is not equivalent to fsync().  It's not a
- * request to sync dirty data.
- *
- * Flush is called on each close() of a file descriptor.  So if a
- * filesystem wants to return write errors in close() and the file
- * has cached dirty data, this is a good place to write back data
- * and return any errors.  Since many applications ignore close()
- * errors this is not always useful.
- *
- * NOTE: The flush() method may be called more than once for each
- * open().  This happens if more than one file descriptor refers
- * to an opened file due to dup(), dup2() or fork() calls.  It is
- * not possible to determine if a flush is final, so each flush
- * should be treated equally.  Multiple write-flush sequences are
- * relatively rare, so this shouldn't be a problem.
- *
- * Filesystems shouldn't assume that flush will always be called
- * after some writes, or that if will be called at all.
- *
- * Changed in version 2.2
- */
-// this is a no-op in BBFS.  It just logs the call and returns success
-int bb_flush(const char *path, struct fuse_file_info *fi){
-  //log_msg("\nbb_flush(path=\"%s\",fi=0x%08x)\n",path, fi);
-  // no need to get fpath on this one, since I work from fi->fh not the path
-  //log_fi(fi);
-
+static off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file_info *fi){
+  int fd;
+  off_t res;
+  if (fi==NULL){
+    FIND_REAL();
+    fd=open(zpath.path,O_RDONLY);
+    destroy_zip_path(&zpath);
+  }else fd=fi->fh;
+  if (fd==-1) return -errno;
+  res=lseek(fd,off,whence);
+  if (res==-1) res=-errno;
+  if (fi==NULL) close(fd);
+  return res;
+}
+/////////////////////////////////////////////////
+//
+// These are kept unchanged from passthrough example
+static int xmp_release(const char *path, struct fuse_file_info *fi){
+  log_entered_function("xmp_release %s\n",path);
+  (void) path;
+  close(fi->fh);
   return 0;
 }
 
-/** Release an open file
- *
- * Release is called when there are no more references to an open
- * file: all file descriptors are closed and all memory mappings
- * are unmapped.
- *
- * For every open() call there will be exactly one release() call
- * with the same flags and file descriptor.  It is possible to
- * have a file opened more than once, in which case only the last
- * release will mean, that no more reads/writes will happen on the
- * file.  The return value of release is ignored.
- *
- * Changed in version 2.2
- */
-int bb_release(const char *path, struct fuse_file_info *fi){
-  stream_data_synchronized(STREAM_DATA_RELEASE,fi);
-
-  //log_msg("\nbb_release(path=\"%s\",fi=0x%08x)\n",path,fi);
-  //log_fi(fi);
-
-  // We need to close the file.  Had we allocated any resources
-  // (buffers etc) we'd need to free them here as well.
-  return log_syscall("close", close(fi->fh),0);
-}
-
-/** Synchronize file contents
- *
- * If the datasync parameter is non-zero, then only the user data
- * should be flushed, not the meta data.
- *
- * Changed in version 2.2
- */
-int bb_fsync(const char *path, int datasync, struct fuse_file_info *fi){
-  //log_msg("\nbb_fsync(path=\"%s\",datasync=%d,fi=0x%08x)\n",path,datasync, fi);
-  //log_fi(fi);
-
-  // some unix-like systems (notably freebsd) don't have a datasync call
-#ifdef HAVE_FDATASYNC
-  if (datasync)
-    return log_syscall("fdatasync", fdatasync(fi->fh),0);
-  else
+static const struct fuse_operations xmp_oper={
+  .init=xmp_init,
+  .getattr=xmp_getattr,
+  .access=xmp_access,
+  .readlink=xmp_readlink,
+  .readdir=xmp_readdir,
+  .mknod=NULL,
+  .mkdir=xmp_mkdir,
+  .symlink=xmp_symlink,
+  .unlink=xmp_unlink,
+  .rmdir=xmp_rmdir,
+  .rename=xmp_rename,
+  .link=NULL, //xmp_link,
+  .chmod=NULL, //xmp_chmod,
+  .chown=NULL, //xmp_chown,
+  .truncate=xmp_truncate,
+#ifdef HAVE_UTIMENSAT
+  .utimens=NULL,//xmp_utimens,
 #endif
-    return log_syscall("fsync", fsync(fi->fh),0);
-}
-
-#ifdef HAVE_SYS_XATTR_H
-/** Note that my implementations of the various xattr functions use
-    the 'l-' versions of the functions (eg bb_setxattr() calls
-    lsetxattr() not setxattr(),etc).  This is because it appears any
-    symbolic links are resolved before the actual call takes place, so
-    I only need to use the system-provided calls that don't follow
-    them */
-
-/** Set extended attributes */
-int bb_setxattr(const char *path, const char *name, const char *value, size_t size, int flags){
-  char fpath[PATH_MAX];
-
-  //log_msg("\nbb_setxattr(path=\"%s\",name=\"%s\",value=\"%s\",size=%d,flags=0x%08x)\n",path,name, value,size, flags);
-  bb_fullpath(fpath,path);
-
-  return log_syscall("lsetxattr", lsetxattr(fpath,name, value,size, flags),0);
-}
-
-/** Get extended attributes */
-int bb_getxattr(const char *path, const char *name, char *value, size_t size){
-  int retstat=0;
-  char fpath[PATH_MAX];
-
-  //log_msg("\nbb_getxattr(path=\"%s\",name=\"%s\",value=0x%08x,size=%d)\n",path,name, value,size);
-  bb_fullpath(fpath,path);
-
-  retstat=log_syscall("lgetxattr", lgetxattr(fpath,name, value,size),0);
-  //if (retstat >= 0) log_msg("    value=\"%s\"\n",value);
-
-  return retstat;
-}
-
-/** List extended attributes */
-int bb_listxattr(const char *path, char *list, size_t size){
-  int retstat=0;
-  char fpath[PATH_MAX];
-  char *ptr;
-
-  //log_msg("\nbb_listxattr(path=\"%s\",list=0x%08x,size=%d)\n",path,list, size);
-  bb_fullpath(fpath,path);
-
-  retstat=log_syscall("llistxattr", llistxattr(fpath,list, size),0);
-  if (retstat >= 0) {
-    //log_msg("    returned attributes (length %d):\n",retstat);
-    if (list != NULL){
-      for (ptr=list; ptr < list+retstat; ptr += strlen(ptr)+1) log_msg("    \"%s\"\n",ptr);
-    }else{
-      //log_msg("    (null)\n");
-    }
-  }
-  return retstat;
-}
-
-/** Remove extended attributes */
-int bb_removexattr(const char *path, const char *name){
-  char fpath[PATH_MAX];
-
-  //log_msg("\nbb_removexattr(path=\"%s\",name=\"%s\")\n",path,name);
-  bb_fullpath(fpath,path);
-
-  return log_syscall("lremovexattr", lremovexattr(fpath,name),0);
-}
+  .open=xmp_open,
+  .create=xmp_create,
+  .read=xmp_read,
+  .write=xmp_write,
+  .statfs=xmp_statfs,
+  .release=xmp_release,
+  .fsync=NULL,//xmp_fsync,
+#ifdef HAVE_POSIX_FALLOCATE
+  .fallocate=NULL,//xmp_fallocate,
 #endif
-
-/** Open directory
- *
- * This method should check if the open operation is permitted for
- * this  directory
- *
- * Introduced in version 2.3
- */
-int bb_opendir(const char *path, struct fuse_file_info *fi){
-  DIR *dp;
-  int retstat=0;
-  char fpath[PATH_MAX];
-
-  //log_msg("\nbb_opendir(path=\"%s\",fi=0x%08x)\n",path,fi);
-  bb_fullpath(fpath,path);
-
-  // since opendir returns a pointer, takes some custom handling of
-  // return status.
-  dp=opendir(fpath);
-  //log_msg("    opendir returned 0x%p\n",dp);
-  if (dp==NULL)
-    retstat=log_error("bb_opendir opendir");
-
-  fi->fh=(intptr_t) dp;
-
-  //log_fi(fi);
-
-  return retstat;
-}
-
-/** Read directory
- *
- * This supersedes the old getdir() interface.  New applications
- * should use this.
- *
- * The filesystem may choose between two modes of operation:
- *
- * 1) The readdir implementation ignores the offset parameter, and
- * passes zero to the filler function's offset.  The filler
- * function will not return '1' (unless an error happens), so the
- * whole directory is read in a single readdir operation.  This
- * works just like the old getdir() method.
- *
- * 2) The readdir implementation keeps track of the offsets of the
- * directory entries.  It uses the offset parameter and always
- * passes non-zero offset to the filler function.  When the buffer
- * is full (or an error happens) the filler function will return
- * '1'.
- *
- * Introduced in version 2.3
- */
-
-int bb_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset,struct fuse_file_info *fi){
-  int retstat=0;
-  DIR *dp;
-  struct dirent *de;
-
-  //log_msg("\nbb_readdir(path=\"%s\",buf=0x%08x,filler=0x%08x,offset=%lld,fi=0x%08x)\n",path,buf, filler,offset, fi);
-  // once again, no need for fullpath -- but note that I need to cast fi->fh
-  dp=(DIR *) (uintptr_t) fi->fh;
-
-  // Every directory contains at least two entries: . and ..  If my
-  // first call to the system readdir() returns NULL I've got an
-  // error; near as I can tell, that's the only condition under
-  // which I can get an error from readdir()
-  de=readdir(dp);
-  //log_msg("    readdir returned 0x%p\n",de);
-  if (de==0) {
-    retstat=log_error("bb_readdir readdir");
-    return retstat;
-  }
-
-  // This will copy the entire directory into the buffer.  The loop exits
-  // when either the system readdir() returns NULL, or filler()
-  // returns something non-zero.  The first case just means I've
-  // read the whole directory; the second means the buffer is full.
-  do {
-    //log_msg("calling filler with name %s\n", de->d_name);
-    if (filler(buf, de->d_name,NULL, 0) != 0) {
-      //log_msg("    ERROR bb_readdir filler:  buffer full");
-      return -ENOMEM;
-    }
-  } while ((de=readdir(dp)) != NULL);
-
-  //log_fi(fi);
-
-  return retstat;
-}
-
-/** Release directory
- *
- * Introduced in version 2.3
- */
-int bb_releasedir(const char *path, struct fuse_file_info *fi){
-  int retstat=0;
-
-  //log_msg("\nbb_releasedir(path=\"%s\",fi=0x%08x)\n",path,fi);
-  //log_fi(fi);
-
-  closedir((DIR *) (uintptr_t) fi->fh);
-
-  return retstat;
-}
-
-/** Synchronize directory contents
- *
- * If the datasync parameter is non-zero, then only the user data
- * should be flushed, not the meta data
- *
- * Introduced in version 2.3
- */
-// when exactly is this called?  when a user calls fsync and it
-// happens to be a directory? ??? >>> I need to implement this...
-int bb_fsyncdir(const char *path, int datasync, struct fuse_file_info *fi){
-  int retstat=0;
-
-  //log_msg("\nbb_fsyncdir(path=\"%s\",datasync=%d,fi=0x%08x)\n",path,datasync, fi);
-  //log_fi(fi);
-
-  return retstat;
-}
-
-/**
- * Initialize filesystem
- *
- * The return value will passed in the private_data field of
- * fuse_context to all file operations and as a parameter to the
- * destroy() method.
- *
- * Introduced in version 2.3
- * Changed in version 2.6
- */
-// Undocumented but extraordinarily useful fact:  the fuse_context is
-// set up before this function is called, and
-// fuse_get_context()->private_data returns the user_data passed to
-// fuse_main().  Really seems like either it should be a third
-// parameter coming in here, or else the fact should be documented
-// (and this might as well return void, as it did in older versions of
-// FUSE).
-void *bb_init(struct fuse_conn_info *conn){
-  //log_msg("\nbb_init()\n");
-
-  log_conn(conn);
-  log_fuse_context(fuse_get_context());
-
-  return BB_DATA;
-}
-
-/**
- * Clean up filesystem
- *
- * Called on filesystem exit.
- *
- * Introduced in version 2.3
- */
-void bb_destroy(void *userdata){
-  //log_msg("\nbb_destroy(userdata=0x%08x)\n",userdata);
-}
-
-/**
- * Check file access permissions
- *
- * This will be called for the access() system call.  If the
- * 'default_permissions' mount option is given, this method is not
- * called.
- *
- * This method is not called under Linux kernel versions 2.4.x
- *
- * Introduced in version 2.5
- */
-int bb_access(const char *path, int mask){
-  int retstat=0;
-  char fpath[PATH_MAX];
-
-  //log_msg("\nbb_access(path=\"%s\",mask=0%o)\n",path,mask);
-  bb_fullpath(fpath,path);
-
-  retstat=access(fpath,mask);
-
-  if (retstat < 0)
-    retstat=log_error("bb_access access");
-
-  return retstat;
-}
-
-/**
- * Create and open a file
- *
- * If the file does not exist, first create it with the specified
- * mode, and then open it.
- *
- * If this method is not implemented or under Linux kernel
- * versions earlier than 2.6.15, the mknod() and open() methods
- * will be called instead.
- *
- * Introduced in version 2.5
- */
-// Not implemented.  I had a version that used creat() to create and
-// open the file, which it turned out opened the file write-only.
-
-/**
- * Change the size of an open file
- *
- * This method is called instead of the truncate() method if the
- * truncation was invoked from an ftruncate() system call.
- *
- * If this method is not implemented or under Linux kernel
- * versions earlier than 2.6.15, the truncate() method will be
- * called instead.
- *
- * Introduced in version 2.5
- */
-int bb_ftruncate(const char *path, off_t offset, struct fuse_file_info *fi){
-  int retstat=0;
-
-  //log_msg("\nbb_ftruncate(path=\"%s\",offset=%lld,fi=0x%08x)\n",path,offset, fi);
-  //log_fi(fi);
-
-  retstat=ftruncate(fi->fh,offset);
-  if (retstat < 0)
-    retstat=log_error("bb_ftruncate ftruncate");
-
-  return retstat;
-}
-
-/**
- * Get attributes from an open file
- *
- * This method is called instead of the getattr() method if the
- * file information is available.
- *
- * Currently this is only called after the create() method if that
- * is implemented (see above).  Later it may be called for
- * invocations of fstat() too.
- *
- * Introduced in version 2.5
- */
-int bb_fgetattr(const char *path, struct stat *statbuf, struct fuse_file_info *fi){
-  int retstat=0;
-
-  //log_msg("\nbb_fgetattr(path=\"%s\",statbuf=0x%08x,fi=0x%08x)\n",path,statbuf, fi);
-  //log_fi(fi);
-
-  // On FreeBSD, trying to do anything with the mountpoint ends up
-  // opening it, and then using the FD for an fgetattr.  So in the
-  // special case of a path of "/", I need to do a getattr on the
-  // underlying root directory instead of doing the fgetattr().
-  if (!strcmp(path, "/"))
-    return bb_getattr(path,statbuf);
-
-  retstat=fstat(fi->fh,statbuf);
-  if (retstat < 0)
-    retstat=log_error("bb_fgetattr fstat");
-
-  log_stat(statbuf);
-
-  return retstat;
-}
-
-struct fuse_operations bb_oper={
-  .getattr=bb_getattr,
-  .readlink=bb_readlink,
-  // no .getdir -- that's deprecated
-  .getdir=NULL,
-  .mknod=bb_mknod,
-  .mkdir=bb_mkdir,
-  .unlink=bb_unlink,
-  .rmdir=bb_rmdir,
-  .symlink=bb_symlink,
-  .rename=bb_rename,
-  .link=bb_link,
-  .chmod=bb_chmod,
-  .chown=bb_chown,
-  .truncate=bb_truncate,
-  .utime=bb_utime,
-  .open=bb_open,
-  .read=bb_read,
-  .write=bb_write,
-  /** Just a placeholder, don't set */ // huh???
-  .statfs=bb_statfs,
-  .flush=bb_flush,
-  .release=bb_release,
-  .fsync=bb_fsync,
-#ifdef HAVE_SYS_XATTR_H
-  .setxattr=bb_setxattr,
-  .getxattr=bb_getxattr,
-  .listxattr=bb_listxattr,
-  .removexattr=bb_removexattr,
+#ifdef HAVE_SETXATTR
+  .setxattr=NULL, //xmp_setxattr,
+  .getxattr=NULL, //xmp_getxattr,
+  .listxattr=NULL, //xmp_listxattr,
+  .removexattr=NULL,//xmp_removexattr,
 #endif
-  .opendir=bb_opendir,
-  .readdir=bb_readdir,
-  .releasedir=bb_releasedir,
-  .fsyncdir=bb_fsyncdir,
-  .init=bb_init,
-  .destroy=bb_destroy,
-  .access=bb_access,
-  .ftruncate=bb_ftruncate,
-  .fgetattr=bb_fgetattr
+#ifdef HAVE_COPY_FILE_RANGE
+  .copy_file_range=NULL, //xmp_copy_file_range,
+#endif
+  .lseek=xmp_lseek,
 };
-
-void bb_usage(){
-  fprintf(stderr, "usage:  bbfs [FUSE and mount options] rootDir mountPoint\n");
-  abort();
-}
-
-
-#define BRANCHES 99
-int _branches_n=0;
-char *_branches[BRANCHES];
-
 int main(int argc, char *argv[]){
-  int fuse_stat;
-  struct bb_state *bb_data;
-  if ((getuid()==0) || (geteuid()==0)){ fprintf(stderr,"Running BBFS as root opens unnacceptable security holes\n");return 1;}
-  char *logfile="/dev/stderr", *argv_fuse[99];
-  int c,argc_fuse=1;
+  if ((getuid()==0) || (geteuid()==0)){ log_msg("Running BBFS as root opens unnacceptable security holes\n");return 1;}
+#define ARGV_FUSE 99
+  char *argv_fuse[ARGV_FUSE];
+  int c,argc_fuse=1,i;
   argv_fuse[0]=argv[0];
-  while((c=getopt(argc,argv,"sfdhl:"))!=-1){
+  while((c=getopt(argc,argv,"sfdh"))!=-1){
     switch(c){
-    case 'h': bb_usage();break;
-    case 'l': logfile=optarg; break;
+    case 'h': usage();break;
     case 's': argv_fuse[argc_fuse++]="-s"; break;
-    case 'f': argv_fuse[argc_fuse++]="-f"; logfile="/dev/stdout";break;
+    case 'f': argv_fuse[argc_fuse++]="-f"; break;
     case 'd': argv_fuse[argc_fuse++]="-d";break;
     }
   }
   // See which version of fuse we're running
-  fprintf(stderr, "Fuse library version %d.%d argc=%d\n",FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION, argc-optind);
-  if (argc-optind<2) {bb_usage();abort();}
-  bb_data=malloc(sizeof(struct bb_state));
-  if (bb_data==NULL){ perror("main calloc");abort(); }
-  int i=optind;
-  argv_fuse[argc_fuse++]=argv[argc-1];
+  log_msg("FUSE_MAJOR_VERSION=%d FUSE_MAJOR_VERSION=%d \n",FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION);
+  if (MAX_PATHLEN>PATH_MAX) log_abort(" MAX_PATHLEN (%d) > PATH_MAX (%d)  \n",MAX_PATHLEN,PATH_MAX);
+  log_msg("MAX_PATHLEN=%d \n",MAX_PATHLEN);
+  if (argc-optind<2) {usage();abort();}
+  argv_fuse[argc_fuse++]=argv[argc-1]; // last is the mount point
   argv_fuse[argc_fuse]=NULL;
-  bb_data->rootdir=realpath(argv[i++],NULL);
-  printf("rootdir=%s\n",bb_data->rootdir);
-  bb_data->logfile=log_open(logfile);
-  fprintf(stderr, "about to call fuse_main\n");
-  for(i=0;i<=argc_fuse;i++) printf("%d/%d %s\n",i,argc_fuse, argv_fuse[i]);
-  fuse_stat=fuse_main(argc_fuse,argv_fuse, &bb_oper,bb_data);
-  fprintf(stderr, "fuse_main returned %d\n",fuse_stat);
+  _root_feature[0]=ROOT_WRITABLE;
+  log_debug_now(" optind=%d argc=%d\n",optind,argc);
+  if (argc-optind>ARGV_FUSE) log_abort("Max num of roots is %d\n",ARGV_FUSE);
+  char *descript[ROOTS]={0};
+  descript[0]=ANSI_FG_GREEN" (writable)";
+  for(int i=optind;i<argc-1;i++){
+    if (_root_n>=ROOTS) log_abort("Exceeding max number of ROOTS=%d\n",ROOTS);
+    char *r=argv[i];
+    if (!*r && _root_n) continue;
+    int slashes=-1;
+    while(r[++slashes]=='/');
+    log_debug_now("_root_n=%d   slashes=%d \n",_root_n,slashes);
+    if (slashes>1){
+      _root_feature[_root_n]|=ROOT_REMOTE;
+      descript[_root_n]=ANSI_FG_GREEN" (Remote)";
+      r+=(slashes-1);
+    }
+    _root[_root_n++]=slashes?r:realpath(r,NULL);
+  }
+  if (!_root_n) log_abort("Missing root directories\n");
+  log_msg("about to call fuse_main\n");
+  log_strings("fuse argv",argv_fuse,argc_fuse,NULL);
+  log_strings("root",_root,_root_n, descript);
+  int fuse_stat=fuse_main(argc_fuse,argv_fuse, &xmp_oper,NULL);
+  log_msg("fuse_main returned %d\n",fuse_stat);
   return fuse_stat;
 }

@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.69])
+AC_PREREQ([0.1])
 AC_INIT([ZIPsFS], [2023-02-22], [christophgil@gmail.com])
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([src/ZIPsFS.c])
@@ -14,7 +14,8 @@ AC_PROG_CC
 AC_CHECK_HEADERS([fcntl.h limits.h stdlib.h string.h sys/statvfs.h unistd.h utime.h sys/xattr.h])
 
 # Check for FUSE development environment
-PKG_CHECK_MODULES(FUSE, fuse)
+PKG_CHECK_MODULES(FUSE,fuse3)
+PKG_CHECK_MODULES(LIBZIP,libzip)
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_UID_T
