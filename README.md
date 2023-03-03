@@ -1,9 +1,14 @@
 # ZIPsFS
 Accessing the content of ZIP files.  This  FUSE filesystem texpands  ZIP files like folders
 
-Inspired by https://github.com/openscopeproject/ZipROFS
 
-Based on https://github.com/bbfsdev/bbfs
+Based on fuse3 example passthrough
+
+
+INSPIRATIONS:
+  https://github.com/openscopeproject/ZipROFS
+  https://www.cs.nmsu.edu/~pfeiffer/fuse-tutorial/
+  https://github.com/bbfsdev/bbfs
 
 
 

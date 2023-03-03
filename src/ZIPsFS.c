@@ -40,9 +40,12 @@
 // utils
 #define DEBUG_NOW 1
 #define MAX_PATHLEN 512
+#define FILE_TYPE_DIR 1
+enum file_type{dir,regfile,other};
 struct zip_path{
   int path_capacity;
   char *path;
+  enum file_type file_type;
   char *zipfile;
   struct zip_stat zstat;
   struct zip *zarchive;
@@ -100,8 +103,7 @@ void my_zip_close(struct zip_path *zpath){
   if (z && zip_close(z)==-1) log_zip_path(ANSI_FG_RED"Can't close zip archive'/n"ANSI_RESET,*zpath);
   zpath->zarchive=NULL;
 }
-#define NEW_ZIP_PATH() struct zip_path zpath={.path=NULL,.path_capacity=0,.zarchive=NULL,.zipfile=NULL}
-
+#define NEW_ZIP_PATH()  struct zip_path zpath;memset(&zpath,0,sizeof(zpath))
 #define FIND_REAL()  NEW_ZIP_PATH();  res=real_file(&zpath,path)
 void ensure_path_capacity(struct zip_path *zpath,int n){
   if (n>=zpath->path_capacity){
@@ -181,7 +183,7 @@ char *_root[ROOTS];
 // Iterate over all _root to construct the real path;
 // https://android.googlesource.com/kernel/lk/+/dima/for-travis/include/errno.h
 static int real_file(struct zip_path *zpath, const char *path){
-  log_entered_function("real_file %s\n",path);
+  //log_entered_function("real_file %s\n",path);
   int i,res=ENOENT;
   for(i=0;i<_root_n;i++){
     char *r=_root[i];
@@ -195,6 +197,12 @@ static int real_file(struct zip_path *zpath, const char *path){
     strcpy(zpath->path,r);
     strcat(zpath->path,path);
     int acc=access(zpath->path,R_OK);
+    struct stat st;
+    stat(zpath->path,&st);
+    zpath->file_type=
+      S_ISDIR(st.st_mode)?dir:
+      S_ISREG(st.st_mode)?regfile:
+      other;
     //log_debug_now("path=%s   Access(%s)=%d\n",path,zpath->path,acc);
     if (!acc){
       res=0;
@@ -203,45 +211,47 @@ static int real_file(struct zip_path *zpath, const char *path){
   }
   if (res) log_msg("_real_file %s res=%d\n",path,res);
   else log_msg("real_file %s ->%s \n",path,zpath->path);
-  log_exited_function("real_file\n");
+  //log_exited_function("real_file\n");
   return res;
 }
-static int mk_parentdirs_create_real_path(char *fpath, const char *path){
-  log_entered_function("mk_parentdirs_create_real_path %s\n",path);
-  int res=0;
-  int slash=last_slash(path);
-  *fpath=0;
-  //log_entered_function(" mk_parentdirs_create_real_path(%s) slash=%d  \n  ",path,slash);
+static char *real_path_mk_parent(const char *path,int *res){
+  //log_entered_function("real_path_mk_parent %s\n",path);
+  int needed,slash=last_slash(path);
+  log_entered_function(" real_path_mk_parent(%s) slash=%d  \n  ",path,slash);
   if (slash<0){
     log_error("Should not happen slash<0 for %s\n",path);
-    res=ENOENT;
+    return NULL;
   }else if (slash){
-    char *dir=strdup(path);
-    dir[slash]=0;
-    log_debug_now("dir=%s\n",dir);
+    char *dir=strndup(path,slash);
     NEW_ZIP_PATH();
-    if (real_file(&zpath,dir)){
-      res=ENOENT;
-    }else if (!is_dir(fpath)){
-      res=ENOTDIR;
-    }else if (!(res=exceeds_max_path(my_strlen(_root[0])+my_strlen(path)+2,path))){
-      strcpy(fpath,_root[0]);
-      strcat(fpath,dir);
-      recursive_mkdir(fpath);
-      if(!is_dir(fpath)) res=ENOENT;
+    *res=real_file(&zpath,dir);
+    log_debug_now("dir=%s  -> %s  %d \n",dir,zpath.path,*res);
+    if (*res){
+      *res=ENOENT;
+    }else if (zpath.file_type!=FILE_TYPE_DIR){
+      *res=ENOTDIR;
+    }else if (!(*res=exceeds_max_path(needed=my_strlen(_root[0])+my_strlen(path)+2,path))){
+      char *d=malloc(needed);
+      strcpy(d,_root[0]);
+      strcat(d,dir);
+      recursive_mkdir(d);
+      if(!is_dir(d)) *res=ENOENT;
+      free(d);
     }
+    destroy_zip_path(&zpath);
     free(dir);
   }
-  if(!res){
+  if(!*res){
+    char *fpath=malloc(my_strlen(_root[0])+strlen(path)+1);
     strcpy(fpath,_root[0]);
     strcat(fpath,path);
+    return fpath;
   }
-  log_debug_now(" mk_parentdirs_create_real_path  %s >> %s   %d\n",path, fpath,res);
-  return res;
+  return NULL;
 }
 static int real_path_readdir(int no_dots, struct zip_path zpath, void *buf, fuse_fill_dir_t filler){
   char *path=zpath.path;
-  log_entered_function("real_path_readdir '%s;\n",path);
+  //log_entered_function("real_path_readdir '%s;\n",path);
   if (!path || !*path) return 0;
   pthread_mutex_lock(&_mutex_dir);
   int res=0;
@@ -266,7 +276,7 @@ static int real_path_readdir(int no_dots, struct zip_path zpath, void *buf, fuse
     closedir(dir);
   }
   pthread_mutex_unlock(&_mutex_dir);
-  log_exited_function("real_path_readdir %d\n",res);
+  //log_exited_function("real_path_readdir %d\n",res);
   return res;
 }
 
@@ -347,21 +357,17 @@ static void *xmp_init(struct fuse_conn_info *conn,struct fuse_config *cfg){
 
 
 static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi){
-  log_entered_function("xmp_getattr %s",path);
+  //log_entered_function("xmp_getattr %s",path);
   (void) fi;
   int res;
-  log_debug_now("vor FIND_REAL \n");
   FIND_REAL();
-  log_debug_now("nach FIND_REAL \n");
-  log_zip_path("xmp_getattr",zpath);
-  log_debug_now("nach log_zip_path \n");
+  //log_zip_path("xmp_getattr",zpath);
   if (zpath.path){
-
     if(!res) res=lstat(zpath.path,stbuf);
   }
   destroy_zip_path(&zpath);
   //log_msg("xmp_getattr   lstat(%s)=%d\n",zpath.path,res);
-  log_exited_function(" xmp_getattr res=%d\n",res);
+  //log_exited_function(" xmp_getattr res=%d\n",res);
   return res==-1?-errno:-res;
 }
 static int xmp_access(const char *path, int mask){
@@ -449,37 +455,40 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t
 /////////////////////////////////
 //
 // Creating a new file object
-#define NEW_REAL_PATH() char cpath[MAX_PATHLEN];res=mk_parentdirs_create_real_path(cpath,create_path)
+
 static int xmp_mkdir(const char *create_path, mode_t mode){
   log_entered_function("xmp_mkdir %s \n",create_path);
   int res=0;
-  NEW_REAL_PATH();
-  if (!res){
+  char *cpath=real_path_mk_parent(create_path,&res);
+  log_debug_now("xmp_mkdir %s res=%d\n",cpath,res);
+  if (cpath){
     res=mkdir(cpath,mode);
-    log_debug_now("mkdir(%s) = %d\n",cpath,res);
     if (res==-1) res=errno;
   }
+  free(cpath);
   return -res;
 }
 static int xmp_create(const char *create_path, mode_t mode,struct fuse_file_info *fi){
   log_entered_function("xmp_create %s\n",create_path);
-  int res;
-  NEW_REAL_PATH();
-  if (!res){
+  int res=0;
+  char *cpath=real_path_mk_parent(create_path,&res);
+  if (cpath){
     res=open(cpath,fi->flags,mode);
     if (res==-1) return -errno;
     fi->fh=res;
   }
+  free(cpath);
   return 0;
 }
 static int xmp_write(const char *create_path, const char *buf, size_t size,off_t offset, struct fuse_file_info *fi){
   int fd;
-  int res;
+  int res=0;
   (void) fi;
   if(fi==NULL){
-    NEW_REAL_PATH();
-    if (res) return -res;
+    char *cpath=real_path_mk_parent(create_path,&res);
+    if (!cpath) return -ENOENT;
     fd=open(cpath,O_WRONLY);
+    free(cpath);
   }else fd=fi->fh;
   if (fd==-1) return -errno;
   res=pwrite(fd,buf,size,offset);
@@ -492,11 +501,12 @@ static int xmp_write(const char *create_path, const char *buf, size_t size,off_t
 // Two paths
 static int xmp_symlink(const char *target, const char *create_path){ // target,link
   int res=0;
-  NEW_REAL_PATH();
-  if(!res){
+  char *cpath=real_path_mk_parent(create_path,&res);
+  if(cpath){
     res=symlink(target,cpath);
     if (res==-1) return -errno;
   }
+  free(cpath);
   return -res;
 }
 static int xmp_rename(const char *old_path, const char *neu_path, unsigned int flags){ // from,to
@@ -515,7 +525,7 @@ static int xmp_rename(const char *old_path, const char *neu_path, unsigned int f
 }
 static int xmp_read(const char *path, char *buf, size_t size, off_t offset,struct fuse_file_info *fi){
   int fd;
-  int res;
+  int res=0;
   if(fi==NULL){
     FIND_REAL();
     fd=open(zpath.path,O_RDONLY);
@@ -593,8 +603,8 @@ static const struct fuse_operations xmp_oper={
 };
 int main(int argc, char *argv[]){
   if ((getuid()==0) || (geteuid()==0)){ log_msg("Running BBFS as root opens unnacceptable security holes\n");return 1;}
-#define ARGV_FUSE 99
-  char *argv_fuse[ARGV_FUSE];
+
+  char *argv_fuse[9];
   int c,argc_fuse=1,i;
   argv_fuse[0]=argv[0];
   while((c=getopt(argc,argv,"sfdh"))!=-1){
@@ -613,8 +623,6 @@ int main(int argc, char *argv[]){
   argv_fuse[argc_fuse++]=argv[argc-1]; // last is the mount point
   argv_fuse[argc_fuse]=NULL;
   _root_feature[0]=ROOT_WRITABLE;
-  log_debug_now(" optind=%d argc=%d\n",optind,argc);
-  if (argc-optind>ARGV_FUSE) log_abort("Max num of roots is %d\n",ARGV_FUSE);
   char *descript[ROOTS]={0};
   descript[0]=ANSI_FG_GREEN" (writable)";
   for(int i=optind;i<argc-1;i++){
@@ -623,7 +631,6 @@ int main(int argc, char *argv[]){
     if (!*r && _root_n) continue;
     int slashes=-1;
     while(r[++slashes]=='/');
-    log_debug_now("_root_n=%d   slashes=%d \n",_root_n,slashes);
     if (slashes>1){
       _root_feature[_root_n]|=ROOT_REMOTE;
       descript[_root_n]=ANSI_FG_GREEN" (Remote)";
