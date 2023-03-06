@@ -2,11 +2,7 @@
 set -u
 readonly B=~/test/fuse
 mkdir -p  ${B}/{rootdir_writable,mnt}
-ZIP1=/usr/share/doc/texlive-doc/support/pdfjam/tests.zip
-ZIP2=/usr/share/doc/texlive-doc/bibtex/vak/test.zip
-for z in $ZIP1 $ZIP2;do
-    [[ ! -f $z ]] && read -r -p "Error file does not exist $z "
-done
+example_zips=(/usr/share/doc/texlive-doc/support/pdfjam/tests.zip /usr/share/doc/texlive-doc/bibtex/vak/test.zip /local/java/jnifuse_master.zip)
 main(){
     local j count=0 f
 
@@ -20,13 +16,21 @@ main(){
         done
 
 
-        local z=$base/test_zip/big_zip.zip
-        mkdir -p ${z%/*} && cp -u $ZIP1 $z
-
-        local z=$base/test_zip/20230202_my_data_.d.Zip
-        mkdir -p ${z%/*} && cp -u $ZIP2 $z
-
-
+        if ((j==2));then
+            local z n=0
+            for z in "${example_zips[@]}";do
+                [[ ! -s $z ]] && read -r -p "No such zip file  $z" && continue
+                local zip=$base/test_zip/zip_$n.zip
+                mkdir -p ${zip%/*} || continue
+                if [[ ! -f $zip ]];then
+                    ln $z $zip || cp -u $z $zip
+                fi
+                local zip2=$base/advance_zip/2023_my_data_zip_$n.d.Zip
+                mkdir -p ${zip2%/*} || continue
+                [[ -f $zip2 ]] || ln $zip $zip2
+                ((n++))
+            done
+        fi
     done
     f=$base/verybig.img
     [[ ! -f $f ]] && fallocate -l 500M $f

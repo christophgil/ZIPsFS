@@ -1,22 +1,32 @@
-// https://www.cs.cmu.edu/afs/cs/academic/class/15492-f07/www/pthreads.html#BASICS
-// /usr/include/pthread.h
-// /usr/include/fuse3/fuse.h   /local/filesystem/fuse-3.14.0/lib/fuse.c
+chatgpt
+* Debugging
+Run your code through valgrind. If you're mismanaging memory, it will tell you where
 
-//  All the paths    are relative to the root of the mounted filesystem.
+* Reading
+ https://www.cs.cmu.edu/afs/cs/academic/class/15492-f07/www/pthreads.html#BASICS
 
+
+* Local files
+/usr/include/linux/stat.h
+/usr/include/pthread.h
+/local/filesystem/fuse-3.14.0/lib
+/local/lib/libzip-1.9.2/lib
+/local/filesystem/fuse-3.14.0/example/passthrough.c
+/local/filesystem/ZipROFS-dev/ziprofs.py
+/local/filesystem/mount-zip-main/lib
 
 
 
 * Error
     EPERM 1		/* Not super-user */
-*   ENOENT 2	/* No such file or directory */
+!   ENOENT 2	/* No such file or directory */
     ESRCH 3		/* No such process */
     EINTR 4		/* Interrupted system call */
     EIO 5		/* I/O error */
     ENXIO 6		/* No such device or address */
     E2BIG 7		/* Arg list too long */
     ENOEXEC 8	/* Exec format error */
-*   EBADF 9		/* Bad file number */
+!   EBADF 9		/* Bad file number */
     ECHILD 10	/* No children */
     EAGAIN 11	/* No more processes */
     ENOMEM 12	/* Not enough core */
@@ -24,19 +34,19 @@
     EFAULT 14	/* Bad address */
     ENOTBLK 15	/* Block device required */
     EBUSY 16	/* Mount device busy */
-*   EEXIST 17	/* File exists */
+!   EEXIST 17	/* File exists */
     EXDEV 18	/* Cross-device link */
     ENODEV 19	/* No such device */
     ENOTDIR 20	/* Not a directory */
-*   EISDIR 21	/* Is a directory */
-*   EINVAL 22	/* Invalid argument */
+!   EISDIR 21	/* Is a directory */
+!   EINVAL 22	/* Invalid argument */
     ENFILE 23	/* Too many open files in system */
     EMFILE 24	/* Too many open files */
     ENOTTY 25	/* Not a typewriter */
     ETXTBSY 26	/* Text file busy */
-*   EFBIG 27	/* File too large */
+!   EFBIG 27	/* File too large */
     ENOSPC 28	/* No space left on device */
-*   ESPIPE 29	/* Illegal seek */
+!   ESPIPE 29	/* Illegal seek */
     EROFS 30	/* Read only file system */
     EMLINK 31	/* Too many links */
     EPIPE 32	/* Broken pipe */
@@ -78,7 +88,7 @@
     ELBIN 75	/* Inode is remote (not really error) */
     EDOTDOT 76	/* Cross mount point (not really error) */
     EBADMSG 77	/* Trying to read unreadable message */
-*   EFTYPE 79	/* Inappropriate file type or format */
+!   EFTYPE 79	/* Inappropriate file type or format */
     ENOTUNIQ 80	/* Given log. name not unique */
     EBADFD 81	/* f.d. invalid for this operation */
     EREMCHG 82	/* Remote address changed */
@@ -87,10 +97,10 @@
     ELIBSCN 85	/* .lib section in a.out corrupted */
     ELIBMAX 86	/* Attempting to link in too many libs */
     ELIBEXEC 87	/* Attempting to exec a shared library */
-*   ENOSYS 88	/* Function not implemented */
+!   ENOSYS 88	/* Function not implemented */
     ENMFILE 89      /* No more files */
-*   ENOTEMPTY 90	/* Directory not empty */
-*   ENAMETOOLONG 91	/* File or path name too long */
+!   ENOTEMPTY 90	/* Directory not empty */
+!   ENAMETOOLONG 91	/* File or path name too long */
     ELOOP 92	/* Too many symbolic links */
     EOPNOTSUPP 95	/* Operation not supported on transport endpoint */
     EPFNOSUPPORT 96 /* Protocol family not supported */
@@ -106,9 +116,9 @@
     ECONNABORTED 113	/* Connection aborted */
     ENETUNREACH 114		/* Network is unreachable */
     ENETDOWN 115		/* Network interface is not configured */
-*   ETIMEDOUT 116		/* Connection timed out */
-*   EHOSTDOWN 117		/* Host is down */
-*   EHOSTUNREACH 118	/* Host is unreachable */
+!   ETIMEDOUT 116		/* Connection timed out */
+!   EHOSTDOWN 117		/* Host is down */
+!   EHOSTUNREACH 118	/* Host is unreachable */
     EINPROGRESS 119		/* Connection already in progress */
     EALREADY 120		/* Socket already connected */
     EDESTADDRREQ 121	/* Destination address required */
@@ -131,3 +141,81 @@
     EILSEQ 138
     EOVERFLOW 139	/* Value too large for defined data type */
     EWOULDBLOCK EAGAIN	/* Operation would block */
+
+
+* zip_stat
+    struct zip_stat {
+    zip_uint64_t valid;             /* which fields have valid values */
+    const char *_Nullable name;     /* name of the file */
+    zip_uint64_t index;             /* index within archive */
+    zip_uint64_t size;              /* size of file (uncompressed) */
+    zip_uint64_t comp_size;         /* size of file (compressed) */
+    time_t mtime;                   /* modification time */
+    zip_uint32_t crc;               /* crc of file data */
+    zip_uint16_t comp_method;       /* compression method used */
+    zip_uint16_t encryption_method; /* encryption method used */
+    zip_uint32_t flags;             /* reserved for future use */
+};
+
+
+* stat
+    https://linux.die.net/man/2/stat
+struct stat {
+    mode_t    st_mode;    /* protection */
+    }
+
+
+    st.st_mode = de->d_type << 12;
+
+
+The following flags are defined for the st_mode field:
+S_IFMT     0170000   bit mask for the file type bit fields
+S_IFSOCK   0140000   socket
+S_IFLNK    0120000   symbolic link
+S_IFREG    0100000   regular file
+S_IFBLK    0060000   block device
+S_IFDIR    0040000   directory
+S_IFCHR    0020000   character device
+S_IFIFO    0010000   FIFO
+S_ISUID    0004000   set UID bit
+S_ISGID    0002000   set-group-ID bit (see below)
+S_ISVTX    0001000   sticky bit (see below)
+
+
+S_ISDIR(
+#define     S_ISDIR(m)   (((m) & S_IFMT) == S_IFDIR)
+
+
+int is_dir(const char *path){
+  struct stat path_stat;
+  stat(path,&path_stat);
+  return S_ISDIR(path_stat.st_mode);
+}
+
+
+
+#define S_IRWXU 00700
+#define S_IRUSR 00400
+#define S_IWUSR 00200
+#define S_IXUSR 00100
+
+#define S_IRWXG 00070
+#define S_IRGRP 00040
+#define S_IWGRP 00020
+#define S_IXGRP 00010
+
+#define S_IRWXO 00007
+#define S_IROTH 00004
+#define S_IWOTH 00002
+#define S_IXOTH 00001
+
+
+
+
+
+* Duplicates
+
+https://www.gnu.org/software/libc/manual/html_node/Array-Search-Function.html#index-lfind
+https://www.geeksforgeeks.org/binary-search-tree-set-1-search-and-insertion/
+
+https://github.com/jean553/c-data-structures

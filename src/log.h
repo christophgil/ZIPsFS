@@ -25,7 +25,7 @@
 #define TERMINAL_CLR_LINE "\r\x1B""[K"
 
 #define log_struct(st,field, format)   printf("    " #field "=" #format "\n",st->field)
-
+void prints(char *s){ if (s) fputs(s,stdout);}
 void log_reset(){ prints(ANSI_RESET);}
 #define log_msg(...) printf(__VA_ARGS__)
 #define log_already_exists(...) (prints(" Already exists "ANSI_RESET),printf(__VA_ARGS__)
@@ -40,7 +40,7 @@ void log_path(const char *f,const char *path){
   printf("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
 }
 
-#define log_abort(...)  { log_error(__VA_ARGS__),puts("Going to exit ..."),exit(-i); }
+#define log_abort(...)  { log_error(__VA_ARGS__),puts("Going to exit ..."),exit(-1); }
 
 int log_func_error(char *func){
   int ret=-errno;
@@ -50,10 +50,9 @@ int log_func_error(char *func){
 
 
 void log_strings(const char *pfx, char *ss[],int n,char *ss2[]){
-  int count=0,i;
   printf(ANSI_UNDERLINE"%s"ANSI_RESET" %p\n",pfx,ss);
   if (ss){
-    for(i=0;i<n;i++){
+    for(int i=0;i<n;i++){
       printf("   %s %3d./.%d "ANSI_FG_BLUE"'%s'",pfx,i,n,ss[i]);
       if (ss2) prints(ss2[i]);
       puts(ANSI_RESET);
@@ -61,13 +60,18 @@ void log_strings(const char *pfx, char *ss[],int n,char *ss2[]){
   }
 }
 
-
-void log_zip_path(char *msg, struct zip_path zp){
-  prints(ANSI_UNDERLINE);
-  prints(msg);
-  puts(ANSI_RESET);
-  printf("      path="ANSI_FG_BLUE"='%s   %u byte\n",zp.path,my_strlen(zp.path));
-  char *n=(char*)zp.zstat.name;
-
-  if (n) printf("    zentry="ANSI_FG_BLUE"='%s   %u byte\n",n,my_strlen(n));
+#define errputc(c) putc(c,stderr)
+void log_file_stat(const char * name,const struct stat *s){
+  printf("%s\t\t%lu bytes\tlinks=%lu\tinode=%lu\t",name,s->st_size,s->st_nlink,s->st_ino);
+    errputc( (S_ISDIR(s->st_mode)) ? 'd' : '-');
+    errputc( (s->st_mode & S_IRUSR) ? 'r' : '-');
+    errputc( (s->st_mode & S_IWUSR) ? 'w' : '-');
+    errputc( (s->st_mode & S_IXUSR) ? 'x' : '-');
+    errputc( (s->st_mode & S_IRGRP) ? 'r' : '-');
+    errputc( (s->st_mode & S_IWGRP) ? 'w' : '-');
+    errputc( (s->st_mode & S_IXGRP) ? 'x' : '-');
+    errputc( (s->st_mode & S_IROTH) ? 'r' : '-');
+    errputc( (s->st_mode & S_IWOTH) ? 'w' : '-');
+    errputc( (s->st_mode & S_IXOTH) ? 'x' : '-');
+    errputc('\n');
 }

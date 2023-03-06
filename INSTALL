@@ -1,5 +1,15 @@
+apt-get install gcc cmake check
+
+
 Install libfuse3
 
 ./configure
 cd src
 make
+
+
+
+lib=b_tree
+cd $lib
+gcc -c -fpic $lib.c
+gcc -shared -o lib$lib.so $lib.o
