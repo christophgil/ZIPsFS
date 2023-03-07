@@ -67,7 +67,7 @@ struct zip_path{
   char *realpath;
   char *entry_path;
   int len_virtual_zip_filepath;
-  struct stat *stbuf;
+  struct stat stbuf;
 
   struct zip *zarchive;
   unsigned int flags;
@@ -140,7 +140,7 @@ void log_zip_path(char *msg, struct zip_path *zpath){
   prints(msg);
   puts(ANSI_RESET);
   printf(" virtualpath="ANSI_FG_BLUE"%s   %u"ANSI_RESET" byte dir="ANSI_FG_BLUE"%s"ANSI_RESET"\n",zpath->virtualpath,my_strlen(zpath->virtualpath),yes_no(zpath->flags&ZP_FLAG_IS_DIR));
-  printf("    realpath="ANSI_FG_BLUE"%s   %u"ANSI_RESET" byte dir="ANSI_FG_BLUE"%s"ANSI_RESET"\n",zpath->realpath,my_strlen(zpath->realpath),yes_no(S_ISDIR(zpath->stbuf->st_mode)));
+  printf("    realpath="ANSI_FG_BLUE"%s   %u"ANSI_RESET" byte dir="ANSI_FG_BLUE"%s"ANSI_RESET"\n",zpath->realpath,my_strlen(zpath->realpath),yes_no(S_ISDIR(zpath->stbuf.st_mode)));
   printf("  entry_path="ANSI_FG_BLUE"%s   %u"ANSI_RESET" byte\n",zpath->entry_path,my_strlen(zpath->entry_path));
   printf(" len_virtual="ANSI_FG_BLUE"%d"ANSI_RESET"   ZIP %s"ANSI_RESET"\n",zpath->len_virtual_zip_filepath,  zpath->zarchive? ANSI_FG_RED"opened":ANSI_FG_GREEN"closed");
 }
@@ -164,7 +164,7 @@ void reset_zip_path(struct zip_path *zpath){
   my_zip_close(zpath);
   free(zpath->realpath); zpath->realpath=NULL;
   free(zpath->entry_path); zpath->entry_path=NULL;
-  if (zpath->flags&ZP_FLAG_NEED_FREE_STBUF) free(zpath->stbuf);
+  //  if (zpath->flags&ZP_FLAG_NEED_FREE_STBUF) free(zpath->stbuf);
 
   zpath->flags=zpath->realpath_capacity=zpath->len_virtual_zip_filepath=0;
 
@@ -238,22 +238,19 @@ static struct stream_data stream_data(int op,struct fuse_file_info *fi){
 // Iterate over all _root to construct the real path;
 // https://android.googlesource.com/kernel/lk/+/dima/for-travis/include/errno.h
 static int real_file(struct zip_path *zpath, const char *root,const char *virtualpath){
+  assert(root!=NULL);
+  if (*root==0) return 0; /* The first root which is writable can be empty */
   log_entered_function("real_file %s\n",virtualpath);
   int res=ENOENT;
-  for(int i=0;i<_root_n;i++){
-    char *r=_root[i];
-    if (*r==0) continue; /* The first root which is writable can be empty */
-    if (*virtualpath=='/' && virtualpath[1]==0){
-      strcpy(ensure_path_capacity(zpath,my_strlen(r)),r);
-    }else{
-      ensure_path_capacity(zpath,my_strlen(virtualpath)+my_strlen(r)+1);
-      strcpy(zpath->realpath,r);
-      strcat(zpath->realpath,virtualpath);
-    }
-    res=stat(zpath->realpath,zpath->stbuf);
-    if (S_ISDIR(zpath->stbuf->st_mode)) zpath->flags|=ZP_FLAG_IS_DIR;
-    if (!res) break;
+  if (*virtualpath=='/' && virtualpath[1]==0){
+    strcpy(ensure_path_capacity(zpath,my_strlen(root)),root);
+  }else{
+    ensure_path_capacity(zpath,my_strlen(virtualpath)+my_strlen(root)+1);
+    strcpy(zpath->realpath,root);
+    strcat(zpath->realpath,virtualpath);
   }
+  res=stat(zpath->realpath,&zpath->stbuf);
+  if (S_ISDIR(zpath->stbuf.st_mode)) zpath->flags|=ZP_FLAG_IS_DIR;
   //  if (res) log_msg("_real_file %s res=%d\n",virtualpath,res);  else log_msg("real_file %s ->%s \n",virtualpath,zpath->realpath);
   //log_exited_function("real_file\n");
   return res;
@@ -278,7 +275,7 @@ static char *realpath_mk_parent(const char *path,int *res){
       strcpy(d,_root[0]);
       strcat(d,dir);
       recursive_mkdir(d);
-      if (!(S_ISDIR(zpath.stbuf->st_mode))) *res=ENOENT;
+      if (!(S_ISDIR(zpath.stbuf.st_mode))) *res=ENOENT;
       //if(!is_dir(d))
       free(d);
     }
@@ -301,7 +298,7 @@ int read_zipdir(struct zip_path *zpath, void *buf, fuse_fill_dir_t filler_maybe_
     log_error("realpath=%s  remaining=%d   virtualpath=%s len_virtual_zip_filepath=%d\n",zpath->realpath,remaining, zpath->virtualpath, zpath->len_virtual_zip_filepath);
     res=-1;
   }else if(remaining==0 && filler_maybe_null){ /* The virtual path is a Zip file */
-    assert(zpath->stbuf!=NULL);
+
     zpath->flags|=ZP_FLAG_IS_DIR;
     return 0;
   }else{
@@ -314,7 +311,6 @@ int read_zipdir(struct zip_path *zpath, void *buf, fuse_fill_dir_t filler_maybe_
         if (zip_stat_index(zpath->zarchive,i,0,&sb)) continue;
         const int len=my_strlen(sb.name),is_dir=sb.name[len-1]=='/';
         if (len<remaining || slash_not_trailing(sb.name+remaining)) continue;
-        assert(zpath->stbuf!=NULL);
         if (!filler_maybe_null){
           const int cmp=paths_cmp(zpath->virtualpath+zpath->len_virtual_zip_filepath+1,sb.name);
           log_debug_now("paths_cmp  %s   %s    %d\n",zpath->virtualpath+zpath->len_virtual_zip_filepath+1,sb.name,cmp);
@@ -333,7 +329,7 @@ int read_zipdir(struct zip_path *zpath, void *buf, fuse_fill_dir_t filler_maybe_
           }
           //log_debug_now("zip=%s   sb.name=%s   s=%s remaining=%d    name+remaining=%s         \n",zpath->realpath,sb.name,s,remaining,s);
           struct stat st={0};
-          st_mode_infer(&st,zpath->stbuf,is_dir);
+          st_mode_infer(&st,&zpath->stbuf,is_dir);
           filler_maybe_null(buf,s,&st,0,fill_dir_plus);
           //filler_maybe_null(buf,s,NULL,0,fill_dir_plus);
         }
@@ -396,7 +392,7 @@ static int realpath_or_zip(struct zip_path *zpath, const char *root,const char *
   log_entered_function("realpath_or_zip %s %d\n",virtualpath,is_zip);
 
 
-  if (!zpath->stbuf) { zpath->stbuf=malloc(sizeof(struct stat)); zpath->flags|=ZP_FLAG_NEED_FREE_STBUF;}
+  //  if (!zpath->stbuf) { zpath->stbuf=malloc(sizeof(struct stat)); zpath->flags|=ZP_FLAG_NEED_FREE_STBUF;}
 
   int res=0;
 #if WITH_ZIP
@@ -413,7 +409,7 @@ static int realpath_or_zip(struct zip_path *zpath, const char *root,const char *
       log_zip_path("realpath_or_zip2 ",zpath);
       if (!res && zpath->len_virtual_zip_filepath){
         read_zipdir(zpath,NULL,NULL,NULL);
-        if (zpath->stbuf->st_mode&S_IFMT){
+        if (zpath->stbuf.st_mode&S_IFMT){
           log_succes("Zip entry found  \n");
           log_zip_path("realpath_or_zip",zpath);
         }else{
@@ -428,14 +424,15 @@ static int realpath_or_zip(struct zip_path *zpath, const char *root,const char *
   }
   if (res)
 #endif
-    res=real_file(zpath,NULL,virtualpath);
+    res=real_file(zpath,root,virtualpath);
   return res;
 }
 int realpath_or_zip_any_root(struct zip_path *zpath,const char *virtualpath){
   int res;
   for(int i=0;i<_root_n;i++){
+    assert(_root[i]!=NULL);
     if (!(res=realpath_or_zip(zpath,_root[i],virtualpath))) break;
-        reset_zip_path(zpath);
+    reset_zip_path(zpath);
   }
   return res;
 }
@@ -472,8 +469,8 @@ static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_inf
   if (is_zip && !zpath.realpath) log_debug_now("zpath.realpath is NULL\n");
   if (is_zip && res) log_debug_now("res=%d\n",res);
   if(!res){
-    st_mode_infer(stbuf,zpath.stbuf,zpath.flags&ZP_FLAG_IS_DIR);
-    if (zpath.flags&ZP_FLAG_IS_DIR) st_mode_set_dir(&zpath.stbuf->st_mode);
+    st_mode_infer(stbuf,&zpath.stbuf,zpath.flags&ZP_FLAG_IS_DIR);
+    if (zpath.flags&ZP_FLAG_IS_DIR) st_mode_set_dir(&zpath.stbuf.st_mode);
   }
   destroy_zip_path(&zpath);
   log_file_stat(path,stbuf);
@@ -556,7 +553,10 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t
   for(int i=0;i<_root_n;i++){
     int res;
     NEW_ZIP_PATH(path);
+
+    assert(_root[i]!=NULL);
     realpath_or_zip(&zpath,_root[i],path);
+
     impl_readdir(&zpath,buf,filler,no_dups);
     destroy_zip_path(&zpath);
   }
@@ -674,9 +674,7 @@ int main(int argc, char *argv[]){
   assert(S_IXOTH==(S_IROTH>>2));
   //  char *uninitialized;  printf("%p",uninitialized);
 
-    printf("sizeof=%lu\n",sizeof(struct stat));
-    struct zip_path zpath;
-    exit(9);
+  //    printf("sizeof=%lu\n",sizeof(struct stat));    exit(9);
 
   /*
     {
