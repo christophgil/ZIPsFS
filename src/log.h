@@ -41,7 +41,7 @@ void log_path(const char *f,const char *path){
 }
 
 #define log_abort(...)  { log_error(__VA_ARGS__),puts("Going to exit ..."),exit(-1); }
-
+char *yes_no(int i){ return i?"Yes":"No";}
 int log_func_error(char *func){
   int ret=-errno;
   log_error(" %s: %s\n",func, strerror(errno));
@@ -60,18 +60,50 @@ void log_strings(const char *pfx, char *ss[],int n,char *ss2[]){
   }
 }
 
-#define errputc(c) putc(c,stderr)
+
 void log_file_stat(const char * name,const struct stat *s){
-  printf("%s\t\t%lu bytes\tlinks=%lu\tinode=%lu\t",name,s->st_size,s->st_nlink,s->st_ino);
-    errputc( (S_ISDIR(s->st_mode)) ? 'd' : '-');
-    errputc( (s->st_mode & S_IRUSR) ? 'r' : '-');
-    errputc( (s->st_mode & S_IWUSR) ? 'w' : '-');
-    errputc( (s->st_mode & S_IXUSR) ? 'x' : '-');
-    errputc( (s->st_mode & S_IRGRP) ? 'r' : '-');
-    errputc( (s->st_mode & S_IWGRP) ? 'w' : '-');
-    errputc( (s->st_mode & S_IXGRP) ? 'x' : '-');
-    errputc( (s->st_mode & S_IROTH) ? 'r' : '-');
-    errputc( (s->st_mode & S_IWOTH) ? 'w' : '-');
-    errputc( (s->st_mode & S_IXOTH) ? 'x' : '-');
-    errputc('\n');
+  printf("%s  st_size=%lu st_blksize=%lu st_blocks=%lu links=%lu inode=%lu ",name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,s->st_ino);
+
+  //st_blksize st_blocks f_bsize
+
+
+    putchar( (S_ISDIR(s->st_mode))? 'd':'-');
+    putchar( (s->st_mode&S_IRUSR)?'r':'-');
+    putchar( (s->st_mode&S_IWUSR)?'w':'-');
+    putchar( (s->st_mode&S_IXUSR)?'x':'-');
+    putchar( (s->st_mode&S_IRGRP)?'r':'-');
+    putchar( (s->st_mode&S_IWGRP)?'w':'-');
+    putchar( (s->st_mode&S_IXGRP)?'x':'-');
+    putchar( (s->st_mode&S_IROTH)?'r':'-');
+    putchar( (s->st_mode&S_IWOTH)?'w':'-');
+    putchar( (s->st_mode&S_IXOTH)?'x':'-');
+    putchar('\n');
+}
+
+
+void log_malloc(){
+   printf("uordblks=%d\n",mallinfo().uordblks);
+}
+
+
+
+
+void log_statvfs(char *path){
+  struct statvfs info;
+  if (-1==statvfs(path, &info)){
+    perror("statvfs() error");
+  }else{
+    puts("statvfs() returned the following information");
+    puts("about the root (/) file system:");
+    printf("  f_bsize    : %lu\n", info.f_bsize);
+    printf("  f_blocks   : %lu\n", info.f_blocks),
+    printf("  f_bfree    : %lu\n", info.f_bfree),
+    printf("  f_files    : %lu\n", info.f_files);
+    printf("  f_ffree    : %lu\n", info.f_ffree);
+    printf("  f_fsid     : %lu\n", info.f_fsid);
+    printf("  f_flag     : %lX\n", info.f_flag);
+    printf("  f_namemax  : %lu\n", info.f_namemax);
+    //    printf("  f_pathmax  : %u\n", info.f_pathmax);
+    //    printf("  f_basetype : %s\n", info.f_basetype);
+  }
 }

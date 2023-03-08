@@ -10,7 +10,7 @@ main(){
         local base=$B/root_$j
         mkdir -p $base/subdir1/subdir2/lastsubdir
         for d in $(find $base -type d)    ;do
-            f=$d/file$count.txt
+            f=$d/file_in_root${j}_${d##*/}_$count.txt
             [[ ! -f $f ]] && echo hello world $j > $f
             ((count++))
         done

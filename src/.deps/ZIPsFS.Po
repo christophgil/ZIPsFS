@@ -99,7 +99,7 @@ ZIPsFS.o: ZIPsFS.c /usr/include/stdc-predef.h /usr/include/stdlib.h \
  /usr/include/x86_64-linux-gnu/bits/errno.h /usr/include/linux/errno.h \
  /usr/include/x86_64-linux-gnu/asm/errno.h \
  /usr/include/asm-generic/errno.h /usr/include/asm-generic/errno-base.h \
- /usr/include/x86_64-linux-gnu/bits/types/error_t.h \
+ /usr/include/x86_64-linux-gnu/bits/types/error_t.h /usr/include/malloc.h \
  /usr/include/x86_64-linux-gnu/sys/time.h /usr/local/include/zip.h \
  /usr/local/include/zipconf.h /usr/include/inttypes.h \
  /usr/include/assert.h configuration.h log.h ht.c ht.h \
@@ -356,6 +356,8 @@ config.h:
 /usr/include/asm-generic/errno-base.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/error_t.h:
+
+/usr/include/malloc.h:
 
 /usr/include/x86_64-linux-gnu/sys/time.h:
 
