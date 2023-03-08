@@ -5,7 +5,7 @@
   ZIPsFS
   Copyright (C) 2023   christoph Gille
   This program can be distributed under the terms of the GNU GPLv2.
-  (global-set-key (kbd "<f8>") '(switch-to-buffer "ZIPsFS.c"))
+  (global-set-key (kbd "<f1>") '(lambda() (interactive) (switch-to-buffer "ZIPsFS.c")))
 */
 #define FUSE_USE_VERSION 31
 #define _GNU_SOURCE
@@ -318,7 +318,9 @@ static char *realpath_mk_parent(const char *path,int *return_res){
     }else if (!S_ISDIR(zpath->stbuf.st_mode)){
       *return_res=ENOTDIR;
     }else if (!(*return_res=exceeds_max_path(mem=my_strlen(_root[0])+my_strlen(path)+2,path))){
-      char *d=strcat(strcpy(malloc(mem),_root[0]),parent);
+
+      char *d=malloc(mem);
+        strcat(strcpy(d,_root[0]),parent);
       recursive_mkdir(d);
       //if(!is_dir(d))
       free(d);
@@ -498,7 +500,7 @@ static void *xmp_init(struct fuse_conn_info *conn,struct fuse_config *cfg){
 // Functions where Only single paths need to be  substituted
 static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi){
   debug_is_zip;
-  if (is_zip) log_entered_function("xmp_getattr %s\n",path);
+  //if (is_zip) log_entered_function("xmp_getattr %s\n",path);
   (void) fi;
   int res;
   FIND_REAL(path);
@@ -507,9 +509,9 @@ static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_inf
     *stbuf=zpath->stbuf;
     if (ZPATH_REMAINING()==0) stat_set_dir(stbuf);
     if (zpath->flags&ZP_DEBUG) printf(ANSI_RED"dddddddddd "ANSI_RESET);
-    log_exited_function("xmp_getattr %s res=%d is_debug=%d   ",path,res, (zpath->flags&ZP_DEBUG)); log_file_stat("",stbuf);
+    //log_exited_function("xmp_getattr %s res=%d is_debug=%d   ",path,res, (zpath->flags&ZP_DEBUG)); log_file_stat("",stbuf);
   }else{
-    log_exited_function("xmp_getattr Error %s res=%d\n",path,res);
+    //log_exited_function("xmp_getattr Error %s res=%d\n",path,res);
   }
   destroy_zip_path(zpath);
   return res==-1?-errno:-res;
@@ -554,7 +556,7 @@ static int xmp_open(const char *path, struct fuse_file_info *fi){
   if (res){
     log_warn("xmp_open(%s) FIND_REAL res=%d\n",path,res);
   }else{
-    int handle=open(RP(),fi->flags);
+     handle=open(RP(),fi->flags);
     //log_entered_function(" open(%s) handle=%d\n",RP(),handle);
   }
   destroy_zip_path(zpath);
