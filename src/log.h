@@ -62,11 +62,11 @@ void log_strings(const char *pfx, char *ss[],int n,char *ss2[]){
 
 
 void log_file_stat(const char * name,const struct stat *s){
-  printf("%s  st_size=%lu st_blksize=%lu st_blocks=%lu links=%lu inode=%lu ",name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,s->st_ino);
+  char *color= (s->st_ino>(1L<<SHIFT_INODE)) ? ANSI_FG_MAGENTA:ANSI_FG_BLUE;
 
+
+  printf("%s  st_size=%lu st_blksize=%lu st_blocks=%lu links=%lu inode=%s%lu "ANSI_RESET,name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino);
   //st_blksize st_blocks f_bsize
-
-
     putchar( (S_ISDIR(s->st_mode))? 'd':'-');
     putchar( (s->st_mode&S_IRUSR)?'r':'-');
     putchar( (s->st_mode&S_IWUSR)?'w':'-');
@@ -93,8 +93,7 @@ void log_statvfs(char *path){
   if (-1==statvfs(path, &info)){
     perror("statvfs() error");
   }else{
-    puts("statvfs() returned the following information");
-    puts("about the root (/) file system:");
+    printf("statvfs() ");
     printf("  f_bsize    : %lu\n", info.f_bsize);
     printf("  f_blocks   : %lu\n", info.f_blocks),
     printf("  f_bfree    : %lu\n", info.f_bfree),
