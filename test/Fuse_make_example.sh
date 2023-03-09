@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -u
-readonly B=~/test/fuse
+readonly B=~/tmp/fuse
 mkdir -p  ${B}/{rootdir_writable,mnt}
 example_zips=(/usr/share/doc/texlive-doc/support/pdfjam/tests.zip /usr/share/doc/texlive-doc/bibtex/vak/test.zip /local/java/jnifuse_master.zip)
 main(){
-    local j count=0 f
+    local j k count=0 f
 
     for((j=1;j<4;j++));do
         local base=$B/root_$j
@@ -30,6 +30,19 @@ main(){
                 [[ -f $zip2 ]] || ln $zip $zip2
                 ((n++))
             done
+        fi
+        if ((j==3));then
+            for((k=0;k<3;k++));do
+                local pfx=$base/big_zip/big_file_$k
+                # shellcheck disable=SC2125
+                local zip=$pfx*
+                if [[ ! -s "$zip" ]];then
+                    openssl rand -out $pfx -base64 $(( 2**8 * 3/4 ))
+                    mv $pfx $pfx-=$(rhash --printf='%C'  --crc32 $pfx)
+                fi
+            done
+            local zip=$base/big_zip/BIG_FILE.zip
+             [[ ! -s $zip ]] && zip $zip $base/big_zip/big_file_*
         fi
     done
     f=$base/verybig.img

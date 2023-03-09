@@ -16,6 +16,138 @@ Run your code through valgrind. If you're mismanaging memory, it will tell you w
 /local/filesystem/mount-zip-main/lib
 
 
+* Zip
+zip_int8_t zip_fseek(zip_file_t *file, zip_int64_t offset, int whence);
+int zip_file_is_seekable(zip_file_t *file);
+
+* Zip_fopen
+libzip (-lzip)
+
+Synopsis
+#include <zip.h>
+
+zip_file_t * zip_fopen(zip_t *archive, const char *fname, zip_flags_t flags);
+
+zip_file_t *
+zip_fopen_index(zip_t *archive, zip_uint64_t index, zip_flags_t flags);
+
+Description
+The zip_fopen() function opens the file name fname in archive. The flags argument specifies how the name lookup should be done, according to the values are described in zip_name_locate(3).
+Also, the following values may be or'ed to it.
+
+ZIP_FL_COMPRESSED
+Read the compressed data. Otherwise the data is uncompressed by zip_fread().
+
+ZIP_FL_UNCHANGED
+Read the original data from the zip archive, ignoring any changes made to the file.
+
+The zip_fopen_index() function opens the file at position index.
+
+If encrypted data is encountered, the functions call zip_fopen_encrypted(3) or zip_fopen_index_encrypted(3) respectively, using the default password set with zip_set_default_password(3).
+
+Return Values
+Upon successful completion, a struct zip_file pointer is returned. Otherwise, NULL is returned and the error code in archive is set to indicate the error.
+
+Errors
+[ZIP_ER_CHANGED]
+The file data has been changed.
+
+[ZIP_ER_COMPNOTSUPP]
+The compression method used is not supported.
+
+[ZIP_ER_ENCRNOTSUPP]
+The encryption method used is not supported.
+
+[ZIP_ER_MEMORY]
+Required memory could not be allocated.
+
+[ZIP_ER_NOPASSWD]
+The file is encrypted, but no password has been provided.
+
+[ZIP_ER_READ]
+A file read error occurred.
+
+[ZIP_ER_SEEK]
+A file seek error occurred.
+
+[ZIP_ER_WRONGPASSWD]
+The provided password does not match the password used for encryption. Note that some incorrect passwords are not detected by the check done by zip_fopen().
+
+[ZIP_ER_ZLIB]
+Initializing the zlib stream failed.
+
+The function zip_fopen() may also fail and set zip_err for any of the errors specified for the routine zip_name_locate(3).
+
+The function zip_fopen_index() may also fail with ZIP_ER_INVAL if index is invalid.
+
+See Also
+libzip(3), zip_fclose(3), zip_fread(3), zip_fseek(3), zip_get_num_entries(3), zip_name_locate(3), zip_set_default_password(3)
+
+History
+zip_fopen() and zip_fopen_index() were added in libzip 1.0.
+
+Authors
+Dieter Baron <dillo@nih.at> and Thomas Klausner <tk@giga.or.at>
+
+Referenced By
+
+* fuse_file_info
+https://www.usenix.org/system/files/conference/fast17/fast17-vangoor.pdf
+/home/cgille/test/fuse/root_3/file_in_root3_root_3_10.txt
+struct fuse_file_info {
+    /** Open flags.	 Available in open() and release() */
+    int flags;
+
+    /** In case of a write operation indicates if this was caused by a delayed write from the page
+        cache. If so, then the context's pid, uid, and gid fields will not be valid, and the *fh*
+        value may not match the *fh* value that would have been sent with the corresponding
+        individual write requests if write caching had been disabled. */
+
+    unsigned int writepage : 1;
+
+    /** Can be filled in by open, to use direct I/O on this file. */
+    unsigned int direct_io : 1;
+
+    /** Can be filled in by open. It signals the kernel that any
+        currently cached file data (ie., data that the filesystem
+        provided the last time the file was open) need not be
+        invalidated. Has no effect when set in other contexts (in
+        particular it does nothing when set by opendir()). */
+
+   unsigned int keep_cache : 1;
+
+    /** Indicates a flush operation.  Set in flush operation, also      maybe set in highlevel lock operation and lowlevel release      operation. */
+    unsigned int flush : 1;
+
+    /** Can be filled in by open, to indicate that the file is not      seekable. */
+    unsigned int nonseekable : 1;
+
+    /* Indicates that flock locks for this file should be released.  If set, lock_owner shall contain a valid value. May only be set in ->release(). */
+    unsigned int flock_release : 1;
+
+    /** Can be filled in by opendir. It signals the kernel to
+        enable caching of entries returned by readdir().  Has no
+        effect when set in other contexts (in particular it does nothing when set by open()). */
+    unsigned int cache_readdir : 1;
+
+    /** Can be filled in by open, to indicate that flush is not needed        on close. */
+    unsigned int noflush : 1;
+
+    /** Padding.  Reserved for future use*/
+    unsigned int padding : 24;
+    unsigned int padding2 : 32;
+
+    /** File handle id.  May be filled in by filesystem in create,
+     * open, and opendir().  Available in most other file operations on the same file handle. */
+    uint64_t fh;
+
+    /** Lock owner id.  Available in locking operations and flush */
+    uint64_t lock_owner;
+
+    /** Requested poll events.  Available in ->poll.  Only set on kernels        which support it.  If unsupported, this field is set to zero. */
+    uint32_t poll_events;
+};
+
 
 * Error
     EPERM 1		/* Not super-user */
@@ -235,6 +367,20 @@ int is_dir(const char *path){
 
 
 
+
+
+
+* open vs open in C
+
+1) fopen is a library function while open is a system call.
+
+2) fopen provides buffered IO which is faster compare to open which is non buffered.
+
+3) fopen is portable while open not portable (open is environment specific).
+
+4) fopen returns a pointer to a FILE structure(FILE *); open returns an integer that identifies the file.
+
+5) A FILE * gives you the ability to use fscanf and other stdio functions.
 
 * Duplicates
 

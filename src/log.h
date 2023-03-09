@@ -8,6 +8,7 @@
 #define ANSI_GREEN "\x1B""[42m"
 #define ANSI_BLUE "\x1B""[44m"
 #define ANSI_YELLOW "\x1B""[43m"
+#define ANSI_CYAN "\x1B""[46m"
 #define ANSI_WHITE "\x1B""[47m"
 #define ANSI_BLACK "\x1B""[40m"
 #define ANSI_FG_GREEN "\x1B""[32m"
@@ -36,6 +37,9 @@ void log_reset(){ prints(ANSI_RESET);}
 #define log_debug_now(...)   prints(ANSI_FG_MAGENTA" Debug "ANSI_RESET),printf(__VA_ARGS__)
 #define log_entered_function(...)   prints(ANSI_INVERSE">>>> "ANSI_RESET),printf(__VA_ARGS__)
 #define log_exited_function(...)   prints(ANSI_INVERSE"<<<< "ANSI_RESET),printf(__VA_ARGS__)
+#define log_seek_ZIP(delta,...)   printf(ANSI_FG_BLACK""ANSI_YELLOW"SEEK ZIP FILE: %ld"ANSI_RESET" ",delta),printf(__VA_ARGS__)
+#define log_seek(delta,...)  printf(ANSI_FG_BLACK""ANSI_CYAN"SEEK REG FILE: %ld ",delta),printf(__VA_ARGS__)
+
 void log_path(const char *f,const char *path){
   printf("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
 }
@@ -81,8 +85,8 @@ void log_file_stat(const char * name,const struct stat *s){
 }
 
 
-void log_malloc(){
-   printf("uordblks=%d\n",mallinfo().uordblks);
+void log_mem(){
+  printf("_fh_data_n=%d  uordblks=%d\n",_fh_data_n,mallinfo().uordblks);
 }
 
 
