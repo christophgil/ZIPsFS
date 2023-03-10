@@ -35,14 +35,19 @@ main(){
             for((k=0;k<3;k++));do
                 local pfx=$base/big_zip/big_file_$k
                 # shellcheck disable=SC2125
-                local zip=$pfx*
-                if [[ ! -s "$zip" ]];then
-                    openssl rand -out $pfx -base64 $(( 2**8 * 3/4 ))
-                    mv $pfx $pfx-=$(rhash --printf='%C'  --crc32 $pfx)
+                if ! ls $pfx*; then
+                    mkdir -p ${pfx%/*}
+                    set -x
+                    openssl rand -out $pfx -base64 $((2**30*3/4))
+                    set +x
+                    mv $pfx $pfx-$(rhash --printf='%C'  --crc32 $pfx).tdf_bin
                 fi
             done
             local zip=$base/big_zip/BIG_FILE.zip
-             [[ ! -s $zip ]] && zip $zip $base/big_zip/big_file_*
+            [[ ! -s $zip ]] && zip -1 $zip $base/big_zip/big_file_*
+            local zip=$base/big_zip/BIG_FILE_UNCOMPRESSED.zip
+             [[ ! -s $zip ]] && zip -0 $zip $base/big_zip/big_file_*
+
         fi
     done
     f=$base/verybig.img

@@ -41,12 +41,13 @@
 #define SHIFT_INODE_ZIPENTRY 43
 
 #define ADD_INODE_ROOT() (((long)root+1)<<SHIFT_INODE_ROOT)
-#define ADD_INODE_E() (((long)i+1)<<SHIFT_INODE_ZIPENTRY)
+#define ADD_INODE_E(i) (((long)i+1)<<SHIFT_INODE_ZIPENTRY)
 
 #define WITH_HASH_TABLE 1
 #define WITH_ZIP 1
 #include "configuration.h"
 unsigned int my_strlen(const char *s){ return !s?0:strnlen(s,MAX_PATHLEN);}
+int _fh_data_n=0;
 #include "log.h"
 #include "ht.c"
 #define ST_BLKSIZE 4096
@@ -229,7 +230,7 @@ char *real_name_to_display_name(char *n){
 // However, it returns always the same pointer address
 //
 pthread_mutex_t _mutex_dir, _mutex;
-int _fh_data_n=0;
+
 struct fh_data{
   unsigned long fh;
   struct zip *zarchive;
@@ -345,51 +346,64 @@ int read_zipdir(struct zip_path *zpath, int root,void *buf, fuse_fill_dir_t fill
     else{
       if (!my_zip_open(zpath)){ /* The virtual path is a Zip file with zip-entry */
         struct zip_stat sb;
-        char s[MAX_PATHLEN];
-        const int n_entries=zip_get_num_entries(zpath->zarchive,0);
+        char s[MAX_PATHLEN],n[MAX_PATHLEN];
+        const int len_ze=strlen(ZPATH_ZIPENTRY()), n_entries=zip_get_num_entries(zpath->zarchive,0);
         //log_debug_now(ANSI_INVERSE"read_zipdir"ANSI_RESET"  n_entries=%d\n",n_entries);
         for(int i=0; i<n_entries; i++){
           if (zip_stat_index(zpath->zarchive,i,0,&sb)) continue;
-          const int len=my_strlen(sb.name), is_dir=sb.name[len-1]=='/',  len_ze=strlen(ZPATH_ZIPENTRY());
-          if (!filler_maybe_null){
-            if (len_ze==len-is_dir && !strncmp(ZPATH_ZIPENTRY(),sb.name,len_ze)){
-              /* read_zipdir() has been called from realpath_or_zip()  */
-              struct stat *st=&zpath->stbuf;
-              st->st_size=sb.size;
-              if (is_dir && !(zpath->flags&ZP_NOT_SET_S_IFDIR))  stat_set_dir(st);
-              st->st_ino|=ADD_INODE_E()|ADD_INODE_ROOT();
-              st->st_blocks=(st->st_size+511)/512;
-              st->st_nlink=0;
-              log_debug_now(ANSI_GREEN" Successfully"ANSI_RESET" returning from read_zipdir %s ",VP()); log_file_stat("",st);
-              log_debug_now(ANSI_RESET"  sb.size=%lu ",sb.size);
-              return 0;
+          int len=my_strlen(sb.name), is_dir=n[len-1]=='/', count=0;
+          if (len>=MAX_PATHLEN) { log_warn("Exceed MAX_PATHLEN: %s\n",sb.name); continue;}
+          strcpy(n,sb.name);
+          if (is_dir) n[len--]=0;
+          while(len){
+            if (count++){ // To get all dirs, successively remove last path component.
+              int slash=last_slash(n);
+              if (slash<0) break;
+              n[slash]=0;
+              is_dir=1;
+              if (!(len=my_strlen(n))) break;
             }
-          }else{
-            if (len<remaining || slash_not_trailing(sb.name+remaining)>0) continue;
+            //log_debug_now("n=%s filler=%s\n",n,yes_no(!!filler_maybe_null));
+            if (!filler_maybe_null){
+              if (len_ze==len && !strncmp(ZPATH_ZIPENTRY(),n,len_ze)){
+                /* read_zipdir() has been called from realpath_or_zip()  */
+                struct stat *st=&zpath->stbuf;
+                st->st_size=sb.size;
+                if (is_dir && !(zpath->flags&ZP_NOT_SET_S_IFDIR))  stat_set_dir(st);
+                st->st_ino|=ADD_INODE_E(count)|ADD_INODE_ROOT();
+                st->st_blocks=(st->st_size+511)/512;
+                st->st_nlink=0;
+                //log_debug_now(ANSI_GREEN" Successfully"ANSI_RESET" returning from read_zipdir %s ",VP()); log_file_stat("",st);
+                //log_debug_now(ANSI_RESET"  sb.size=%lu ",sb.size);
+                return 0;
+              }
+            }else{
+              if (len<remaining || slash_not_trailing(n+remaining)>0) continue;
 #if WITH_HASH_TABLE
-            if (ht_get(no_dups,sb.name)) continue;
-            ht_set(no_dups,sb.name,"");
+              if (ht_get(no_dups,n)) continue;
+              ht_set(no_dups,n,"");
 #endif
-            {
-              char *q=(char*)sb.name+remaining;
-              my_strcpy(s,q,strchrnul(q,'/')-q);
+              {
+                char *q=(char*)n+remaining;
+                my_strcpy(s,q,strchrnul(q,'/')-q);
+              }
+              if (!strlen(s)) continue;
+              if (len<len_ze||strncmp(ZPATH_ZIPENTRY(),n,len_ze)) continue;
+              //log_debug_now("VP=%s  n=%s  s=%s\n",VP(), n,s);
+              if (slash_not_trailing(n+len_ze+1)>=0) continue;
+              struct stat st=zpath->stbuf;
+              st.st_size=sb.size;
+              //log_debug_now("path=%s   sb.size=%lu",VP(),sb.size);
+              if (is_dir) stat_set_dir(&st);
+              st.st_ino=zpath->stbuf.st_ino|ADD_INODE_E(count)|ADD_INODE_ROOT();
+              st.st_blksize=ST_BLKSIZE;
+              st.st_blocks=(st.st_size+511)/512;
+              st.st_nlink=0;
+              char *color=strcmp("run.sh",s)?"":ANSI_RED;
+              //log_debug_now(ANSI_GREEN"filler"ANSI_RESET" s=%s%s"ANSI_RESET" size=%lu is_dir=%d  ",color,s,sb.size,is_dir); log_file_stat("",&st);
+              filler_maybe_null(buf,s,&st,0,fill_dir_plus);
             }
-            if (!strlen(s)) continue;
-            if (len<len_ze||strncmp(ZPATH_ZIPENTRY(),sb.name,len_ze)) continue;
-            //log_debug_now("VP=%s  sb.name=%s  s=%s\n",VP(), sb.name,s);
-            if (slash_not_trailing(sb.name+len_ze+1)>=0) continue;
-            struct stat st=zpath->stbuf;
-            st.st_size=sb.size;
-            //log_debug_now("path=%s   sb.size=%lu",VP(),sb.size);
-            if (is_dir) stat_set_dir(&st);
-            st.st_ino=zpath->stbuf.st_ino|ADD_INODE_E()|ADD_INODE_ROOT();
-            st.st_blksize=ST_BLKSIZE;
-            st.st_blocks=(st.st_size+511)/512;
-            st.st_nlink=0;
-            char *color=strcmp("run.sh",s)?"":ANSI_RED;
-            //log_debug_now(ANSI_GREEN"filler"ANSI_RESET" s=%s%s"ANSI_RESET" size=%lu is_dir=%d  ",color,s,sb.size,is_dir); log_file_stat("",&st);
-            filler_maybe_null(buf,s,&st,0,fill_dir_plus);
-          }
+          }// while len
         }
       }
     }
@@ -499,12 +513,16 @@ static void *xmp_init(struct fuse_conn_info *conn,struct fuse_config *cfg){
 /////////////////////////////////////////////////
 //
 // Functions where Only single paths need to be  substituted
+
 static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi){
+  static int count=0;
   debug_is_zip;
-  //if (is_zip) log_entered_function("xmp_getattr %s\n",path);
+  //if (is_zip)
+  log_entered_function("%d xmp_getattr %s\n",count++,path);
   (void) fi;
   int res;
   FIND_REAL(path);
+  //log_debug_now("xmp_getattr %d ",res);
   if (res==-1) res=ENOENT;
   if(!res){
     *stbuf=zpath->stbuf;
@@ -518,6 +536,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_inf
 }
 static int xmp_access(const char *path, int mask){
   log_entered_function("xmp_access %s\n",path);
+  //  if (DEBUG_NOW==DEBUG_NOW) exit(1);
   int res;
   FIND_REAL(path);
   if (!res){
@@ -698,19 +717,20 @@ static int xmp_rename(const char *old_path, const char *neu_path, unsigned int f
   if (res==-1) return -errno;
   return -res;
 }
+static int _count_xmp_read=0;
 static int xmp_read(const char *path, char *buf, size_t size, off_t offset,struct fuse_file_info *fi){
   assert(fi!=NULL);
   fh_data_synchronized(GET,fi);
-  log_entered_function(ANSI_BLUE"xmp_read"ANSI_RESET" %s size=%lu offset=%lu %p \n",path,size ,offset, d);
+  //if (_count_xmp_read++%100==0)
+    log_entered_function(ANSI_BLUE"%d  xmp_read"ANSI_RESET" %s size=%lu offset=%lu %p \n",_count_xmp_read,path,size ,offset, d);
   int  res=0;
   long diff;
-
   //log_debug_now("xmp_read  fh=%lu d=%p\n",fi->fh, d);
   if (d && d->zip_file){
     // offset>d: Need to skip data.   offset<d  means we need seek backward
     diff=offset-zip_ftell(d->zip_file);
     if (diff && zip_file_is_seekable(d->zip_file)){
-      //log_seek_ZIP(offset-d->offset,"%s zip_file_is_seekable\n",path);
+      log_seek_ZIP(diff,"%s zip_file_is_seekable\n",path);
       if (zip_fseek(d->zip_file,offset,SEEK_SET)<0) return -1;
     }else if (diff<0){ // Worst case
       log_seek_ZIP(diff,"%s Going to re-open\n",path);
@@ -724,9 +744,12 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,struc
       log_seek_ZIP(diff,"%s Going to skip\n",path);
       if (zip_fread(d->zip_file,buf,MIN(size,diff))<0) return -1;
     }
-    log_debug_now("xmp_read fh_data found");
+    //log_debug_now("xmp_read fh_data found");
+        puts("Davor Press enter"); getchar();
     zip_int64_t n=zip_fread(d->zip_file, buf, size);
-    log_debug_now("size=%lu  read  %lu Byte\n",size,n);
+    //log_debug_now("size=%lu  read  %lu Byte\n",size,n);
+    puts("Danach Press enter"); getchar();
+    log_exited_function("xmp_read zip\n");
     return n;
   }else{
     int fd;
@@ -751,6 +774,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,struc
     if (fi==NULL) close(fd);
     log_exited_function("xmp_read %s res=%d\n",path,res);
   }
+      log_exited_function("xmp_read regfile\n");
   return res;
 }
 static off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file_info *fi){
