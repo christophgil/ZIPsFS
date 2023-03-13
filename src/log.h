@@ -25,7 +25,7 @@
 #define ANSI_RESET "\x1B""[0m"
 #define TERMINAL_CLR_LINE "\r\x1B""[K"
 
-#define log_struct(st,field, format)   printf("    " #field "=" #format "\n",st->field)
+#define log_struct(st,field,format)   printf("    " #field "=" #format "\n",st->field)
 void prints(char *s){ if (s) fputs(s,stdout);}
 void log_reset(){ prints(ANSI_RESET);}
 #define log_msg(...) printf(__VA_ARGS__)
@@ -35,10 +35,10 @@ void log_reset(){ prints(ANSI_RESET);}
 #define log_error(...)  prints(ANSI_FG_RED" Error "ANSI_RESET),printf(__VA_ARGS__)
 #define log_succes(...)  prints(ANSI_FG_GREEN" Success "ANSI_RESET),printf(__VA_ARGS__)
 #define log_debug_now(...)   prints(ANSI_FG_MAGENTA" Debug "ANSI_RESET),printf(__VA_ARGS__)
-#define log_entered_function(...)   prints(ANSI_INVERSE">>>> "ANSI_RESET),printf(__VA_ARGS__)
-#define log_exited_function(...)   prints(ANSI_INVERSE"<<<< "ANSI_RESET),printf(__VA_ARGS__)
-#define log_seek_ZIP(delta,...)   printf(ANSI_FG_BLACK""ANSI_YELLOW"SEEK ZIP FILE: %ld"ANSI_RESET" ",delta),printf(__VA_ARGS__)
-#define log_seek(delta,...)  printf(ANSI_FG_BLACK""ANSI_CYAN"SEEK REG FILE: %ld ",delta),printf(__VA_ARGS__)
+#define log_entered_function(...)   prints(ANSI_INVERSE"> > > >"ANSI_RESET),printf(__VA_ARGS__)
+#define log_exited_function(...)   prints(ANSI_INVERSE"< < < <"ANSI_RESET),printf(__VA_ARGS__)
+#define log_seek_ZIP(delta,...)   printf(ANSI_FG_RED""ANSI_YELLOW"SEEK ZIP FILE:"ANSI_RESET" %'ld ",delta),printf(__VA_ARGS__)
+#define log_seek(delta,...)  printf(ANSI_FG_RED""ANSI_YELLOW"SEEK REG FILE:"ANSI_RESET" %ld ",delta),printf(__VA_ARGS__)
 
 void log_path(const char *f,const char *path){
   printf("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
@@ -71,26 +71,50 @@ void log_file_stat(const char * name,const struct stat *s){
 
   printf("%s  st_size=%lu st_blksize=%lu st_blocks=%lu links=%lu inode=%s%lu "ANSI_RESET,name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino);
   //st_blksize st_blocks f_bsize
-    putchar( (S_ISDIR(s->st_mode))? 'd':'-');
-    putchar( (s->st_mode&S_IRUSR)?'r':'-');
-    putchar( (s->st_mode&S_IWUSR)?'w':'-');
-    putchar( (s->st_mode&S_IXUSR)?'x':'-');
-    putchar( (s->st_mode&S_IRGRP)?'r':'-');
-    putchar( (s->st_mode&S_IWGRP)?'w':'-');
-    putchar( (s->st_mode&S_IXGRP)?'x':'-');
-    putchar( (s->st_mode&S_IROTH)?'r':'-');
-    putchar( (s->st_mode&S_IWOTH)?'w':'-');
-    putchar( (s->st_mode&S_IXOTH)?'x':'-');
-    putchar('\n');
+  putchar( (S_ISDIR(s->st_mode))? 'd':'-');
+  putchar( (s->st_mode&S_IRUSR)?'r':'-');
+  putchar( (s->st_mode&S_IWUSR)?'w':'-');
+  putchar( (s->st_mode&S_IXUSR)?'x':'-');
+  putchar( (s->st_mode&S_IRGRP)?'r':'-');
+  putchar( (s->st_mode&S_IWGRP)?'w':'-');
+  putchar( (s->st_mode&S_IXGRP)?'x':'-');
+  putchar( (s->st_mode&S_IROTH)?'r':'-');
+  putchar( (s->st_mode&S_IWOTH)?'w':'-');
+  putchar( (s->st_mode&S_IXOTH)?'x':'-');
+  putchar('\n');
+}
+int print_open_files(bool do_print){
+  int fd_count=0;
+  char proc_path[64], path[256];
+  struct dirent *dp;
+  snprintf(proc_path,64,"/proc/%i/fd/",getpid());
+  DIR *dir=opendir(proc_path);
+  const int len_proc_path=strlen(proc_path);
+  for(int i=0;dp=readdir(dir);i++){
+    fd_count++;
+    if (!do_print) continue;
+    if (atoi(dp->d_name)<4) continue;
+    proc_path[len_proc_path]=0;
+    strcat(proc_path+len_proc_path,dp->d_name);
+    readlink(proc_path,path,255);
+    printf("print_open_files %d  %s -> %s\n",i,proc_path,path);
+  }
+  closedir(dir);
+  return fd_count;
 }
 
+void print_pointers(){
+  for(int i=0;i<_fh_data_n;i++){
+    log_msg(ANSI_RESET"%d  zarchive=%p zip_file=%p\n",i,_fh_data[i].zarchive,_fh_data[i].zip_file  );
+  }
+
+}
 
 void log_mem(){
-  printf("_fh_data_n=%d  uordblks=%d\n",_fh_data_n,mallinfo().uordblks);
+  printf(ANSI_MAGENTA"Resources pid=%d"ANSI_RESET" _fh_data_n=%d  uordblks=%'d get_num_fds=%d\n",getpid(),_fh_data_n,mallinfo().uordblks,print_open_files(false));
+  // print_open_files();
+  // print_pointers();
 }
-
-
-
 
 void log_statvfs(char *path){
   struct statvfs info;
@@ -98,15 +122,29 @@ void log_statvfs(char *path){
     perror("statvfs() error");
   }else{
     printf("statvfs() ");
-    printf("  f_bsize    : %lu\n", info.f_bsize);
-    printf("  f_blocks   : %lu\n", info.f_blocks),
-    printf("  f_bfree    : %lu\n", info.f_bfree),
-    printf("  f_files    : %lu\n", info.f_files);
-    printf("  f_ffree    : %lu\n", info.f_ffree);
-    printf("  f_fsid     : %lu\n", info.f_fsid);
-    printf("  f_flag     : %lX\n", info.f_flag);
-    printf("  f_namemax  : %lu\n", info.f_namemax);
-    //    printf("  f_pathmax  : %u\n", info.f_pathmax);
-    //    printf("  f_basetype : %s\n", info.f_basetype);
+    printf("  f_bsize    : %lu\n",info.f_bsize);
+    printf("  f_blocks   : %lu\n",info.f_blocks),
+      printf("  f_bfree    : %lu\n",info.f_bfree),
+      printf("  f_files    : %lu\n",info.f_files);
+    printf("  f_ffree    : %lu\n",info.f_ffree);
+    printf("  f_fsid     : %lu\n",info.f_fsid);
+    printf("  f_flag     : %lX\n",info.f_flag);
+    printf("  f_namemax  : %lu\n",info.f_namemax);
+    //    printf("  f_pathmax  : %u\n",info.f_pathmax);
+    //    printf("  f_basetype : %s\n",info.f_basetype);
   }
+}
+
+
+
+
+void my_backtrace(){ /*  compile with options -g -rdynamic */
+  void *array[10];
+  size_t size=backtrace(array,10);
+  backtrace_symbols_fd(array,size,STDOUT_FILENO);
+}
+void handler(int sig) {
+  printf( "ZIPsFS Error: signal %d:\n",sig);
+  my_backtrace();
+  abort();
 }

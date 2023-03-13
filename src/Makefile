@@ -171,7 +171,7 @@ AUTOMAKE = ${SHELL} /home/cgille/git_projects/ZIPsFS/missing automake-1.16
 AWK = gawk
 CC = gcc
 CCDEPMODE = depmode=gcc3
-CFLAGS = -march=znver2
+CFLAGS = -march=znver2 -g -rdynamic
 CPP = gcc -E
 CPPFLAGS = 
 CYGPATH_W = echo
@@ -183,7 +183,11 @@ ECHO_T =
 EGREP = /usr/bin/grep -E
 EXEEXT = 
 FUSE_CFLAGS = -I/usr/local/include/fuse3
+
 FUSE_LIBS = -L/usr/local/lib/x86_64-linux-gnu -lfuse3 -lpthread
+
+
+
 GREP = /usr/bin/grep
 INSTALL = /usr/bin/install -c
 INSTALL_DATA = ${INSTALL} -m 644

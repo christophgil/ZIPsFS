@@ -9,6 +9,12 @@
 // Hash table structure: create with ht_create, free with ht_destroy.
 typedef struct ht ht;
 
+typedef struct {
+  uint64_t key_hash;
+  const char* key;  // key is NULL if this slot is empty
+  void* value;
+} ht_entry;
+
 // Create hash table and return pointer to it, or NULL if out of memory.
 ht* ht_create(size_t initalCapacity);
 
@@ -23,7 +29,7 @@ void* ht_get(ht* table, const char* key);
 // be NULL). If not already present in table, key is copied to newly
 // allocated memory (keys are freed automatically when ht_destroy is
 // called). Return address of copied key, or NULL if out of memory.
-const char* ht_set(ht* table, const char* key, void* value);
+ht_entry* ht_set(ht* table, const char* key, void* value);
 
 // Return number of items in hash table.
 size_t ht_length(ht* table);
