@@ -26,6 +26,9 @@ struct zip_file {
     bool eof;
     zip_source_t *src; /* data source */
 };
+* malloc
+https://developer.apple.com/library/archive/documentation/Performance/Conceptual/ManagingMemory/Articles/MemoryAlloc.html
+https://stackoverflow.com/questions/1739296/malloc-vs-mmap-in-c
 
 * Zip_fopen
 libzip (-lzip)

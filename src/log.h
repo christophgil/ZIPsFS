@@ -37,8 +37,9 @@ void log_reset(){ prints(ANSI_RESET);}
 #define log_debug_now(...)   prints(ANSI_FG_MAGENTA" Debug "ANSI_RESET),printf(__VA_ARGS__)
 #define log_entered_function(...)   prints(ANSI_INVERSE"> > > >"ANSI_RESET),printf(__VA_ARGS__)
 #define log_exited_function(...)   prints(ANSI_INVERSE"< < < <"ANSI_RESET),printf(__VA_ARGS__)
-#define log_seek_ZIP(delta,...)   printf(ANSI_FG_RED""ANSI_YELLOW"SEEK ZIP FILE:"ANSI_RESET" %'ld ",delta),printf(__VA_ARGS__)
-#define log_seek(delta,...)  printf(ANSI_FG_RED""ANSI_YELLOW"SEEK REG FILE:"ANSI_RESET" %ld ",delta),printf(__VA_ARGS__)
+#define log_seek_ZIP(delta,...)   printf(ANSI_FG_RED""ANSI_YELLOW"SEEK ZIP FILE:"ANSI_RESET" %'16ld ",delta),printf(__VA_ARGS__)
+#define log_seek(delta,...)  printf(ANSI_FG_RED""ANSI_YELLOW"SEEK REG FILE:"ANSI_RESET" %'16ld ",delta),printf(__VA_ARGS__)
+#define log_cache(...)  prints(ANSI_RED"CACHE"ANSI_RESET),printf(__VA_ARGS__)
 
 void log_path(const char *f,const char *path){
   printf("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
@@ -71,7 +72,7 @@ void log_file_stat(const char * name,const struct stat *s){
 
   printf("%s  st_size=%lu st_blksize=%lu st_blocks=%lu links=%lu inode=%s%lu "ANSI_RESET,name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino);
   //st_blksize st_blocks f_bsize
-  putchar( (S_ISDIR(s->st_mode))? 'd':'-');
+  putchar(  S_ISDIR(s->st_mode)?'d':'-');
   putchar( (s->st_mode&S_IRUSR)?'r':'-');
   putchar( (s->st_mode&S_IWUSR)?'w':'-');
   putchar( (s->st_mode&S_IXUSR)?'x':'-');
@@ -83,38 +84,53 @@ void log_file_stat(const char * name,const struct stat *s){
   putchar( (s->st_mode&S_IXOTH)?'x':'-');
   putchar('\n');
 }
-int print_open_files(bool do_print){
+int print_open_files(char *to_strg, int to_strg_max){
   int fd_count=0;
   char proc_path[64], path[256];
   struct dirent *dp;
   snprintf(proc_path,64,"/proc/%i/fd/",getpid());
   DIR *dir=opendir(proc_path);
   const int len_proc_path=strlen(proc_path);
-  for(int i=0;dp=readdir(dir);i++){
+  for(int i=0,n=0;dp=readdir(dir);i++){
     fd_count++;
-    if (!do_print) continue;
-    if (atoi(dp->d_name)<4) continue;
+    if (!to_strg || atoi(dp->d_name)<4) continue;
     proc_path[len_proc_path]=0;
     strcat(proc_path+len_proc_path,dp->d_name);
     readlink(proc_path,path,255);
-    printf("print_open_files %d  %s -> %s\n",i,proc_path,path);
+      n+=snprintf(to_strg+n,to_strg_max-n,"print_open_files %d  %s -> %s\n",i,proc_path,path);
   }
   closedir(dir);
   return fd_count;
 }
 
 void print_pointers(){
-  for(int i=0;i<_fh_data_n;i++){
-    log_msg(ANSI_RESET"%d  zarchive=%p zip_file=%p\n",i,_fh_data[i].zarchive,_fh_data[i].zip_file  );
+  for(int i=0;i<_fhdata_n;i++){
+    log_msg(ANSI_RESET"%d zarchive=%p zip_file=%p\n",i,_fhdata[i].zpath.zarchive,_fhdata[i].zip_file);
   }
-
 }
 
 void log_mem(){
-  printf(ANSI_MAGENTA"Resources pid=%d"ANSI_RESET" _fh_data_n=%d  uordblks=%'d get_num_fds=%d\n",getpid(),_fh_data_n,mallinfo().uordblks,print_open_files(false));
+  printf(ANSI_MAGENTA"Resources pid=%d"ANSI_RESET" _fhdata_n=%d  uordblks=%'d get_num_fds=%d mmap/munmap=%'d/%'d\n",getpid(),_fhdata_n,mallinfo().uordblks,print_open_files(NULL,0),_mmap_n,_munmap_n);
   // print_open_files();
   // print_pointers();
 }
+
+
+#define LEN_INFO 3333
+static char _info[LEN_INFO];
+char*  get_info(){
+  int n=sprintf(_info,"ROOTS\n");
+  for(int i=0;i<_root_n;i++){
+    n+=snprintf(_info+n,LEN_INFO-n,"   %s  %s\n",_root[i],_root_descript[i]);
+  }
+  n+=snprintf(_info+n,LEN_INFO-n,"\npid=%d  _fhdata_n=%d  uordblks=%'d\n",getpid(),_fhdata_n,mallinfo().uordblks);
+
+  n+=snprintf(_info+n,LEN_INFO-n,"\nOpen files (# %d)\n",print_open_files(NULL,0));
+  print_open_files(_info+n,LEN_INFO-n);
+}
+
+
+
 
 void log_statvfs(char *path){
   struct statvfs info;

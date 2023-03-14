@@ -125,8 +125,13 @@ ZIPsFS.o: ZIPsFS.c /usr/include/stdc-predef.h /usr/include/stdlib.h \
  /usr/include/x86_64-linux-gnu/sys/time.h \
  /usr/lib/gcc/x86_64-linux-gnu/9/include/stdbool.h \
  /usr/local/include/zip.h /usr/local/include/zipconf.h \
- /usr/include/inttypes.h /usr/include/assert.h configuration.h log.h ht.c \
- ht.h
+ /usr/include/inttypes.h /usr/include/assert.h ht.c ht.h \
+ /usr/include/x86_64-linux-gnu/sys/mman.h \
+ /usr/include/x86_64-linux-gnu/bits/mman.h \
+ /usr/include/x86_64-linux-gnu/bits/mman-map-flags-generic.h \
+ /usr/include/x86_64-linux-gnu/bits/mman-linux.h \
+ /usr/include/x86_64-linux-gnu/bits/mman-shared.h ZIPsFS.h \
+ configuration.h log.h
 
 /usr/include/stdc-predef.h:
 
@@ -442,10 +447,22 @@ config.h:
 
 /usr/include/assert.h:
 
-configuration.h:
-
-log.h:
-
 ht.c:
 
 ht.h:
+
+/usr/include/x86_64-linux-gnu/sys/mman.h:
+
+/usr/include/x86_64-linux-gnu/bits/mman.h:
+
+/usr/include/x86_64-linux-gnu/bits/mman-map-flags-generic.h:
+
+/usr/include/x86_64-linux-gnu/bits/mman-linux.h:
+
+/usr/include/x86_64-linux-gnu/bits/mman-shared.h:
+
+ZIPsFS.h:
+
+configuration.h:
+
+log.h:
