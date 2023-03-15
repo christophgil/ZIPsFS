@@ -52,13 +52,16 @@
 // Structs and enums
 static int _fhdata_n=0,_mmap_n=0,_munmap_n=0;
 enum data_op{GET,CREATE,RELEASE};
+enum when_cache_zip{NEVER,SEEK,RULE,ALWAYS};
+static enum when_cache_zip _when_cache=SEEK;
+static char *WHEN_CACHE_S[]={"never","seek","rule","always",NULL};
 struct zippath{
   const char *virtualpath;
-  char *virtualpath_without_entry;
-  int realpath_capacity;
-  char *realpath;
-  char *entry_path;
-  int len_virtual_zip_filepath;
+  char *virtualpath_without_entry; /*free*/
+  int realpath_max;
+  char *realpath;  /*free*/
+  char *entry_path; /*free*/
+  int len_virtual_zipfile;
   struct stat stbuf;
   struct zip *zarchive;
   unsigned int flags;
@@ -74,13 +77,13 @@ struct fhdata{
   size_t cache_len;
 };
 
-#define ROOTS 7
+
 #define FHDATA_MAX 3333
+#define ROOTS 7
 static struct fhdata _fhdata[FHDATA_MAX];
-#include "ZIPsFS.h" // (shell-command (concat  "makeheaders "  (buffer-file-name)))
-#include "configuration.h"
-#include "log.h"
+
 #define ST_BLKSIZE 4096
+#define FILE_FS_INFO "/_FILE_SYSTEM_INFO.HTML"
 ///////////////////////////////////////////////////////////
 //
 // The root directories are specified as program arguments
@@ -89,22 +92,28 @@ static struct fhdata _fhdata[FHDATA_MAX];
 //
 #define ROOT_WRITABLE (1<<1)
 #define ROOT_REMOTE (1<<2)
-int _root_n=0, _root_feature[ROOTS];
-char *_root[ROOTS], *_root_descript[ROOTS]={0};
+static int _root_n=0, _root_feature[ROOTS]={0};
+static char *_root[ROOTS]={0}, *_root_descript[ROOTS]={0};
+
+
+#include "ZIPsFS.h" // (shell-command (concat  "makeheaders "  (buffer-file-name)))
+#include "configuration.h"
+#include "log.h"
+
 // https://android.googlesource.com/kernel/lk/+/dima/for-travis/include/errno.h
 ///////////////////////////////////////////////////////////
 // Utils
+
 unsigned int my_strlen(const char *s){ return !s?0:strnlen(s,MAX_PATHLEN);}
 void my_close_fh(int fh){
   if (fh){
-    log_debug_now("my_close_fh %d\n",fh);
+    //log_debug_now("my_close_fh %d\n",fh);
     close(fh);
-    log_mem();
   }
 }
 int my_open_fh(const char* msg, const char *path,int flags){
   int fh=open(path,flags);
-  log_debug_now("my_open_fh %s %s fh=%d\n",msg,path,fh);
+  //log_debug_now("my_open_fh %s %s fh=%d\n",msg,path,fh);
   return fh;
 }
 #define MIN(X,Y) (((X)<(Y))?(X):(Y))
@@ -112,7 +121,7 @@ int my_open_fh(const char* msg, const char *path,int flags){
 #define ZP_NOT_SET_S_IFDIR (1<<2)
 #define IS_ZPATH_DEBUG() (zpath->flags&ZP_DEBUG)
 int empty_dot_dotdot(const char *s){
-  return !*s || *s=='.' && (!s[1] || s[1]=='.' && !s[2]);
+  return !*s || *s=='.' && (!s[1] || s[1]=='.'&&!s[2]);
 }
 int last_slash(const char *path){
   for(int i=my_strlen(path);--i>=0;){
@@ -126,13 +135,13 @@ static int slash_not_trailing(const char *path){
 }
 int pathlen_ignore_trailing_slash(const char *p){
   const int n=my_strlen(p);
-  return n && p[n-1]=='/' ? n-1:n;
+  return n && p[n-1]=='/'?n-1:n;
 }
 char *my_strcpy(char *dst,const char *src, size_t n){ /* Beware strncpy terminal 0 */
   *dst=0;
   if (src){
     if (n>=MAX_PATHLEN){
-      n=MAX_PATHLEN-strlen(src)-1;
+      n=MAX_PATHLEN-1;
       log_error("my_strcpy n=%zu MAX_PATHLEN\n",n);
     }
     strncat(dst,src,n);
@@ -141,10 +150,10 @@ char *my_strcpy(char *dst,const char *src, size_t n){ /* Beware strncpy terminal
 }
 static void recursive_mkdir(char *p){
   const int n=pathlen_ignore_trailing_slash(p);
-  for(int i=0;i<n;i++){
+  for(int i=2;i<n;i++){
     if (p[i]=='/') {
       p[i]=0;
-      mkdir(p+i,S_IRWXU);
+      mkdir(p,S_IRWXU);
       p[i]='/';
     }
   }
@@ -163,7 +172,7 @@ void stat_set_dir(struct stat *s){
     mode_t *m= &(s->st_mode);
     assert(S_IROTH>>2==S_IXOTH);
     s->st_size=ST_BLKSIZE;
-    s->st_nlink=0;
+    s->st_nlink=1;
     *m=(*m&~S_IFMT)|S_IFDIR|((*m&(S_IRUSR|S_IRGRP|S_IROTH))>>2); /* Can read - can also execute directory */
   }
 }
@@ -174,22 +183,22 @@ void stat_set_dir(struct stat *s){
 const char *zpath_zipentry(struct zippath *zpath){
   if (!zpath) return NULL;
   const char *v=zpath->virtualpath;
-  size_t l=zpath->len_virtual_zip_filepath;
+  size_t l=zpath->len_virtual_zipfile;
   return strlen(v)>l?v+l+1:"";
 }
-#define ZPATH_IS_ZIP() (zpath->len_virtual_zip_filepath)
+#define ZPATH_IS_ZIP() (zpath->len_virtual_zipfile)
 #define LOG_FILE_STAT() log_file_stat(zpath->virtualpath,&zpath->stbuf)
 #define VP() zpath->virtualpath
 #define RP() zpath->realpath
-#define LEN_VP() zpath->len_virtual_zip_filepath
-#define ZPATH_REMAINING() my_strlen(VP())-zpath->len_virtual_zip_filepath
+#define LEN_VP() zpath->len_virtual_zipfile
+#define ZPATH_REMAINING() my_strlen(VP())-zpath->len_virtual_zipfile
 #define NEW_ZIPPATH(virtpath)  struct zippath zp={0}, *zpath=&zp; VP()=virtpath
 #define FIND_REAL(virtpath)  NEW_ZIPPATH(virtpath); if (!strcmp(virtpath+strlen(virtpath)-6,"run.sh")) zpath->flags|=ZP_DEBUG;  res=realpath_or_zip_any_root(zpath)
-#define FREE_THEN_SET_NULL(a) free(a);a=NULL
+#define FREE_THEN_SET_NULL(a) free(a),a=NULL
 char *zpath_ensure_path_capacity(struct zippath *zpath,int n){
-  if (n>=zpath->realpath_capacity){
+  if (n>=zpath->realpath_max){
     FREE_THEN_SET_NULL(RP());
-    RP()=malloc(zpath->realpath_capacity=n+10);
+    RP()=malloc(zpath->realpath_max=n+10);
   }
   return RP();
 }
@@ -200,7 +209,7 @@ void zpath_log(char *msg, struct zippath *zpath){
   printf(" virtualpath="ANSI_FG_BLUE"%s   %u"ANSI_RESET" byte \n",VP(),my_strlen(VP()));
   printf("    realpath="ANSI_FG_BLUE"%s   %u"ANSI_RESET" byte dir="ANSI_FG_BLUE"%s"ANSI_RESET"\n",RP(),my_strlen(RP()),yes_no(S_ISDIR(zpath->stbuf.st_mode)));
   printf("  entry_path="ANSI_FG_BLUE"%s   %u"ANSI_RESET" byte\n",zpath->entry_path,my_strlen(zpath->entry_path));
-  printf(" len_virtual="ANSI_FG_BLUE"%d"ANSI_RESET"   ZIP %s"ANSI_RESET"\n",zpath->len_virtual_zip_filepath,  zpath->zarchive? ANSI_FG_GREEN"opened":ANSI_FG_RED"closed");
+  printf(" len_virtual="ANSI_FG_BLUE"%d"ANSI_RESET"   ZIP %s"ANSI_RESET"\n",zpath->len_virtual_zipfile,  zpath->zarchive? ANSI_FG_GREEN"opened":ANSI_FG_RED"closed");
 }
 void zpath_reset(struct zippath *zpath){
   if (zpath){
@@ -212,7 +221,7 @@ void zpath_reset(struct zippath *zpath){
     FREE_THEN_SET_NULL(RP());
     FREE_THEN_SET_NULL(zpath->entry_path);
     FREE_THEN_SET_NULL(zpath->virtualpath_without_entry);
-    zpath->realpath_capacity=zpath->len_virtual_zip_filepath=0;
+    zpath->realpath_max=LEN_VP()=0;
     clear_stat(&zpath->stbuf);
   }
 }
@@ -227,9 +236,9 @@ int zpath_stat(struct zippath *zpath){
   return stat(RP(),&zpath->stbuf);
 }
 int zpath_zip_open(struct zippath *zpath){
-  //  log_entered_function("zpath_zip_open %s len_virtual_zip_filepath=%d %p \n",RP(),ZPATH_IS_ZIP(),zpath->zarchive);
+  //  log_entered_function("zpath_zip_open %s len_virtual_zipfile=%d %p \n",RP(),ZPATH_IS_ZIP(),zpath->zarchive);
   if (zpath && !zpath->zarchive){
-    log_msg("zpath_zip_open zpath=%p ",zpath);
+    //log_msg("zpath_zip_open zpath=%p ",zpath);
     int err, fd=zpath->zarchive_fd=my_open_fh("zpath_zip_open ",RP(),O_RDONLY);
     /* O_DIRECT results in Error "No such file or directory" */
     if(fd<0 || !(zpath->zarchive=zip_fdopen(fd,0,&err))) {
@@ -289,17 +298,14 @@ static int real_file(struct zippath *zpath, int root){
 static int realpath_or_zip(struct zippath *zpath, int root){
   int res=1;
   char *append="";
-  if (zpath->len_virtual_zip_filepath=zip_contained_in_virtual_path(VP(),&append)){
+  if (LEN_VP()=zip_contained_in_virtual_path(VP(),&append)){
     if (!zpath->virtualpath_without_entry){
-      const int mem=zpath->len_virtual_zip_filepath+my_strlen(append)+1;
+      const int mem=LEN_VP()+my_strlen(append)+1;
       if (exceeds_max_path(mem,VP())) return ENAMETOOLONG;
-      zpath->virtualpath_without_entry=strcat(my_strcpy(malloc(mem),VP(),zpath->len_virtual_zip_filepath),append);
-      //log_debug_now("virtualpath_without_entry=%s\n",zpath->virtualpath_without_entry);
+      zpath->virtualpath_without_entry=strcat(my_strcpy(malloc(mem),VP(),LEN_VP()),append);
     }
     res=real_file(zpath,root);
-    if (!res && ZPATH_IS_ZIP()){
-      return read_zipdir(zpath,root,NULL,NULL,NULL);
-    }
+    if (!res && ZPATH_IS_ZIP()) return read_zipdir(zpath,root,NULL,NULL,NULL);
   }
   if (res)
     zpath_reset(zpath);
@@ -319,9 +325,16 @@ int realpath_or_zip_any_root(struct zippath *zpath){
 static void usage(){
   log_msg("\
 Usage:  ZIPsFS -s -f root-dir1 root-dir2 ... root-dir-n  mountPoint\n\n\
-The first root-dir1 is writable, the others read-only.\n\
-");
-  abort();
+The first root-dir1 is writable, the others read-only.\n\n");
+  log_msg("Caching zip-entries in RAM is controled by the option -c [");
+
+  for(char **s=WHEN_CACHE_S; *s; s++){
+    if (s!=WHEN_CACHE_S) putchar('|');
+    prints(*s);
+  }
+  log_msg("]\n");
+
+  exit(0);
 }
 //2023_my_data_zip_1.d.Zip
 ///////////////////////////////////////////////////////////
@@ -334,26 +347,22 @@ The first root-dir1 is writable, the others read-only.\n\
 //
 static pthread_mutex_t _mutex_dir, _mutex_fhdata, _mutex_cache;
 static const struct fhdata  FHDATA_EMPTY={0};//.fh=0,.offset=0,.file=NULL};
-//void destroy_fhdata(struct fhdata *d){
-/*
-  struct zip_file {
-  zip_t *za;
-  zip_error_t error;
-  bool eof;
-  zip_source_t *src;
-  };
-*/
-int fhdata_zip_open(struct fhdata *d){
-  fhdata_zip_fclose(d);
+int fhdata_zip_open(struct fhdata *d,char *msg){
+  zip_file_t *zf=d->zip_file;
+  if (zf && !zip_ftell(zf)) return 0;
+  fhdata_zip_fclose(d,"fhdata_zip_open");
   struct zip *za=d->zpath.zarchive;
+  //log_msg("fhdata_zip_open %s\n",msg);
   if(za &&  (d->zip_file=zip_fopen(za,zpath_zipentry(&d->zpath),0))!=0) return 0;
   return -1;
 }
 
-void fhdata_zip_fclose(struct fhdata *d){
+void fhdata_zip_fclose(struct fhdata *d,char *msg){
   if (d) {
-    log_debug_now("Going to zip_fclose %p\n",d->zip_file);
-    if (d->zip_file) zip_fclose(d->zip_file);
+    if (d->zip_file){
+      zip_fclose(d->zip_file);
+      log_debug_now("Going to zip_fclose %s %p  \n",msg,d->zip_file);
+    }
     d->zip_file=NULL;
   }
 }
@@ -362,13 +371,11 @@ static struct fhdata* fhdata(enum data_op op,struct fuse_file_info *fi){
   uint64_t fh=fi->fh;
   //log_msg(ANSI_FG_GRAY" fhdata %d  %lu\n"ANSI_RESET,op,fh);
   for(int i=_fhdata_n;--i>=0;){
-    //log_msg(ANSI_FG_GRAY"fh=%lu  [%d].fh=%ld "ANSI_RESET,fh,i,_fhdata[i].fh  );
-    //if (fh==_fhdata[i].fh) log_succes(" "); else log_failed(" ");
     struct fhdata *d=&_fhdata[i];
     if (fh==_fhdata[i].fh){
       if(op==RELEASE){
         log_msg(ANSI_FG_RED"Release fhdata %lu\n"ANSI_RESET,fh);
-        fhdata_zip_fclose(d);
+        fhdata_zip_fclose(d,"RELEASE");
         zpath_destroy(&d->zpath);
         cache_zip_entry(RELEASE,d);
         for(int j=i+1;j<_fhdata_n;j++) _fhdata[j-1]=_fhdata[j];
@@ -380,7 +387,7 @@ static struct fhdata* fhdata(enum data_op op,struct fuse_file_info *fi){
   if (op==CREATE && _fhdata_n<FHDATA_MAX){
     //log_msg(ANSI_FG_GREEN"New fhdata %lu\n"ANSI_RESET,fh);
     memset(&_fhdata[_fhdata_n],0,sizeof(struct fhdata));
-    _fhdata[_fhdata_n].fh=fh;;
+    _fhdata[_fhdata_n].fh=fh;
     return &_fhdata[_fhdata_n++];
   }
   return NULL;
@@ -413,85 +420,83 @@ static int realpath_mk_parent(char *realpath,const char *path){
 int read_zipdir(struct zippath *zpath, int root,void *buf, fuse_fill_dir_t filler_maybe_null,struct ht *no_dups){
   int res=0;
   const int remaining=ZPATH_REMAINING();
-  if (IS_ZPATH_DEBUG())   log_entered_function("read_zipdir rp=%s filler=%p vp=%s  len_virtual_zip_filepath=%d   remaining=%d\n",RP(),filler_maybe_null,VP(),LEN_VP(),remaining);
+  if (IS_ZPATH_DEBUG())   log_entered_function("read_zipdir rp=%s filler=%p vp=%s  len_virtual_zipfile=%d   remaining=%d\n",RP(),filler_maybe_null,VP(),LEN_VP(),remaining);
   if (remaining<0){ /* No Zipfile */
-    //log_error("realpath=%s  remaining=%d   virtualpath=%s len_virtual_zip_filepath=%d\n",RP(),remaining, VP(), ZPATH_IS_ZIP());
+    //log_error("realpath=%s  remaining=%d   virtualpath=%s len_virtual_zipfile=%d\n",RP(),remaining, VP(), ZPATH_IS_ZIP());
     res=-1;
   }else if(remaining==0 && !filler_maybe_null){ /* The virtual path is a Zip file */
     return 0; /* Just report success */
   }else{
     if (zpath_stat(zpath)) res=ENOENT;
-    else{
-      if (!zpath_zip_open(zpath)){ /* The virtual path is a Zip file with zip-entry */
-        struct zip_stat sb;
-        char s[MAX_PATHLEN],n[MAX_PATHLEN];
-        const int len_ze=strlen(zpath_zipentry(zpath)), n_entries=zip_get_num_entries(zpath->zarchive,0);
-        //log_debug_now(ANSI_INVERSE"read_zipdir"ANSI_RESET"  n_entries=%d\n",n_entries);
-        for(int i=0,count=0; i<n_entries; i++){
-          if (zip_stat_index(zpath->zarchive,i,0,&sb)) continue;
-          int len=my_strlen(sb.name), is_dir=n[len-1]=='/',not_at_the_first_pass=0;
-          if (len>=MAX_PATHLEN) { log_warn("Exceed MAX_PATHLEN: %s\n",sb.name); continue;}
-          strcpy(n,sb.name);
-          if (is_dir) n[len--]=0;
-          while(len){
-            if (not_at_the_first_pass++){ // To get all dirs, successively remove last path component.
-              int slash=last_slash(n);
-              if (slash<0) break;
-              n[slash]=0;
-              is_dir=1;
+    else if (!zpath_zip_open(zpath)){ /* The virtual path is a Zip file with zip-entry */
+      struct zip_stat sb;
+      char s[MAX_PATHLEN],n[MAX_PATHLEN];
+      const int len_ze=strlen(zpath_zipentry(zpath)), n_entries=zip_get_num_entries(zpath->zarchive,0);
+      //log_debug_now(ANSI_INVERSE"read_zipdir"ANSI_RESET"  n_entries=%d\n",n_entries);
+      for(int i=0,count=0; i<n_entries; i++){
+        if (zip_stat_index(zpath->zarchive,i,0,&sb)) continue;
+        int len=my_strlen(sb.name), is_dir=n[len-1]=='/',not_at_the_first_pass=0;
+        if (len>=MAX_PATHLEN) { log_warn("Exceed MAX_PATHLEN: %s\n",sb.name); continue;}
+        strcpy(n,sb.name);
+        if (is_dir) n[len--]=0;
+        while(len){
+          if (not_at_the_first_pass++){ /* To get all dirs, and parent dirs successively remove last path component. */
+            const int slash=last_slash(n);
+            if (slash<0) break;
+            n[slash]=0;
+            is_dir=1;
+          }
+          if (!(len=my_strlen(n))) break;
+          count++;
+          if (!filler_maybe_null){
+              /* read_zipdir() has been called from realpath_or_zip()  */
+            if (len_ze==len && !strncmp(zpath_zipentry(zpath),n,len)){
+              struct stat *st=&zpath->stbuf;
+              st->st_size=sb.size;
+              if (is_dir && !(zpath->flags&ZP_NOT_SET_S_IFDIR))  stat_set_dir(st);
+              st->st_ino^=(ADD_INODE_E(count)|ADD_INODE_ROOT());
+              st->st_blocks=(st->st_size+511)/512;
+              st->st_nlink=1;
+              //log_debug_now(ANSI_RESET"  sb.size=%lu ",sb.size);
+              return 0;
             }
-            if (!(len=my_strlen(n))) break;
-            //log_debug_now("n=%s filler=%s\n",n,yes_no(!!filler_maybe_null));
-            //log_debug_now("%s count=%d %s \n",yes_no(!!filler_maybe_null),count,VP());
-            count++;
-            if (!filler_maybe_null){
-              if (len_ze==len && !strncmp(zpath_zipentry(zpath),n,len_ze)){
-                /* read_zipdir() has been called from realpath_or_zip()  */
-                struct stat *st=&zpath->stbuf;
-                st->st_size=sb.size;
-                if (is_dir && !(zpath->flags&ZP_NOT_SET_S_IFDIR))  stat_set_dir(st);
-                st->st_ino^=(ADD_INODE_E(count)|ADD_INODE_ROOT());
-                st->st_blocks=(st->st_size+511)/512;
-                st->st_nlink=0;
-                //log_debug_now(ANSI_GREEN" Successfully"ANSI_RESET" returning from read_zipdir %s ",VP()); log_file_stat("",st);
-                //log_debug_now(ANSI_RESET"  sb.size=%lu ",sb.size);
-                return 0;
-              }
-            }else{
-              if (len<remaining || slash_not_trailing(n+remaining)>0) continue;
-              {
-                char *q=(char*)n+remaining;
-                my_strcpy(s,q,strchrnul(q,'/')-q);
-              }
-              if (ht_set(no_dups,s,"")) continue;
-              //log_debug_now("Vor strncmp(%s,%s,%d) \n",zpath_zipentry(zpath),n,len_ze  );
-              if (!*s || len<len_ze||strncmp(zpath_zipentry(zpath),n,len_ze)) continue;
-              //log_debug_now("VP=%s  n=%s  s=%s\n",VP(), n,s);
-              if (slash_not_trailing(n+len_ze+1)>=0) continue;
-              struct stat st=zpath->stbuf;
-              st.st_size=sb.size;
-              //log_debug_now("path=%s   sb.size=%lu",VP(),sb.size);
-              if (is_dir) stat_set_dir(&st);
-              st.st_ino=zpath->stbuf.st_ino^(ADD_INODE_E(count)|ADD_INODE_ROOT());
-              st.st_blksize=ST_BLKSIZE;
-              st.st_blocks=(st.st_size+511)/512;
-              st.st_nlink=0;
-              char *color=strcmp("run.sh",s)?"":ANSI_RED;
-              //log_debug_now(ANSI_GREEN"filler"ANSI_RESET" s=%s%s"ANSI_RESET" size=%lu is_dir=%d  ",color,s,sb.size,is_dir); log_file_stat("",&st);
-              filler_maybe_null(buf,s,&st,0,fill_dir_plus);
+          }else{
+            if (len<remaining || slash_not_trailing(n+remaining)>0) continue;
+            {
+              char *q=(char*)n+remaining;
+              my_strcpy(s,q,strchrnul(q,'/')-q);
             }
-          }// while len
-        }
+            if (ht_set(no_dups,s,"")) continue;
+            //log_debug_now("Vor strncmp(%s,%s,%d) \n",zpath_zipentry(zpath),n,len_ze  );
+            if (!*s || len<len_ze||strncmp(zpath_zipentry(zpath),n,len_ze)) continue;
+            //log_debug_now("VP=%s  n=%s  s=%s\n",VP(), n,s);
+            if (slash_not_trailing(n+len_ze+1)>=0) continue;
+            struct stat st=zpath->stbuf;
+            st.st_size=sb.size;
+            //log_debug_now("path=%s   sb.size=%lu",VP(),sb.size);
+            if (is_dir) stat_set_dir(&st);
+            st.st_ino=zpath->stbuf.st_ino^(ADD_INODE_E(count)|ADD_INODE_ROOT());
+            st.st_blksize=ST_BLKSIZE;
+            st.st_blocks=(st.st_size+511)/512;
+            st.st_nlink=0;
+            char *color=strcmp("run.sh",s)?"":ANSI_RED;
+            //log_debug_now(ANSI_GREEN"filler"ANSI_RESET" s=%s%s"ANSI_RESET" size=%lu is_dir=%d  ",color,s,sb.size,is_dir); log_file_stat("",&st);
+            filler_maybe_null(buf,s,&st,0,fill_dir_plus);
+          }
+        }// while len
       }
     }
   }
   if (!filler_maybe_null) return ENOENT;
   return res;
 }
+
 static int impl_readdir(struct zippath *zpath,int root, void *buf, fuse_fill_dir_t filler,struct ht *no_dups){
-  int is_zip=strcasestr(RP(),".zip")>0;
-  // if (is_zip) { log_entered_function("impl_readdir '%s\n",RP()); LOG_FILE_STAT();}
-  if (!RP() || !*RP()) return 0;
+  const char *rp=RP();
+  int is_zip=strcasestr(rp,".zip")>0;
+  //log_entered_function("impl_readdir '%s\n",rp);
+  LOG_FILE_STAT();
+  if (!rp || !*rp) return 0;
   pthread_mutex_lock(&_mutex_dir);
   int res=0;
   if (ZPATH_IS_ZIP()){
@@ -499,7 +504,7 @@ static int impl_readdir(struct zippath *zpath,int root, void *buf, fuse_fill_dir
   }else{
     if (!zpath_stat(zpath)){
       struct stat st;
-      DIR *dir=opendir(RP());
+      DIR *dir=opendir(rp);
       if(dir==NULL){
         perror("Unable to read directory");
         res=ENOMEM;
@@ -520,6 +525,11 @@ static int impl_readdir(struct zippath *zpath,int root, void *buf, fuse_fill_dir
           filler(buf,n,&st,0,fill_dir_plus);
         }
         closedir(dir);
+        if (!root && !strcmp(VP(),"/")){
+          //simple_stat(&st);
+          filler(buf,FILE_FS_INFO+1,NULL,0,fill_dir_plus);
+          log_debug_now("NACH FILLER %s\n",FILE_FS_INFO+1);
+        }
       }
     }
   }
@@ -545,8 +555,17 @@ static void *xmp_init(struct fuse_conn_info *conn,struct fuse_config *cfg){
 /////////////////////////////////////////////////
 //
 // Functions where Only single paths need to be  substituted
+
 static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi){
   if (is_skip_file_name(path)) return -ENOENT;
+  if (!strcmp(path,FILE_FS_INFO)){
+    clear_stat(stbuf);
+    stbuf->st_mode=S_IFREG|0444;
+    stbuf->st_nlink=1;
+    stbuf->st_size=MAX_INFO;
+    time(&stbuf->st_mtime);
+    return 0;
+  }
   fhdata_synchronized(GET,fi);
   if (d && d->stat.st_ino){
     *stbuf=d->stat;
@@ -555,7 +574,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_inf
   static int count=0;
   int res;
   FIND_REAL(path);
-  log_entered_function("%d xmp_getattr %s fh=%lu FIND_REAL=%d\n",count++,path, fi!=NULL?fi->fh:0,res);
+  //log_entered_function("%d xmp_getattr %s fh=%lu FIND_REAL=%d\n",count++,path, fi!=NULL?fi->fh:0,res);
   if (res==-1) res=ENOENT;
   if(!res){
     *stbuf=zpath->stbuf;
@@ -570,7 +589,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_inf
 }
 static int xmp_access(const char *path, int mask){
   if (is_skip_file_name(path)) return -ENOENT;
-  log_entered_function("xmp_access %s\n",path);
+  if (!strcmp(path,FILE_FS_INFO)) return 0;
   int res;
   FIND_REAL(path);
   if (!res){
@@ -603,28 +622,39 @@ static int xmp_rmdir(const char *path){
 }
 
 
+void log_list_caches(char *title){
+  log_cache("log_list_caches %s\n",title);
+  for(int i=_fhdata_n; --i>=0;){
+    struct fhdata *d=_fhdata+i;
+    printf("  %4d cache %s$%zu %p\n ",i, d->zpath.realpath, d->cache_hash,d->cache);
+  }
+}
+
 bool cache_zip_entry(enum data_op op,struct fhdata *d){
   const char *rp=d->zpath.realpath;
+  if (!rp) return false;
   char *c=d->cache;
   if (!c){
     if (op==RELEASE) return false;
     uint64_t h=d->cache_hash;
     if (!h) h=d->cache_hash=hash_key(rp);
+    log_list_caches(op==GET?"GET":"CREATE");
     for(int i=_fhdata_n; --i>=0;){
-      if(_fhdata[i].cache_hash==h && !strcmp(rp,d->zpath.realpath)){
-        c=d->cache;
+      char *rp2=d->zpath.realpath;
+      if(d!=_fhdata+i && _fhdata[i].cache_hash==h && rp && !strcmp(rp,rp2)){
+        c=d->cache=_fhdata[i].cache;
+        d->cache_len=_fhdata[i].cache_len;
         break;
       }
     }
-    if (c){
-      log_debug_now("Found cache in other fhdata\n"); exit(9);
+    if (c){log_cache(ANSI_FG_GREEN"Found in othe fhdata %p\n"ANSI_RESET,d->cache);
     }
   }
   switch(op){
   case CREATE:
     if (!c){
       const size_t len=d->zpath.stbuf.st_size;
-      log_cache("Going to cache %s %'zu Bytes\n",rp,len);
+      log_cache(ANSI_RED"Going to cache %s %'zu Bytes"ANSI_RESET"\n",rp,len);
       char *bb=mmap(NULL,len,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,0,0);
       if (bb!=MAP_FAILED) _mmap_n++;
       else{
@@ -632,17 +662,20 @@ bool cache_zip_entry(enum data_op op,struct fhdata *d){
         return false;
       }
       d->cache=bb;
-      fhdata_zip_open(d);
+      fhdata_zip_open(d,"CREATE");
       zip_int64_t  already=0;
       while(already<len){
         zip_int64_t n=zip_fread(d->zip_file,bb+already,len-already);
+        log_cache("Read %'zu\n",n);
         if (n<0){
           log_error("cache_zip_entry_in_RAM %s\n  read %'zu/%'zu",rp,already,len);
           break;
         }
         already+=n;
       }
+      fhdata_zip_fclose(d,"CREATED");
       d->cache_len=already;
+      log_list_caches("Created");
       return true;
     }
     break;
@@ -665,17 +698,23 @@ bool cache_zip_entry(enum data_op op,struct fhdata *d){
   }
   return c!=NULL;
 }
-
-
-bool maybe_cache_zip_entry(enum data_op op,struct fhdata *d){
+bool maybe_cache_zip_entry(enum data_op op,struct fhdata *d,bool always){
+  if (!always && !d->cache){
+    switch(_when_cache){
+    case NEVER: return false;break;
+    case RULE:
+      if (!need_cache_zip_entry(d->zpath.virtualpath)); return false;
+      break;
+    }
+  }
   pthread_mutex_lock(&_mutex_fhdata);
   const bool success=cache_zip_entry(op,d);
   pthread_mutex_unlock(&_mutex_fhdata);
   return success;
 }
 static int xmp_open(const char *path, struct fuse_file_info *fi){
+  if (!strcmp(path,FILE_FS_INFO)) return 0;
   //log_entered_function("xmp_open %s\n",path);
-  log_mem();
   static uint64_t _next_fh=FH_ZIP_MIN;
   int res,handle=0;
   FIND_REAL(path);
@@ -691,11 +730,7 @@ static int xmp_open(const char *path, struct fuse_file_info *fi){
       handle=fi->fh=_next_fh++;
       fhdata_synchronized(CREATE,fi);
       d->zpath=*zpath;zpath=NULL;
-      maybe_cache_zip_entry(CREATE,d);
-      fhdata_zip_open(d);
-      //d->zip_file=zip_fopen(zpath->zarchive,zpath_zipentry(zpath), 0);
-
-      //log_debug_now("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz fh=%lu fhdata=%p zf=%p \n",fi->fh, d, d->zip_file);
+      if (!maybe_cache_zip_entry(CREATE,d,false)) fhdata_zip_open(d,"xmp_open");
     }else{
       //log_debug_now(" Going to open(%s) \n",RP());
       handle=my_open_fh("xmp_open reg file",RP(),fi->flags);
@@ -812,21 +847,33 @@ static int xmp_rename(const char *old_path, const char *neu_path, unsigned int f
   if (res==-1) return -errno;
   return -res;
 }
-static int _count_xmp_read=0;
+static int maybe_read_from_cache(struct fhdata *d, char *buf, size_t size, off_t offset,bool always){
+  int res=-1;
+  if (d && maybe_cache_zip_entry(GET,d,always)){
+    //log_cache("xmp_read %s  cache=%p size=%'zu\n",path,cache,size);
+    res=0;
+    if (offset<d->cache_len) memcpy(buf,d->cache+offset,res=MIN(size,d->cache_len-offset));
+  }
+  return res;
+}
 static int xmp_read(const char *path, char *buf, size_t size, off_t offset,struct fuse_file_info *fi){
+  static int _count_xmp_read=0;
   assert(fi!=NULL);
+  if (!strcmp(path,FILE_FS_INFO)){
+    const char *s=get_info();
+    const int n=MIN(size,strnlen(s,MAX_INFO)-offset);
+    if (n<=0) return 0;
+    memcpy(buf,s+offset,n);
+    return n;
+  }
   fhdata_synchronized(CREATE,fi);
   //if (_count_xmp_read++%1000==0) log_entered_function(ANSI_BLUE"%d  xmp_read"ANSI_RESET" %s size=%zu offset=%'lu %p  fh=%lu\n",_count_xmp_read,path,size ,offset, d,fi==NULL?0:fi->fh);
   int res=0;
   long diff;
   //log_debug_now("xmp_read  fh=%lu d=%p\n",fi->fh, d);
-  if(d && maybe_cache_zip_entry(GET,d)){
+  if((res=maybe_read_from_cache(d,buf,size,offset,false))>=0){
+    return res;
     //log_cache("xmp_read %s  cache=%p size=%'zu\n",path,cache,size);
-    if (offset<d->cache_len){
-      memcpy(buf,d->cache+offset,res=MIN(size,d->cache_len-offset));
-    }else{
-      log_error("xmp_read from cache: Offset too large %s  offset=%'zu  size=%'zu cache->len=%'zu\n",path,offset,size,d->cache_len);
-    }
   }else if (d && d->zip_file){
     // offset>d: Need to skip data.   offset<d  means we need seek backward
     diff=offset-zip_ftell(d->zip_file);
@@ -834,11 +881,10 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,struc
       log_seek_ZIP(diff,"%s zip_file_is_seekable\n",path);
       if (zip_fseek(d->zip_file,offset,SEEK_SET)<0) return -1;
     }else if (diff<0){ // Worst case
-      log_seek_ZIP(diff,"%s Going to re-open\n",path);
-      fhdata_zip_open(d);
-      /* fhdata_zip_fclose(d); */
-      /* struct zip *za=d->zpath.zarchive; */
-      /* if(za) d->zip_file=zip_fopen(za,zpath_zipentry(&d->zpath),0); //ZIP_FL_COMPRESSED */
+      if (_when_cache>=SEEK && (res=maybe_read_from_cache(d,buf,size,offset,false))>=0){
+        return res;
+      }
+      fhdata_zip_open(d,"SEEK");
     }
     {
       int report_skip=0;
@@ -848,12 +894,8 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,struc
       }
     }
     //log_debug_now("xmp_read fhdata found");
-    //puts("Davor Press enter"); getchar();
-    log_mem();
     zip_int64_t n=zip_fread(d->zip_file, buf, size);
-    //log_debug_now("size=%zu  read  %zu Byte\n",size,n);
-    //puts("Danach Press enter"); getchar();
-    //log_exited_function("xmp_read zip\n");
+
     return n;
   }else{
     int fd;
@@ -905,9 +947,8 @@ static off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file
 static int xmp_release(const char *path, struct fuse_file_info *fi){
   (void) path;
   fhdata_synchronized(RELEASE,fi);
-  log_entered_function("xmp_release %s d=%p zip_file=%p\n",path,d,!d?NULL:d->zip_file);
+  //log_entered_function("xmp_release %s d=%p zip_file=%p\n",path,d,!d?NULL:d->zip_file);
   if (fi->fh <FH_ZIP_MIN) close(fi->fh);
-  fhdata(RELEASE,fi);
   return 0;
 }
 static struct fuse_operations xmp_oper={0};
@@ -917,7 +958,7 @@ int main(int argc, char *argv[]){
   assert((1<<(SHIFT_INODE_ZIPENTRY-SHIFT_INODE_ROOT))>ROOTS);
   signal(SIGSEGV,handler);
   //  raise(SIGSEGV);
-  //  printf("MIN_BUFSIZE=%d   FUSE_MAXPAGES_PATH=%s \n",MIN_BUFSIZE,FUSE_MAXPAGES_PATH);
+  //  printf("EOF=%d  \n",EOF);exit(9);
   /* { */
   /* char *n=strdup("2023_my_data_zip_1.d.Zip"); */
   /* real_name_to_display_name(n); */
@@ -974,25 +1015,30 @@ int main(int argc, char *argv[]){
   S(lseek);
 #undef S
   if ((getuid()==0) || (geteuid()==0)){ log_msg("Running BBFS as root opens unnacceptable security holes\n");return 1;}
-  char *argv_fuse[9];
+  char *argv_fuse[9]={0};
   int c,argc_fuse=1;
   argv_fuse[0]=argv[0];
-  while((c=getopt(argc,argv,"o:sfdh"))!=-1){
+  while((c=getopt(argc,argv,"o:sfdhc:"))!=-1){
     switch(c){
     case 'h': usage();break;
+    case 'c':
+      for(int i=0;WHEN_CACHE_S[i];i++){
+        if (!strcmp(WHEN_CACHE_S[i],optarg)) _when_cache=i;
+      }
+      break;
     case 's': argv_fuse[argc_fuse++]="-s"; break;
     case 'f': argv_fuse[argc_fuse++]="-f"; break;
     case 'd': argv_fuse[argc_fuse++]="-d";break;
     case 'o': argv_fuse[argc_fuse++]="-o"; argv_fuse[argc_fuse++]=strdup(optarg);break;
     }
   }
+  argv_fuse[argc_fuse++]="-s";
   // See which version of fuse we're running
   log_msg("FUSE_MAJOR_VERSION=%d FUSE_MAJOR_VERSION=%d \n",FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION);
   if (MAX_PATHLEN>PATH_MAX) log_abort(" MAX_PATHLEN (%d)>PATH_MAX (%d)  \n",MAX_PATHLEN,PATH_MAX);
   log_msg("MAX_PATHLEN=%d \n",MAX_PATHLEN);
   if (argc-optind<2) {usage();abort();}
   argv_fuse[argc_fuse++]=argv[argc-1]; // last is the mount point
-  argv_fuse[argc_fuse]=NULL;
   _root_feature[0]=ROOT_WRITABLE;
   _root_descript[0]=" (writable)";
   for(int i=optind;i<argc-1;i++){

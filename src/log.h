@@ -39,7 +39,7 @@ void log_reset(){ prints(ANSI_RESET);}
 #define log_exited_function(...)   prints(ANSI_INVERSE"< < < <"ANSI_RESET),printf(__VA_ARGS__)
 #define log_seek_ZIP(delta,...)   printf(ANSI_FG_RED""ANSI_YELLOW"SEEK ZIP FILE:"ANSI_RESET" %'16ld ",delta),printf(__VA_ARGS__)
 #define log_seek(delta,...)  printf(ANSI_FG_RED""ANSI_YELLOW"SEEK REG FILE:"ANSI_RESET" %'16ld ",delta),printf(__VA_ARGS__)
-#define log_cache(...)  prints(ANSI_RED"CACHE"ANSI_RESET),printf(__VA_ARGS__)
+#define log_cache(...)  prints(ANSI_RED"CACHE"ANSI_RESET" "),printf(__VA_ARGS__)
 
 void log_path(const char *f,const char *path){
   printf("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
@@ -64,12 +64,8 @@ void log_strings(const char *pfx, char *ss[],int n,char *ss2[]){
     }
   }
 }
-
-
 void log_file_stat(const char * name,const struct stat *s){
   char *color= (s->st_ino>(1L<<SHIFT_INODE_ROOT)) ? ANSI_FG_MAGENTA:ANSI_FG_BLUE;
-
-
   printf("%s  st_size=%lu st_blksize=%lu st_blocks=%lu links=%lu inode=%s%lu "ANSI_RESET,name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino);
   //st_blksize st_blocks f_bsize
   putchar(  S_ISDIR(s->st_mode)?'d':'-');
@@ -84,24 +80,6 @@ void log_file_stat(const char * name,const struct stat *s){
   putchar( (s->st_mode&S_IXOTH)?'x':'-');
   putchar('\n');
 }
-int print_open_files(char *to_strg, int to_strg_max){
-  int fd_count=0;
-  char proc_path[64], path[256];
-  struct dirent *dp;
-  snprintf(proc_path,64,"/proc/%i/fd/",getpid());
-  DIR *dir=opendir(proc_path);
-  const int len_proc_path=strlen(proc_path);
-  for(int i=0,n=0;dp=readdir(dir);i++){
-    fd_count++;
-    if (!to_strg || atoi(dp->d_name)<4) continue;
-    proc_path[len_proc_path]=0;
-    strcat(proc_path+len_proc_path,dp->d_name);
-    readlink(proc_path,path,255);
-      n+=snprintf(to_strg+n,to_strg_max-n,"print_open_files %d  %s -> %s\n",i,proc_path,path);
-  }
-  closedir(dir);
-  return fd_count;
-}
 
 void print_pointers(){
   for(int i=0;i<_fhdata_n;i++){
@@ -109,24 +87,77 @@ void print_pointers(){
   }
 }
 
-void log_mem(){
-  printf(ANSI_MAGENTA"Resources pid=%d"ANSI_RESET" _fhdata_n=%d  uordblks=%'d get_num_fds=%d mmap/munmap=%'d/%'d\n",getpid(),_fhdata_n,mallinfo().uordblks,print_open_files(NULL,0),_mmap_n,_munmap_n);
-  // print_open_files();
-  // print_pointers();
+#define MAX_INFO 33333
+static char _info[MAX_INFO];
+#define PRINTINFO(...)  n+=snprintf(_info+n,MAX_INFO-n,__VA_ARGS__)
+int print_open_files(int n, int *fd_count){
+  char proc_path[64], path[256];
+  struct dirent *dp;
+  snprintf(proc_path,64,"/proc/%i/fd/",getpid());
+  DIR *dir=opendir(proc_path);
+  const int len_proc_path=strlen(proc_path);
+  if (n>=0) PRINTINFO("<OL>\n");
+  for(int i=0;dp=readdir(dir);i++){
+    *fd_count++;
+    if (n<0 || atoi(dp->d_name)<4) continue;
+    proc_path[len_proc_path]=0;
+    strcat(proc_path+len_proc_path,dp->d_name);
+    readlink(proc_path,path,255);
+    PRINTINFO("<LI>%s -- %s</LI>\n",proc_path,path);
+  }
+  closedir(dir);
+  if (n>=0) PRINTINFO("</OL>\n");
+  return n;
 }
 
+void log_mem(){
+  int fd_count;
+  print_open_files(-1,&fd_count);
+  printf(ANSI_MAGENTA"Resources pid=%d"ANSI_RESET" _fhdata_n=%d  uordblks=%'d get_num_fds=%d mmap/munmap=%'d/%'d\n",getpid(),_fhdata_n,mallinfo().uordblks,fd_count,_mmap_n,_munmap_n);
+}
 
-#define LEN_INFO 3333
-static char _info[LEN_INFO];
-char*  get_info(){
-  int n=sprintf(_info,"ROOTS\n");
-  for(int i=0;i<_root_n;i++){
-    n+=snprintf(_info+n,LEN_INFO-n,"   %s  %s\n",_root[i],_root_descript[i]);
+int print_maps(int n){
+  char fname[99];
+  unsigned long writable=0, total=0, shared=0;
+  snprintf(fname,sizeof(fname),"/proc/%ld/maps", (long)getpid());
+  FILE *f=fopen(fname,"r");
+  if(!f) {
+    PRINTINFO("%s: %s\n",fname, strerror(errno));
+    return n;
   }
-  n+=snprintf(_info+n,LEN_INFO-n,"\npid=%d  _fhdata_n=%d  uordblks=%'d\n",getpid(),_fhdata_n,mallinfo().uordblks);
+  PRINTINFO("<TABLE>\n");
+  while(!feof(f)) {
+    char buf[PATH_MAX+100], perm[5], dev[6], mapname[PATH_MAX];
+    unsigned long begin,end, size,inode, foo;
+    if(fgets(buf, sizeof(buf),f)==0) break;
+    mapname[0]='\0';
+    sscanf(buf, "%lx-%lx %4s %lx %5s %lu %100s", &begin, &end,perm,&foo,dev, &inode,mapname);
+    if (!strchr(mapname,'/')){
+    PRINTINFO("<TR><TD>%08lx</TD><TD>%'20ld KB</TD><TD>%s</TD></TR>\n",begin,(end-begin)/1024,mapname);
+    }
+  }
+  printf("mapped:   %'lu KB writable/private: %'lu KB shared: %'lu KB\n",total/1024, writable/1024, shared/1024);
+  fclose(f);
+  PRINTINFO("</TABLE>\n total=%'lu<BR>\n",total);
+  return n;
+}
 
-  n+=snprintf(_info+n,LEN_INFO-n,"\nOpen files (# %d)\n",print_open_files(NULL,0));
-  print_open_files(_info+n,LEN_INFO-n);
+char*  get_info(){
+  int n=0;
+  PRINTINFO("<HTML>\n<BODY style=\"font-family:'Lucida Console',monospace\">\n<H1>Roots</H1>\n<OL>\n");
+  for(int i=0;i<_root_n;i++){
+    char *d=_root_descript[i];
+    PRINTINFO("<LI>%s   %s</LI>\n",_root[i],d?d:"");
+  }
+  PRINTINFO("</OL>\n<H1>Misc</H1>\n");
+  PRINTINFO("\npid=%d\tfhdata=%d\tuordblks=%'d<BR>\n",getpid(),_fhdata_n,mallinfo().uordblks);
+  int fd_count=0;
+  PRINTINFO("</OL>\n<H1>File handles</H1>\n");
+  n=print_open_files(n,&fd_count);
+  PRINTINFO("<H1>Cache</H1>\nWhen cache Zip entry: %s\n",WHEN_CACHE_S[_when_cache]);
+  n=print_maps(n);
+  PRINTINFO("</BODY>\n</HTML>\n");
+  return _info;
 }
 
 
