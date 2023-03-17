@@ -1,10 +1,25 @@
 chatgpt
+
+* libfuse
+
+https://manpages.ubuntu.com/manpages/xenial/man8/mount.fuse.8.html
+
+intr Allow requests to be interrupted. Turning on this option may result in unexpected behavior, if the filesystem does not support requestq interruption.
+
+ac_attr_timeout=T The timeout in seconds for which file attributes are cached for the purpose of checking if auto_cache should flush the file data on open. The default is the value of attr_timeout
+
+attr_timeout=T The timeout in seconds for which file/directory attributes are cached. The default is 1.0 second.
+
+entry_timeout=T The timeout in seconds for which name lookups will be cached. The default is 1.0 second. For all the timeout options, it is possible to give fractions of a second as well
+                (e.g. entry_timeout=2.8)
+
+negative_timeout=T The timeout in seconds for which a negative lookup will be cached. This means, that if file did not exist (lookup retuned ENOENT), the lookup will only be redone after the timeout,
+                   and the file/directory will be assumed to not exist until then. The default is 0.0 second, meaning that caching negative lookups are disabled.
+
 * Debugging
 Run your code through valgrind. If you're mismanaging memory, it will tell you where
 
 * Reading
- https://www.cs.cmu.edu/afs/cs/academic/class/15492-f07/www/pthreads.html#BASICS
-
 
 * Local files
 /usr/include/linux/stat.h
@@ -15,21 +30,19 @@ Run your code through valgrind. If you're mismanaging memory, it will tell you w
 /local/filesystem/ZipROFS-dev/ziprofs.py
 /local/filesystem/mount-zip-main/lib
 
+* malloc
+https://developer.apple.com/library/archive/documentation/Performance/Conceptual/ManagingMemory/Articles/MemoryAlloc.html
+https://stackoverflow.com/questions/1739296/malloc-vs-mmap-in-c
 
 * Zip
 zip_int8_t zip_fseek(zip_file_t *file, zip_int64_t offset, int whence);
 int zip_file_is_seekable(zip_file_t *file);
-
 struct zip_file {
     zip_t *za;         /* zip archive containing this file */
     zip_error_t error; /* error information */
     bool eof;
     zip_source_t *src; /* data source */
 };
-* malloc
-https://developer.apple.com/library/archive/documentation/Performance/Conceptual/ManagingMemory/Articles/MemoryAlloc.html
-https://stackoverflow.com/questions/1739296/malloc-vs-mmap-in-c
-
 * Zip_fopen
 libzip (-lzip)
 
@@ -38,68 +51,35 @@ Synopsis
 
 zip_file_t * zip_fopen(zip_t *archive, const char *fname, zip_flags_t flags);
 
-zip_file_t *
-zip_fopen_index(zip_t *archive, zip_uint64_t index, zip_flags_t flags);
+zip_file_t * zip_fopen_index(zip_t *archive, zip_uint64_t index, zip_flags_t flags);
 
-Description
+DESCRIPTION
 The zip_fopen() function opens the file name fname in archive. The flags argument specifies how the name lookup should be done, according to the values are described in zip_name_locate(3).
 Also, the following values may be or'ed to it.
-
-ZIP_FL_COMPRESSED
-Read the compressed data. Otherwise the data is uncompressed by zip_fread().
-
-ZIP_FL_UNCHANGED
-Read the original data from the zip archive, ignoring any changes made to the file.
+  ZIP_FL_COMPRESSED Read the compressed data. Otherwise the data is uncompressed by zip_fread().
+  ZIP_FL_UNCHANGED  Read the original data from the zip archive, ignoring any changes made to the file.
 
 The zip_fopen_index() function opens the file at position index.
 
-If encrypted data is encountered, the functions call zip_fopen_encrypted(3) or zip_fopen_index_encrypted(3) respectively, using the default password set with zip_set_default_password(3).
+Return Values Upon successful completion, a struct zip_file pointer is returned. Otherwise, NULL is returned and the error code in archive is set to indicate the error.
 
-Return Values
-Upon successful completion, a struct zip_file pointer is returned. Otherwise, NULL is returned and the error code in archive is set to indicate the error.
-
-Errors
-[ZIP_ER_CHANGED]
-The file data has been changed.
-
-[ZIP_ER_COMPNOTSUPP]
-The compression method used is not supported.
-
-[ZIP_ER_ENCRNOTSUPP]
-The encryption method used is not supported.
-
-[ZIP_ER_MEMORY]
-Required memory could not be allocated.
-
-[ZIP_ER_NOPASSWD]
-The file is encrypted, but no password has been provided.
-
-[ZIP_ER_READ]
-A file read error occurred.
-
-[ZIP_ER_SEEK]
-A file seek error occurred.
-
-[ZIP_ER_WRONGPASSWD]
-The provided password does not match the password used for encryption. Note that some incorrect passwords are not detected by the check done by zip_fopen().
-
-[ZIP_ER_ZLIB]
-Initializing the zlib stream failed.
+ERRORS
+[ZIP_ER_CHANGED] The file data has been changed.
+[ZIP_ER_COMPNOTSUPP] The compression method used is not supported.
+[ZIP_ER_ENCRNOTSUPP] The encryption method used is not supported.
+[ZIP_ER_MEMORY] Required memory could not be allocated.
+[ZIP_ER_NOPASSWD] The file is encrypted, but no password has been provided.
+[ZIP_ER_READ] A file read error occurred.
+[ZIP_ER_SEEK] A file seek error occurred.
+[ZIP_ER_WRONGPASSWD] The provided password does not match the password used for encryption. Note that some incorrect passwords are not detected by the check done by zip_fopen().
+[ZIP_ER_ZLIB] Initializing the zlib stream failed.
 
 The function zip_fopen() may also fail and set zip_err for any of the errors specified for the routine zip_name_locate(3).
 
 The function zip_fopen_index() may also fail with ZIP_ER_INVAL if index is invalid.
 
-See Also
-libzip(3), zip_fclose(3), zip_fread(3), zip_fseek(3), zip_get_num_entries(3), zip_name_locate(3), zip_set_default_password(3)
+See Also libzip(3), zip_fclose(3), zip_fread(3), zip_fseek(3), zip_get_num_entries(3), zip_name_locate(3), zip_set_default_password(3)
 
-History
-zip_fopen() and zip_fopen_index() were added in libzip 1.0.
-
-Authors
-Dieter Baron <dillo@nih.at> and Thomas Klausner <tk@giga.or.at>
-
-Referenced By
 
 * fuse_file_info
 https://www.usenix.org/system/files/conference/fast17/fast17-vangoor.pdf
@@ -307,8 +287,15 @@ struct dirent {
     zip_uint32_t flags;             /* reserved for future use */
 };
 
+* Threads
+ https://www.cs.cmu.edu/afs/cs/academic/class/15492-f07/www/pthreads.html#BASICS
+          https://www.codequoi.com/en/threads-mutexes-and-concurrent-programming-in-c/
+* gcc instrumentation
+https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html
+gcc -fsanitize=thread
 
 * core-dumps
+
 more  /proc/sys/kernel/core_pattern
 |/lib/systemd/systemd-coredump %P %u %g %s %t 9223372036854775808 %h
 echo core.%e > /proc/sys/kernel/core_pattern
@@ -328,6 +315,18 @@ You can detect which process is triggering the coredump: (man core):
            tion marks ('!').
        %c  core file size soft resource limit of crashing  process  (since
            Linux 2.6.24)
+
+
+** Making a core dump
+
+$ gdb -p 2071
+(gdb) generate-core-file
+Saved corefile core.2071
+(gdb) quit
+Now you have a coredump file called core.2071.
+
+
+
 * stat
 struct stat {
     dev_t     st_dev;     /* ID of device containing file */
