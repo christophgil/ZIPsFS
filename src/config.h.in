@@ -37,6 +37,9 @@
 /* Define to 1 if you have the `rmdir' function. */
 #undef HAVE_RMDIR
 
+/* Define to 1 if you have the <sqlite3.h> header file. */
+#undef HAVE_SQLITE3_H
+
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 
@@ -85,6 +88,9 @@
 
 /* Define to 1 if you have the <utime.h> header file. */
 #undef HAVE_UTIME_H
+
+/* Define to 1 if you have the <zip.h> header file. */
+#undef HAVE_ZIP_H
 
 /* Define to 1 if `lstat' dereferences a symlink specified with a trailing
    slash. */

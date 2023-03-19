@@ -55,12 +55,11 @@ int log_func_error(char *func){
 }
 
 
-void log_strings(const char *pfx, char *ss[],int n,char *ss2[]){
-  printf(ANSI_UNDERLINE"%s"ANSI_RESET" %p\n",pfx,(void*)ss);
+void log_strings(const char *pfx, char *ss[],int n){
+  printf(ANSI_UNDERLINE"%s"ANSI_RESET" %p\n",pfx,ss);
   if (ss){
     for(int i=0;i<n;i++){
       printf("   %s %3d./.%d "ANSI_FG_BLUE"'%s'",pfx,i,n,ss[i]);
-      if (ss2) prints(ss2[i]);
       puts(ANSI_RESET);
     }
   }
@@ -174,8 +173,8 @@ TD{padding:5px;}\n\
 <H1>Roots</H1>\n\
 <TABLE><THEAD><TR><TH>Path</TH><TH>Writable</TH><TH>Remote</TH></TR></THEAD>\n");
   for(int i=0;i<_root_n;i++){
-    const char *d=_root_descript[i];
-    PRINTINFO("<TR><TD>%s</TD><TD>%s</TD><TD>%s</TD></TR>\n",_root[i],yes_no(_root_feature[i]&ROOT_WRITABLE),yes_no(_root_feature[i]&ROOT_REMOTE));
+    int f=_root[i].features;
+    PRINTINFO("<TR><TD>%s</TD><TD>%s</TD><TD>%s</TD></TR>\n",_root[i].path,yes_no(f&ROOT_WRITABLE),yes_no(f&ROOT_REMOTE));
   }
   PRINTINFO("</TABLE>\n<H1>Heap</H1>\nuordblks=%'d<BR>\n",mallinfo().uordblks);
   PRINTINFO("<H1>File handles</H1>\n");
@@ -186,13 +185,14 @@ TD{padding:5px;}\n\
   TABLEROW(_count_read_zip_cached,7);
   TABLEROW(_count_read_zip_regular,7);
   TABLEROW(_count_read_zip_seekable,7);
+  TABLEROW(_count_read_zip_no_seek,7);
   TABLEROW(_count_read_zip_seek_fwd,7);
   TABLEROW(_count_read_zip_seek_bwd,7);
   TABLEROW(_read_max_size,7);
   PRINTINFO("</TABLE>");
 
 #undef TABLEROW
-  PRINTINFO("<H1>Cache</H1>\nWhen cache Zip entry: %s\n",WHEN_CACHE_S[_when_cache]);
+  PRINTINFO("<H1>Cache</H1>\nWhen cache Zip entry: %s\n sqlite-db=%s\n",WHEN_CACHE_S[_when_cache],_sqlitefile);
   n=log_cached(n,"");
   PRINTINFO("<H1>/proc/%ld/maps</H1>\n", (long)getpid());
   n=print_maps(n);

@@ -171,8 +171,7 @@ AUTOMAKE = ${SHELL} /home/cgille/git_projects/ZIPsFS/missing automake-1.16
 AWK = gawk
 CC = gcc
 CCDEPMODE = depmode=gcc3
-CFLAGS = -march=znver2 -g -rdynamic   -pthread 
-# -pedantic-errors
+CFLAGS = -march=znver2
 CPP = gcc -E
 CPPFLAGS = 
 CYGPATH_W = echo
@@ -184,11 +183,7 @@ ECHO_T =
 EGREP = /usr/bin/grep -E
 EXEEXT = 
 FUSE_CFLAGS = -I/usr/local/include/fuse3
-
 FUSE_LIBS = -L/usr/local/lib/x86_64-linux-gnu -lfuse3 -lpthread
-
-
-
 GREP = /usr/bin/grep
 INSTALL = /usr/bin/install -c
 INSTALL_DATA = ${INSTALL} -m 644
@@ -217,6 +212,8 @@ PKG_CONFIG_LIBDIR =
 PKG_CONFIG_PATH = 
 SET_MAKE = 
 SHELL = /bin/bash
+SQLITE_CFLAGS = -I/usr/local/include
+SQLITE_LIBS = -L/usr/local/lib -lsqlite3
 STRIP = 
 VERSION = 2023-02-22
 abs_builddir = /home/cgille/git_projects/ZIPsFS/src
@@ -263,7 +260,7 @@ top_build_prefix = ../
 top_builddir = ..
 top_srcdir = ..
 ZIPsFS_SOURCES = ZIPsFS.c  log.h
-LDADD = -L/usr/local/lib/x86_64-linux-gnu -lfuse3 -lpthread -L/usr/local/lib -lzip
+LDADD = -L/usr/local/lib/x86_64-linux-gnu -lfuse3 -lpthread -L/usr/local/lib -lzip  -L/usr/local/lib -lsqlite3
 AM_CFLAGS = -I/usr/local/include/fuse3 -g3 -O0 -D_FILE_OFFSET_BITS=64 
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am

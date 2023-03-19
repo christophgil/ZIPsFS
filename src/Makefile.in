@@ -212,6 +212,8 @@ PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
 PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SQLITE_CFLAGS = @SQLITE_CFLAGS@
+SQLITE_LIBS = @SQLITE_LIBS@
 STRIP = @STRIP@
 VERSION = @VERSION@
 abs_builddir = @abs_builddir@
@@ -258,7 +260,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 ZIPsFS_SOURCES = ZIPsFS.c  log.h
-LDADD = @FUSE_LIBS@ @LIBZIP_LIBS@
+LDADD = @FUSE_LIBS@ @LIBZIP_LIBS@  @SQLITE_LIBS@
 AM_CFLAGS = @FUSE_CFLAGS@ -g3 -O0 -D_FILE_OFFSET_BITS=64 
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am

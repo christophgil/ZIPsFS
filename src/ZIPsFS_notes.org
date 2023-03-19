@@ -1,5 +1,10 @@
 chatgpt
 
+* Makefile
+CFLAGS = -march=znver2 -g -rdynamic   -pthread -fsanitize=bounds
+# -pedantic-errors
+
+
 * libfuse
 
 https://manpages.ubuntu.com/manpages/xenial/man8/mount.fuse.8.html
@@ -20,7 +25,9 @@ negative_timeout=T The timeout in seconds for which a negative lookup will be ca
 Run your code through valgrind. If you're mismanaging memory, it will tell you where
 
 * Reading
-
+* File cache
+sudo fatrace | grep sample.txt
+https://www.baeldung.com/linux/file-cache-ram
 * Local files
 /usr/include/linux/stat.h
 /usr/include/pthread.h
@@ -80,7 +87,6 @@ The function zip_fopen_index() may also fail with ZIP_ER_INVAL if index is inval
 
 See Also libzip(3), zip_fclose(3), zip_fread(3), zip_fseek(3), zip_get_num_entries(3), zip_name_locate(3), zip_set_default_password(3)
 
-
 * fuse_file_info
 https://www.usenix.org/system/files/conference/fast17/fast17-vangoor.pdf
 /home/cgille/test/fuse/root_3/file_in_root3_root_3_10.txt
@@ -139,7 +145,7 @@ struct fuse_file_info {
 };
 
 
-* Error
+* Error codes
     EPERM 1		/* Not super-user */
 !   ENOENT 2	/* No such file or directory */
     ESRCH 3		/* No such process */
@@ -264,7 +270,7 @@ struct fuse_file_info {
     EOVERFLOW 139	/* Value too large for defined data type */
     EWOULDBLOCK EAGAIN	/* Operation would block */
 
-* dirent
+* struct dirent
 struct dirent {
     ino_t          d_ino;       /* inode number */
     off_t          d_off;       /* offset to the next dirent */
@@ -273,7 +279,8 @@ struct dirent {
     char           d_name[256]; /* filename */
 };
 
-* zip_stat
+* struct zip_stat
+
     struct zip_stat {
     zip_uint64_t valid;             /* which fields have valid values */
     const char *_Nullable name;     /* name of the file */
@@ -286,48 +293,7 @@ struct dirent {
     zip_uint16_t encryption_method; /* encryption method used */
     zip_uint32_t flags;             /* reserved for future use */
 };
-
-* Threads
- https://www.cs.cmu.edu/afs/cs/academic/class/15492-f07/www/pthreads.html#BASICS
-          https://www.codequoi.com/en/threads-mutexes-and-concurrent-programming-in-c/
-* gcc instrumentation
-https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html
-gcc -fsanitize=thread
-
-* core-dumps
-
-more  /proc/sys/kernel/core_pattern
-|/lib/systemd/systemd-coredump %P %u %g %s %t 9223372036854775808 %h
-echo core.%e > /proc/sys/kernel/core_pattern
-
-You can detect which process is triggering the coredump: (man core):
-
-       %%  a single % character
-       %p  PID of dumped process
-       %u  (numeric) real UID of dumped process
-       %g  (numeric) real GID of dumped process
-       %s  number of signal causing dump
-       %t  time of dump, expressed as seconds since the Epoch,  1970-01-01
-           00:00:00 +0000 (UTC)
-       %h  hostname (same as nodename returned by uname(2))
-       %e  executable filename (without path prefix)
-       %E  pathname of executable, with slashes ('/') replaced by exclama‐
-           tion marks ('!').
-       %c  core file size soft resource limit of crashing  process  (since
-           Linux 2.6.24)
-
-
-** Making a core dump
-
-$ gdb -p 2071
-(gdb) generate-core-file
-Saved corefile core.2071
-(gdb) quit
-Now you have a coredump file called core.2071.
-
-
-
-* stat
+* struct stat
 struct stat {
     dev_t     st_dev;     /* ID of device containing file */
     ino_t     st_ino;     /* inode number */     8 Byte
@@ -399,6 +365,50 @@ int is_dir(const char *path){
 
 
 
+* Threads
+ https://www.cs.cmu.edu/afs/cs/academic/class/15492-f07/www/pthreads.html#BASICS
+          https://www.codequoi.com/en/threads-mutexes-and-concurrent-programming-in-c/
+
+* core-dumps
+
+more  /proc/sys/kernel/core_pattern
+|/lib/systemd/systemd-coredump %P %u %g %s %t 9223372036854775808 %h
+echo core.%e > /proc/sys/kernel/core_pattern
+
+You can detect which process is triggering the coredump: (man core):
+
+       %%  a single % character
+       %p  PID of dumped process
+       %u  (numeric) real UID of dumped process
+       %g  (numeric) real GID of dumped process
+       %s  number of signal causing dump
+       %t  time of dump, expressed as seconds since the Epoch,  1970-01-01
+           00:00:00 +0000 (UTC)
+       %h  hostname (same as nodename returned by uname(2))
+       %e  executable filename (without path prefix)
+       %E  pathname of executable, with slashes ('/') replaced by exclama‐
+           tion marks ('!').
+       %c  core file size soft resource limit of crashing  process  (since
+           Linux 2.6.24)
+
+
+** Making a core dump
+
+$ gdb -p 2071
+(gdb) generate-core-file
+Saved corefile core.2071
+(gdb) quit
+Now you have a coredump file called core.2071.
+
+
+
+* gcc
+** gcc instrumentation
+https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html
+gcc -fsanitize=thread
+
+
+
 
 * open vs open in C
 
@@ -412,7 +422,7 @@ int is_dir(const char *path){
 
 5) A FILE * gives you the ability to use fscanf and other stdio functions.
 
-* Duplicates
+* hashmaps dicts duplicates
 
 https://www.gnu.org/software/libc/manual/html_node/Array-Search-Function.html#index-lfind
 https://www.geeksforgeeks.org/binary-search-tree-set-1-search-and-insertion/
@@ -472,13 +482,3 @@ static const struct fuse_opt fuse_lib_opts[] = {
 entry_timeout=10,attr_timeout=10,ac_attr_timeout=10,noforget
 
 * Why getattr
-/home/cgille/git_projects/ZIPsFS/src/ZIPsFS(my_backtrace+0x2c)[0x561554961f66]
-/home/cgille/git_projects/ZIPsFS/src/ZIPsFS(+0x6431)[0x561554964431]
-/usr/local/lib/x86_64-linux-gnu/libfuse3.so.3(fuse_fs_getattr+0x8c)[0x7f2ec367451c]
-/usr/local/lib/x86_64-linux-gnu/libfuse3.so.3(+0xda16)[0x7f2ec3674a16]
-/usr/local/lib/x86_64-linux-gnu/libfuse3.so.3(+0x184ca)[0x7f2ec367f4ca]
-/usr/local/lib/x86_64-linux-gnu/libfuse3.so.3(+0x1a340)[0x7f2ec3681340]
-/usr/local/lib/x86_64-linux-gnu/libfuse3.so.3(fuse_session_loop+0x6d)[0x7f2ec367bf2d]
-/usr/local/lib/x86_64-linux-gnu/libfuse3.so.3(fuse_loop+0x43)[0x7f2ec36742f3]
-/usr/local/lib/x86_64-linux-gnu/libfuse3.so.3(fuse_main_real+0x219)[0x7f2ec3684eb9]
-/home/cgille/git_projects/ZIPsFS/src/ZIPsFS(main+0x597)[0x56155496671f]

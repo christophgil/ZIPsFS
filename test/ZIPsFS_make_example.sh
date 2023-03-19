@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -u
-readonly B=~/tmp/fuse
+readonly B=~/tmp/ZIPsFS/
 mkdir -p  ${B}/{rootdir_writable,mnt}
 example_zips=(/usr/share/doc/texlive-doc/support/pdfjam/tests.zip /usr/share/doc/texlive-doc/bibtex/vak/test.zip /local/java/jnifuse_master.zip)
 main(){
