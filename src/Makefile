@@ -171,7 +171,7 @@ AUTOMAKE = ${SHELL} /home/cgille/git_projects/ZIPsFS/missing automake-1.16
 AWK = gawk
 CC = gcc
 CCDEPMODE = depmode=gcc3
-CFLAGS = -march=znver2
+CFLAGS = -march=znver2 -g -rdynamic    -fsanitize=bounds
 CPP = gcc -E
 CPPFLAGS = 
 CYGPATH_W = echo
