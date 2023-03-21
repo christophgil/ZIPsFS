@@ -1,0 +1,33 @@
+/* This file was automatically generated.  Do not edit! */
+#undef INTERFACE
+extern struct rlimit _rlimit;
+bool maybe_cache_zip_entry(enum data_op op,struct fhdata *d,bool always);
+bool cache_zip_entry(enum data_op op,struct fhdata *d);
+void fhdata_zip_fclose(struct fhdata *d,char *msg);
+int fhdata_zip_open(struct fhdata *d,char *msg);
+int read_zipdir(struct zippath *zpath,int root,void *buf,fuse_fill_dir_t filler_maybe_null,struct ht *no_dups);
+void readdir_append(int *i,struct rootdata *rd,long inode,const char *n,bool append_slash,long len);
+int readdir_callback(void *arg1,int argc,char **argv,char **name);
+int sql_exec(int flags,const char *sql,int(*callback)(void *,int,char **,char **),void *udp);
+int sqlite3_callback_directory(void *NotUsed,int argc,char **argv,char **azColName);
+extern sqlite3 *_sqlitedb;
+int zip_contained_in_virtual_path(const char *path,char *append[]);
+int zpath_zip_open(struct zippath *zpath);
+int zpath_stat(struct zippath *zpath);
+void zpath_destroy(struct zippath *zpath);
+void zpath_reset(struct zippath *zpath);
+void log_zpath(char *msg,struct zippath *zpath);
+char *zpath_ensure_path_capacity(struct zippath *zpath,int n);
+const char *zpath_zipentry(struct zippath *zpath);
+int realpath_or_zip_any_root(struct zippath *zpath);
+void stat_set_dir(struct stat *s);
+void clear_stat(struct stat *st);
+int exceeds_max_path(int need_len,const char *path);
+char *my_strcpy(char *dst,const char *src,size_t n);
+int pathlen_ignore_trailing_slash(const char *p);
+int last_slash(const char *path);
+int empty_dot_dotdot(const char *s);
+int my_open_fh(const char *msg,const char *path,int flags);
+void my_close_fh(int fh);
+unsigned int my_strlen(const char *s);
+long time_ms();

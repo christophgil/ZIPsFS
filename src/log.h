@@ -66,7 +66,7 @@ void log_strings(const char *pfx, char *ss[],int n){
 }
 void log_file_stat(const char * name,const struct stat *s){
   char *color= (s->st_ino>(1L<<SHIFT_INODE_ROOT)) ? ANSI_FG_MAGENTA:ANSI_FG_BLUE;
-  printf("%s  st_size=%lu st_blksize=%lu st_blocks=%lu links=%lu inode=%s%lu "ANSI_RESET,name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino);
+  printf("%s  st_size=%lu st_blksize=%lu st_blocks=%lu links=%lu inode=%s%lu"ANSI_RESET" dir=%s ",name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino,  yes_no(S_ISDIR(s->st_mode)));
   //st_blksize st_blocks f_bsize
   putchar(  S_ISDIR(s->st_mode)?'d':'-');
   putchar( (s->st_mode&S_IRUSR)?'r':'-');
@@ -148,7 +148,7 @@ static int log_cached(int n,char *title){
     if (n<0) printf("\t%4d\t%s\t%lx\t%p\n",i, d->path, d->path_hash,d->cache);
     else{
       struct tm tm = *localtime(&d->access);
-      sprintf(stime,"%d-%02d-%02d%02d:%02d:%02d\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec);
+      sprintf(stime,"%d-%02d-%02d_%02d:%02d:%02d\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec);
       PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,d->cache_len>>10,d->cache_read_sec);
 
 

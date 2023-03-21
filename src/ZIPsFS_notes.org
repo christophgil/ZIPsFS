@@ -4,6 +4,10 @@ chatgpt
 CFLAGS = -march=znver2 -g -rdynamic   -pthread -fsanitize=bounds
 # -pedantic-errors
 
+* sqlite3
+
+https://www.sqlite.org/c3ref/blob_open.html
+
 
 * libfuse
 
@@ -270,7 +274,45 @@ struct fuse_file_info {
     EOVERFLOW 139	/* Value too large for defined data type */
     EWOULDBLOCK EAGAIN	/* Operation would block */
 
-* struct dirent
+* struct di
+rent
+
+,struct zip_dirent {
+  zip_uint32_t changed;
+  bool local_extra_fields_read; /*      whether we already read in local header
+                                   extra fields */
+  bool cloned; /*      whether this instance is cloned, and thus shares
+                  non-changed strings */
+  bool crc_valid; /*      if CRC is valid (sometimes not for encrypted archives)
+                   */
+  zip_uint16_t version_madeby;     /* (c)  version of creator */
+  zip_uint16_t version_needed;     /* (cl) version needed to extract */
+  zip_uint16_t bitflags;           /* (cl) general purpose bit flag */
+  zip_int32_t comp_method;         /* (cl) compression method used (uint16 and
+                                      ZIP_CM_DEFAULT (-1)) */
+  time_t last_mod;                 /* (cl) time of last modification */
+  zip_uint32_t crc;                /* (cl) CRC-32 of uncompressed data */
+  zip_uint64_t comp_size;          /* (cl) size of compressed data */
+  zip_uint64_t uncomp_size;        /* (cl) size of uncompressed data */
+  zip_string_t* filename;          /* (cl) file name (NUL-terminated) */
+  zip_extra_field_t* extra_fields; /* (cl) extra fields, parsed */
+  zip_string_t* comment;           /* (c)  file comment */
+  zip_uint32_t disk_number;        /* (c)  disk number start */
+  zip_uint16_t int_attrib;         /* (c)  internal file attributes */
+  zip_uint32_t ext_attrib;         /* (c)  external file attributes */
+  zip_uint64_t offset;             /* (c)  offset of local header */
+  zip_uint16_t compression_level; /*      level of compression to use (never
+                                     valid in orig) */
+  zip_uint16_t encryption_method; /*      encryption method, computed from other
+                                     fields */
+  char* password;                 /*      file specific encryption password */
+};
+
+
+
+
+
+
 struct dirent {
     ino_t          d_ino;       /* inode number */
     off_t          d_off;       /* offset to the next dirent */
