@@ -98,7 +98,7 @@ int print_open_files(int n, int *fd_count){
   DIR *dir=opendir(proc_path);
   if (n>=0) PRINTINFO("<OL>\n");
   for(int i=0;dp=readdir(dir);i++){
-    if (fd_count) *fd_count++;
+    if (fd_count) *(fd_count++);
     if (n<0 || atoi(dp->d_name)<4) continue;
     my_strcpy(proc_path+len_proc_path,dp->d_name,PROC_PATH_MAX-len_proc_path);
     const int l=readlink(proc_path,path,255);path[l]=0;
