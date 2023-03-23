@@ -44,6 +44,21 @@ void log_reset(){ prints(ANSI_RESET);}
 void log_path(const char *f,const char *path){
   printf("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
 }
+void print_backtrace(){
+  int j, nptrs;
+  void *buffer[BT_BUF_SIZE];
+  char **strings;
+  nptrs = backtrace(buffer, BT_BUF_SIZE);
+  printf("backtrace() returned %d addresses\n", nptrs);
+  /* The call backtrace_symbols_fd(buffer, nptrs, STDOUT_FILENO) would produce similar output to the following: */
+  strings = backtrace_symbols(buffer, nptrs);
+  if (strings == NULL) {
+    perror("backtrace_symbols");
+    exit(EXIT_FAILURE);
+  }
+  for (j = 0; j < nptrs; j++) printf("%s\n", strings[j]);
+  free(strings);
+}
 
 #define log_abort(...)  { log_error(__VA_ARGS__),puts("Going to exit ..."),exit(-1); }
 char *yes_no(int i){ return i?"Yes":"No";}
