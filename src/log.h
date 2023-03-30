@@ -27,8 +27,7 @@
 
 #define log_struct(st,field,format)   printf("    " #field "=" #format "\n",st->field)
 void prints(char *s){ if (s) fputs(s,stdout);}
-void log_reset(){ prints(ANSI_RESET);}
-#define log_msg(...) printf(__VA_ARGS__)
+#define log(...)  printf(__VA_ARGS__)
 #define log_already_exists(...) (prints(" Already exists "ANSI_RESET),printf(__VA_ARGS__)
 #define log_failed(...)  prints(ANSI_FG_RED" Failed "ANSI_RESET),printf(__VA_ARGS__)
 #define log_warn(...)  prints(ANSI_FG_RED" Warn "ANSI_RESET),printf(__VA_ARGS__)
@@ -40,6 +39,10 @@ void log_reset(){ prints(ANSI_RESET);}
 #define log_seek_ZIP(delta,...)   printf(ANSI_FG_RED""ANSI_YELLOW"SEEK ZIP FILE:"ANSI_RESET" %'16ld ",delta),printf(__VA_ARGS__)
 #define log_seek(delta,...)  printf(ANSI_FG_RED""ANSI_YELLOW"SEEK REG FILE:"ANSI_RESET" %'16ld ",delta),printf(__VA_ARGS__)
 #define log_cache(...)  prints(ANSI_RED"CACHE"ANSI_RESET" "),printf(__VA_ARGS__)
+int isPowerOfTwo(unsigned int n){ return n && (n&(n-1))==0;}
+void _log_mthd(char *s,int count){ if (isPowerOfTwo(count)) log(" %s=%d ",s,count);}
+#define log_mthd_invoke(s) static int __count=0;_log_mthd(ANSI_FG_GRAY #s ANSI_RESET,++__count);
+#define log_mthd_orig(s) static int __count_orig=0;_log_mthd(ANSI_FG_BLUE #s ANSI_RESET,++__count_orig);
 
 void log_path(const char *f,const char *path){
   printf("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
@@ -81,7 +84,7 @@ void log_strings(const char *pfx, char *ss[],int n){
 }
 void log_file_stat(const char * name,const struct stat *s){
   char *color= (s->st_ino>(1L<<SHIFT_INODE_ROOT)) ? ANSI_FG_MAGENTA:ANSI_FG_BLUE;
-  printf("%s  st_size=%lu st_blksize=%lu st_blocks=%lu links=%lu inode=%s%lu"ANSI_RESET" dir=%s ",name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino,  yes_no(S_ISDIR(s->st_mode)));
+  printf("%s  size=%lu blksize=%lu blocks=%lu links=%lu inode=%s%lu"ANSI_RESET" dir=%s uid=%u gid=%u ",name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
   //st_blksize st_blocks f_bsize
   putchar(  S_ISDIR(s->st_mode)?'d':'-');
   putchar( (s->st_mode&S_IRUSR)?'r':'-');
@@ -98,7 +101,7 @@ void log_file_stat(const char * name,const struct stat *s){
 
 void print_pointers(){
   for(int i=0;i<_fhdata_n;i++){
-    log_msg(ANSI_RESET"%d zarchive=%p zip_file=%p\n",i,_fhdata[i].zpath.zarchive,(void*)_fhdata[i].zip_file);
+    log(ANSI_RESET"%d zarchive=%p zip_file=%p\n",i,_fhdata[i].zpath.zarchive,(void*)_fhdata[i].zip_file);
   }
 }
 
@@ -115,7 +118,7 @@ int print_open_files(int n, int *fd_count){
   for(int i=0;dp=readdir(dir);i++){
     if (fd_count) *(fd_count++);
     if (n<0 || atoi(dp->d_name)<4) continue;
-    my_strcpy(proc_path+len_proc_path,dp->d_name,PROC_PATH_MAX-len_proc_path);
+    my_strncat(proc_path+len_proc_path,dp->d_name,PROC_PATH_MAX-len_proc_path);
     const int l=readlink(proc_path,path,255);path[l]=0;
     PRINTINFO("<LI>%s -- %s</LI>\n",proc_path,path);
   }
@@ -228,4 +231,39 @@ void handler(int sig) {
   printf( "ZIPsFS Error: signal %d:\n",sig);
   my_backtrace();
   abort();
+}
+
+
+#include <sys/wait.h>
+#include <sys/prctl.h>
+void print_trace() {
+  char pid_buf[30];
+  sprintf(pid_buf, "%d", getpid());
+  char name_buf[512];
+  name_buf[readlink("/proc/self/exe", name_buf, 511)]=0;
+  prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
+  int child_pid = fork();
+  if (!child_pid) {
+    dup2(2,1); // redirect output to stderr - edit: unnecessary?
+    execl("/usr/bin/gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "bt", name_buf, pid_buf, NULL);
+    abort(); /* If gdb failed to start */
+  } else {
+    waitpid(child_pid,NULL,0);
+  }
+}
+
+
+const char *zip_fdopen_err(int err){
+#define  ZIP_FDOPEN_ERR(code,descr) if (err==code) return descr
+  ZIP_FDOPEN_ERR(ZIP_ER_INCONS,"Inconsistencies were found in the file specified by path. This error is often caused by specifying ZIP_CHECKCONS but can also happen withot it.");
+  ZIP_FDOPEN_ERR(ZIP_ER_INVAL,"The flags argument is invalid. Not all zip_open(3) flags are allowed for zip_fdopen, see DESCRIPTION.");
+  ZIP_FDOPEN_ERR(ZIP_ER_MEMORY,"Required memory could not be allocated.");
+  ZIP_FDOPEN_ERR(ZIP_ER_NOZIP,"The file specified by fd is not a zip archive.");
+  ZIP_FDOPEN_ERR(ZIP_ER_OPEN,"The file specified by fd could not be prepared for use by libzip(3).");
+  ZIP_FDOPEN_ERR(ZIP_ER_READ,"A read error occurred; see errno for details.");
+  ZIP_FDOPEN_ERR(ZIP_ER_SEEK,"The file specified by fd does not allow seeks.");
+  ZIP_FDOPEN_ERR(ZIP_ER_INCONS,"Inconsistencies were found in the file specified by path. This error is often caused by specifying ZIP_CHECKCONS but can also happen without it.");
+  ZIP_FDOPEN_ERR(ZIP_ER_INVAL,"The flags argument is invalid. Not all zip_open(3) flags are allowed for zip_fdopen, see DESCRIPTION.");
+  return "zip_fdopen - Unknown error";
+  #undef ZIP_FDOPEN_ERR
 }

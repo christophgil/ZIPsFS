@@ -27,6 +27,9 @@ negative_timeout=T The timeout in seconds for which a negative lookup will be ca
 
 * Debugging
 Run your code through valgrind. If you're mismanaging memory, it will tell you where
+** Stacktraces
+https://stackoverflow.com/questions/4636456/how-to-get-a-stack-trace-for-c-using-gcc-with-line-number-information
+
 
 * Reading
 * File cache
@@ -309,7 +312,14 @@ rent
 };
 
 
-
+int listdir(const char *path){
+struct dirent *entry;
+DIR *dp=opendir(path);
+if (dp == NULL){perror("opendir");return -1;}
+while((entry = readdir(dp))) puts(entry->d_name);
+closedir(dp);
+return 0;
+}
 
 
 
