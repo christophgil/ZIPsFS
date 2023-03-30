@@ -100,7 +100,21 @@ ZIPsFS.o: ZIPsFS.c /usr/include/stdc-predef.h /usr/include/stdlib.h \
  /usr/include/x86_64-linux-gnu/asm/errno.h \
  /usr/include/asm-generic/errno.h /usr/include/asm-generic/errno-base.h \
  /usr/include/x86_64-linux-gnu/bits/types/error_t.h /usr/include/malloc.h \
- /usr/include/execinfo.h /usr/include/signal.h \
+ /usr/include/locale.h /usr/include/x86_64-linux-gnu/bits/locale.h \
+ /usr/include/x86_64-linux-gnu/sys/time.h \
+ /usr/include/x86_64-linux-gnu/sys/mman.h \
+ /usr/include/x86_64-linux-gnu/bits/mman.h \
+ /usr/include/x86_64-linux-gnu/bits/mman-map-flags-generic.h \
+ /usr/include/x86_64-linux-gnu/bits/mman-linux.h \
+ /usr/include/x86_64-linux-gnu/bits/mman-shared.h \
+ /usr/lib/gcc/x86_64-linux-gnu/9/include/stdbool.h \
+ /usr/local/include/zip.h /usr/local/include/zipconf.h \
+ /usr/include/inttypes.h /usr/local/include/sqlite3.h \
+ /usr/include/assert.h ht.c ht.h cg_log.c cg_utils.c \
+ /usr/include/x86_64-linux-gnu/sys/vfs.h \
+ /usr/include/x86_64-linux-gnu/sys/statfs.h \
+ /usr/include/x86_64-linux-gnu/bits/statfs.h cg_debug.c \
+ /usr/include/x86_64-linux-gnu/sys/wait.h /usr/include/signal.h \
  /usr/include/x86_64-linux-gnu/bits/signum.h \
  /usr/include/x86_64-linux-gnu/bits/signum-generic.h \
  /usr/include/x86_64-linux-gnu/bits/types/sig_atomic_t.h \
@@ -120,23 +134,12 @@ ZIPsFS.o: ZIPsFS.c /usr/include/stdc-predef.h /usr/include/stdlib.h \
  /usr/include/x86_64-linux-gnu/bits/ss_flags.h \
  /usr/include/x86_64-linux-gnu/bits/types/struct_sigstack.h \
  /usr/include/x86_64-linux-gnu/bits/sigthread.h \
- /usr/include/x86_64-linux-gnu/bits/signal_ext.h /usr/include/locale.h \
- /usr/include/x86_64-linux-gnu/bits/locale.h \
- /usr/include/x86_64-linux-gnu/sys/time.h \
- /usr/include/x86_64-linux-gnu/sys/resource.h \
+ /usr/include/x86_64-linux-gnu/bits/signal_ext.h \
+ /usr/include/x86_64-linux-gnu/sys/prctl.h /usr/include/linux/prctl.h \
+ /usr/include/execinfo.h /usr/include/x86_64-linux-gnu/sys/resource.h \
  /usr/include/x86_64-linux-gnu/bits/resource.h \
- /usr/include/x86_64-linux-gnu/bits/types/struct_rusage.h \
- /usr/include/x86_64-linux-gnu/sys/mman.h \
- /usr/include/x86_64-linux-gnu/bits/mman.h \
- /usr/include/x86_64-linux-gnu/bits/mman-map-flags-generic.h \
- /usr/include/x86_64-linux-gnu/bits/mman-linux.h \
- /usr/include/x86_64-linux-gnu/bits/mman-shared.h \
- /usr/lib/gcc/x86_64-linux-gnu/9/include/stdbool.h \
- /usr/local/include/zip.h /usr/local/include/zipconf.h \
- /usr/include/inttypes.h /usr/local/include/sqlite3.h \
- /usr/include/assert.h ht.c ht.h ZIPsFS.h configuration.h log.h \
- /usr/include/x86_64-linux-gnu/sys/wait.h \
- /usr/include/x86_64-linux-gnu/sys/prctl.h /usr/include/linux/prctl.h
+ /usr/include/x86_64-linux-gnu/bits/types/struct_rusage.h ZIPsFS.h \
+ configuration.h log.h
 
 /usr/include/stdc-predef.h:
 
@@ -392,7 +395,51 @@ config.h:
 
 /usr/include/malloc.h:
 
-/usr/include/execinfo.h:
+/usr/include/locale.h:
+
+/usr/include/x86_64-linux-gnu/bits/locale.h:
+
+/usr/include/x86_64-linux-gnu/sys/time.h:
+
+/usr/include/x86_64-linux-gnu/sys/mman.h:
+
+/usr/include/x86_64-linux-gnu/bits/mman.h:
+
+/usr/include/x86_64-linux-gnu/bits/mman-map-flags-generic.h:
+
+/usr/include/x86_64-linux-gnu/bits/mman-linux.h:
+
+/usr/include/x86_64-linux-gnu/bits/mman-shared.h:
+
+/usr/lib/gcc/x86_64-linux-gnu/9/include/stdbool.h:
+
+/usr/local/include/zip.h:
+
+/usr/local/include/zipconf.h:
+
+/usr/include/inttypes.h:
+
+/usr/local/include/sqlite3.h:
+
+/usr/include/assert.h:
+
+ht.c:
+
+ht.h:
+
+cg_log.c:
+
+cg_utils.c:
+
+/usr/include/x86_64-linux-gnu/sys/vfs.h:
+
+/usr/include/x86_64-linux-gnu/sys/statfs.h:
+
+/usr/include/x86_64-linux-gnu/bits/statfs.h:
+
+cg_debug.c:
+
+/usr/include/x86_64-linux-gnu/sys/wait.h:
 
 /usr/include/signal.h:
 
@@ -436,11 +483,11 @@ config.h:
 
 /usr/include/x86_64-linux-gnu/bits/signal_ext.h:
 
-/usr/include/locale.h:
+/usr/include/x86_64-linux-gnu/sys/prctl.h:
 
-/usr/include/x86_64-linux-gnu/bits/locale.h:
+/usr/include/linux/prctl.h:
 
-/usr/include/x86_64-linux-gnu/sys/time.h:
+/usr/include/execinfo.h:
 
 /usr/include/x86_64-linux-gnu/sys/resource.h:
 
@@ -448,40 +495,8 @@ config.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/struct_rusage.h:
 
-/usr/include/x86_64-linux-gnu/sys/mman.h:
-
-/usr/include/x86_64-linux-gnu/bits/mman.h:
-
-/usr/include/x86_64-linux-gnu/bits/mman-map-flags-generic.h:
-
-/usr/include/x86_64-linux-gnu/bits/mman-linux.h:
-
-/usr/include/x86_64-linux-gnu/bits/mman-shared.h:
-
-/usr/lib/gcc/x86_64-linux-gnu/9/include/stdbool.h:
-
-/usr/local/include/zip.h:
-
-/usr/local/include/zipconf.h:
-
-/usr/include/inttypes.h:
-
-/usr/local/include/sqlite3.h:
-
-/usr/include/assert.h:
-
-ht.c:
-
-ht.h:
-
 ZIPsFS.h:
 
 configuration.h:
 
 log.h:
-
-/usr/include/x86_64-linux-gnu/sys/wait.h:
-
-/usr/include/x86_64-linux-gnu/sys/prctl.h:
-
-/usr/include/linux/prctl.h:

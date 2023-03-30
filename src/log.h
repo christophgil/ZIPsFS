@@ -1,70 +1,9 @@
-/*
-  Copyright (C) 2023
-  christoph Gille
-  This program can be distributed under the terms of the GNU GPLv3.
-*/
-#define ANSI_RED "\x1B[41m"
-#define ANSI_MAGENTA "\x1B[45m"
-#define ANSI_GREEN "\x1B[42m"
-#define ANSI_BLUE "\x1B[44m"
-#define ANSI_YELLOW "\x1B[43m"
-#define ANSI_CYAN "\x1B[46m"
-#define ANSI_WHITE "\x1B[47m"
-#define ANSI_BLACK "\x1B[40m"
-#define ANSI_FG_GREEN "\x1B[32m"
-#define ANSI_FG_RED "\x1B[31m"
-#define ANSI_FG_MAGENTA "\x1B[35m"
-#define ANSI_FG_GRAY "\x1B[30;1m"
-#define ANSI_FG_BLUE "\x1B[34;1m"
-#define ANSI_FG_BLACK "\x1B[100;1m"
-#define ANSI_FG_YELLOW "\x1B[33m"
-#define ANSI_FG_WHITE "\x1B[37m"
-#define ANSI_INVERSE "\x1B[7m"
-#define ANSI_BOLD "\x1B[1m"
-#define ANSI_UNDERLINE "\x1B[4m"
-#define ANSI_RESET "\x1B[0m"
-#define TERMINAL_CLR_LINE "\r\x1B[K"
-
-#define log_struct(st,field,format)   printf("    " #field "=" #format "\n",st->field)
-void prints(char *s){ if (s) fputs(s,stdout);}
-#define log(...)  printf(__VA_ARGS__)
-#define log_already_exists(...) (prints(" Already exists "ANSI_RESET),printf(__VA_ARGS__)
-#define log_failed(...)  prints(ANSI_FG_RED" Failed "ANSI_RESET),printf(__VA_ARGS__)
-#define log_warn(...)  prints(ANSI_FG_RED" Warn "ANSI_RESET),printf(__VA_ARGS__)
-#define log_error(...)  prints(ANSI_FG_RED" Error "ANSI_RESET),printf(__VA_ARGS__)
-#define log_succes(...)  prints(ANSI_FG_GREEN" Success "ANSI_RESET),printf(__VA_ARGS__)
-#define log_debug_now(...)   prints(ANSI_FG_MAGENTA" Debug "ANSI_RESET),printf(__VA_ARGS__)
-#define log_entered_function(...)   prints(ANSI_INVERSE"> > > >"ANSI_RESET),printf(__VA_ARGS__)
-#define log_exited_function(...)   prints(ANSI_INVERSE"< < < <"ANSI_RESET),printf(__VA_ARGS__)
-#define log_seek_ZIP(delta,...)   printf(ANSI_FG_RED""ANSI_YELLOW"SEEK ZIP FILE:"ANSI_RESET" %'16ld ",delta),printf(__VA_ARGS__)
-#define log_seek(delta,...)  printf(ANSI_FG_RED""ANSI_YELLOW"SEEK REG FILE:"ANSI_RESET" %'16ld ",delta),printf(__VA_ARGS__)
-#define log_cache(...)  prints(ANSI_RED"CACHE"ANSI_RESET" "),printf(__VA_ARGS__)
-int isPowerOfTwo(unsigned int n){ return n && (n&(n-1))==0;}
-void _log_mthd(char *s,int count){ if (isPowerOfTwo(count)) log(" %s=%d ",s,count);}
-#define log_mthd_invoke(s) static int __count=0;_log_mthd(ANSI_FG_GRAY #s ANSI_RESET,++__count);
-#define log_mthd_orig(s) static int __count_orig=0;_log_mthd(ANSI_FG_BLUE #s ANSI_RESET,++__count_orig);
-
 void log_path(const char *f,const char *path){
   printf("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
 }
-void print_backtrace(){
-  int j, nptrs;
-  void *buffer[BT_BUF_SIZE];
-  char **strings;
-  nptrs = backtrace(buffer, BT_BUF_SIZE);
-  printf("backtrace() returned %d addresses\n", nptrs);
-  /* The call backtrace_symbols_fd(buffer, nptrs, STDOUT_FILENO) would produce similar output to the following: */
-  strings = backtrace_symbols(buffer, nptrs);
-  if (strings == NULL) {
-    perror("backtrace_symbols");
-    exit(EXIT_FAILURE);
-  }
-  for (j = 0; j < nptrs; j++) printf("%s\n", strings[j]);
-  free(strings);
-}
 
 #define log_abort(...)  { log_error(__VA_ARGS__),puts("Going to exit ..."),exit(-1); }
-char *yes_no(int i){ return i?"Yes":"No";}
+
 int log_func_error(char *func){
   int ret=-errno;
   log_error(" %s:",func);
@@ -81,22 +20,6 @@ void log_strings(const char *pfx, char *ss[],int n){
       puts(ANSI_RESET);
     }
   }
-}
-void log_file_stat(const char * name,const struct stat *s){
-  char *color= (s->st_ino>(1L<<SHIFT_INODE_ROOT)) ? ANSI_FG_MAGENTA:ANSI_FG_BLUE;
-  printf("%s  size=%lu blksize=%lu blocks=%lu links=%lu inode=%s%lu"ANSI_RESET" dir=%s uid=%u gid=%u ",name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
-  //st_blksize st_blocks f_bsize
-  putchar(  S_ISDIR(s->st_mode)?'d':'-');
-  putchar( (s->st_mode&S_IRUSR)?'r':'-');
-  putchar( (s->st_mode&S_IWUSR)?'w':'-');
-  putchar( (s->st_mode&S_IXUSR)?'x':'-');
-  putchar( (s->st_mode&S_IRGRP)?'r':'-');
-  putchar( (s->st_mode&S_IWGRP)?'w':'-');
-  putchar( (s->st_mode&S_IXGRP)?'x':'-');
-  putchar( (s->st_mode&S_IROTH)?'r':'-');
-  putchar( (s->st_mode&S_IWOTH)?'w':'-');
-  putchar( (s->st_mode&S_IXOTH)?'x':'-');
-  putchar('\n');
 }
 
 void print_pointers(){
@@ -118,7 +41,7 @@ int print_open_files(int n, int *fd_count){
   for(int i=0;dp=readdir(dir);i++){
     if (fd_count) *(fd_count++);
     if (n<0 || atoi(dp->d_name)<4) continue;
-    my_strncat(proc_path+len_proc_path,dp->d_name,PROC_PATH_MAX-len_proc_path);
+    my_strncpy(proc_path+len_proc_path,dp->d_name,PROC_PATH_MAX-len_proc_path);
     const int l=readlink(proc_path,path,255);path[l]=0;
     PRINTINFO("<LI>%s -- %s</LI>\n",proc_path,path);
   }
@@ -167,7 +90,7 @@ static int log_cached(int n,char *title){
     else{
       struct tm tm = *localtime(&d->access);
       sprintf(stime,"%d-%02d-%02d_%02d:%02d:%02d\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec);
-      PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,d->cache_len>>10,d->cache_read_sec);
+      PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,d->cache_len>>10,d->cache_read_seconds);
 
 
 
@@ -222,35 +145,8 @@ TD{padding:5px;}\n\
   PRINTINFO("</BODY>\n</HTML>\n");
   return n;
 }
-void my_backtrace(){ /*  compile with options -g -rdynamic */
-  void *array[10];
-  size_t size=backtrace(array,10);
-  backtrace_symbols_fd(array,size,STDOUT_FILENO);
-}
-void handler(int sig) {
-  printf( "ZIPsFS Error: signal %d:\n",sig);
-  my_backtrace();
-  abort();
-}
 
 
-#include <sys/wait.h>
-#include <sys/prctl.h>
-void print_trace() {
-  char pid_buf[30];
-  sprintf(pid_buf, "%d", getpid());
-  char name_buf[512];
-  name_buf[readlink("/proc/self/exe", name_buf, 511)]=0;
-  prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
-  int child_pid = fork();
-  if (!child_pid) {
-    dup2(2,1); // redirect output to stderr - edit: unnecessary?
-    execl("/usr/bin/gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "bt", name_buf, pid_buf, NULL);
-    abort(); /* If gdb failed to start */
-  } else {
-    waitpid(child_pid,NULL,0);
-  }
-}
 
 
 const char *zip_fdopen_err(int err){

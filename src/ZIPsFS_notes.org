@@ -26,6 +26,7 @@ negative_timeout=T The timeout in seconds for which a negative lookup will be ca
                    and the file/directory will be assumed to not exist until then. The default is 0.0 second, meaning that caching negative lookups are disabled.
 
 * Debugging
+https://jesseevers.com/segfault-malloc-consolidate/
 Run your code through valgrind. If you're mismanaging memory, it will tell you where
 ** Stacktraces
 https://stackoverflow.com/questions/4636456/how-to-get-a-stack-trace-for-c-using-gcc-with-line-number-information
