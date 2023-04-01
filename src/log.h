@@ -22,11 +22,11 @@ void log_strings(const char *pfx, char *ss[],int n){
   }
 }
 
-void print_pointers(){
-  for(int i=0;i<_fhdata_n;i++){
-    log(ANSI_RESET"%d zarchive=%p zip_file=%p\n",i,_fhdata[i].zpath.zarchive,(void*)_fhdata[i].zip_file);
-  }
-}
+/* void print_pointers(){ */
+/*   for(int i=0;i<_fhdata_n;i++){ */
+/*     log(ANSI_RESET"%d zarchive=%p zip_file=%p\n",i,_fhdata[i].zpath.zarchive,(void*)_fhdata[i].zip_file); */
+/*   } */
+/* } */
 
 #define MAX_INFO 33333
 static char _info[MAX_INFO+1];
@@ -91,10 +91,6 @@ static int log_cached(int n,char *title){
       struct tm tm = *localtime(&d->access);
       sprintf(stime,"%d-%02d-%02d_%02d:%02d:%02d\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec);
       PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,d->cache_len>>10,d->cache_read_seconds);
-
-
-
-
     }
   }
   if (n>=0) PRINTINFO("</TABLE>");
@@ -112,10 +108,14 @@ THEAD{background-color:black;color:white;}\n\
 TD{padding:5px;}\n\
 </STYLE>\n</HEAD>\n<BODY>\n\
 <H1>Roots</H1>\n\
-<TABLE><THEAD><TR><TH>Path</TH><TH>Writable</TH><TH>Remote</TH></TR></THEAD>\n");
+<TABLE><THEAD><TR><TH>Path</TH><TH>Writable</TH><TH align=\"right\">Response</TH><TH align=\"right\">Delayed</TH><TH>Free GB</TH></TR></THEAD>\n");
+ char remote[99];
   for(int i=0;i<_root_n;i++){
-    int f=_root[i].features;
-    PRINTINFO("<TR><TD>%s</TD><TD>%s</TD><TD>%s</TD></TR>\n",_root[i].path,yes_no(f&ROOT_WRITABLE),yes_no(f&ROOT_REMOTE));
+    struct rootdata *r=_root+i;
+    const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30), diff=currentTimeMillis()-r->statfs_when;
+    if (f&ROOT_REMOTE) sprintf(remote,"%'d ms",diff>ROOT_OBSERVE_EVERY_MSECONDS*3?diff:r->statfs_mseconds);
+    else strcpy(remote,"Local");
+    PRINTINFO("<TR><TD>%s</TD><TD align=\"center\">%s</TD><TD align=\"right\">%s</TD><TD align=\"right\">%'d</TD><TD align=\"right\">%'d</TD></TR>\n",r->path,yes_no(f&ROOT_WRITABLE),remote,r->delayed,freeGB);
   }
   PRINTINFO("</TABLE>\n<H1>Heap</H1>\nuordblks=%'d<BR>\n",mallinfo().uordblks);
   PRINTINFO("<H1>File handles</H1>\n");

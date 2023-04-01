@@ -26,12 +26,22 @@ negative_timeout=T The timeout in seconds for which a negative lookup will be ca
                    and the file/directory will be assumed to not exist until then. The default is 0.0 second, meaning that caching negative lookups are disabled.
 
 * Debugging
+
 https://jesseevers.com/segfault-malloc-consolidate/
+https://www.brendangregg.com/blog/2016-08-09/gdb-example-ncurses.html
+Checkout bcc
 Run your code through valgrind. If you're mismanaging memory, it will tell you where
 ** Stacktraces
 https://stackoverflow.com/questions/4636456/how-to-get-a-stack-trace-for-c-using-gcc-with-line-number-information
 
+* gcc
+** gcc instrumentation
+https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html
+gcc -fsanitize=thread
 
+
+
+* core-dumps
 * Reading
 * File cache
 sudo fatrace | grep sample.txt
@@ -58,7 +68,7 @@ struct zip_file {
     bool eof;
     zip_source_t *src; /* data source */
 };
-* Zip_fopen
+** Zip_fopen
 libzip (-lzip)
 
 Synopsis
@@ -152,8 +162,8 @@ struct fuse_file_info {
     uint32_t poll_events;
 };
 
-
-* Error codes
+* Error cod
+es
     EPERM 1		/* Not super-user */
 !   ENOENT 2	/* No such file or directory */
     ESRCH 3		/* No such process */
@@ -418,11 +428,26 @@ int is_dir(const char *path){
 
 
 
+* struct statfs {
+__SWORD_TYPE f_type;    /* Typ des Dateisystems (siehe unten) */
+__SWORD_TYPE f_bsize;   /* optimale Übertragungsblockgröße */
+fsblkcnt_t   f_blocks;  /* gesamte Datenblöcke im Dateisystem */
+fsblkcnt_t   f_bfree;   /* freie Blöcke im Dateisystem */
+fsblkcnt_t   f_bavail;  /* freie Blöcke verfügbar für
+nicht privilegierte Nutzer */
+fsfilcnt_t   f_files;   /* gesamte Dateiknoten im Dateisystem */
+fsfilcnt_t   f_ffree;   /* freie Dateiknoten im Dateisystem */
+fsid_t       f_fsid;    /* Dateisystemkennung */
+__SWORD_TYPE f_namelen; /* maximale Länge für Dateinamen */
+__SWORD_TYPE f_frsize;  /* Fragmentgröße (seit Linux 2.6) */
+__SWORD_TYPE f_spare[5];
+f_bsize
+};
 * Threads
  https://www.cs.cmu.edu/afs/cs/academic/class/15492-f07/www/pthreads.html#BASICS
           https://www.codequoi.com/en/threads-mutexes-and-concurrent-programming-in-c/
 
-* core-dumps
+
 
 more  /proc/sys/kernel/core_pattern
 |/lib/systemd/systemd-coredump %P %u %g %s %t 9223372036854775808 %h
@@ -454,15 +479,6 @@ Saved corefile core.2071
 Now you have a coredump file called core.2071.
 
 
-
-* gcc
-** gcc instrumentation
-https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html
-gcc -fsanitize=thread
-
-
-
-
 * open vs open in C
 
 1) fopen is a library function while open is a system call.
@@ -481,7 +497,6 @@ https://www.gnu.org/software/libc/manual/html_node/Array-Search-Function.html#in
 https://www.geeksforgeeks.org/binary-search-tree-set-1-search-and-insertion/
 
 https://github.com/jean553/c-data-structures
-
 
 
 

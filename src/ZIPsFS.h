@@ -1,6 +1,5 @@
 /* This file was automatically generated.  Do not edit! */
 #undef INTERFACE
-extern struct rlimit _rlimit;
 bool maybe_cache_zip_entry(enum data_op op,struct fhdata *d,bool always);
 bool cache_zip_entry(enum data_op op,struct fhdata *d);
 void fhdata_zip_fclose(struct fhdata *d,char *msg);
@@ -34,3 +33,6 @@ void my_close_fh(int fh);
 void stat_set_dir(struct stat *s);
 char *my_strncpy(char *dst,const char *src,int n);
 int empty_dot_dotdot(const char *s);
+void *thread_readdir_async(void *arg);
+void threads_root_start();
+void *thread_observe_root(void *arg);

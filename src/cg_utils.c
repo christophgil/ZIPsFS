@@ -47,6 +47,14 @@ static int path_for_fd(char *path, int fd,char *buf){
 }
 static int min_int(int a,int b){ return MIN(a,b);}
 /*********************************************************************************/
+/* *** time *** */
+long currentTimeMillis(){
+  struct timeval tv={0};
+   gettimeofday(&tv,NULL);
+   return tv.tv_sec*1000+tv.tv_usec/1000;
+}
+
+/*********************************************************************************/
 /* *** stat *** */
 #include <sys/stat.h>
 #include <sys/statvfs.h>
@@ -105,7 +113,21 @@ int is_regular_file(const char *path){
   stat(path,&path_stat);
   return S_ISREG(path_stat.st_mode);
 }
-
+bool access_from_stat(struct stat *stats,int mode){ // equivaletn to access(path,mode)
+  int granted;
+  mode&=(X_OK|W_OK|R_OK);
+#if R_OK!=S_IROTH || W_OK!=S_IWOTH || X_OK!=S_IXOTH
+  ?error Oops, portability assumptions incorrect.;
+#endif
+  if (mode==F_OK) return 0;
+  if (getuid()==stats->st_uid)
+    granted=(unsigned int) (stats->st_mode&(mode<<6))>>6;
+  else if (getgid()==stats->st_gid || group_member(stats->st_gid))
+    granted=(unsigned int) (stats->st_mode&(mode<<3))>>3;
+  else
+    granted=(stats->st_mode&mode);
+  return granted==mode;
+}
 /*********************************************************************************/
 /* *** io *** */
 void print_substring(int fd,char *s,int f,int t){  write(fd,s,min_int(my_strlen(s),t)); }
