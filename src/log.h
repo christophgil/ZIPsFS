@@ -22,13 +22,21 @@ void log_strings(const char *pfx, char *ss[],int n){
   }
 }
 
+
+void log_fh(char *title,long fh){
+    char p[MAX_PATHLEN];
+    path_for_fd(p,fh);
+    log_debug_now("%s  fh=%ld %s \n",title?title:"", fh,p);
+}
+
 /* void print_pointers(){ */
 /*   for(int i=0;i<_fhdata_n;i++){ */
 /*     log(ANSI_RESET"%d zarchive=%p zip_file=%p\n",i,_fhdata[i].zpath.zarchive,(void*)_fhdata[i].zip_file); */
 /*   } */
 /* } */
 
-#define MAX_INFO 33333
+#define MAX_INFO 33333 // DEBUG_NOW
+
 static char _info[MAX_INFO+1];
 #define PRINTINFO(...)  n+=snprintf(_info+n,MAX_INFO-n,__VA_ARGS__)
 #define PROC_PATH_MAX 256
@@ -42,7 +50,7 @@ int print_open_files(int n, int *fd_count){
     if (fd_count) *(fd_count++);
     if (n<0 || atoi(dp->d_name)<4) continue;
     my_strncpy(proc_path+len_proc_path,dp->d_name,PROC_PATH_MAX-len_proc_path);
-    const int l=readlink(proc_path,path,255);path[l]=0;
+    const int l=readlink(proc_path,path,255);path[MAX(l,0)]=0;
     PRINTINFO("<LI>%s -- %s</LI>\n",proc_path,path);
   }
   closedir(dir);
@@ -81,22 +89,25 @@ int print_maps(int n){
 }
 
 static int log_cached(int n,char *title){
-  if (n<0) log_cache("log_cached %s\n",title);
+  if (n<0) log_cache("log_cached %s\n",snull(title));
   else PRINTINFO("<TABLE>\n<THEAD><TR><TH></TH><TH>Path</TH><TH>Access</TH><TH>Addr&gt;&gt;12</TH><TH>KByte</TH><TH>Millisec</TH></TR></THEAD>\n");
   char stime[99];
   for(int i=_fhdata_n; --i>=0;){
     struct fhdata *d=_fhdata+i;
     if (n<0) printf("\t%4d\t%s\t%lx\t%p\n",i, d->path, d->path_hash,d->cache);
     else{
+
       struct tm tm = *localtime(&d->access);
       sprintf(stime,"%d-%02d-%02d_%02d:%02d:%02d\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec);
-      PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,d->cache_len>>10,d->cache_read_seconds);
+            PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,d->cache_len>>10,d->cache_read_seconds);
     }
   }
+
   if (n>=0) PRINTINFO("</TABLE>");
   return n;
 }
 int get_info(){
+  log_entered_function("get_info\n");
   int n=0;
   PRINTINFO("<HTML>\n<HEAD>\n<STYLE>\n\
 H1{color:blue;}\n\
@@ -109,6 +120,7 @@ TD{padding:5px;}\n\
 </STYLE>\n</HEAD>\n<BODY>\n\
 <H1>Roots</H1>\n\
 <TABLE><THEAD><TR><TH>Path</TH><TH>Writable</TH><TH align=\"right\">Response</TH><TH align=\"right\">Delayed</TH><TH>Free GB</TH></TR></THEAD>\n");
+
  char remote[99];
   for(int i=0;i<_root_n;i++){
     struct rootdata *r=_root+i;
@@ -131,9 +143,9 @@ TD{padding:5px;}\n\
   TABLEROW(_count_read_zip_seek_bwd,7);
   TABLEROW(_read_max_size,7);
   PRINTINFO("</TABLE>");
-
 #undef TABLEROW
   PRINTINFO("<H1>Cache</H1>\nWhen cache Zip entry: %s\n sqlite-db=%s\n",WHEN_CACHE_S[_when_cache],_sqlitefile);
+
   n=log_cached(n,"");
   PRINTINFO("<H1>/proc/%ld/maps</H1>\n", (long)getpid());
   n=print_maps(n);
@@ -143,6 +155,7 @@ TD{padding:5px;}\n\
   PRINTINFO("Rlim soft=%'zu MB   hard=%'zu MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
 
   PRINTINFO("</BODY>\n</HTML>\n");
+  log_exited_function("get_info\n %d",n);
   return n;
 }
 

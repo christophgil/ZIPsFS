@@ -31,8 +31,24 @@ https://jesseevers.com/segfault-malloc-consolidate/
 https://www.brendangregg.com/blog/2016-08-09/gdb-example-ncurses.html
 Checkout bcc
 Run your code through valgrind. If you're mismanaging memory, it will tell you where
+
+
+
 ** Stacktraces
+
 https://stackoverflow.com/questions/4636456/how-to-get-a-stack-trace-for-c-using-gcc-with-line-number-information
+
+** strace
+
+
+sudo strace -q  -e trace=file df -h  Next, to trace all system calls that take a filename as an argument, run this command.
+-t time
+-i instruct pointer
+
+strace -e trace=write df -h
+
+
+
 
 * gcc
 ** gcc instrumentation
@@ -104,7 +120,24 @@ The function zip_fopen() may also fail and set zip_err for any of the errors spe
 The function zip_fopen_index() may also fail with ZIP_ER_INVAL if index is invalid.
 
 See Also libzip(3), zip_fclose(3), zip_fread(3), zip_fseek(3), zip_get_num_entries(3), zip_name_locate(3), zip_set_default_password(3)
+* Diann errors
+** ERROR: cannot open the raw data folder
+[63:12] Loading run /home/cgille/tmp/ZIPsFS/mnt/PRO1/Data/30-0046/20230126_PRO1_KTT_008_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMGlycine3mM_dia_BC9_1_12101.d                                    [320/1246]
+ERROR: cannot open the raw data folder ERROR: cannot open the raw data folder /home/cgille/tmp/ZIPsFS/mnt/PRO1/Data/30-0046/20230126_PRO1_KTT_008_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMGlycine3mM_dia_B
+C9_1_12101.d/home/cgille/tmp/ZIPsFS/mnt/PRO1/Data/30-0046/2
+0230126_PRO1_KTT_008_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMGlycine3mM_dia_BC9_1_12101.d
+ERROR: cannot open the raw data folder /home/cgille/tmp/ZIPsFS/mnt/PRO1/Data/30-0046/20230126_PRO1_KTT_008_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMGlycine3mM_dia_BC9_1_12101.d
 
+ERROR: cannot open the raw data folder /home/cgille/tmp/ZIPsFS/mnt/PRO1/Data/30-0046/20230126_PRO1_KTT_008_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMGlycine3mM_dia_BC9_1_12101.d
+ERROR: cannot open the raw data folder /home/cgille/tmp/ZIPsFS/mnt/PRO1/Data/30-0046/20230126_PRO1_KTT_008_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMGlycine3mM_dia_BC9_1_12101.d
+ERROR: cannot open the raw data folder /home/cgille/tmp/ZIPsFS/mnt/PRO1/Data/30-0046/20230126_PRO1_KTT_008_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMGlycine3mM_dia_BC9_1_12101.d
+ERROR: cannot open the raw data folder /home/cgille/tmp/ZIPsFS/mnt/PRO1/Data/30-0046/20230126_PRO1_KTT_008_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMGlycine3mM_dia_BC9_1_12101.d
+ERROR: either the dia-PASEF file is damaged or a .dia file produced by an older DIA-NN version has been loaded: performance might be suboptimal, regenerate the .dia file using this DIA-NN version
+WARNING: incorrectly recorded isolation window margins
+[63:12] 0 library precursors are potentially detectable
+
+
+wine: Unhandled page fault on read access to FFFFFFFFFFFFFFFF at address 000000014013CA81 (thread 0288), starting debugger...
 * fuse_file_info
 https://www.usenix.org/system/files/conference/fast17/fast17-vangoor.pdf
 /home/cgille/test/fuse/root_3/file_in_root3_root_3_10.txt
@@ -162,7 +195,7 @@ struct fuse_file_info {
     uint32_t poll_events;
 };
 
-* Error cod
+* Error code
 es
     EPERM 1		/* Not super-user */
 !   ENOENT 2	/* No such file or directory */
@@ -422,6 +455,8 @@ int is_dir(const char *path){
 #define S_IROTH 00004
 #define S_IWOTH 00002
 #define S_IXOTH 00001
+
+
 
 
 

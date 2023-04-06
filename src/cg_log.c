@@ -3,6 +3,8 @@
   christoph Gille
   This program can be distributed under the terms of the GNU GPLv3.
 */
+#ifndef _def_cg_log_c
+#define _def_cg_log_c 1
 #define ANSI_RED "\x1B[41m"
 #define ANSI_MAGENTA "\x1B[45m"
 #define ANSI_GREEN "\x1B[42m"
@@ -45,3 +47,4 @@ int isPowerOfTwo(unsigned int n){ return n && (n&(n-1))==0;}
 void _log_mthd(char *s,int count){ if (isPowerOfTwo(count)) log(" %s=%d ",s,count);}
 #define log_mthd_invoke(s) static int __count=0;_log_mthd(ANSI_FG_GRAY #s ANSI_RESET,++__count);
 #define log_mthd_orig(s) static int __count_orig=0;_log_mthd(ANSI_FG_BLUE #s ANSI_RESET,++__count_orig);
+#endif

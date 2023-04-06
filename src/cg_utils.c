@@ -2,9 +2,17 @@
 #define MAX(a,b) (((a)>(b))?(a):(b))
 #define MAX_PATHLEN 512
 #define DEBUG_NOW 1
-#define FREE_NULL(s) free(s),s=NULL
+#define FREE(s) free(s),s=NULL
 /*********************************************************************************/
 /* *** String *** */
+int empty_dot_dotdot(const char *s){  return !*s || *s=='.' && (!s[1] || s[1]=='.'&&!s[2]); }
+char *my_strncpy(char *dst,const char *src, int n){
+  *dst=0;
+  if (src) strncat(dst,src,n);
+  return dst;
+}
+
+#define SNPRINTF(dest,max,...)   (max<=snprintf(dest,max,__VA_ARGS__) && (log_error("Exceed snprintf "),true))
 unsigned int my_strlen(const char *s){ return !s?0:strnlen(s,MAX_PATHLEN);}
 const char* snull(const char *s){ return s?s:"Null";}
 static inline char *yes_no(int i){ return i?"Yes":"No";}
@@ -33,8 +41,9 @@ int pathlen_ignore_trailing_slash(const char *p){
   const int n=my_strlen(p);
   return n && p[n-1]=='/'?n-1:n;
 }
-static int path_for_fd(char *path, int fd,char *buf){
+static int path_for_fd(char *path, int fd){
   *path=0;
+  char buf[99];
   sprintf(buf,"/proc/%d/fd/%d",getpid(),fd);
   const ssize_t n=readlink(buf,path, MAX_PATHLEN-1);
   if (n<0){

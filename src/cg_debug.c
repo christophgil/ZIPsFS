@@ -42,7 +42,7 @@ void my_backtrace(){ /*  compile with options -g -rdynamic */
 void _handler(int sig) {
   printf( "ZIPsFS Error: signal %d:\n",sig);
   my_backtrace();
-  //print_trace();
+  print_trace();
   abort();
 }
 
@@ -99,4 +99,17 @@ void assert_r_ok(const char *p, struct stat *st){
 void my_file_checks(const char *p, struct stat *s){
   if(file_starts_year_ends_dot_d(p)) assert_dir(p,s);
   if (file_ends_tdf_bin(p)) assert_r_ok(p,s);
+}
+
+
+bool tdf_or_tdf_bin(const char *p) {return endsWith(p,".tdf") || endsWith(p,".tdf_bin");}
+
+void tdf_maybe_sleep(const char *path, int factor){
+  if (tdf_or_tdf_bin(path)){
+    static int sleep=0;
+    int us=((random())&0x3f)*factor;
+    //log_debug_now(" Begin sleep %d  ",us);
+    usleep(us);
+    //log_debug_now(" Done sleep ");
+  }
 }
