@@ -45,7 +45,7 @@ static bool _ht_pushKey_p(const char *k,int klen){ return klen<(1<<(_HT_LDDIM-1)
 static char *_ht_pushKey(ht *t,const char *k,int klen){
   const char debug=false;
   const MY_UINT DIM=1<<_HT_LDDIM,AND=(DIM-1);
-  if(debug)log_debug_now("DIM=%d  AND=%x \n",DIM,AND);
+  if(debug)log_debug_now("DIM=%u  AND=%x \n",DIM,AND);
   MY_UINT b=t->keys_i,e=b+klen+1;
   if ((b&~AND)!=(e&~AND)){ b=(e&~AND)+DIM; e=b+klen+1; if(debug)log_debug_now("next dimenstion \n"); } /* Does not fit any more. Reset d0, Increment d1. */
   t->keys_i=e;
@@ -61,7 +61,7 @@ static char *_ht_pushKey(ht *t,const char *k,int klen){
   if (!kkk[d2][d1]) { kkk[d2][d1]=calloc(DIM,1); if(debug)log_debug_now("kkk[d2][d1]=calloc\n");}
   char *s=kkk[d2][d1]+(b&AND);
   memcpy(s,k,klen+1);
-  if(debug)log_debug_now("k=%s be=%d-%d d012=%d,%d,%d s=%s k=%s\n",k,b,e,d0,d1,d2,s,k);
+  if(debug)log_debug_now("k=%s be=%u-%u d012=%d,%d,%d s=%s k=%s\n",k,b,e,d0,d1,d2,s,k);
   return s;
 }
 
@@ -115,7 +115,7 @@ void ht_destroy(ht* t){
   else{
     for (int i=t->capacity;--i>=0;){
       ht_entry *e=t->entries+i;
-      if (e) free((void*)e->key); e->key=NULL;
+      if (e) {free((void*)e->key); e->key=NULL;}
     }
   }
   free(t->entries);t->entries=NULL;

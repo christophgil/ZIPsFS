@@ -2,7 +2,7 @@ void log_path(const char *f,const char *path){
   printf("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
 }
 
-#define log_abort(...)  { log_error(__VA_ARGS__),puts("Going to exit ..."),exit(-1); }
+
 
 int log_func_error(char *func){
   int ret=-errno;
@@ -25,7 +25,7 @@ void log_strings(const char *pfx, char *ss[],int n){
 
 void log_fh(char *title,long fh){
     char p[MAX_PATHLEN];
-    path_for_fd(p,fh);
+    path_for_fd(title,p,fh);
     log_debug_now("%s  fh=%ld %s \n",title?title:"", fh,p);
 }
 
@@ -99,7 +99,7 @@ static int log_cached(int n,char *title){
 
       struct tm tm = *localtime(&d->access);
       sprintf(stime,"%d-%02d-%02d_%02d:%02d:%02d\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec);
-            PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,d->cache_len>>10,d->cache_read_seconds);
+            PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,d->cache_l>>10,d->cache_read_seconds);
     }
   }
 

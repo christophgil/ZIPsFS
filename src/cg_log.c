@@ -35,16 +35,24 @@
 void prints(char *s){ if (s) fputs(s,LOG_STREAM);}
 #define log(...)  printf(__VA_ARGS__)
 #define log_already_exists(...) (prints(" Already exists "ANSI_RESET),log(__VA_ARGS__)
-#define log_failed(...)  prints(ANSI_FG_RED" Failed "ANSI_RESET),log(__VA_ARGS__)
-#define log_warn(...)  prints(ANSI_FG_RED" Warn "ANSI_RESET),log(__VA_ARGS__)
-#define log_error(...)  prints(ANSI_FG_RED" Error "ANSI_RESET),log(__VA_ARGS__)
+#define log_failed(...)  log(ANSI_FG_RED" $$ %d Failed "ANSI_RESET,getpid()),log(__VA_ARGS__)
+#define log_warn(...)  log(ANSI_FG_RED" $$ %d Warn "ANSI_RESET,getpid()),log(__VA_ARGS__)
+#define log_error(...)  log(ANSI_FG_RED" $$ %d Error "ANSI_RESET,getpid()),log(__VA_ARGS__)
 #define log_succes(...)  prints(ANSI_FG_GREEN" Success "ANSI_RESET),log(__VA_ARGS__)
 #define log_debug_now(...)   prints(ANSI_FG_MAGENTA" Debug "ANSI_RESET),log(__VA_ARGS__)
-#define log_entered_function(...)   prints(ANSI_INVERSE"> > > >"ANSI_RESET),log(__VA_ARGS__)
+#define log_entered_function(...)   log(ANSI_INVERSE" $$ %d > > > >"ANSI_RESET,getpid()),log(__VA_ARGS__)
 #define log_exited_function(...)   prints(ANSI_INVERSE"< < < <"ANSI_RESET),log(__VA_ARGS__)
-#define log_cache(...)  prints(ANSI_RED"CACHE"ANSI_RESET" "),log(__VA_ARGS__)
+#define log_cache(...)  log(ANSI_RED" $$ %d CACHE"ANSI_RESET" ",getpid()),log(__VA_ARGS__)
 int isPowerOfTwo(unsigned int n){ return n && (n&(n-1))==0;}
 void _log_mthd(char *s,int count){ if (isPowerOfTwo(count)) log(" %s=%d ",s,count);}
-#define log_mthd_invoke(s) static int __count=0;_log_mthd(ANSI_FG_GRAY #s ANSI_RESET,++__count);
-#define log_mthd_orig(s) static int __count_orig=0;_log_mthd(ANSI_FG_BLUE #s ANSI_RESET,++__count_orig);
+#define log_mthd_invoke(s) static int __count=0;_log_mthd(ANSI_FG_GRAY #s ANSI_RESET,++__count)
+#define log_mthd_orig(s) static int __count_orig=0;_log_mthd(ANSI_FG_BLUE #s ANSI_RESET,++__count_orig)
+#define log_abort(...)   prints(ANSI_RED"\nAbort"),log(__VA_ARGS__),log("ANSI_RESET\n")
+
+#if 0
+#define log_debug_abort(...)   log_abort(__VA_ARGS__)
+#else
+#define log_debug_abort(...)   log_error(__VA_ARGS__)
+#endif
+
 #endif
