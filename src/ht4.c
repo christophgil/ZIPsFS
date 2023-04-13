@@ -14,6 +14,9 @@
 #include <stddef.h>
 #include <malloc.h>
 #include "cg_log.c"
+       #include <sys/types.h>
+       #include <unistd.h>
+
 #ifndef log_error
 #define log_error(...)  printf("\x1B[31m Error \x1B[0m"),fprintf(stderr,__VA_ARGS__)
 #endif
@@ -23,6 +26,9 @@
 //#define HT_INIT_IF_NOT_ALREADY (1<<30)
 #define _HT_STORE_KEYS_MAX 16
 #define MY_UINT unsigned int
+
+
+const char *HT_FAKE_KEY="HT_FAKE_KEY";
 
 typedef struct ht ht;
 typedef struct {
@@ -43,6 +49,7 @@ struct ht {
 static bool _ht_pushKey_p(const char *k,int klen){ return klen<(1<<(_HT_LDDIM-1)); }
 
 static char *_ht_pushKey(ht *t,const char *k,int klen){
+  assert(0);
   const char debug=false;
   const MY_UINT DIM=1<<_HT_LDDIM,AND=(DIM-1);
   if(debug)log_debug_now("DIM=%u  AND=%x \n",DIM,AND);
@@ -102,7 +109,7 @@ bool ht_init(ht *table,MY_UINT log2initalCapacity){
   }
   //  memset(table,0,sizeof(struct ht));
   table->capacity=(log2initalCapacity&0xff)?(1<<(log2initalCapacity&0xff)):256;
-  if (!(table->entries=calloc(table->capacity, sizeof(ht_entry)))){
+  if (!(table->entries=calloc(table->capacity,sizeof(ht_entry)))){
     log_error("ht.c: calloc table->entries\n");
     return false;
   }
@@ -131,25 +138,39 @@ static uint64_t hash_key(const char* key){
   }
   return hash;
 }
-const ht_entry* ht_get_entry(ht* table, const char* key){
+const ht_entry* ht_get_entryh(ht* table, const char* key, uint64_t hash){
+  if (!table->entries) ht_init(table,8);
   // AND hash with capacity-1 to ensure it's within entries array.
   if (!table){ fprintf(stderr,"ht_get table is NULL\n");return NULL;}
-  const uint64_t hash=hash_key(key);
   MY_UINT i=(MY_UINT)(hash & (uint64_t)(table->capacity - 1));
   // Loop till we find an empty entry.
   const ht_entry *ee=table->entries;
+  const bool hash_only=(key==HT_FAKE_KEY);
   while (ee[i].key){
-    if (ee[i].key_hash==hash && !strcmp(key,ee[i].key)) return ee+i;
+    if (ee[i].key_hash==hash && (hash_only||!strcmp(key,ee[i].key))) return ee+i;
     // Key wasn't in this slot, move to next (linear probing).
     if (++i>=table->capacity) i=0; // At end of entries array, wrap around.
   }
   return NULL;
 }
-void* ht_get(ht* table, const char* key){
-  if (!table->entries) ht_init(table,8);
-  const ht_entry *e=ht_get_entry(table,key);
+//const ht_entry* ht_get_entry(ht* table, const char* key){  return key?ht_get_entryh(table,key, hash_key(key)):NULL; }
+
+void* ht_geth(ht* table, const char* key,uint64_t hash){
+  const ht_entry *e=key?ht_get_entryh(table,key,hash):NULL;
   return e?e->value:NULL;
 }
+
+
+void* ht_get(ht* table, const char* key){
+    const ht_entry *e=key?ht_get_entryh(table,key,hash_key(key)):NULL;
+  return e?e->value:NULL;
+}
+void* ht_getn(ht* table, uint64_t key){
+  const ht_entry *e=ht_get_entryh(table,HT_FAKE_KEY,key);
+  return e?e->value:NULL;
+}
+
+
 
 // Internal function to set an entry (without expanding table).
 static ht_entry* ht_set_entry(ht *table,ht_entry* ee, MY_UINT capacity,const char* key, uint64_t hash, void* value, MY_UINT* plength){
@@ -159,7 +180,7 @@ static ht_entry* ht_set_entry(ht *table,ht_entry* ee, MY_UINT capacity,const cha
   while (ee[i].key){
     if (ee[i].key_hash==hash && !strcmp(key,ee[i].key)){
       ee[i].value=value;
-      if (!value) ee[i].key=NULL;
+      if (!value) { free((char*)ee[i].key);ee[i].key=NULL;}
       return ee+i;
     }
     // Key wasn't in this slot, move to next (linear probing).
@@ -171,7 +192,7 @@ static ht_entry* ht_set_entry(ht *table,ht_entry* ee, MY_UINT capacity,const cha
       int len;
       if ((table->flags&HT_STORE_KEYS_IN_POOL) && _ht_pushKey_p(key,len=strlen(key))){
         key=_ht_pushKey(table,key,len);
-      } else if (!(key=strdup(key))){
+      }else if (!(key=strdup(key))){
         log_error("ht.c: strdup(key)\n");
         return NULL;
       }
@@ -188,11 +209,8 @@ static ht_entry* ht_set_entry(ht *table,ht_entry* ee, MY_UINT capacity,const cha
 static bool ht_expand(ht* table){
   const MY_UINT new_capacity=table->capacity<<1;
   if (new_capacity<table->capacity) return false;  // overflow (capacity would be too big)
-  ht_entry* new_ee=calloc(new_capacity, sizeof(ht_entry));
-  if (!new_ee){
-    log_error("ht.c: calloc new_ee\n");
-    return false;
-  }
+  ht_entry* new_ee=calloc(new_capacity,sizeof(ht_entry));
+  if (!new_ee){ log_error("ht.c: calloc new_ee\n"); return false; }
   for (MY_UINT i=0; i<table->capacity; i++){
     const ht_entry e=table->entries[i];
     if (e.key) ht_set_entry(table,new_ee,new_capacity,e.key,e.key_hash,e.value,NULL);
@@ -202,11 +220,17 @@ static bool ht_expand(ht* table){
   table->capacity=new_capacity;
   return true;
 }
-ht_entry* ht_set(ht* table, const char* key, void* value){
+
+ht_entry* ht_seth(ht* table, const char* key, uint64_t hash,void* value){
+  if (!hash && key!=HT_FAKE_KEY) hash=hash_key(key);
   if (!table->entries) ht_init(table,8);
   if (!key || ((table->length>=table->capacity>>1) && !ht_expand(table))) return NULL;
-  return ht_set_entry(table,table->entries, table->capacity,key,hash_key(key),value, &table->length);
+  return ht_set_entry(table,table->entries, table->capacity,key,hash,value, &table->length);
 }
+ht_entry* ht_set(ht* table, const char* key, void* value){ return ht_seth(table,key,0,value);}
+ht_entry* ht_setn(ht* table, uint64_t key,void* value){ return ht_seth(table,HT_FAKE_KEY,key,value);}
+
+
 //MY_UINT ht_length(ht* table){  return table->length;}
 /* *** Iteration over elements ***  */
 ht_entry *ht_next(ht *table, int *index){
@@ -218,4 +242,15 @@ ht_entry *ht_next(ht *table, int *index){
   if (i>=c) return NULL;
   *index=i+1;
   return ee+i;
+}
+
+
+
+/* identical Strings will have same address */
+const char* ht_internalize_strg(ht *table,const char *s){
+  if (!s) return NULL;
+  const char *s2=ht_get(table,s);
+  if (s2) return s2;
+  ht_set(table,s,(void*)s);
+  return s;
 }

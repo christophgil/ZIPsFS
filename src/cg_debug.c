@@ -20,20 +20,21 @@ void print_backtrace(){
 }
 
 void print_trace() {
+  fputs(ANSI_INVERSE"print_trace"ANSI_RESET"\n",stderr);
   char pid_buf[30],name_buf[512];
   sprintf(pid_buf, "%d", getpid());
   name_buf[readlink("/proc/self/exe",name_buf, 511)]=0;
   prctl(PR_SET_PTRACER,PR_SET_PTRACER_ANY, 0,0, 0);
   const int child_pid=fork();
   if (!child_pid) {
-    dup2(2,1); // redirect output to stderr - edit: unnecessary?
-    execl("/usr/bin/gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "bt",name_buf, pid_buf,NULL);
+    execl("/usr/bin/gdb", "gdb", "--batch", "-f","-n", "-ex", "thread", "-ex", "bt",name_buf, pid_buf,NULL);
     abort(); /* If gdb failed to start */
   } else {
     waitpid(child_pid,NULL,0);
   }
 }
 void my_backtrace(){ /*  compile with options -g -rdynamic */
+    fputs(ANSI_INVERSE"my_backtrace"ANSI_RESET"\n",stderr);
   void *array[10];
   size_t size=backtrace(array,10);
   backtrace_symbols_fd(array,size,STDOUT_FILENO);
@@ -43,7 +44,8 @@ void _handler(int sig) {
   printf( "ZIPsFS Error: signal %d:\n",sig);
   my_backtrace();
   print_trace();
-  abort();
+  if (sig==SIGABRT) exit(1);
+  else abort();
 }
 
 void init_handler() __attribute((constructor));
@@ -51,6 +53,8 @@ void init_handler() __attribute((constructor));
 void init_handler(){
   log_debug_now("init_handler\n");
   signal(SIGSEGV,_handler);
+  signal(SIGABRT,_handler);
+
   struct rlimit core_limit={RLIM_INFINITY,RLIM_INFINITY};
   assert(!setrlimit(RLIMIT_CORE,&core_limit)); // enable core dumps
 }
@@ -117,3 +121,47 @@ int debug_tdf_maybe_sleep(const char *path, int factor){
   }
   return 0;
 }
+
+
+
+bool report_failure(const char *mthd, int res, const char *path){
+  if (res && tdf_or_tdf_bin(path)){
+    log_debug_abort("xmp_getattr res=%d  path=%s",res,path);
+    return true;
+  }
+  return false;
+}
+
+
+enum functions{xmp_open_,xmp_access_,xmp_getattr_,xmp_read_,xmp_readdir_,mcze_,functions_l};
+#if 0
+static int functions_count[functions_l];
+static long functions_time[functions_l];
+const char *function_name(enum functions f){
+  #define C(x) f==x ## _ ? #x :
+return C(xmp_open) C(xmp_access) C(xmp_getattr) C(xmp_read) C(xmp_readdir) C(mcze) "null";
+ #undef C
+}
+static void log_count_b(enum functions f){
+  functions_time[f]=time_ms();
+  log(" >>%s%d ",function_name(f),functions_count[f]);
+  pthread_mutex_lock(mutex+mutex_log_count);
+  functions_count[f]++;
+  pthread_mutex_unlock(mutex+mutex_log_count);
+}
+static void log_count_e(enum functions f,const char *path){
+  const int ms=(int)(time_ms()-functions_time[f]);
+    pthread_mutex_lock(mutex+mutex_log_count);
+    --functions_count[f];
+  pthread_mutex_unlock(mutex+mutex_log_count);
+
+  if (ms>1000 && (f==xmp_getattr_ || f==xmp_access_ || f==xmp_open_ || f==xmp_readdir_)){
+    log(ANSI_FG_RED" %s"ANSI_FG_GRAY"%d"ANSI_FG_RED",'%s'%d<< "ANSI_RESET,function_name(f),ms,snull(path),functions_count[f]);
+  }else{
+    log(" %s"ANSI_FG_GRAY"%d"ANSI_RESET",%d<< ",function_name(f),ms,functions_count[f]);
+  }
+}
+#else
+#define  log_count_b(f) ;
+#define  log_count_e(f,path) ;
+#endif

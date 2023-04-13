@@ -41,6 +41,21 @@ int pathlen_ignore_trailing_slash(const char *p){
   const int n=my_strlen(p);
   return n && p[n-1]=='/'?n-1:n;
 }
+bool equivalent_path(char *nextPath, const char *path,int equiv){
+  *nextPath=0;
+#define SLASH_EQUIVALENT "/EquiValent/"
+  const int EQUIVALENT_L=sizeof(SLASH_EQUIVALENT)-1;
+  const char* e=equiv?strstr(path,SLASH_EQUIVALENT):0,*slash=e?strchr(e+EQUIVALENT_L,'/'):NULL;
+  if (slash){
+    memcpy(nextPath,path,e-path+EQUIVALENT_L);
+    sprintf(nextPath+(e-path+EQUIVALENT_L),"%d%s",atoi(e+EQUIVALENT_L)+equiv,slash);
+  }else{
+    strcpy(nextPath,path);
+  }
+  return slash!=NULL;
+#undef SLASH_EQUIVALENT
+}
+
 static int path_for_fd(const char *title, char *path, int fd){
   *path=0;
   char buf[99];
@@ -59,8 +74,8 @@ static int max_int(int a,int b){ return MAX(a,b);}
 /* *** time *** */
 long currentTimeMillis(){
   struct timeval tv={0};
-   gettimeofday(&tv,NULL);
-   return tv.tv_sec*1000+tv.tv_usec/1000;
+  gettimeofday(&tv,NULL);
+  return tv.tv_sec*1000+tv.tv_usec/1000;
 }
 
 /*********************************************************************************/

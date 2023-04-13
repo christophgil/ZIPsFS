@@ -31,7 +31,7 @@ https://jesseevers.com/segfault-malloc-consolidate/
 https://www.brendangregg.com/blog/2016-08-09/gdb-example-ncurses.html
 Checkout bcc
 Run your code through valgrind. If you're mismanaging memory, it will tell you where
-
+www.cs.toronto.edu/~krueger/csc209h/tut/gdb_tutorial.html
 
 
 ** Stacktraces
@@ -70,6 +70,29 @@ https://www.baeldung.com/linux/file-cache-ram
 /local/filesystem/fuse-3.14.0/example/passthrough.c
 /local/filesystem/ZipROFS-dev/ziprofs.py
 /local/filesystem/mount-zip-main/lib
+
+* faile safe FS
+
+- GlusterFS
+- MooseFS
+
+   fault-tolerant
+   LizardFS
+
+Would using Heartbeat and a floating virtual IP help you out? It's not limited to NFS, but a more general approach. see for example Arch Linux wiki: Simple IP Failover with Heartbeat. –
+gertvdijk
+ Dec 19, 2012 at 23:52
+ 2
+ I second the comment by @gertvdijk. You might be able to configure active/passive failover by configuring the same IP address and hostname on the main server and the failover server. That is how commercial NFS filers work such as EMC VG-2 storage gateway. –
+ Dmitri Chubarov
+  Dec 20, 2012 at 8:49
+  heartbeat would work but this is a strange particular situation. The NFS server is a OS X 10.8 Xsan setup and they removed heartbeat in 10.8 (10.7 had it). –
+  Doug
+   Jan 4, 2013 at 3:07
+
+
+ https://access.redhat.com/documentation/en-us/red_hat_gluster_storage/3/html/administration_guide/sect-configuring_automated_ip_failover_for_nfs_and_smb
+
 
 * malloc
 https://developer.apple.com/library/archive/documentation/Performance/Conceptual/ManagingMemory/Articles/MemoryAlloc.html
@@ -121,6 +144,13 @@ The function zip_fopen_index() may also fail with ZIP_ER_INVAL if index is inval
 
 See Also libzip(3), zip_fclose(3), zip_fread(3), zip_fseek(3), zip_get_num_entries(3), zip_name_locate(3), zip_set_default_password(3)
 * Diann errors
+
+Unhandled exception: page fault on read access to 0xffffffffffffffff in 64-bit code (0x000000014013ca81).
+000000014013ca81-000000014013ca81
+0000000140000000-0000000140fc8000       Export          diann_l
+
+20230126_PRO1_KTT_003_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMFormate20mM_dia_BD12_1_12096.d
+
 ** ERROR: cannot open the raw data folder
 [63:12] Loading run /home/cgille/tmp/ZIPsFS/mnt/PRO1/Data/30-0046/20230126_PRO1_KTT_008_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMGlycine3mM_dia_BC9_1_12101.d                                    [320/1246]
 ERROR: cannot open the raw data folder ERROR: cannot open the raw data folder /home/cgille/tmp/ZIPsFS/mnt/PRO1/Data/30-0046/20230126_PRO1_KTT_008_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMGlycine3mM_dia_B

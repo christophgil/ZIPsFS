@@ -113,9 +113,9 @@ ZIPsFS.o: ZIPsFS.c /usr/include/stdc-predef.h /usr/include/stdlib.h \
  /usr/include/assert.h cg_log.c cg_utils.c \
  /usr/include/x86_64-linux-gnu/sys/vfs.h \
  /usr/include/x86_64-linux-gnu/sys/statfs.h \
- /usr/include/x86_64-linux-gnu/bits/statfs.h cg_debug.c \
- /usr/include/x86_64-linux-gnu/sys/wait.h /usr/include/signal.h \
- /usr/include/x86_64-linux-gnu/bits/signum.h \
+ /usr/include/x86_64-linux-gnu/bits/statfs.h configuration.h ht4.c \
+ cg_debug.c /usr/include/x86_64-linux-gnu/sys/wait.h \
+ /usr/include/signal.h /usr/include/x86_64-linux-gnu/bits/signum.h \
  /usr/include/x86_64-linux-gnu/bits/signum-generic.h \
  /usr/include/x86_64-linux-gnu/bits/types/sig_atomic_t.h \
  /usr/include/x86_64-linux-gnu/bits/types/siginfo_t.h \
@@ -138,8 +138,7 @@ ZIPsFS.o: ZIPsFS.c /usr/include/stdc-predef.h /usr/include/stdlib.h \
  /usr/include/x86_64-linux-gnu/sys/prctl.h /usr/include/linux/prctl.h \
  /usr/include/execinfo.h /usr/include/x86_64-linux-gnu/sys/resource.h \
  /usr/include/x86_64-linux-gnu/bits/resource.h \
- /usr/include/x86_64-linux-gnu/bits/types/struct_rusage.h configuration.h \
- ht4.c ZIPsFS.h log.h
+ /usr/include/x86_64-linux-gnu/bits/types/struct_rusage.h ZIPsFS.h log.h
 
 /usr/include/stdc-predef.h:
 
@@ -433,6 +432,10 @@ cg_utils.c:
 
 /usr/include/x86_64-linux-gnu/bits/statfs.h:
 
+configuration.h:
+
+ht4.c:
+
 cg_debug.c:
 
 /usr/include/x86_64-linux-gnu/sys/wait.h:
@@ -490,10 +493,6 @@ cg_debug.c:
 /usr/include/x86_64-linux-gnu/bits/resource.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/struct_rusage.h:
-
-configuration.h:
-
-ht4.c:
 
 ZIPsFS.h:
 

@@ -171,7 +171,8 @@ AUTOMAKE = ${SHELL} /home/cgille/git_projects/ZIPsFS/missing automake-1.16
 AWK = gawk
 CC = gcc
 CCDEPMODE = depmode=gcc3
-CFLAGS = -march=znver2 -g -rdynamic -fsanitize=bounds
+CFLAGS = -march=znver2  -rdynamic   -ggdb
+# -fsanitize=bounds
 CPP = gcc -E
 CPPFLAGS = 
 CYGPATH_W = echo
@@ -261,7 +262,7 @@ top_builddir = ..
 top_srcdir = ..
 ZIPsFS_SOURCES = ZIPsFS.c  log.h
 LDADD = -L/usr/local/lib/x86_64-linux-gnu -lfuse3 -lpthread -L/usr/local/lib -lzip  -L/usr/local/lib -lsqlite3
-AM_CFLAGS = -I/usr/local/include/fuse3 -g3 -O0 -D_FILE_OFFSET_BITS=64 
+AM_CFLAGS = -I/usr/local/include/fuse3 -g -O0 -D_FILE_OFFSET_BITS=64 
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am
 
