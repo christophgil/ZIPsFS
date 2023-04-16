@@ -937,6 +937,19 @@ int impl_readdir(struct rootdata *r,struct zippath *zpath, void *buf, fuse_fill_
   //log_exited_function("realpath_readdir \n");
   return 0;
 }
+
+int xmp_releasedir(const char *path, struct fuse_file_info *fi){
+  return 0;
+}
+
+static int xmp_statfs(const char *path, struct statvfs *stbuf){
+    char *p=_root[0].path;
+    if (!p || !*p && _root_n>1) p=_root[1].path;
+    if (!p || !*p) return -ENOSYS;
+    const int res=statvfs(p,stbuf);
+    return res==-1?-errno:res;
+}
+
 /************************************************************************************************/
 /* *** Create parent dir for creating new files. The first root is writable, the others not *** */
 int realpath_mk_parent(char *realpath,const char *path){
@@ -1343,7 +1356,7 @@ static off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file
 
 
 
-int _xmp_read(const char *path, char *buf, size_t size, off_t offset,struct fuse_file_info *fi,struct fhdata *d){
+int _xmp_read(const char *path, char *buf, size_t size, off_t offset,struct fuse_file_info *fi,struct fhdata *retd[1]){
   //log_entered_function(ANSI_BLUE"xmp_read"ANSI_RESET" %s size=%zu offset=%'lu   fh=%lu\n",path,size ,offset,fi==NULL?0:fi->fh);
   log_mthd_orig(xmp_read);
   if (size>(int)_read_max_size) _read_max_size=(int)size;
@@ -1351,7 +1364,9 @@ int _xmp_read(const char *path, char *buf, size_t size, off_t offset,struct fuse
   const int fd=fi->fh;
   int res=read_info(path,buf,size,offset);
   if (res>=0) return res;
+  struct fhdata *d;
   fhdata_synchronized(CREATE,path,fi);
+  retd[0]=d;
   d->access=time(NULL);
   //static int _countr=0; if (_countr++%1000==0) log_entered_function(ANSI_BLUE"%d  xmp_read"ANSI_RESET" %s size=%zu offset=%'lu %p  fh=%lu\n",_countr,path,size ,offset,d,fi==NULL?0:fi->fh);
   if (d->cache_try){
@@ -1371,7 +1386,7 @@ int _xmp_read(const char *path, char *buf, size_t size, off_t offset,struct fuse
       if (zip_fseek(d->zip_file,offset,SEEK_SET)<0) return -1;
       _count_read_zip_seekable++;
     }else if (diff<0){ // Worst case
-      if ((res=maybe_read_from_cache(d,buf,size,offset,CREATE,true))>=0) return res;
+           if ((res=maybe_read_from_cache(d,buf,size,offset,CREATE,true))>=0) return res;
       _count_read_zip_seek_bwd++;
       fhdata_zip_open(d,"SEEK");
     }
@@ -1392,10 +1407,10 @@ int _xmp_read(const char *path, char *buf, size_t size, off_t offset,struct fuse
 
 int xmp_read(const char *path, char *buf, size_t size, off_t offset,struct fuse_file_info *fi){
   //log_count_b(xmp_read_);
-        struct fhdata* d;
+        struct fhdata* d[1];
         const int res=_xmp_read(path,buf,size,offset,fi,d);
   //log_count_e(xmp_read_,path);
-        if (res>0) d->offset+=res;
+        if (res>0) d[0]->offset+=res;
   return res;
 }
 
@@ -1431,9 +1446,9 @@ int main(int argc, char *argv[]){
   S(readlink);  S(readdir);   S(mkdir);
   S(symlink);   S(unlink);
   S(rmdir);     S(rename);    S(truncate);
-  S(open);      S(create);    S(read);  S(write);   S(release);
+  S(open);      S(create);    S(read);  S(write);   S(release); S(releasedir); S(statfs);
   S(flush);
-  S(lseek);
+  //S(lseek);
   //S(statfs);
 #undef S
   if ((getuid()==0) || (geteuid()==0)){ log("Running BBFS as root opens unnacceptable security holes\n");return 1;}
