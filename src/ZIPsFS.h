@@ -1,12 +1,13 @@
 /* This file was automatically generated.  Do not edit! */
 #undef INTERFACE
+int xmp_flush(const char *path,struct fuse_file_info *fi);
 int xmp_release(const char *path,struct fuse_file_info *fi);
 int xmp_read(const char *path,char *buf,size_t size,off_t offset,struct fuse_file_info *fi);
-int _xmp_read(const char *path,char *buf,size_t size,off_t offset,struct fuse_file_info *fi);
+struct fhdata *fhdata(enum data_op op,const char *path,uint64_t fh);
+int _xmp_read(const char *path,char *buf,size_t size,off_t offset,struct fuse_file_info *fi,struct fhdata *d);
 int read_info(const char *path,char *buf,size_t size,off_t offset);
 void debug_read1(const char *path);
-struct fhdata *fhdata(enum data_op op,const char *path,uint64_t fh);
-int maybe_read_from_cache(struct fhdata *d,char *buf,size_t size,off_t offset,bool always);
+int maybe_read_from_cache(struct fhdata *d,char *buf,size_t size,off_t offset,enum data_op op,bool always);
 int xmp_rename(const char *old_path,const char *neu_path,unsigned int flags);
 int xmp_symlink(const char *target,const char *create_path);
 int xmp_write(const char *create_path,const char *buf,size_t size,off_t offset,struct fuse_file_info *fi);

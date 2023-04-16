@@ -428,7 +428,7 @@ struct stat {
     uid_t     st_uid;     /* user ID of owner */
     gid_t     st_gid;     /* group ID of owner */
     dev_t     st_rdev;    /* device ID (if special file) */
-    off_t     st_size;    /* total size, in bytes */
+    off_t      st_size;    /* total size, in bytes */
     blksize_t st_blksize; /* blocksize for file system I/O */
     blkcnt_t  st_blocks;  /* number of 512B blocks allocated */
     time_t    st_atime;   /* time of last access */
@@ -615,3 +615,10 @@ static const struct fuse_opt fuse_lib_opts[] = {
 entry_timeout=10,attr_timeout=10,ac_attr_timeout=10,noforget
 
 * Why getattr
+
+* mmap
+sqlite3_config(SQLITE_CONFIG_MMAP_SIZE
+sqlite3_config(SQLITE_CONFIG_MMAP_SIZE, defaultSize, maximumSize);
+ https://github.com/jemalloc/jemalloc/issues/329
+ https://gist.github.com/rLinks234/6c7000fda4d2ab4c6b8bc52479b03353
+https://github.com/pmem/syscall_intercept
