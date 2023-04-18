@@ -74,9 +74,9 @@ void assert_dir(const char *p, struct stat *st){
   if (!st) return;
   //  log("st=%s  %p\n",p, st);
   if(!S_ISDIR(st->st_mode)){
-    log_error("stat S_ISDIR %s",p);
+    log_error("assert_dir  stat S_ISDIR %s",p);
     log_file_stat("",st);
-    exit(9);
+    print_trace();
   }
   bool r_ok=access_from_stat(st,R_OK);
     bool x_ok=access_from_stat(st,X_OK);
@@ -94,18 +94,15 @@ bool file_ends_tdf_bin(const char *p){
 }
 void assert_r_ok(const char *p, struct stat *st){
   if(!access_from_stat(st,R_OK)){
-    log_error("access_from_stat r_ok %s  ",p);
+    log_error("assert_r_ok  %s  ",p);
     log_file_stat("",st);
+        print_trace();
   }
 }
-
-
 void debug_my_file_checks(const char *p, struct stat *s){
   if(file_starts_year_ends_dot_d(p)) assert_dir(p,s);
   if (file_ends_tdf_bin(p)) assert_r_ok(p,s);
 }
-
-
 bool tdf_or_tdf_bin(const char *p) {return endsWith(p,".tdf") || endsWith(p,".tdf_bin");}
 
 

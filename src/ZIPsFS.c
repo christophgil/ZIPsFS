@@ -1448,8 +1448,8 @@ int main(int argc, char *argv[]){
   S(rmdir);     S(rename);    S(truncate);
   S(open);      S(create);    S(read);  S(write);   S(release); S(releasedir); S(statfs);
   S(flush);
-  //S(lseek);
-  //S(statfs);
+  S(lseek);
+
 #undef S
   if ((getuid()==0) || (geteuid()==0)){ log("Running BBFS as root opens unnacceptable security holes\n");return 1;}
   char *argv_fuse[9]={0};

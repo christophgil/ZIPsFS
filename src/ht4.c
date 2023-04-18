@@ -100,7 +100,7 @@ bool ht_init(ht *table,MY_UINT log2initalCapacity){
   if (!table) return false;
   if (table->must_be_zero){
     log_error("The struct ht must be initialized with zero\n");
-    exit(1);
+    return false;
   }
   table->flags=log2initalCapacity&0xFF000000;
   if (table->entries){
