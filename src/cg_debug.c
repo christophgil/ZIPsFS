@@ -4,19 +4,17 @@
 #include <execinfo.h>
 #include <signal.h>
 void print_backtrace(){
-  int j, nptrs;
   void *buffer[BT_BUF_SIZE];
-  char **strings;
-  nptrs=backtrace(buffer,BT_BUF_SIZE);
-  printf("backtrace() returned %d addresses\n",nptrs);
+  const int nptrs=backtrace(buffer,BT_BUF_SIZE);
+  printf(ANSI_INVERSE"backtrace() returned %d addresses\n"ANSI_RESET,nptrs);
   /* The call backtrace_symbols_fd(buffer,nptrs, STDOUT_FILENO) would produce similar output to the following: */
-  strings=backtrace_symbols(buffer,nptrs);
+  char **strings=backtrace_symbols(buffer,nptrs);
   if (strings==NULL) {
     perror("backtrace_symbols");
-    exit(EXIT_FAILURE);
+  }else{
+    for (int j=0; j<nptrs; j++) printf("%s\n", strings[j]);
+    free(strings);
   }
-  for (j=0; j<nptrs; j++) printf("%s\n", strings[j]);
-  free(strings);
 }
 
 void print_trace() {
@@ -34,17 +32,21 @@ void print_trace() {
   }
 }
 void my_backtrace(){ /*  compile with options -g -rdynamic */
-    fputs(ANSI_INVERSE"my_backtrace"ANSI_RESET"\n",stderr);
+  fputs(ANSI_INVERSE"my_backtrace"ANSI_RESET"\n",stderr);
   void *array[10];
   size_t size=backtrace(array,10);
   backtrace_symbols_fd(array,size,STDOUT_FILENO);
 }
-  //  raise(SIGSEGV);
+//  raise(SIGSEGV);
 void _handler(int sig) {
   printf( "ZIPsFS Error: signal %d:\n",sig);
   my_backtrace();
   print_trace();
-  if (sig==SIGABRT) exit(1);
+  print_backtrace();
+  if (sig==SIGABRT){
+    printf("\n_handler calling exit();\n");
+    exit(1);
+  }
   else abort();
 }
 
@@ -65,8 +67,8 @@ void init_handler(){
 bool file_starts_year_ends_dot_d(const char *p){
   const int l=my_strlen(p);
   if (l<20 || p[l-1]!='d' || p[l-2]!='.') return false;
-    const int slash=last_slash(p);
-    if (slash<0 || strncmp(p+slash,"/202",4)) return false;
+  const int slash=last_slash(p);
+  if (slash<0 || strncmp(p+slash,"/202",4)) return false;
   return true;
 }
 
@@ -79,24 +81,24 @@ void assert_dir(const char *p, struct stat *st){
     print_trace();
   }
   bool r_ok=access_from_stat(st,R_OK);
-    bool x_ok=access_from_stat(st,X_OK);
-   if(!r_ok||!x_ok){
-     log_error("access_from_stat %s r=%s x=%s ",p,yes_no(r_ok),yes_no(x_ok));
-     log_file_stat("",st);
-   }
+  bool x_ok=access_from_stat(st,X_OK);
+  if(!r_ok||!x_ok){
+    log_error("access_from_stat %s r=%s x=%s ",p,yes_no(r_ok),yes_no(x_ok));
+    log_file_stat("",st);
+  }
 }
 bool file_ends_tdf_bin(const char *p){
   const int l=my_strlen(p);
   if (l<20) return false;
-    const int slash=last_slash(p);
-    if (slash<0 || strncmp(p+slash,"/202",4)) return false;
-    return endsWith(p,".tdf") || endsWith(p,".tdf_bin");
+  const int slash=last_slash(p);
+  if (slash<0 || strncmp(p+slash,"/202",4)) return false;
+  return endsWith(p,".tdf") || endsWith(p,".tdf_bin");
 }
 void assert_r_ok(const char *p, struct stat *st){
   if(!access_from_stat(st,R_OK)){
     log_error("assert_r_ok  %s  ",p);
     log_file_stat("",st);
-        print_trace();
+    print_trace();
   }
 }
 void debug_my_file_checks(const char *p, struct stat *s){
@@ -106,18 +108,18 @@ void debug_my_file_checks(const char *p, struct stat *s){
 bool tdf_or_tdf_bin(const char *p) {return endsWith(p,".tdf") || endsWith(p,".tdf_bin");}
 
 
-static int _debug_tdf_maybe_sleep[0xffff+1];
-#define DEBUG_TDF_MAYBE_SLEEP(fd) _debug_tdf_maybe_sleep[(fd-FH_ZIP_MIN)&0xffff]
-int debug_tdf_maybe_sleep(const char *path, int factor){
-  if (tdf_or_tdf_bin(path)){
-    int us=((random())&0x3f)*factor;
-    //log_debug_now(" Begin sleep %d  ",us);
-    usleep(us);
-    //log_debug_now(" Done sleep ");
-    return us;
-  }
-  return 0;
-}
+/* static int _debug_tdf_maybe_sleep[0xffff+1]; */
+/* #define DEBUG_TDF_MAYBE_SLEEP(fd) _debug_tdf_maybe_sleep[(fd-FH_ZIP_MIN)&0xffff] */
+/* int debug_tdf_maybe_sleep(const char *path, int factor){ */
+/*   if (tdf_or_tdf_bin(path)){ */
+/*     int us=((random())&0x3f)*factor; */
+/*     //log_debug_now(" Begin sleep %d  ",us); */
+/*     usleep(us); */
+/*     //log_debug_now(" Done sleep "); */
+/*     return us; */
+/*   } */
+/*   return 0; */
+/* } */
 
 
 
@@ -135,9 +137,9 @@ enum functions{xmp_open_,xmp_access_,xmp_getattr_,xmp_read_,xmp_readdir_,mcze_,f
 static int functions_count[functions_l];
 static long functions_time[functions_l];
 const char *function_name(enum functions f){
-  #define C(x) f==x ## _ ? #x :
-return C(xmp_open) C(xmp_access) C(xmp_getattr) C(xmp_read) C(xmp_readdir) C(mcze) "null";
- #undef C
+#define C(x) f==x ## _ ? #x :
+  return C(xmp_open) C(xmp_access) C(xmp_getattr) C(xmp_read) C(xmp_readdir) C(mcze) "null";
+#undef C
 }
 static void log_count_b(enum functions f){
   functions_time[f]=time_ms();
@@ -148,8 +150,8 @@ static void log_count_b(enum functions f){
 }
 static void log_count_e(enum functions f,const char *path){
   const int ms=(int)(time_ms()-functions_time[f]);
-    pthread_mutex_lock(mutex+mutex_log_count);
-    --functions_count[f];
+  pthread_mutex_lock(mutex+mutex_log_count);
+  --functions_count[f];
   pthread_mutex_unlock(mutex+mutex_log_count);
 
   if (ms>1000 && (f==xmp_getattr_ || f==xmp_access_ || f==xmp_open_ || f==xmp_readdir_)){

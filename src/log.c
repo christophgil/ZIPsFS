@@ -24,9 +24,9 @@ void log_strings(const char *pfx, char *ss[],int n){
 
 
 void log_fh(char *title,long fh){
-    char p[MAX_PATHLEN];
-    path_for_fd(title,p,fh);
-    log_debug_now("%s  fh=%ld %s \n",title?title:"", fh,p);
+  char p[MAX_PATHLEN];
+  path_for_fd(title,p,fh);
+  log_debug_now("%s  fh=%ld %s \n",title?title:"", fh,p);
 }
 
 /* void print_pointers(){ */
@@ -99,7 +99,7 @@ static int log_cached(int n,char *title){
 
       struct tm tm = *localtime(&d->access);
       sprintf(stime,"%d-%02d-%02d_%02d:%02d:%02d\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec);
-            PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,d->cache_l>>10,d->cache_read_seconds);
+      PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,d->cache_l>>10,d->cache_read_seconds);
     }
   }
 
@@ -121,7 +121,7 @@ TD{padding:5px;}\n\
 <H1>Roots</H1>\n\
 <TABLE><THEAD><TR><TH>Path</TH><TH>Writable</TH><TH align=\"right\">Response</TH><TH align=\"right\">Delayed</TH><TH>Free GB</TH></TR></THEAD>\n");
 
- char remote[99];
+  char remote[99];
   for(int i=0;i<_root_n;i++){
     struct rootdata *r=_root+i;
     const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30), diff=currentTimeMillis()-r->statfs_when;
@@ -132,7 +132,6 @@ TD{padding:5px;}\n\
   PRINTINFO("</TABLE>\n<H1>Heap</H1>\nuordblks=%'d<BR>\n",mallinfo().uordblks);
   PRINTINFO("<H1>File handles</H1>\n");
   n=print_open_files(n,NULL);
-
   PRINTINFO("<H1>Read bytes statistics</H1>\n<TABLE><THEAD><TR><TH>Event</TH><TH>Count</TH></TR></THEAD>\n");
 #define TABLEROW(a,skip) PRINTINFO("<TR><TD><B>%s</B></TD><TD align=\"right\">%'d</TD></TR>\n",#a+skip,a)
   TABLEROW(_count_read_zip_cached,7);
@@ -141,11 +140,11 @@ TD{padding:5px;}\n\
   TABLEROW(_count_read_zip_no_seek,7);
   TABLEROW(_count_read_zip_seek_fwd,7);
   TABLEROW(_count_read_zip_seek_bwd,7);
-  TABLEROW(_read_max_size,7);
+  TABLEROW(_count_need_close,7);
+    TABLEROW(_read_max_size,7);
   PRINTINFO("</TABLE>");
 #undef TABLEROW
   PRINTINFO("<H1>Cache</H1>\nWhen cache Zip entry: %s\n sqlite-db=%s\n",WHEN_CACHE_S[_when_cache],_sqlitefile);
-
   n=log_cached(n,"");
   PRINTINFO("<H1>/proc/%ld/maps</H1>\n", (long)getpid());
   n=print_maps(n);
@@ -153,7 +152,6 @@ TD{padding:5px;}\n\
   getrlimit(RLIMIT_AS,&rl);
   PRINTINFO("Number of calls mmap:%d munmap:%d<BR>\n", _mmap_n,_munmap_n);
   PRINTINFO("Rlim soft=%'zu MB   hard=%'zu MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
-
   PRINTINFO("</BODY>\n</HTML>\n");
   log_exited_function("get_info\n %d",n);
   return n;
@@ -174,5 +172,5 @@ const char *zip_fdopen_err(int err){
   ZIP_FDOPEN_ERR(ZIP_ER_INCONS,"Inconsistencies were found in the file specified by path. This error is often caused by specifying ZIP_CHECKCONS but can also happen without it.");
   ZIP_FDOPEN_ERR(ZIP_ER_INVAL,"The flags argument is invalid. Not all zip_open(3) flags are allowed for zip_fdopen, see DESCRIPTION.");
   return "zip_fdopen - Unknown error";
-  #undef ZIP_FDOPEN_ERR
+#undef ZIP_FDOPEN_ERR
 }
