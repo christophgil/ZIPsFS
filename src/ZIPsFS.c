@@ -543,10 +543,10 @@ bool readdir_concat_unsynchronized(int opt,struct my_strg *s,long mtime,const ch
   return true;
 }
 bool readdir_concat(int opt,struct my_strg *s,long mtime,const char *rp,struct zip *zip){
-  const int m=+mutex_roots+s->index;
-  pthread_mutex_lock(mutex+m);
+ pthread_mutex_t *m=mutex+mutex_roots+s->index;
+  pthread_mutex_lock(m);
   bool success=readdir_concat_unsynchronized(opt,s,mtime,rp,zip);
-  pthread_mutex_unlock(mutex+m);
+  pthread_mutex_unlock(m);
   return success;
 }
 
@@ -1078,13 +1078,9 @@ bool cache_zip_entry(enum data_op op,struct fhdata *d){
   if (op==RELEASE) log_entered_function("cache_zip_entry RELEASE %p\n",c);
   if (!c){
     if (op==RELEASE) return false;
-    struct fhdata *d2=NULL;
     LOCK_FHDATA();
-    fhdata_by_virtualpath(d->path,d);
-    if (d2){
-      c=d->cache=d2->cache;
-      d->cache_l=d2->cache_l;
-    }
+    struct fhdata *d2=fhdata_by_virtualpath(d->path,d);
+    if (d2){ c=d->cache=d2->cache; d->cache_l=d2->cache_l;}
     UNLOCK_FHDATA();
     if (c) log_cache(ANSI_FG_GREEN"Found cache in other record %p\n"ANSI_RESET,d->cache);
   }
@@ -1349,10 +1345,10 @@ static off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file
   if (d){
     switch(whence){
     case SEEK_DATA:
-    case SEEK_SET: ret=d->offset=off;
-    case SEEK_CUR: ret=(d->offset+=off);
-    case SEEK_END: ret=(d->offset+=d->zpath.stat_vp.st_size+off);
-    case SEEK_HOLE:ret=(d->offset=d->zpath.stat_vp.st_size);
+    case SEEK_SET: ret=d->offset=off;break;
+    case SEEK_CUR: ret=(d->offset+=off);break;
+    case SEEK_END: ret=(d->offset+=d->zpath.stat_vp.st_size+off);break;
+    case SEEK_HOLE:ret=(d->offset=d->zpath.stat_vp.st_size);break;
     }
   } else log_warn("xmp_lseek d==NULL %s\n",path);
   UNLOCK_FHDATA();
@@ -1383,7 +1379,7 @@ int _xmp_read(const char *path, char *buf, size_t size, off_t offset,struct fuse
       if (status!=CACHE_FILLING) break;
       usleep((d->zpath.stat_rp.st_size>>17)*(random()&255));
     }
-    //return 0; // Per GB sleep 1s  would be size>>10
+    break;
   }
 
   if((res=maybe_read_from_cache(d,buf,size,offset,GET,false))>=0){
