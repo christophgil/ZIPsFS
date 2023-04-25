@@ -47,7 +47,7 @@ int isPowerOfTwo(unsigned int n){ return n && (n&(n-1))==0;}
 void _log_mthd(char *s,int count){ if (isPowerOfTwo(count)) log(" %s=%d ",s,count);}
 #define log_mthd_invoke(s) static int __count=0;_log_mthd(ANSI_FG_GRAY #s ANSI_RESET,++__count)
 #define log_mthd_orig(s) static int __count_orig=0;_log_mthd(ANSI_FG_BLUE #s ANSI_RESET,++__count_orig)
-#define log_abort(...)   prints(ANSI_RED"\nAbort"),log(__VA_ARGS__),log("ANSI_RESET\n"),abort();
+#define log_abort(...)   prints(ANSI_RED"\n AAAAAAAAAAAAAAAAAAA cg_log.c Abort"),log(__VA_ARGS__),log("ANSI_RESET\n"),abort();
 
 #if 0
 #define log_debug_abort(...)   log_abort(__VA_ARGS__)

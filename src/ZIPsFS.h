@@ -71,3 +71,4 @@ void threads_root_start();
 void *thread_observe_root(void *arg);
 char *ensure_capacity(struct my_strg *s,int n);
 int xmp_read(const char *path,char *buf,size_t size,off_t offset,struct fuse_file_info *fi);
+extern char *cache_status_s[];
