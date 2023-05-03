@@ -1,62 +1,89 @@
-#define BT_BUF_SIZE 100
+#define _GNU_SOURCE
+#ifndef _cg_debug_dot_c
+#define _cg_debug_dot_c
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <assert.h>
 #include <sys/wait.h>
 #include <sys/prctl.h>
 #include <execinfo.h>
 #include <signal.h>
-void print_backtrace(){
-  void *buffer[BT_BUF_SIZE];
-  const int nptrs=backtrace(buffer,BT_BUF_SIZE);
-  printf(ANSI_INVERSE"backtrace() returned %d addresses\n"ANSI_RESET,nptrs);
-  /* The call backtrace_symbols_fd(buffer,nptrs, STDOUT_FILENO) would produce similar output to the following: */
-  char **strings=backtrace_symbols(buffer,nptrs);
-  if (strings==NULL) {
-    perror("backtrace_symbols");
-  }else{
-    for (int j=0; j<nptrs; j++) printf("%s\n", strings[j]);
-    free(strings);
+#include <ucontext.h>
+#include <stdbool.h>
+#include <errno.h>
+#include <malloc.h>
+#include <unistd.h>
+#include <sys/time.h>
+#include "cg_log.c"
+#include "cg_utils.c"
+char *path_of_this_executable(){
+  static char* _p;
+  if (!_p){
+    char p[512];
+    p[readlink("/proc/self/exe",p, 511)]=0;
+    _p=strdup(p);
   }
+  return _p;
 }
-
-void print_trace() {
-  fputs(ANSI_INVERSE"print_trace"ANSI_RESET"\n",stderr);
-  char pid_buf[30],name_buf[512];
+void print_trace_using_debugger() {
+  fputs(ANSI_INVERSE"print_trace_using_debugger"ANSI_RESET"\n",stderr);
+  char pid_buf[30];
   sprintf(pid_buf, "%d", getpid());
-  name_buf[readlink("/proc/self/exe",name_buf, 511)]=0;
   prctl(PR_SET_PTRACER,PR_SET_PTRACER_ANY, 0,0, 0);
   const int child_pid=fork();
   if (!child_pid) {
-    execl("/usr/bin/gdb", "gdb", "--batch", "-f","-n", "-ex", "thread", "-ex", "bt",name_buf, pid_buf,NULL);
+#ifdef __clang__
+    execl("/usr/bin/lldb", "lldb", "-p", pid_buf, "-b", "-o","bt","-o","quit" ,NULL);
+#else
+    execl("/usr/bin/gdb", "gdb", "--batch", "-f","-n", "-ex", "thread", "-ex", "bt",path_of_this_executable(),pid_buf,NULL);
+#endif
     abort(); /* If gdb failed to start */
   } else {
     waitpid(child_pid,NULL,0);
   }
 }
-void my_backtrace(){ /*  compile with options -g -rdynamic */
-  fputs(ANSI_INVERSE"my_backtrace"ANSI_RESET"\n",stderr);
-  void *array[10];
-  size_t size=backtrace(array,10);
-  backtrace_symbols_fd(array,size,STDOUT_FILENO);
-}
-//  raise(SIGSEGV);
-void _handler(int sig) {
-  printf( "ZIPsFS Error: signal %d:\n",sig);
-  my_backtrace();
-  print_trace();
-  print_backtrace();
-  if (sig==SIGABRT){
-    printf("\n_handler calling exit();\n");
-    exit(1);
-  }
-  else abort();
+////////////////////////////////////////////////////////////////////////////////////////////////////
+static void addr2line(void *p, void *messageP) {
+  char cmd[999];
+  sprintf(cmd,"/usr/bin/addr2line -p %p -e %s",p,path_of_this_executable());
+  system(cmd);
 }
 
+void bt_sighandler(int sig, siginfo_t *psi, void *ctxarg){
+  void *trace[16];
+  mcontext_t *ctxP=&((ucontext_t *) ctxarg)->uc_mcontext;
+  trace[1]=(void *)ctxP->gregs[REG_RIP];
+  if (sig==SIGSEGV) printf("Got signal %d, faulty address is %p, from %p\n",sig, (void*)ctxP->gregs[REG_RSP],trace[1]);
+  else printf("Got signal %d\n",sig);
+  const int trace_size=backtrace(trace,16);
+  /* overwrite sigaction with caller's address */
+  char **messages=backtrace_symbols(trace,trace_size);
+  /* skip first stack frame (points here) */
+  printf(ANSI_INVERSE"bt_sighandler  %d \n"ANSI_RESET,trace_size);
+  for(int i=1; i<trace_size; ++i){
+    printf(ANSI_FG_GRAY"pid=%d #%d %s"ANSI_RESET"\n",getpid(),i, messages[i]);
+    usleep(1000);
+    addr2line(trace[i],messages[i]);
+    fputs(ANSI_RESET,stdout);
+  }
+  print_trace_using_debugger();
+  exit(0);
+}
 void init_handler() __attribute((constructor));
 #include <sys/resource.h>
 void init_handler(){
   log_debug_now("init_handler\n");
-  signal(SIGSEGV,_handler);
-  signal(SIGABRT,_handler);
-
+  struct sigaction sa;
+  sa.sa_sigaction=bt_sighandler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags=SA_RESTART|SA_SIGINFO;
+  sigaction(SIGSEGV,&sa,NULL);
+  sigaction(SIGUSR1,&sa,NULL);
+  sigaction(SIGABRT,&sa,NULL);
+  log_debug_now("init_handler pid=%d\n",getpid());
   struct rlimit core_limit={RLIM_INFINITY,RLIM_INFINITY};
   assert(!setrlimit(RLIMIT_CORE,&core_limit)); // enable core dumps
 }
@@ -78,7 +105,7 @@ void assert_dir(const char *p, struct stat *st){
   if(!S_ISDIR(st->st_mode)){
     log_error("assert_dir  stat S_ISDIR %s",p);
     log_file_stat("",st);
-    print_trace();
+    print_trace_using_debugger();
   }
   bool r_ok=access_from_stat(st,R_OK);
   bool x_ok=access_from_stat(st,X_OK);
@@ -98,7 +125,7 @@ void assert_r_ok(const char *p, struct stat *st){
   if(!access_from_stat(st,R_OK)){
     log_error("assert_r_ok  %s  ",p);
     log_file_stat("",st);
-    print_trace();
+    print_trace_using_debugger();
   }
 }
 void debug_my_file_checks(const char *p, struct stat *s){
@@ -108,18 +135,6 @@ void debug_my_file_checks(const char *p, struct stat *s){
 bool tdf_or_tdf_bin(const char *p) {return endsWith(p,".tdf") || endsWith(p,".tdf_bin");}
 
 
-/* static int _debug_tdf_maybe_sleep[0xffff+1]; */
-/* #define DEBUG_TDF_MAYBE_SLEEP(fd) _debug_tdf_maybe_sleep[(fd-FH_ZIP_MIN)&0xffff] */
-/* int debug_tdf_maybe_sleep(const char *path, int factor){ */
-/*   if (tdf_or_tdf_bin(path)){ */
-/*     int us=((random())&0x3f)*factor; */
-/*     //log_debug_now(" Begin sleep %d  ",us); */
-/*     usleep(us); */
-/*     //log_debug_now(" Done sleep "); */
-/*     return us; */
-/*   } */
-/*   return 0; */
-/* } */
 
 
 
@@ -163,4 +178,39 @@ static void log_count_e(enum functions f,const char *path){
 #else
 #define  log_count_b(f) ;
 #define  log_count_e(f,path) ;
+#endif
+
+#endif
+
+
+#if __INCLUDE_LEVEL__ == 0
+
+void func3(){
+  raise(SIGSEGV);
+
+}
+void func2(){ func3();}
+void func1(){ func2();}
+
+
+
+void libzip_takes_care_of_closing_fd() {
+  int fd=open("/s-mcpb-ms03/slow2/incoming/6600-tof2/Data/30-0036/20221031_TOF2_FA_005_30-0036_1kSCerevisaeIsolates-MSBatch3_P01_C01.rawIdx.Zip",O_RDONLY);
+  if (fd<0){perror("");  exit(9);}
+  log("fd=%d\n",fd);
+
+  int err;
+  struct zip *za=zip_fdopen(fd,0,&err);
+  log("zip=%p\n",za);
+  //zip_close(za);
+  print_path_for_fd(fd);
+  exit(9);
+}
+
+
+int main(int argc, char *argv[]){
+  func1();
+}
+
+
 #endif

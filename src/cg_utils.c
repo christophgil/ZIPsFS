@@ -1,3 +1,15 @@
+#include <string.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/time.h>
+
+
+#ifndef _cg_utils_dot_c
+#define _cg_utils_dot_c
+
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 #define MAX_PATHLEN 512
@@ -68,6 +80,38 @@ static int path_for_fd(const char *title, char *path, int fd){
   }
   return path[n]=0;
 }
+
+
+static bool check_path_for_fd(const char *title, const char *path, int fd){
+  char check_path[MAX_PATHLEN],rp[PATH_MAX];
+  if (!realpath(path,rp)){
+    log_error("check_path_for_fd: %s  Failed realpath(%s)\n",snull(title),path);
+    return false;
+  }
+  path_for_fd(title,check_path,fd);
+  if (strncmp(rp,path,MAX_PATHLEN-1)){
+    log_error("check_path_for_fd %s  fd=%d,%s   d->path=%s   realpath(path)=%s\n",title,fd,check_path,path,rp);
+    return false;
+  }
+  return true;
+}
+
+static void print_path_for_fd(int fd){
+  char buf[99],path[512];
+  sprintf(buf,"/proc/%d/fd/%d",getpid(),fd);
+  const ssize_t n=readlink(buf,path,511);
+  if (n<0){
+    printf(ANSI_FG_RED"Warning %s  No path\n"ANSI_RESET,buf);
+    perror(" ");
+  }else{
+    path[n]=0;
+    printf("Path for %d:  %s\n",fd,path);
+  }
+}
+
+
+
+
 static int min_int(int a,int b){ return MIN(a,b);}
 static int max_int(int a,int b){ return MAX(a,b);}
 /*********************************************************************************/
@@ -168,3 +212,4 @@ static void recursive_mkdir(char *p){
 }
 // #pragma GCC diagnostic ignored "-Wunused-variable" //__attribute__((unused));
 /* **********************************************/
+#endif

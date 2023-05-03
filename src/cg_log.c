@@ -3,6 +3,9 @@
   christoph Gille
   This program can be distributed under the terms of the GNU GPLv3.
 */
+#ifndef _cg_log_dot_c
+#define _cg_log_dot_c
+
 #ifndef _def_cg_log_c
 #define _def_cg_log_c 1
 #define ANSI_RED "\x1B[41m"
@@ -55,4 +58,5 @@ void _log_mthd(char *s,int count){ if (isPowerOfTwo(count)) log(" %s=%d ",s,coun
 #define log_debug_abort(...)   log_error(__VA_ARGS__)
 #endif
 
+#endif
 #endif

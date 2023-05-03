@@ -46,8 +46,8 @@ int print_open_files(int n, int *fd_count){
   const int len_proc_path=snprintf(proc_path,64,"/proc/%i/fd/",getpid());
   DIR *dir=opendir(proc_path);
   if (n>=0) PRINTINFO("<OL>\n");
-  for(int i=0;dp=readdir(dir);i++){
-    if (fd_count) *(fd_count++);
+  for(int i=0;(dp=readdir(dir));i++){
+    if (fd_count) (*fd_count)++;
     if (n<0 || atoi(dp->d_name)<4) continue;
     my_strncpy(proc_path+len_proc_path,dp->d_name,PROC_PATH_MAX-len_proc_path);
     const int l=readlink(proc_path,path,255);path[MAX(l,0)]=0;
@@ -59,7 +59,7 @@ int print_open_files(int n, int *fd_count){
 }
 
 void log_mem(){
-  printf(ANSI_MAGENTA"Resources pid=%d"ANSI_RESET" _fhdata_n=%d  uordblks=%'d  mmap/munmap=%'d/%'d\n",getpid(),_fhdata_n,mallinfo().uordblks,_mmap_n,_munmap_n);
+  printf(ANSI_MAGENTA"Resources pid=%d"ANSI_RESET" _fhdata_n=%d  uordblks=%'d  mmap/munmap=%'d/%'d\n",getpid(),_fhdata_n,mallinfo().uordblks,_count_mmap,_count_munmap);
 }
 
 int print_maps(int n){
@@ -88,17 +88,17 @@ int print_maps(int n){
   return n;
 }
 
-static int log_cached(int n,char *title){
+int log_cached(int n,char *title){
   if (n<0) log_cache("log_cached %s\n",snull(title));
   else PRINTINFO("<TABLE>\n<THEAD><TR><TH></TH><TH>Path</TH><TH>Access</TH><TH>Addr&gt;&gt;12</TH><TH>KByte</TH><TH>Millisec</TH></TR></THEAD>\n");
   char stime[99];
   for(int i=_fhdata_n; --i>=0;){
     struct fhdata *d=_fhdata+i;
-    if (n<0) printf("\t%4d\t%s\t%lx\t%p\n",i, d->path, d->path_hash,d->cache);
+    if (n<0) printf("\t%4d\t%s\t%p\t%ld\n",i, d->path,d->cache,d->cache_l);
     else{
       struct tm tm = *localtime(&d->access);
       sprintf(stime,"%d-%02d-%02d_%02d:%02d:%02d\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec);
-      PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,d->cache_l>>10,d->cache_read_seconds);
+      PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,MAX(d->cache_l>>10,1),d->cache_read_seconds);
     }
   }
 
@@ -132,14 +132,14 @@ TD{padding:5px;}\n\
   PRINTINFO("<H1>File handles</H1>\n");
   n=print_open_files(n,NULL);
   PRINTINFO("<H1>Read bytes statistics</H1>\n<TABLE><THEAD><TR><TH>Event</TH><TH>Count</TH></TR></THEAD>\n");
-#define TABLEROW(a,skip) PRINTINFO("<TR><TD><B>%s</B></TD><TD align=\"right\">%'d</TD></TR>\n",#a+skip,a)
+#define TABLEROW(a,skip) PRINTINFO("<TR><TD><B>%s</B></TD><TD align=\"right\">%'d</TD></TR>\n",(#a)+skip,a)
   TABLEROW(_count_read_zip_cached,7);
   TABLEROW(_count_read_zip_regular,7);
   TABLEROW(_count_read_zip_seekable,7);
   TABLEROW(_count_read_zip_no_seek,7);
   TABLEROW(_count_read_zip_seek_fwd,7);
   TABLEROW(_count_read_zip_seek_bwd,7);
-  TABLEROW(_count_need_close,7);
+  TABLEROW(_count_close_later,7);
     TABLEROW(_read_max_size,7);
   PRINTINFO("</TABLE>");
 #undef TABLEROW
@@ -149,7 +149,7 @@ TD{padding:5px;}\n\
   n=print_maps(n);
   struct rlimit rl={0};
   getrlimit(RLIMIT_AS,&rl);
-  PRINTINFO("Number of calls mmap:%d munmap:%d<BR>\n", _mmap_n,_munmap_n);
+  PRINTINFO("Number of calls mmap:%d munmap:%d<BR>\n", _count_mmap,_count_munmap);
   PRINTINFO("Rlim soft=%'zu MB   hard=%'zu MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
   PRINTINFO("</BODY>\n</HTML>\n");
   log_exited_function("get_info\n %d",n);
