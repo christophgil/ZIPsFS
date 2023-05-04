@@ -8,6 +8,8 @@ CFLAGS = -march=znver2 -g -rdynamic   -pthread -fsanitize=bounds
 
 https://www.sqlite.org/c3ref/blob_open.html
 
+* Read-ahead
+https://lwn.net/Articles/888715/
 
 * libfuse
 
@@ -24,6 +26,84 @@ entry_timeout=T The timeout in seconds for which name lookups will be cached. Th
 
 negative_timeout=T The timeout in seconds for which a negative lookup will be cached. This means, that if file did not exist (lookup retuned ENOENT), the lookup will only be redone after the timeout,
                    and the file/directory will be assumed to not exist until then. The default is 0.0 second, meaning that caching negative lookups are disabled.
+
+
+
+** struct fuse_conn_info_opts {
+
+    int atomic_o_trunc;
+    int no_remote_posix_lock;
+    int no_remote_flock;
+    int splice_write;
+    int splice_move;
+    int splice_read;
+    int no_splice_write;
+    int no_splice_move;
+    int no_splice_read;
+    int auto_inval_data;
+    int no_auto_inval_data;
+    int no_readdirplus;
+    int no_readdirplus_auto;
+    int async_dio;
+    int no_async_dio;
+    int writeback_cache;
+    int no_writeback_cache;
+    int async_read;
+    int sync_read;
+    unsigned max_write;
+    unsigned max_readahead;
+    unsigned max_background;
+    unsigned congestion_threshold;
+    unsigned time_gran;
+    int set_max_write;
+    int set_max_readahead;
+    int set_max_background;
+    int set_congestion_threshold;
+    int set_time_gran;
+};
+
+
+
+
+** static const struct fuse_opt fuse_mount_opts[] = {
+    FUSE_MOUNT_OPT("allow_other",		allow_other),
+    FUSE_MOUNT_OPT("blkdev",		blkdev),
+    FUSE_MOUNT_OPT("auto_unmount",		auto_unmount),
+    FUSE_MOUNT_OPT("fsname=%s",		fsname),
+    FUSE_MOUNT_OPT("max_read=%u",		max_read),
+    FUSE_MOUNT_OPT("subtype=%s",		subtype),
+    FUSE_OPT_KEY("allow_other",		KEY_KERN_OPT),
+    FUSE_OPT_KEY("auto_unmount",		KEY_FUSERMOUNT_OPT),
+    FUSE_OPT_KEY("blkdev",			KEY_FUSERMOUNT_OPT),
+    FUSE_OPT_KEY("fsname=",			KEY_FUSERMOUNT_OPT),
+    FUSE_OPT_KEY("subtype=",		KEY_SUBTYPE_OPT),
+    FUSE_OPT_KEY("blksize=",		KEY_KERN_OPT),
+    FUSE_OPT_KEY("default_permissions",	KEY_KERN_OPT),
+    FUSE_OPT_KEY("context=",		KEY_KERN_OPT),
+    FUSE_OPT_KEY("fscontext=",		KEY_KERN_OPT),
+    FUSE_OPT_KEY("defcontext=",		KEY_KERN_OPT),
+    FUSE_OPT_KEY("rootcontext=",		KEY_KERN_OPT),
+    FUSE_OPT_KEY("max_read=",		KEY_KERN_OPT),
+    FUSE_OPT_KEY("user=",			KEY_MTAB_OPT),
+    FUSE_OPT_KEY("-n",			KEY_MTAB_OPT),
+    FUSE_OPT_KEY("-r",			KEY_RO),
+    FUSE_OPT_KEY("ro",			KEY_KERN_FLAG),
+    FUSE_OPT_KEY("rw",			KEY_KERN_FLAG),
+    FUSE_OPT_KEY("suid",			KEY_KERN_FLAG),
+    FUSE_OPT_KEY("nosuid",			KEY_KERN_FLAG),
+    FUSE_OPT_KEY("dev",			KEY_KERN_FLAG),
+    FUSE_OPT_KEY("nodev",			KEY_KERN_FLAG),
+    FUSE_OPT_KEY("exec",			KEY_KERN_FLAG),
+    FUSE_OPT_KEY("noexec",			KEY_KERN_FLAG),
+    FUSE_OPT_KEY("async",			KEY_KERN_FLAG),
+    FUSE_OPT_KEY("sync",			KEY_KERN_FLAG),
+    FUSE_OPT_KEY("dirsync",			KEY_KERN_FLAG),
+    FUSE_OPT_KEY("atime",			KEY_KERN_FLAG),
+    FUSE_OPT_KEY("noatime",			KEY_KERN_FLAG),
+    FUSE_OPT_END
+};
+
+/local/filesystem/fuse-3.14.0/lib/mount.c
 
 * Debugging
 

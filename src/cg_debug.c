@@ -138,7 +138,7 @@ bool tdf_or_tdf_bin(const char *p) {return endsWith(p,".tdf") || endsWith(p,".td
 
 
 
-bool report_failure(const char *mthd, int res, const char *path){
+bool report_failure_for_tdf(const char *mthd, int res, const char *path){
   if (res && tdf_or_tdf_bin(path)){
     log_debug_abort("xmp_getattr res=%d  path=%s",res,path);
     return true;

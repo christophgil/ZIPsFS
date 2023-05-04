@@ -1,5 +1,6 @@
 /* This file was automatically generated.  Do not edit! */
 #undef INTERFACE
+void usage();
 int xmp_flush(const char *path,struct fuse_file_info *fi);
 int xmp_release(const char *path,struct fuse_file_info *fi);
 int _xmp_read(const char *path,char *buf,const size_t size,const off_t offset,const uint64_t fd,struct fhdata *d);
@@ -35,7 +36,6 @@ struct fhdata *cache_zip_entry(enum data_op op,struct fhdata *d);
 void fhdata_destroy(struct fhdata *d,int i);
 struct fhdata *fhdata_by_virtualpath(const char *path,const struct fhdata *not_this,const enum fhdata_having having);
 bool fhdata_can_destroy(struct fhdata *d);
-void usage();
 int test_realpath_any_root(struct zippath *zpath,int onlyThisRoot);
 int read_zipdir(struct rootdata *r,struct zippath *zpath,void *buf,fuse_fill_dir_t filler_maybe_null,struct ht *no_dups);
 int test_realpath(struct zippath *zpath,int root);
@@ -43,7 +43,7 @@ bool readdir_concat(int opt,struct my_strg *s,long mtime,const char *rp,struct z
 bool readdir_concat_unsynchronized(int opt,struct my_strg *s,long mtime,const char *rp,struct zip *zip);
 bool readdir_iterate(struct name_ino_size *nis,struct my_strg *s);
 char *my_memchr(const char *b,const char *e,char c);
-void readdir_append(struct my_strg *s,long inode,const char *n,bool append_slash,long size);
+void readdir_append(struct my_strg *s,long inode,const char *n,bool append_slash,long size,zip_uint32_t crc);
 bool illegal_char(const char *s);
 int readdir_callback(void *arg1,int argc,char **argv,char **name);
 int zipfile_callback(void *arg1,int argc,char **argv,char **name);
@@ -51,12 +51,11 @@ int sql_exec(int flags,const char *sql,int(*callback)(void *,int,char **,char **
 extern sqlite3 *_sqlitedb;
 int zip_contained_in_virtual_path(const char *path,char *append[]);
 struct zip *zpath_zip_open(struct zippath *zpath,int equivalent);
-struct zip *my_zip_open_ro(const char *orig,int equivalent);
+struct zip *zip_open_ro(const char *orig,int equivalent);
 int zpath_stat(struct zippath *zpath,struct rootdata *r);
 void zpath_destroy(struct zippath *zpath);
 void zpath_reset_keep_VP(struct zippath *zpath);
 void zpath_reset_realpath(struct zippath *zpath);
-void zpath_close_zip(struct zippath *zpath);
 int find_realpath_any_root(struct zippath *zpath,int onlyThisRoot);
 void zpath_stack_to_heap(struct zippath *zpath);
 char *zpath_newstr(struct zippath *zpath);
@@ -67,11 +66,10 @@ void zpath_assert_strlen(const char *title,struct zippath *zpath);
 int zpath_strcat(struct zippath *zpath,const char *s);
 void zpath_init(struct zippath *zpath,const char *virtualpath,char *strgs_on_stack);
 int my_open_fh(const char *msg,const char *path,int flags);
-void my_close_fh(int fh);
 void init_stat(struct stat *st,long size,struct stat *uid_gid);
 void stat_set_dir(struct stat *s);
 void *thread_readdir_async(void *arg);
-void threads_root_start();
+void start_threads();
 void *thread_observe_root(void *arg);
 char *ensure_capacity(struct my_strg *s,int n);
 int xmp_read(const char *path,char *buf,const size_t size,const off_t offset,struct fuse_file_info *fi);

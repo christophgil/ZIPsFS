@@ -98,7 +98,13 @@ int log_cached(int n,char *title){
     else{
       struct tm tm = *localtime(&d->access);
       sprintf(stime,"%d-%02d-%02d_%02d:%02d:%02d\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec);
-      PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,MAX(d->cache_l>>10,1),d->cache_read_seconds);
+      //  PRINTINFO("<TR><TD>%4d</TD><TD>%s</TD><TD>%s</TD><TD>%lx</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD></TR>\n",i,d->path,stime,((long)d->cache)>>12,MAX(d->cache_l>>10,1),d->cache_read_seconds);
+      PRINTINFO("<TR><TD>%4d</TD>",i);
+      PRINTINFO("<TD>%s</TD>",d->path);
+      PRINTINFO("<TD>%s</TD>",stime);
+      PRINTINFO("<TD>%lx</TD>",((long)d->cache)>>12);
+      PRINTINFO("<TD align=\"right\">%'zu</TD>",MAX(d->cache_l>>10,1));
+      PRINTINFO("<TD align=\"right\">%'d</TD></TR>\n",d->cache_read_seconds);
     }
   }
 

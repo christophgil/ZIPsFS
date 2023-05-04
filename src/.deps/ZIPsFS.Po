@@ -98,8 +98,8 @@ ZIPsFS.o: ZIPsFS.c /usr/include/stdc-predef.h config.h \
  /usr/include/x86_64-linux-gnu/bits/waitstatus.h \
  /usr/include/x86_64-linux-gnu/bits/floatn.h \
  /usr/include/x86_64-linux-gnu/bits/floatn-common.h /usr/include/alloca.h \
- /usr/include/x86_64-linux-gnu/bits/stdlib-float.h /usr/include/unistd.h \
- /usr/include/x86_64-linux-gnu/bits/posix_opt.h \
+ /usr/include/x86_64-linux-gnu/bits/stdlib-float.h /usr/include/assert.h \
+ /usr/include/unistd.h /usr/include/x86_64-linux-gnu/bits/posix_opt.h \
  /usr/include/x86_64-linux-gnu/bits/environments.h \
  /usr/include/x86_64-linux-gnu/bits/confname.h \
  /usr/include/x86_64-linux-gnu/bits/getopt_posix.h \
@@ -109,7 +109,7 @@ ZIPsFS.o: ZIPsFS.c /usr/include/stdc-predef.h config.h \
  /usr/include/x86_64-linux-gnu/sys/vfs.h \
  /usr/include/x86_64-linux-gnu/sys/statfs.h \
  /usr/include/x86_64-linux-gnu/bits/statfs.h configuration.h ht4.c \
- /usr/include/assert.h /usr/include/malloc.h cg_debug.c \
+ /usr/include/malloc.h cg_debug.c \
  /usr/include/x86_64-linux-gnu/sys/wait.h /usr/include/signal.h \
  /usr/include/x86_64-linux-gnu/bits/signum.h \
  /usr/include/x86_64-linux-gnu/bits/signum-generic.h \
@@ -394,6 +394,8 @@ cg_utils.c:
 
 /usr/include/x86_64-linux-gnu/bits/stdlib-float.h:
 
+/usr/include/assert.h:
+
 /usr/include/unistd.h:
 
 /usr/include/x86_64-linux-gnu/bits/posix_opt.h:
@@ -419,8 +421,6 @@ cg_utils.c:
 configuration.h:
 
 ht4.c:
-
-/usr/include/assert.h:
 
 /usr/include/malloc.h:
 

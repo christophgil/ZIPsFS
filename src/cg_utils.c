@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/time.h>
@@ -128,17 +129,12 @@ long currentTimeMillis(){
 #include <sys/statvfs.h>
 #include <sys/vfs.h>
 #include <sys/statfs.h>
-void clear_stat(struct stat *st){ if(st) memset(st,0,sizeof(struct stat));}
-static long time_ms(){
-  struct timeval tp;
-  gettimeofday(&tp,NULL);
-  return tp.tv_sec*1000+tp.tv_usec/1000;
-}
-#define SHIFT_INODE_ROOT 40
-#define SHIFT_INODE_ZIPENTRY 43
-#define ADD_INODE_ROOT(root) (((long)root+1)<<SHIFT_INODE_ROOT)
+
 void log_file_stat(const char * name,const struct stat *s){
-  char *color= (s->st_ino>(1L<<SHIFT_INODE_ROOT)) ? ANSI_FG_MAGENTA:ANSI_FG_BLUE;
+  char *color=ANSI_FG_BLUE;
+#if defined SHIFT_INODE_ROOT
+   if (s->st_ino>(1L<<SHIFT_INODE_ROOT)) color=ANSI_FG_MAGENTA;
+#endif
   printf("%s  size=%lu blksize=%lu blocks=%lu links=%lu inode=%s%lu"ANSI_RESET" dir=%s uid=%u gid=%u ",name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
   //st_blksize st_blocks f_bsize
   putchar(  S_ISDIR(s->st_mode)?'d':'-');
@@ -152,6 +148,13 @@ void log_file_stat(const char * name,const struct stat *s){
   putchar( (s->st_mode&S_IWOTH)?'w':'-');
   putchar( (s->st_mode&S_IXOTH)?'x':'-');
   putchar('\n');
+}
+
+void clear_stat(struct stat *st){ if(st) memset(st,0,sizeof(struct stat));}
+static long time_ms(){
+  struct timeval tp;
+  gettimeofday(&tp,NULL);
+  return tp.tv_sec*1000+tp.tv_usec/1000;
 }
 static long file_mtime(const char *f){
   struct stat st={0};
@@ -212,4 +215,45 @@ static void recursive_mkdir(char *p){
 }
 // #pragma GCC diagnostic ignored "-Wunused-variable" //__attribute__((unused));
 /* **********************************************/
+
+
+
+
+
+
+
+
+uint32_t crc32_for_byte(uint32_t r) {
+  for(int j=0; j<8; ++j) r=(r&1?0: (uint32_t)0xEDB88320L)^r>>1;
+  return r^(uint32_t)0xFF000000L;
+}
+
+/* Any unsigned integer type with at least 32 bits may be used as
+ * accumulator type for fast crc32-calulation, but unsigned long is
+ * probably the optimal choice for most systems. */
+typedef unsigned long accum_t;
+static void cg_crc32_init_tables(uint32_t* table, uint32_t* wtable){
+  for(size_t i=0; i<0x100; ++i) table[i]=crc32_for_byte(i);
+  for(size_t k=0; k<sizeof(accum_t); ++k)
+    for(size_t w,i=0; i<0x100; ++i){
+      for(size_t j=w=0; j<sizeof(accum_t); ++j)
+        w=table[(uint8_t)(j==k?w^i:w)]^w>>8;
+      wtable[(k<<8)+i]=w^(k?wtable[0]:0);
+    }
+}
+static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc) {
+  assert( ((uint64_t)data)%sizeof(accum_t)==0); /* Assume alignment at 16 bytes */
+  static uint32_t table[0x100]={0}, wtable[0x100*sizeof(accum_t)];
+  const size_t n_accum=n_bytes/sizeof(accum_t);
+  if(!*table) cg_crc32_init_tables(table,wtable);
+  log_debug_now("n_accum=%ld data=%p accum_t=%p \n",n_accum,data,(accum_t*)data);
+  for(size_t i=0; i<n_accum; ++i) {
+    const accum_t a=crc^((accum_t*)data)[i];
+    for(size_t j=crc=0; j<sizeof(accum_t); ++j) crc^=wtable[(j << 8)+(uint8_t)(a>>8*j)];
+  }
+
+  for(size_t i=n_accum*sizeof(accum_t);i<n_bytes;++i) crc=table[(uint8_t)crc^((uint8_t*)data)[i]]^crc>>8;
+  return crc;
+}
+
 #endif
