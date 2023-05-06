@@ -1,10 +1,10 @@
-void log_path(const char *f,const char *path){
+static void log_path(const char *f,const char *path){
   printf("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
 }
 
 
 
-int log_func_error(char *func){
+static int log_func_error(char *func){
   int ret=-errno;
   log_error(" %s:",func);
   perror("");
@@ -12,7 +12,7 @@ int log_func_error(char *func){
 }
 
 
-void log_strings(const char *pfx, char *ss[],int n){
+static void log_strings(const char *pfx, char *ss[],int n){
   printf(ANSI_UNDERLINE"%s"ANSI_RESET" %p\n",pfx,ss);
   if (ss){
     for(int i=0;i<n;i++){
@@ -23,24 +23,18 @@ void log_strings(const char *pfx, char *ss[],int n){
 }
 
 
-void log_fh(char *title,long fh){
+static void log_fh(char *title,long fh){
   char p[MAX_PATHLEN];
   path_for_fd(title,p,fh);
   log_debug_now("%s  fh=%ld %s \n",title?title:"", fh,p);
 }
-
-/* void print_pointers(){ */
-/*   for(int i=0;i<_fhdata_n;i++){ */
-/*     log(ANSI_RESET"%d zarchive=%p zip_file=%p\n",i,_fhdata[i].zpath.zarchive,(void*)_fhdata[i].zip_file); */
-/*   } */
-/* } */
 
 #define MAX_INFO 33333 // DEBUG_NOW
 
 static char _info[MAX_INFO+1];
 #define PRINTINFO(...)  n+=snprintf(_info+n,MAX_INFO-n,__VA_ARGS__)
 #define PROC_PATH_MAX 256
-int print_open_files(int n, int *fd_count){
+static int print_open_files(int n, int *fd_count){
   static char proc_path[PROC_PATH_MAX], path[256];
   struct dirent *dp;
   const int len_proc_path=snprintf(proc_path,64,"/proc/%i/fd/",getpid());
@@ -58,11 +52,11 @@ int print_open_files(int n, int *fd_count){
   return n;
 }
 
-void log_mem(){
+static void log_mem(){
   printf(ANSI_MAGENTA"Resources pid=%d"ANSI_RESET" _fhdata_n=%d  uordblks=%'d  mmap/munmap=%'d/%'d\n",getpid(),_fhdata_n,mallinfo().uordblks,_count_mmap,_count_munmap);
 }
 
-int print_maps(int n){
+static int print_maps(int n){
   char fname[99];
   unsigned long total=0;
   snprintf(fname,sizeof(fname),"/proc/%ld/maps", (long)getpid());
@@ -88,13 +82,14 @@ int print_maps(int n){
   return n;
 }
 
-int log_cached(int n,char *title){
+static int log_cached(int n,char *title){
   if (n<0) log_cache("log_cached %s\n",snull(title));
   else PRINTINFO("<TABLE>\n<THEAD><TR><TH></TH><TH>Path</TH><TH>Access</TH><TH>Addr&gt;&gt;12</TH><TH>KByte</TH><TH>Millisec</TH></TR></THEAD>\n");
   char stime[99];
   for(int i=_fhdata_n; --i>=0;){
     struct fhdata *d=_fhdata+i;
-    if (n<0) printf("\t%4d\t%s\t%p\t%ld\n",i, d->path,d->cache,d->cache_l);
+    if (!d->path) continue; /* empty position where an instance had been destroyed */
+    if (n<0) printf("\t%4d\t%p\t%s\t%p\t%zu\n",i,d, d->path,d->cache,d->cache_l);
     else{
       struct tm tm = *localtime(&d->access);
       sprintf(stime,"%d-%02d-%02d_%02d:%02d:%02d\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec);
@@ -111,7 +106,7 @@ int log_cached(int n,char *title){
   if (n>=0) PRINTINFO("</TABLE>");
   return n;
 }
-int get_info(){
+static int get_info(){
   log_entered_function("get_info\n");
   int n=0;
   PRINTINFO("<HTML>\n<HEAD>\n<STYLE>\n\
@@ -165,7 +160,7 @@ TD{padding:5px;}\n\
 
 
 
-const char *zip_fdopen_err(int err){
+static const char *zip_fdopen_err(int err){
 #define  ZIP_FDOPEN_ERR(code,descr) if (err==code) return descr
   ZIP_FDOPEN_ERR(ZIP_ER_INCONS,"Inconsistencies were found in the file specified by path. This error is often caused by specifying ZIP_CHECKCONS but can also happen withot it.");
   ZIP_FDOPEN_ERR(ZIP_ER_INVAL,"The flags argument is invalid. Not all zip_open(3) flags are allowed for zip_fdopen, see DESCRIPTION.");
@@ -178,4 +173,30 @@ const char *zip_fdopen_err(int err){
   ZIP_FDOPEN_ERR(ZIP_ER_INVAL,"The flags argument is invalid. Not all zip_open(3) flags are allowed for zip_fdopen, see DESCRIPTION.");
   return "zip_fdopen - Unknown error";
 #undef ZIP_FDOPEN_ERR
+}
+
+
+
+static void fhdata_log_cache(struct fhdata *d){
+  if (!d){ log("\n");return;}
+  const char
+    *c=d->cache,
+    *s= !c?"Null":c==CACHE_FAILED?"FAILED":c==CACHE_FILLING?"FILLING":"Yes";
+
+  const int index=(int)(_fhdata-d);
+  log("log_cache: d= %p path= %s cache=%s cache_l= %zu can_destroy=%s  index=%d  hasc=%s\n",d,d->path,s,d->cache_l,yes_no(fhdata_can_destroy(d)),index,yes_no(fhdata_has_cache(d)));
+}
+
+
+static void log_zpath(char *msg, struct zippath *zpath){
+  prints(ANSI_UNDERLINE);
+  prints(msg);
+  puts(ANSI_RESET);
+  printf("   this= %p   only slash=%d\n",zpath,0!=(zpath->flags&ZP_PATH_IS_ONLY_SLASH));
+  printf("    %p strgs="ANSI_FG_BLUE"%s"ANSI_RESET"  "ANSI_FG_BLUE"%d\n"ANSI_RESET   ,zpath->strgs, (zpath->flags&ZP_STRGS_ON_HEAP)?"Heap":"Stack", zpath->strgs_l);
+  printf("    %p    VP="ANSI_FG_BLUE"'%s' VP_LEN=%d"ANSI_RESET,VP(),snull(VP()),VP_LEN()); log_file_stat("",&zpath->stat_vp);
+  printf("    %p   VP0="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,VP0(),  snull(VP0()));
+  printf("    %p entry="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,EP(), snull(EP()));
+  printf("    %p    RP="ANSI_FG_BLUE"'%s'"ANSI_RESET,RP(), snull(RP())); log_file_stat("",&zpath->stat_rp);
+  printf("    zip=%s  ZIP %s"ANSI_RESET"\n",yes_no(ZPATH_IS_ZIP()),  zpath->zarchive?ANSI_FG_GREEN"opened":ANSI_FG_RED"closed");
 }

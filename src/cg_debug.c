@@ -1,6 +1,6 @@
-#define _GNU_SOURCE
 #ifndef _cg_debug_dot_c
 #define _cg_debug_dot_c
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -19,7 +19,8 @@
 #include <sys/time.h>
 #include "cg_log.c"
 #include "cg_utils.c"
-char *path_of_this_executable(){
+#include <sys/resource.h>
+static char *path_of_this_executable(){
   static char* _p;
   if (!_p){
     char p[512];
@@ -28,7 +29,7 @@ char *path_of_this_executable(){
   }
   return _p;
 }
-void print_trace_using_debugger() {
+static void print_trace_using_debugger() {
   fputs(ANSI_INVERSE"print_trace_using_debugger"ANSI_RESET"\n",stderr);
   char pid_buf[30];
   sprintf(pid_buf, "%d", getpid());
@@ -52,7 +53,7 @@ static void addr2line(void *p, void *messageP) {
   system(cmd);
 }
 
-void bt_sighandler(int sig, siginfo_t *psi, void *ctxarg){
+static void bt_sighandler(int sig, siginfo_t *psi, void *ctxarg){
   void *trace[16];
   mcontext_t *ctxP=&((ucontext_t *) ctxarg)->uc_mcontext;
   trace[1]=(void *)ctxP->gregs[REG_RIP];
@@ -73,7 +74,6 @@ void bt_sighandler(int sig, siginfo_t *psi, void *ctxarg){
   exit(0);
 }
 void init_handler() __attribute((constructor));
-#include <sys/resource.h>
 void init_handler(){
   log_debug_now("init_handler\n");
   struct sigaction sa;
@@ -91,7 +91,7 @@ void init_handler(){
 
 /*********************************************************************************/
 
-bool file_starts_year_ends_dot_d(const char *p){
+static bool file_starts_year_ends_dot_d(const char *p){
   const int l=my_strlen(p);
   if (l<20 || p[l-1]!='d' || p[l-2]!='.') return false;
   const int slash=last_slash(p);
@@ -99,7 +99,7 @@ bool file_starts_year_ends_dot_d(const char *p){
   return true;
 }
 
-void assert_dir(const char *p, struct stat *st){
+static void assert_dir(const char *p, struct stat *st){
   if (!st) return;
   //  log("st=%s  %p\n",p, st);
   if(!S_ISDIR(st->st_mode)){
@@ -114,21 +114,21 @@ void assert_dir(const char *p, struct stat *st){
     log_file_stat("",st);
   }
 }
-bool file_ends_tdf_bin(const char *p){
+static bool file_ends_tdf_bin(const char *p){
   const int l=my_strlen(p);
   if (l<20) return false;
   const int slash=last_slash(p);
   if (slash<0 || strncmp(p+slash,"/202",4)) return false;
   return endsWith(p,".tdf") || endsWith(p,".tdf_bin");
 }
-void assert_r_ok(const char *p, struct stat *st){
+static void assert_r_ok(const char *p, struct stat *st){
   if(!access_from_stat(st,R_OK)){
     log_error("assert_r_ok  %s  ",p);
     log_file_stat("",st);
     print_trace_using_debugger();
   }
 }
-void debug_my_file_checks(const char *p, struct stat *s){
+static void debug_my_file_checks(const char *p, struct stat *s){
   if(file_starts_year_ends_dot_d(p)) assert_dir(p,s);
   if (file_ends_tdf_bin(p)) assert_r_ok(p,s);
 }
@@ -138,7 +138,7 @@ bool tdf_or_tdf_bin(const char *p) {return endsWith(p,".tdf") || endsWith(p,".td
 
 
 
-bool report_failure_for_tdf(const char *mthd, int res, const char *path){
+static bool report_failure_for_tdf(const char *mthd, int res, const char *path){
   if (res && tdf_or_tdf_bin(path)){
     log_debug_abort("xmp_getattr res=%d  path=%s",res,path);
     return true;
@@ -151,7 +151,7 @@ enum functions{xmp_open_,xmp_access_,xmp_getattr_,xmp_read_,xmp_readdir_,mcze_,f
 #if 0
 static int functions_count[functions_l];
 static long functions_time[functions_l];
-const char *function_name(enum functions f){
+static const char *function_name(enum functions f){
 #define C(x) f==x ## _ ? #x :
   return C(xmp_open) C(xmp_access) C(xmp_getattr) C(xmp_read) C(xmp_readdir) C(mcze) "null";
 #undef C
@@ -185,27 +185,12 @@ static void log_count_e(enum functions f,const char *path){
 
 #if __INCLUDE_LEVEL__ == 0
 
-void func3(){
+static void func3(){
   raise(SIGSEGV);
 
 }
 void func2(){ func3();}
 void func1(){ func2();}
-
-
-
-void libzip_takes_care_of_closing_fd() {
-  int fd=open("/s-mcpb-ms03/slow2/incoming/6600-tof2/Data/30-0036/20221031_TOF2_FA_005_30-0036_1kSCerevisaeIsolates-MSBatch3_P01_C01.rawIdx.Zip",O_RDONLY);
-  if (fd<0){perror("");  exit(9);}
-  log("fd=%d\n",fd);
-
-  int err;
-  struct zip *za=zip_fdopen(fd,0,&err);
-  log("zip=%p\n",za);
-  //zip_close(za);
-  print_path_for_fd(fd);
-  exit(9);
-}
 
 
 int main(int argc, char *argv[]){

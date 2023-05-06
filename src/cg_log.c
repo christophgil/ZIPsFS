@@ -5,9 +5,7 @@
 */
 #ifndef _cg_log_dot_c
 #define _cg_log_dot_c
-
-#ifndef _def_cg_log_c
-#define _def_cg_log_c 1
+#include <pthread.h>
 #define ANSI_RED "\x1B[41m"
 #define ANSI_MAGENTA "\x1B[45m"
 #define ANSI_GREEN "\x1B[42m"
@@ -42,10 +40,10 @@ void prints(char *s){ if (s) fputs(s,LOG_STREAM);}
 #define log_warn(...)  log(ANSI_FG_RED" $$ %d Warn "ANSI_RESET,getpid()),log(__VA_ARGS__)
 #define log_error(...)  log(ANSI_FG_RED" $$ %d Error "ANSI_RESET,getpid()),log(__VA_ARGS__)
 #define log_succes(...)  prints(ANSI_FG_GREEN" Success "ANSI_RESET),log(__VA_ARGS__)
-#define log_debug_now(...)   prints(ANSI_FG_MAGENTA" Debug "ANSI_RESET),log(__VA_ARGS__)
+#define log_debug_now(...)   log(ANSI_FG_MAGENTA" Debug "ANSI_RESET" %lx ",pthread_self()),log(__VA_ARGS__)
 #define log_entered_function(...)   log(ANSI_INVERSE">>>"ANSI_RESET),log(__VA_ARGS__)
 #define log_exited_function(...)   prints(ANSI_INVERSE"< < < <"ANSI_RESET),log(__VA_ARGS__)
-#define log_cache(...)  log(ANSI_RED" $$ %d CACHE"ANSI_RESET" ",getpid()),log(__VA_ARGS__)
+#define log_cache(...)  log(ANSI_MAGENTA" $$ %d CACHE"ANSI_RESET" ",getpid()),log(__VA_ARGS__)
 int isPowerOfTwo(unsigned int n){ return n && (n&(n-1))==0;}
 void _log_mthd(char *s,int count){ if (isPowerOfTwo(count)) log(" %s=%d ",s,count);}
 #define log_mthd_invoke(s) static int __count=0;_log_mthd(ANSI_FG_GRAY #s ANSI_RESET,++__count)
@@ -58,5 +56,4 @@ void _log_mthd(char *s,int count){ if (isPowerOfTwo(count)) log(" %s=%d ",s,coun
 #define log_debug_abort(...)   log_error(__VA_ARGS__)
 #endif
 
-#endif
 #endif

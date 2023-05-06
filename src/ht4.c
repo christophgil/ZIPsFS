@@ -1,7 +1,7 @@
 // Simple hash table implemented in C.
 // https://benhoyt.com/writings/hash-table-in-c/
 // Author Ben Hoyt
-// Modified by Christoph Gille
+// Modified by Christoph Gille   xxxx
 //   (global-set-key (kbd "<f4>") '(lambda() (interactive) (switch-to-buffer "ht4.c")))
 #include <assert.h>
 #include <stdint.h>
