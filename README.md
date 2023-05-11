@@ -16,6 +16,30 @@ However, as the size of our experiments and the number of  ZIP files grow, this 
 Furthermore we are concerned about the health of our conventional hard disks in our RAID system when 20 threads are simultaneously reading a 4TB file at different file positions.
 Furthermore, the software implementation leads to massive seek operations which is inefficient for compressed and remote data.
 
+
+# Usage
+
+We recommend to run ZIPsFS in a tmux session, however, it could also be run as a daemon.
+
+## Usage:
+
+    ZIPsFS [ZIPsFS-options] path-of-root1 path-of-root2 path-of-root3 :  [fuseoptions] mount-point
+
+## Example 1
+
+    ZIPsFS -l 2GB  ~/tmp/ZIPsFS/writable  //computer1/pub  //computer2/pub :  -f -o allow_other  ~/tmp/ZIPsFS/mnt
+
+With this command, all files in the three sources can be accessed via the path ~/tmp/ZIPsFS/mnt.
+When files are created or modified, they will be stored in ~/tmp/ZIPsFS/writable.
+
+Paths starting with double slash such as  //computer1/pub are regarded as unstable and potentially blocking.
+ZIPsFS will periodically check these file systems and skip them if they are not responding. This is useful for remote paths.
+
+With the  option -l an upper limit of memory consumption for the ZIP file RAM cache is specified. The overall size of all cached ZIP entries should not exceed 2 GB here.
+With the fuse option -f, it is running in the foreground such that some debugging output can be observed at
+the command prompt. In this mode the program can be stopped normally with Ctrl-C or Ctrl-Backslash. With  -o allow_other, also other users can access the the file system.
+
+For more information on command line arguments  run ZIPsFS without parameters or with -h.
 # Features
 
 ## Acts like a union or overlay file system
@@ -26,10 +50,6 @@ Furthermore, the software implementation leads to massive seek operations which 
 ## fail-safe
 - Root folders can be marked as less reliable  by starting the absolute file path with two slashes instead of one.  This is in analogy to remote  paths  in Windows - so-called UNCs.
   ZIPsFS queries all remote root folders periodically and if a remote file system is not responding, it will be skipped.
-
-- We use a  remote storage which   can be mounted from different nodes.  When one becomes unavailable, ZIPsFS  tries the next one.
-To take advantage of this automatism,
-  the path must follow the pattern  (strict upper/lower case)  "../EquiValent/123". If the path is working  ZIPsFS will automatically  try "/EquiValent/124" and "/EquiValent/125".
 
 ## Adaptations to the file tree
 
@@ -42,16 +62,13 @@ To take advantage of this automatism,
 This behavior is governed by rules in src/configuration.h and is based on file and path names. Users may want to addapt these rules for their needs.
 
 
-
-## Jumping within the file
+## File seek
 
 For remote and compressed file systems, data is best read sequentially.
-Reading at different positions and performing seek operations is unfavorable.
-
-However, this is exactly what the Windows  software is doing.
+Reading at different positions is unfavorable.
 
 ZIPsFS can store the entire ZIP entry in RAM. All threads can read the data from the in-RAM copy.
-When all file connections are closed, the RAM is released.
+When all file connections are closed, the file date in the RAM is released.
 
 ## Performance
 

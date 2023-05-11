@@ -1,3 +1,4 @@
+/*  Copyright (C) 2023   christoph Gille   This program can be distributed under the terms of the GNU GPLv3. */
 #ifndef _cg_debug_dot_c
 #define _cg_debug_dot_c
 #define _GNU_SOURCE
@@ -180,22 +181,16 @@ static void log_count_e(enum functions f,const char *path){
 #define  log_count_e(f,path) ;
 #endif
 
-#endif
-
+#endif // _cg_debug_dot_c
+// 1111111111111111111111111111111111111111111111111111111111111
 
 #if __INCLUDE_LEVEL__ == 0
-
 static void func3(){
   raise(SIGSEGV);
-
 }
 void func2(){ func3();}
 void func1(){ func2();}
-
-
 int main(int argc, char *argv[]){
   func1();
 }
-
-
 #endif

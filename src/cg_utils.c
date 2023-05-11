@@ -1,3 +1,4 @@
+/*  Copyright (C) 2023   christoph Gille   This program can be distributed under the terms of the GNU GPLv3. */
 #ifndef _cg_utils_dot_c
 #define _cg_utils_dot_c
 #define _GNU_SOURCE
@@ -9,13 +10,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/time.h>
-#include <unistd.h>
 #include <linux/limits.h>
 #include <stdint.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/vfs.h>
 #include <sys/statfs.h>
+#include <locale.h>
 #include "cg_log.c"
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -59,20 +60,7 @@ static int pathlen_ignore_trailing_slash(const char *p){
   const int n=my_strlen(p);
   return n && p[n-1]=='/'?n-1:n;
 }
-static bool equivalent_path(char *nextPath, const char *path,int equiv){
-  *nextPath=0;
-#define SLASH_EQUIVALENT "/EquiValent/"
-  const int EQUIVALENT_L=sizeof(SLASH_EQUIVALENT)-1;
-  const char* e=equiv?strstr(path,SLASH_EQUIVALENT):0,*slash=e?strchr(e+EQUIVALENT_L,'/'):NULL;
-  if (slash){
-    memcpy(nextPath,path,e-path+EQUIVALENT_L);
-    sprintf(nextPath+(e-path+EQUIVALENT_L),"%d%s",atoi(e+EQUIVALENT_L)+equiv,slash);
-  }else{
-    strcpy(nextPath,path);
-  }
-  return slash!=NULL;
-#undef SLASH_EQUIVALENT
-}
+
 
 static int path_for_fd(const char *title, char *path, int fd){
   *path=0;
@@ -123,20 +111,21 @@ static int max_int(int a,int b){ return MAX(a,b);}
 static long min_long(long a,long b){ return MIN(a,b);}
 static long max_long(long a,long b){ return MAX(a,b);}
 
-/*********************************************************************************/
-/* *** time *** */
-static long currentTimeMillis(){
-  struct timeval tv={0};
-  gettimeofday(&tv,NULL);
-  return tv.tv_sec*1000+tv.tv_usec/1000;
+static long atol_kmgt(const char *s){
+  if (!s) return 0;
+  char *c=(char*)s;
+  while(*c && '0'<=*c && *c<='9') c++;
+  *c&=~32;
+  return atol(s)<<(*c=='K'?10:*c=='M'?20:*c=='G'?30:*c=='T'?40:0);
 }
+
 
 /*********************************************************************************/
 /* *** stat *** */
 static void log_file_stat(const char * name,const struct stat *s){
   char *color=ANSI_FG_BLUE;
 #if defined SHIFT_INODE_ROOT
-   if (s->st_ino>(1L<<SHIFT_INODE_ROOT)) color=ANSI_FG_MAGENTA;
+  if (s->st_ino>(1L<<SHIFT_INODE_ROOT)) color=ANSI_FG_MAGENTA;
 #endif
   printf("%s  size=%lu blksize=%lu blocks=%lu links=%lu inode=%s%lu"ANSI_RESET" dir=%s uid=%u gid=%u ",name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
   //st_blksize st_blocks f_bsize
@@ -220,42 +209,56 @@ static void recursive_mkdir(char *p){
 /* **********************************************/
 /* *** CRC32 *** */
 /* Source:  http://home.thep.lu.se/~bjorn/crc/ */
+
 static uint32_t crc32_for_byte(uint32_t r) {
   for(int j=0; j<8; ++j) r=((r&1)?0:(uint32_t)0xEDB88320L)^r>>1;
   return r^(uint32_t)0xFF000000L;
 }
-typedef unsigned long accum_t; /* Or unsigned int */
+typedef unsigned int accum_t; /* Or unsigned int */
 static void cg_crc32_init_tables(uint32_t* table, uint32_t* wtable){
   for(size_t i=0; i<0x100; ++i) table[i]=crc32_for_byte(i);
-  for(size_t k=0; k<sizeof(accum_t); ++k)
+  for(size_t k=0; k<sizeof(accum_t); ++k){
     for(size_t w,i=0; i<0x100; ++i){
       for(size_t j=w=0; j<sizeof(accum_t); ++j)
         w=table[(uint8_t)(j==k?w^i:w)]^w>>8;
       wtable[(k<<8)+i]=w^(k?wtable[0]:0);
     }
+  }
 }
-static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc) {
-  assert( ((uint64_t)data)%sizeof(accum_t)==0); /* Assume alignment at 16 bytes */
+static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc){
+  //assert( ((uint64_t)data)%sizeof(accum_t)==0); /* Assume alignment at 16 bytes --  No not true*/
   static uint32_t table[0x100]={0}, wtable[0x100*sizeof(accum_t)];
   const size_t n_accum=n_bytes/sizeof(accum_t);
   if(!*table) cg_crc32_init_tables(table,wtable);
-  for(size_t i=0; i<n_accum; ++i) {
+  for(size_t i=0; i<n_accum; ++i){
     const accum_t a=crc^((accum_t*)data)[i];
     for(size_t j=crc=0; j<sizeof(accum_t); ++j) crc^=wtable[(j<<8)+(uint8_t)(a>>8*j)];
   }
-
   for(size_t i=n_accum*sizeof(accum_t);i<n_bytes;++i) crc=table[(uint8_t)crc^((uint8_t*)data)[i]]^crc>>8;
   return crc;
 }
-#endif
 
+
+
+
+
+
+
+#endif // _cg_utils_dot_c
+// 1111111111111111111111111111111111111111111111111111111111111
 
 
 #if __INCLUDE_LEVEL__ == 0
 int main(int argc, char *argv[]){
-  if (0){
-    const uint32_t crc=cg_crc32("abcdefg",7,0);
-    printf("crc=%x\n",crc);
+  setlocale(LC_NUMERIC,""); /* Enables decimal grouping in printf */
+  //char *s=argv[1];    printf("%s = %'ld\n",s,atol_kmgt(s));
+  //printf("strcmp %d\n",strcmp(argv[1],argv[2]));
+
+
+  if (1){
+    char *a="abcdefghij";
+    const uint32_t crc=cg_crc32(a,strlen(a),0);
+    printf("%s crc=%x\n",a,crc);
     exit(9);
   }
 }
