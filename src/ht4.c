@@ -49,7 +49,6 @@ struct keystore{
 /* Make sure that kk[i] is not NULL */
 void keystore_inc_i(struct keystore *ks){
   if (++i>=l){
-    log_debug_now("Going to realloc %u\n",l*2);
     kk=realloc(kk,(l*=2)*sizeof(void*));
     assert(kk!=NULL);
     log_keystore("Did realloc kk  l=%u\n",l);
@@ -66,12 +65,9 @@ static const char *keystore_push(struct keystore *ks,const char *k,const int kle
     (kk=malloc((l=0x100)*sizeof(void*)))[0]=malloc(dim);
     log_keystore("Did malloc kk:=%p\n",(void*)kk);
   }
-  log_debug_now("%p dim=%u\n",ks,dim);
   if (b+klen+1>dim){ /* Current buffer too small */
     if (klen+1>dim){ /* Key too big. Should not happen often. */
-      assert((kk[i]=realloc(kk[i],b+klen+1)));
-      log_debug_now("Should not happen often klen=%d dim=%u\n",klen,dim);
-      exit(1);
+      assert(NULL!=(kk[i]=realloc(kk[i],b+klen+1)));
     }else{
       keystore_inc_i(ks);
     }
@@ -82,12 +78,14 @@ static const char *keystore_push(struct keystore *ks,const char *k,const int kle
   return memcpy(kk[i]+b0,k,klen+1);
 }
 static void keystore_destroy(struct keystore *ks){
+  if (kk){
   for(int j=i+1;--j>=0;){
     log_keystore("Going to free kk[%d] %p\n",j,(void*)(kk+j));
     free(kk[j]);
   }
   log_keystore("Going to free kk %p\n",(void*)kk);
   free(kk);
+  }
 }
 #undef log_keystore
 #undef dim
@@ -137,8 +135,10 @@ bool ht_init(struct ht *table,uint32_t log2initalCapacity){
 }
 void ht_destroy(struct ht *t){
   if (t->keystore.dim){ /* All keys are in the keystore */
+
     keystore_destroy(&t->keystore);
   }else if (!(t->flags&HT_INTKEY)){ /* Each key has been stored on the heap individually */
+
     for (int i=t->capacity;--i>=0;){
       struct ht_entry *e=t->entries+i;
       if (e) {free((void*)e->key); e->key=NULL;}
@@ -283,7 +283,7 @@ const char* ht_internalize_strg(struct ht *table,const char *s){
 #if __INCLUDE_LEVEL__ == 0
 void ht_test_keystore(int argc, char *argv[]){
   struct keystore ks={0};
-  ks.dim=100;
+  ks.dim=10;
   char **copy=malloc(argc*8);
   for(int i=1;i<argc;i++){
     printf("i=%d argv=%s\n",i,argv[i]);
@@ -311,7 +311,6 @@ void ht_test1(int argc, char *argv[]){
   for(int i=1;i<argc;i++){
     char *a=argv[i];
     ht_set(&no_dups,a,VV[i%L]);
-    log_debug_now("a=%s  %s \n",a,(char*)ht_get(&no_dups,a));
   }
   for(int i=1;i<argc;i++){
     char *fetched=(char*)ht_get(&no_dups,argv[i]);
@@ -350,7 +349,12 @@ void test_int(int argc, char *argv[]){
 int main(int argc, char *argv[]){
   //  ht_test1(argc,argv);
   //printf(" sizeof(void*)=%zu\n",sizeof(void*));return 0;
-  //  ht_test_keystore(argc,argv);
-  test_int(argc,argv);
+  //ht_test_keystore(argc,argv);
+    //test_int(argc,argv);
+  {
+      struct ht no_dups={0};
+  ht_init_with_keystore(&no_dups,8,12);
+  ht_destroy(&no_dups);
+  }
 }
 #endif

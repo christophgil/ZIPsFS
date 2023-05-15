@@ -501,6 +501,7 @@ struct dirent {
     zip_uint32_t flags;             /* reserved for future use */
 };
 * struct stat
+
 struct stat {
     dev_t     st_dev;     /* ID of device containing file */
     ino_t     st_ino;     /* inode number */     8 Byte
@@ -723,3 +724,25 @@ sqlite3_config(SQLITE_CONFIG_MMAP_SIZE, defaultSize, maximumSize);
  https://github.com/jemalloc/jemalloc/issues/329
  https://gist.github.com/rLinks234/6c7000fda4d2ab4c6b8bc52479b03353
 https://github.com/pmem/syscall_intercept
+
+
+* zoombies
+In ZIPsFS are still many open tdf.
+
+
+$ pgrep -u cgille -a -f diann_L
+1243126 diann_L.exe
+1789635 diann_L.exe
+$ ps -p 1243126
+    PID TTY          TIME CMD
+    1243126 pts/72   02:36:41 diann_L.exe <defunct
+
+$ ps -p 1789635
+   PID TTY          TIME CMD
+   1789635 pts/72   03:05:42 diann_L.exe <defunct>
+$ ls /proc/1243126/fd
+        ls: cannot open directory '/proc/1243126/fd': Permission denied
+$ sudo ls /proc/1243126/fd
+        [sudo] password for cgille:
+$ sudo ls /proc/1243126/fd
+$ sudo ls /proc/1789635/fd

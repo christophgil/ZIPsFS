@@ -2,34 +2,34 @@
 
 # Motivation
 
-
-We use closed-source proprietory Windows software and shared libraries for data conversion of high throughput experimental data. However,
+We use closed-source proprietary Windows software and shared libraries for data conversion of high throughput experimental data. However,
 the sheer amount of file data brought the high-performance Windows machine to a stand still.
 We ended up with Wine on Ubuntu which easily copes with the high amount of data.
-Unfortunately, implementation and  user interface prevents usage of  UNIX techniques  to get data out of a storage without creating intermediate files.
-Furthermore the software demands write access even if nothing is written.
+Unfortunately, implementation and  user interface prevents usage of  UNIX techniques  to use  zipped files from our storage without creating intermediate files.
+Furthermore some software demands write access to the file location.
 
-We used to use zip-fuse to mount   ZIP files in the storage. Before starting computation, all required ZIP files are mounted.
-Symbolic links solved the problem of required write access.
-However, as the size of our experiments and the number of  ZIP files grow, this is not possible any more.
+We used to use zip-fuse to mount  ZIP files in the storage. Before starting computation, all required ZIP files were mounted.
+Symbolic links solved the problem of demanded write access.
+However, recently  the size of our experiments and this the number of ZIP files grew, which rendered this method unusable.
 
-Furthermore we are concerned about the health of our conventional hard disks in our RAID system when 20 threads are simultaneously reading a 4TB file at different file positions.
-Furthermore, the software implementation leads to massive seek operations which is inefficient for compressed and remote data.
+Furthermore we are concerned about the health of our conventional hard disks since many  threads are simultaneously reading files of 2GB and more at different file positions.
+One of the  file types  is a sqlite3 database and accessing this file requires large numbers of seek operations which is inefficient for compressed and remote data.
 
+ZIPsFS has been developed to solve all these problems.
 
 # Usage
 
-We recommend to run ZIPsFS in a tmux session, however, it could also be run as a daemon.
 
-## Usage:
+## General:
 
-    ZIPsFS [ZIPsFS-options] path-of-root1 path-of-root2 path-of-root3 :  [fuseoptions] mount-point
+    ZIPsFS [ZIPsFS-options] path-of-root1 path-of-root2 path-of-root3 :  [fuse-options] mount-point
 
 ## Example 1
 
-    ZIPsFS -l 2GB  ~/tmp/ZIPsFS/writable  //computer1/pub  //computer2/pub :  -f -o allow_other  ~/tmp/ZIPsFS/mnt
+    ZIPsFS -l 2GB  ~/tmp/ZIPsFS/writable ~/local/file/tree  //computer1/pub  //computer2/pub :  -f -o allow_other  ~/tmp/ZIPsFS/mnt
 
 With this command, all files in the three sources can be accessed via the path ~/tmp/ZIPsFS/mnt.
+In this respect, ZIPsFS is a so-called union or overlay file system.
 When files are created or modified, they will be stored in ~/tmp/ZIPsFS/writable.
 
 Paths starting with double slash such as  //computer1/pub are regarded as unstable and potentially blocking.
@@ -40,52 +40,61 @@ With the fuse option -f, it is running in the foreground such that some debuggin
 the command prompt. In this mode the program can be stopped normally with Ctrl-C or Ctrl-Backslash. With  -o allow_other, also other users can access the the file system.
 
 For more information on command line arguments  run ZIPsFS without parameters or with -h.
+
+## Logs
+
+We recommend to run ZIPsFS in a tmux session, using the option -f (foreground).
+In this mode, logs at stdout are enabled and are directly observable. In addition, a log file with errors and warnings
+is  written into the first root folder. An HTML file with status information is found int the root of the file system.
+
 # Features
 
 ## Acts like a union or overlay file system
-- The contents of several root folders given as absolute paths are  joined.
+
+- The contents of several root folders given as absolute paths are combined.
 - Only the first root is writable.
 
 
 ## fail-safe
-- Root folders can be marked as less reliable  by starting the absolute file path with two slashes instead of one.  This is in analogy to remote  paths  in Windows - so-called UNCs.
-  ZIPsFS queries all remote root folders periodically and if a remote file system is not responding, it will be skipped.
+
+- Root folders can be marked as less reliable  by starting the absolute file path with two slashes rather than just one.  This is in analogy to remote  paths in Windows.
+  ZIPsFS queries all remote root folders periodically. If a remote file system fails to  respond in time, it will be skipped.
+  This may avoid block by  broken mounts.
 
 ## Adaptations to the file tree
 
-
-- Normally, ZIP files appear as folders showing the content of the ZIP files. Our software requires folders ending on  ".d". The zip files end with ".d.Zip". Therefore  ZIPsFS may remove the ".Zip" suffix.
+- Normally, the names of ZIP files appear as folders. The ZIP entries are files in these folders. However, our software requires folders ending with  ".d" instead of  ".d.Zip".
+  Therefore  ZIPsFS is capable of suppressing the  ".Zip" suffix for selected file paths.
 
 - For other data file types the name of the ZIP file must not appear in the file tree at all. The containing files within the ZIP file appear directly in the file listing.
-  For example a directory containing 1000 ZIP files each containing 4 files will be shown as a listing of  4000  files.
 
-This behavior is governed by rules in src/configuration.h and is based on file and path names. Users may want to addapt these rules for their needs.
-
+The rules in the user-defined configuration file  src/configuration.h are based on file paths. Changing these rules requires recompilation.
 
 ## File seek
 
-For remote and compressed file systems, data is best read sequentially.
-Reading at different positions is unfavorable.
+For remote and/or compressed files, data is best read sequentially.
+Reading at changing file positions is unfavorable.
 
 ZIPsFS can store the entire ZIP entry in RAM. All threads can read the data from the in-RAM copy.
 When all file connections are closed, the file date in the RAM is released.
 
-## Performance
-
-ZIPsFS uses SQLite3 to keep directory listings.
-When the last-modified file attribute has not changed, the stored directory listings are still valid and
-das not need to be read from the ZIP files again.
 
 # Implementation
 
-Based on fuse3 example passthrough.
 Written in Gnu-C.
+Based on fuse3 example passthrough.
 
+ZIPsFS uses SQLite3 to keep directory listings.
+When the last-modified file attribute has not changed, the stored directory listings are still valid and
+does not need to be read from the ZIP files again.
 
 # Current status
 
 Testing and Bug fixing
 
+# Operation system
+
+Developed and tested on Linux 64 bit. May requires  minor adaptations for other UNIX like platforms like MacOS.
 
 ## Also see
 
