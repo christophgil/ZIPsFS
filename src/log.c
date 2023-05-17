@@ -1,6 +1,6 @@
 //   (global-set-key (kbd "<f4>") '(lambda() (interactive) (switch-to-buffer "log.c")))
 static void log_path(const char *f,const char *path){
-  logmsg("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
+  log_msg("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
 }
 static int log_func_error(char *func){
   int ret=-errno;
@@ -8,14 +8,16 @@ static int log_func_error(char *func){
   perror("");
   return ret;
 }
-static void log_strings(const char *pfx, char *ss[],int n){
+/*
+  static void log_strings(const char *pfx, char *ss[],int n){
   if (ss){
-    for(int i=0;i<n;i++){
-      logmsg("   %s %3d./.%d "ANSI_FG_BLUE"'%s'",pfx,i,n,ss[i]);
-      puts(ANSI_RESET);
-    }
+  for(int i=0;i<n;i++){
+  log_msg("   %s %3d./.%d "ANSI_FG_BLUE"'%s'",pfx,i,n,ss[i]);
+  puts(ANSI_RESET);
   }
-}
+  }
+  }
+*/
 static void log_fh(char *title,long fh){
   char p[MAX_PATHLEN];
   path_for_fd(title,p,fh);
@@ -33,17 +35,19 @@ static int print_fuse_argv(int n){
   return n;
 }
 static int print_roots(int n){
-  PRINTINFO("<H1>Roots</H1>\n<TABLE><THEAD><TR><TH>Path</TH><TH>Writable</TH><TH align=\"right\">Response</TH><TH align=\"right\">Delayed</TH><TH>Free GB</TH></TR></THEAD>\n");
-
-  for(int i=0;i<_root_n;i++){
-    struct rootdata *r=_root+i;
+  if (n>=0) PRINTINFO("<H1>Roots</H1>\n<TABLE><THEAD><TR><TH>Path</TH><TH>Writable</TH><TH align=\"right\">Response</TH><TH align=\"right\">Delayed</TH><TH>Free GB</TH></TR></THEAD>\n");
+  foreach_root(i,r){
     const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30), diff=currentTimeMillis()-r->statfs_when;
-    PRINTINFO("<TR><TD>%s</TD><TD align=\"center\">%s</TD>",r->path,yes_no(f&ROOT_WRITABLE));
-    if (f&ROOT_REMOTE) PRINTINFO("<TD align=\"right\">%'d ms</TD><TD align=\"right\">%'d</TD>",  diff>ROOT_OBSERVE_EVERY_MSECONDS*3?diff:r->statfs_mseconds,r->delayed);
-    else PRINTINFO("<TD align=\"right\">Local</TD><TD></TD>");
-    PRINTINFO("<TD align=\"right\">%'d</TD></TR>\n",freeGB);
+    if (n>=0){
+      PRINTINFO("<TR><TD>%s</TD><TD align=\"center\">%s</TD>",r->path,yes_no(f&ROOT_WRITABLE));
+      if (f&ROOT_REMOTE) PRINTINFO("<TD align=\"right\">%'d ms</TD><TD align=\"right\">%'d</TD>",  diff>ROOT_OBSERVE_EVERY_MSECONDS*3?diff:r->statfs_mseconds,r->delayed);
+      else PRINTINFO("<TD align=\"right\">Local</TD><TD></TD>");
+      PRINTINFO("<TD align=\"right\">%'d</TD></TR>\n",freeGB);
+    }else{
+      log_msg("\t%d\t%s\t%s\n",i,r->path,!my_strlen(r->path)?"":(f&ROOT_REMOTE)?"Remote":(f&ROOT_WRITABLE)?"Writable":"Local");
+    }
   }
-  PRINTINFO("</TABLE>\n");
+  if (n>=0) PRINTINFO("</TABLE>\n");
   return n;
 }
 
@@ -80,7 +84,7 @@ static int print_proc_status(int n,char *filter,int *val){
 }
 static void log_virtual_memory_size(){
   int val;print_proc_status(-1,"VmSize:",&val);
-  logmsg("Virtual memory size: %'d kB\n",val);
+  log_msg("Virtual memory size: %'d kB\n",val);
 }
 static int print_open_files(int n, int *fd_count){
   PRINTINFO("<H1>File handles</H1>\n(Should be empty if idle).<BR>");
@@ -155,8 +159,8 @@ static int print_memory_details(int n){
 
 static int print_memory(int n){
   PRINTINFO("<H1>Cache of ZIP entries</H1><PRE>");
-  n=print_bar(n,trackMemUsage(0,0)/(float)_maxMemForCache);  PRINTINFO("%'ld MB of %'ld MB \n",trackMemUsage(memusage_get_curr,0)>>20,_maxMemForCache>>20);
-  n=print_bar(n,trackMemUsage(0,0)/(float)_maxMemForCache);  PRINTINFO("%'ld MB of %'ld MB \n",trackMemUsage(memusage_get_peak,0)>>20,_maxMemForCache>>20);
+  n=print_bar(n,trackMemUsage(0,0)/(float)_maxMemForCache);  PRINTINFO("Current usage %'ld MB of %'ld MB \n",trackMemUsage(memusage_get_curr,0)>>20,_maxMemForCache>>20);
+  n=print_bar(n,trackMemUsage(0,0)/(float)_maxMemForCache);  PRINTINFO("Peak usage    %'ld MB of %'ld MB  \n",trackMemUsage(memusage_get_peak,0)>>20,_maxMemForCache>>20);
   {
 #ifdef __linux__
     struct rlimit rl={0}; getrlimit(RLIMIT_AS,&rl);
@@ -201,7 +205,7 @@ Column <I><B>F</B></I>: flags. (D)elete insicates that it is marked for closing 
 <TABLE>\n<THEAD><TR><TH>Path</TH><TH>fd</TH><TH>Last access</TH><TH>Cache addr</TH><TH>Cache kB</TH><TH>Millisec</TH><TH> F</TH><TH>R</TH></TR></THEAD>\n");
   char buf[999];
   foreach_fhdata_path_not_null(d){
-    if (n<0) logmsg("\t%p\t%s\t%p\t%zu\n",d, d->path,d->cache,d->cache_l);
+    if (n<0) log_msg("\t%p\t%s\t%p\t%zu\n",d, d->path,d->cache,d->cache_l);
     else{
       PRINTINFO("<TR><TD>%s</TD><TD>%lu</TD>",d->path,d->fh);
       PRINTINFO("<TD align=\"right\">"); if (d->access) PRINTINFO("%'ld s</TD>",time(NULL)-d->access); else PRINTINFO("Never</TD>");
@@ -261,22 +265,22 @@ static const char *zip_fdopen_err(int err){
 #undef ZIP_FDOPEN_ERR
 }
 static void fhdata_log_cache(const struct fhdata *d){
-  if (!d){ logmsg("\n");return;}
+  if (!d){ log_msg("\n");return;}
   const char
     *c=d->cache,
     *s= !c?"Null":c==CACHE_FAILED?"FAILED":c==CACHE_FILLING?"FILLING":"Yes";
   const int index=(int)(_fhdata-d);
-  logmsg("log_cache: d= %p path= %s cache: %s cache_l= %zu can_destroy: %s  index: %d  hasc: %s\n",d,d->path,s,d->cache_l,yes_no(fhdata_can_destroy(d)),index,yes_no(fhdata_has_cache(d)));
+  log_msg("log_cache: d= %p path= %s cache: %s cache_l= %zu can_destroy: %s  index: %d  hasc: %s\n",d,d->path,s,d->cache_l,yes_no(fhdata_can_destroy(d)),index,yes_no(fhdata_has_cache(d)));
 }
 static void log_zpath(char *msg, struct zippath *zpath){
-  logmsg(ANSI_UNDERLINE"%s"ANSI_RESET,msg);
-  logmsg("   this= %p   only slash: %d\n",zpath,0!=(zpath->flags&ZP_PATH_IS_ONLY_SLASH));
-  logmsg("    %p strgs="ANSI_FG_BLUE"%s"ANSI_RESET"  "ANSI_FG_BLUE"%d\n"ANSI_RESET   ,zpath->strgs, (zpath->flags&ZP_STRGS_ON_HEAP)?"Heap":"Stack", zpath->strgs_l);
-  logmsg("    %p    VP="ANSI_FG_BLUE"'%s' VP_LEN: %d"ANSI_RESET,VP(),snull(VP()),VP_LEN()); log_file_stat("",&zpath->stat_vp);
-  logmsg("    %p   VP0="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,VP0(),  snull(VP0()));
-  logmsg("    %p entry="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,EP(), snull(EP()));
-  logmsg("    %p    RP="ANSI_FG_BLUE"'%s'"ANSI_RESET,RP(), snull(RP())); log_file_stat("",&zpath->stat_rp);
-  logmsg("    zip: %s  ZIP %s"ANSI_RESET"\n",yes_no(ZPATH_IS_ZIP()),  zpath->zarchive?ANSI_FG_GREEN"opened":ANSI_FG_RED"closed");
+  log_msg(ANSI_UNDERLINE"%s"ANSI_RESET,msg);
+  log_msg("   this= %p   only slash: %d\n",zpath,0!=(zpath->flags&ZP_PATH_IS_ONLY_SLASH));
+  log_msg("    %p strgs="ANSI_FG_BLUE"%s"ANSI_RESET"  "ANSI_FG_BLUE"%d\n"ANSI_RESET   ,zpath->strgs, (zpath->flags&ZP_STRGS_ON_HEAP)?"Heap":"Stack", zpath->strgs_l);
+  log_msg("    %p    VP="ANSI_FG_BLUE"'%s' VP_LEN: %d"ANSI_RESET,VP(),snull(VP()),VP_LEN()); log_file_stat("",&zpath->stat_vp);
+  log_msg("    %p   VP0="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,VP0(),  snull(VP0()));
+  log_msg("    %p entry="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,EP(), snull(EP()));
+  log_msg("    %p    RP="ANSI_FG_BLUE"'%s'"ANSI_RESET,RP(), snull(RP())); log_file_stat("",&zpath->stat_rp);
+  log_msg("    zip: %s  ZIP %s"ANSI_RESET"\n",yes_no(ZPATH_IS_ZIP()),  zpath->zarchive?ANSI_FG_GREEN"opened":ANSI_FG_RED"closed");
 }
 #define FHDATA_ALREADY_LOGGED_VIA_ZIP (1<<0)
 #define FHDATA_ALREADY_LOGGED_FAILED_DIFF (1<<1)

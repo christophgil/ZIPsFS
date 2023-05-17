@@ -42,13 +42,17 @@
 
 static bool _logIsSilent=false, _logIsSilentFailed=false,_logIsSilentWarn=false,_logIsSilentError=false;
 #define log_argptr() va_list argptr;va_start(argptr,format);vfprintf(LOG_STREAM,format,argptr);va_end(argptr)
+static void log_strg(const char *s){
+  if(!_logIsSilent && s) fputs(s,LOG_STREAM);
+}
 static void log_already_exists(const char *format,...){
   if(!_logIsSilent){
-    fputs(" Already exists "ANSI_RESET,LOG_STREAM);
+    log_strg(" Already exists "ANSI_RESET);
     log_argptr();
   }
 }
-static void logmsg(const char *format,...){
+
+static void log_msg(const char *format,...){
   if(!_logIsSilent){
     log_argptr();
   }
@@ -56,49 +60,50 @@ static void logmsg(const char *format,...){
 
 static void log_failed(const char *format,...){
   if(!_logIsSilentFailed){
-    logmsg(ANSI_FG_RED" $$ %d Failed "ANSI_RESET,getpid());
+    log_msg(ANSI_FG_RED" $$ %d Failed "ANSI_RESET,getpid());
     log_argptr();
   }
 }
 static void log_warn(const char *format,...){
   if(!_logIsSilentWarn){
-    logmsg(ANSI_FG_RED" $$ %d Warn "ANSI_RESET,getpid());
+    log_msg(ANSI_FG_RED" $$ %d Warn "ANSI_RESET,getpid());
     log_argptr();
   }
 }
 static void log_error(const char *format,...){
   if(!_logIsSilentError){
-    logmsg(ANSI_FG_RED" $$ %d Error "ANSI_RESET,getpid());
+    log_msg(ANSI_FG_RED" $$ %d Error "ANSI_RESET,getpid());
     log_argptr();
   }
 }
 static void log_succes(const char *format,...){
   if(!_logIsSilent){
-    fputs(ANSI_FG_GREEN" Success "ANSI_RESET,LOG_STREAM);
+    log_strg(ANSI_FG_GREEN" Success "ANSI_RESET);
     log_argptr();
   }
 }
 static void log_debug_now(const char *format,...){
   if(!_logIsSilent){
-    logmsg(ANSI_FG_MAGENTA" Debug "ANSI_RESET" %lx ",pthread_self());
+    //log_msg(ANSI_FG_MAGENTA" Debug "ANSI_RESET" %lx ",pthread_self());
+    log_msg(ANSI_FG_MAGENTA" Debug "ANSI_RESET" ");
     log_argptr();
   }
 }
 static void log_entered_function(const char *format,...){
   if(!_logIsSilent){
-    logmsg(ANSI_INVERSE">>>"ANSI_RESET);
+    log_msg(ANSI_INVERSE">>>"ANSI_RESET);
     log_argptr();
   }
 }
 static void log_exited_function(const char *format,...){
   if(!_logIsSilent){
-    fputs(ANSI_INVERSE"< < < <"ANSI_RESET,LOG_STREAM);
+    log_strg(ANSI_INVERSE"< < < <"ANSI_RESET);
     log_argptr();
   }
 }
 static void log_cache(const char *format,...){
   if(!_logIsSilent){
-    logmsg(ANSI_MAGENTA" $$ %d CACHE"ANSI_RESET" ",getpid());
+    log_msg(ANSI_MAGENTA" $$ %d CACHE"ANSI_RESET" ",getpid());
     log_argptr();
   }
 }
@@ -106,11 +111,11 @@ static int isPowerOfTwo(unsigned int n){
   return n && (n&(n-1))==0;
 }
 static void _log_mthd(char *s,int count){
-  if (!_logIsSilent && isPowerOfTwo(count)) logmsg(" %s=%d ",s,count);
+  if (!_logIsSilent && isPowerOfTwo(count)) log_msg(" %s=%d ",s,count);
 }
 #define log_mthd_invoke(s) static int __count=0;_log_mthd(ANSI_FG_GRAY #s ANSI_RESET,++__count)
 #define log_mthd_orig(s) static int __count_orig=0;_log_mthd(ANSI_FG_BLUE #s ANSI_RESET,++__count_orig)
-#define log_abort(...)   fputs(ANSI_RED"\n AAAAAAAAAAAAAAAAAAA cg_log.c Abort",LOG_STREAM),logmsg(__VA_ARGS__),logmsg("ANSI_RESET\n"),abort();
+#define log_abort(...)   fputs(ANSI_RED"\n AAAAAAAAAAAAAAAAAAA cg_log.c Abort",LOG_STREAM),log_msg(__VA_ARGS__),log_msg("ANSI_RESET\n"),abort();
 #if 0
 #define log_debug_abort(...)   log_abort(__VA_ARGS__)
 #else
@@ -146,7 +151,7 @@ static long currentTimeMillis(){
 static bool  _killOnError=false;
 static void killOnError_exit(){
   if (_killOnError){
-    logmsg("Thread %lx\nTime=%'ld\n  killOnError_exit\n",pthread_self(),_startTimeMillis-currentTimeMillis());
+    log_msg("Thread %lx\nTime=%'ld\n  killOnError_exit\n",pthread_self(),_startTimeMillis-currentTimeMillis());
     exit(9);
   }
 }

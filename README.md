@@ -1,19 +1,19 @@
-# ZIPsFS - An fuse-based  overlay file system which expands  ZIP files
+# ZIPsFS - Fuse-based  overlay file system which expands  ZIP files
 
 # Motivation
 
 We use closed-source proprietary Windows software and shared libraries for data conversion of high throughput experimental data. However,
-the sheer amount of file data brought the high-performance Windows machine to a stand still.
+the sheer amount of file data brought the high-performance Windows machine regularly to a stand still.
 We ended up with Wine on Ubuntu which easily copes with the high amount of data.
 Unfortunately, implementation and  user interface prevents usage of  UNIX techniques  to use  zipped files from our storage without creating intermediate files.
 Furthermore some software demands write access to the file location.
 
 We used to use zip-fuse to mount  ZIP files in the storage. Before starting computation, all required ZIP files were mounted.
 Symbolic links solved the problem of demanded write access.
-However, recently  the size of our experiments and this the number of ZIP files grew, which rendered this method unusable.
+However, recently  the size of our experiments and thus the number of ZIP files grew, which rendered this method unusable.
 
 Furthermore we are concerned about the health of our conventional hard disks since many  threads are simultaneously reading files of 2GB and more at different file positions.
-One of the  file types  is a sqlite3 database and accessing this file requires large numbers of seek operations which is inefficient for compressed and remote data.
+There are also files which are sqlite3 databases. This leads to large numbers of seek operations which is inefficient for compressed and remote files.
 
 ZIPsFS has been developed to solve all these problems.
 

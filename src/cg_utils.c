@@ -36,7 +36,9 @@ static unsigned int my_strlen(const char *s){ return !s?0:strnlen(s,MAX_PATHLEN)
 static const char* snull(const char *s){ return s?s:"Null";}
 static inline char *yes_no(int i){ return i?"Yes":"No";}
 
-#define ENDSWITH(s,slen,ending) !strcmp(s+slen-((int)sizeof(ending)-1),ending)
+#define ENDSWITH(s,slen,ending)  ((slen>=((int)sizeof(ending)-1) && (!memcmp(s+slen-((int)sizeof(ending)-1),ending,(int)sizeof(ending)))))
+#define ENDSWITHI(s,slen,ending) ((slen>=((int)sizeof(ending)-1) && (!strcasecmp(s+slen-((int)sizeof(ending)-1),ending))))
+
 static bool endsWith(const char* s,const char* e){
   if (!s || !e) return false;
   const int sn=strlen(s),en=strlen(e);
@@ -128,7 +130,7 @@ static void log_file_mode(mode_t m){
   C(S_IRGRP,'r');C(S_IWGRP,'w');C(S_IXGRP,'x');
   C(S_IROTH,'r');C(S_IWOTH,'w');C(S_IXOTH,'x');
 #undef C
-  fputs(mode,LOG_STREAM);
+  log_strg(mode);
 }
 
 static void log_file_stat(const char * name,const struct stat *s){
@@ -136,20 +138,20 @@ static void log_file_stat(const char * name,const struct stat *s){
 #if defined SHIFT_INODE_ROOT
   if (s->st_ino>(1L<<SHIFT_INODE_ROOT)) color=ANSI_FG_MAGENTA;
 #endif
-  logmsg("%s  size=%lu blksize=%lu blocks=%lu links=%lu inode=%s%lu"ANSI_RESET" dir=%s uid=%u gid=%u ",name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
+  log_msg("%s  size=%lu blksize=%lu blocks=%lu links=%lu inode=%s%lu"ANSI_RESET" dir=%s uid=%u gid=%u ",name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
   //st_blksize st_blocks f_bsize
   log_file_mode(s->st_mode);
-  fputc('\n',LOG_STREAM);
+  log_strg("\n");
 }
 
 
 
 static void log_open_flags(int flags){
-  logmsg("flags=%x{",flags);
-#define C(a) if (flags&a) logmsg(#a" ")
+  log_msg("flags=%x{",flags);
+#define C(a) if (flags&a) log_msg(#a" ")
   C(O_RDONLY); C(O_WRONLY);C(O_RDWR);C(O_APPEND);C(O_ASYNC);C(O_CLOEXEC);C(O_CREAT);C(O_DIRECT);C(O_DIRECTORY);C(O_DSYNC);C(O_EXCL);C(O_LARGEFILE);C(O_NOATIME);C(O_NOCTTY);C(O_NOFOLLOW);C(O_NONBLOCK);C(O_NDELAY);C(O_PATH);C(O_SYNC);C(O_TMPFILE);C(O_TRUNC);
 #undef C
-  fputc('}',LOG_STREAM);
+  log_strg("}");
 }
 
 static void clear_stat(struct stat *st){ if(st) memset(st,0,sizeof(struct stat));}
@@ -269,11 +271,24 @@ static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc){
 int main(int argc, char *argv[]){
   setlocale(LC_NUMERIC,""); /* Enables decimal grouping in printf */
   //char *s=argv[1];    printf("%s = %'ld\n",s,atol_kmgt(s));
-  //printf("strcmp %d\n",strcmp(argv[1],argv[2]));
+  {
+    const char *s=argv[1],*ending=".zip";
+  int l=strlen(s);
+  printf("l=%d\n",l);
+
+  printf("strcmp %d\n",ENDSWITH(s,l,".zip"));
+  printf("strcmp %d\n",ENDSWITHI(s,l,".zip"));
+
+}
+  /*
   const char *path="/home/cgille/tmp/ZIPsFS/modified/PRO1/Data/30-0046/20230126_PRO1_KTT_004_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMFormate20mM_dia_BD11_1_12097.d/analysis.tdf";
   //  int res=open(path,8201,509);
     int res=open(path,O_WRONLY|O_TRUNC);
   printf("res=%d path=%s\n",res,path);
+  */
+
+
+
   if (0){
     printf("sizeof=%zu\n",sizeof(".txt"));
     printf("ENDSWITH=%d\n",ENDSWITH(argv[1],strlen(argv[1]),".txt"));
