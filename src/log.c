@@ -122,13 +122,16 @@ static int print_maps(int n){
     char buf[PATH_MAX+100],perm[5],dev[6],mapname[PATH_MAX]={0};
     unsigned long begin,end,inode,foo;
     if(fgets(buf,sizeof(buf),f)==0) break;
-    //mapname[0]=0;
-    sscanf(buf, "%lx-%lx %4s %lx %5s %lu %100s",&begin,&end,perm,&foo,dev, &inode,mapname);
-    const long size=end-begin;
-    total+=size;
-    if (!strchr(mapname,'/') && size>=SIZE_CUTOFF_MMAP_vs_MALLOC){
-      PRINTINFO("<TR><TD>%08lx</TD><TD>%s</TD><TD align=\"right\">%'ld</TD><TD>%s</TD></TR>\n",begin>>12,mapname,size>>10,A+L-min_int(L,(int)(3*log(size))));
-    }
+    *mapname=0;
+    const int k=sscanf(buf, "%lx-%lx %4s %lx %5s %lu %100s",&begin,&end,perm,&foo,dev, &inode,mapname);
+    if (k>=6){
+      const long size=end-begin;
+      total+=size;
+      if (!strchr(mapname,'/') && size>=SIZE_CUTOFF_MMAP_vs_MALLOC){
+        PRINTINFO("<TR><TD>%08lx</TD><TD>%s</TD><TD align=\"right\">%'ld</TD>",begin>>12,mapname,size>>10);
+        PRINTINFO("<TD>%s</TD></TR>\n",A+L-max_int(0,min_int(L,(int)(3*log(size)))));
+      }
+    } else log_debug_now("sscanf scanned n=%d\n",k);
   }
   fclose(f);
   PRINTINFO("<TFOOT><TR><TD></TD><TD></TD><TD>%'lu</TD><TD></TD></TR></TFOOT>\n</TABLE>\n",total>>10);
@@ -167,7 +170,7 @@ static int print_memory(int n){
     const bool rlset=rl.rlim_cur!=-1;
     int val=-1;print_proc_status(-1,"VmSize:",&val);
     if(rlset)  n=print_bar(n,val*1024/(.01+rl.rlim_cur));
-    PRINTINFO("Virt memory %'d kB",val);
+    PRINTINFO("Virt memory %'d MB",val>>10);
     if(rlset) PRINTINFO(" / rlimit %zu MB<BR>\n",rl.rlim_cur>>20);
 #endif
   }
@@ -200,21 +203,27 @@ static int print_read_statistics(int n){
 
 static int print_fhdata(int n,char *title){
   if (n<0) log_cache("print_fhdata %s\n",snull(title));
-  else PRINTINFO("<H1>Data associated to file descriptors</H1>Table should be empty when idle. Column <I><B>fd</B></I> file descriptor. Column <I><B>Last access</B></I>:    Column <I><B>Millisec</B></I>:  time to read entry en bloc into cache.  Column <I><B>R</B></I>: number of threads in currently in xmp_read(). \
+  else PRINTINFO("<H1>Data associated to file descriptors</H1>\n");
+  if (!_fhdata_n){
+    if (n>0) PRINTINFO("The cache is empty which is good. It means that no entry is locked or leaked.<BR>\n");
+    else log_msg("_fhdata_n is 0\n");
+  }else{
+    PRINTINFO("Table should be empty when idle.<BR>Column <I><B>fd</B></I> file descriptor. Column <I><B>Last access</B></I>:    Column <I><B>Millisec</B></I>:  time to read entry en bloc into cache.  Column <I><B>R</B></I>: number of threads in currently in xmp_read(). \
 Column <I><B>F</B></I>: flags. (D)elete insicates that it is marked for closing and (K)eep indicates that it can currently not be closed. Two possible reasons why data cannot be released: (I)  xmp_read() is currently run (II) the cached zip entry is needed by another file descriptor  with the same virtual path.<BR>\n \
 <TABLE>\n<THEAD><TR><TH>Path</TH><TH>fd</TH><TH>Last access</TH><TH>Cache addr</TH><TH>Cache kB</TH><TH>Millisec</TH><TH> F</TH><TH>R</TH></TR></THEAD>\n");
-  char buf[999];
-  foreach_fhdata_path_not_null(d){
-    if (n<0) log_msg("\t%p\t%s\t%p\t%zu\n",d, d->path,d->cache,d->cache_l);
-    else{
-      PRINTINFO("<TR><TD>%s</TD><TD>%lu</TD>",d->path,d->fh);
-      PRINTINFO("<TD align=\"right\">"); if (d->access) PRINTINFO("%'ld s</TD>",time(NULL)-d->access); else PRINTINFO("Never</TD>");
-      strcpy(buf,"<TD></TD><TD></TD><TD></TD>");
-      if (d->cache) sprintf(buf,"<TD>%p</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD>",d->cache,MAX(d->cache_l>>10,!!d->cache_l),d->cache_read_seconds);
-      PRINTINFO("%s<TD>%c%c</TD><TD>%d</TD></TR>\n",buf,d->close_later?'D':' ', fhdata_can_destroy(d)?' ':'K',d->xmp_read);
+    char buf[999];
+    foreach_fhdata_path_not_null(d){
+      if (n<0) log_msg("\t%p\t%s\t%p\t%zu\n",d, d->path,d->cache,d->cache_l);
+      else{
+        PRINTINFO("<TR><TD>%s</TD><TD>%lu</TD>",d->path,d->fh);
+        PRINTINFO("<TD align=\"right\">"); if (d->access) PRINTINFO("%'ld s</TD>",time(NULL)-d->access); else PRINTINFO("Never</TD>");
+        strcpy(buf,"<TD></TD><TD></TD><TD></TD>");
+        if (d->cache) sprintf(buf,"<TD>%p</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD>",d->cache,MAX(d->cache_l>>10,!!d->cache_l),d->cache_read_seconds);
+        PRINTINFO("%s<TD>%c%c</TD><TD>%d</TD></TR>\n",buf,d->close_later?'D':' ', fhdata_can_destroy(d)?' ':'K',d->xmp_read);
+      }
     }
+    if (n>=0) PRINTINFO("</TABLE>");
   }
-  if (n>=0) PRINTINFO("</TABLE>");
   return n;
 }
 
@@ -288,4 +297,16 @@ static bool fhdata_not_yet_logged(unsigned int flag,struct fhdata *d){
   if (d->already_logged&flag) return false;
   d->already_logged|=flag;
   return true;
+}
+
+void log_fuse_process(){
+  log_debug_now(ANSI_YELLOW"log_fuse_process"ANSI_RESET"\n");
+  struct fuse_context *fc=fuse_get_context();
+  const int BUF=99;
+  char buf[BUF+1];
+  snprintf(buf,BUF-1,"/proc/%d/cmdline",fc->pid);
+  FILE *f=fopen(buf,"r");
+  fscanf(f,"%99s",buf);
+  log_msg("PID=%d cmd=%s\n",fc->pid,buf);
+  fclose(f);
 }

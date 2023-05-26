@@ -272,7 +272,7 @@ int main(int argc, char *argv[]){
   setlocale(LC_NUMERIC,""); /* Enables decimal grouping in printf */
   //char *s=argv[1];    printf("%s = %'ld\n",s,atol_kmgt(s));
   {
-    const char *s=argv[1],*ending=".zip";
+    const char *s=argv[1];
   int l=strlen(s);
   printf("l=%d\n",l);
 

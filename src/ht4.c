@@ -12,7 +12,7 @@
        + Keys can be stored in a pool to reduce the number of malloc invocations.
    - Can be used for int-values as keys and int values as values.
 */
-//   (global-set-key (kbd "<f4>") '(lambda() (interactive) (switch-to-buffer "ht4.c")))
+
 #ifndef _ht_dot_c
 #define _ht_dot_c
 #include <assert.h>

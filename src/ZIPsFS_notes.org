@@ -1,4 +1,8 @@
-chatgpt
+  (global-set-key (kbd "<f1>") '(lambda() (interactive) (switch-to-buffer "ZIPsFS.c")))
+  (global-set-key (kbd "<f4>") '(lambda() (interactive) (find-file "~/git_projects/common/ht4.c")))
+    (global-set-key (kbd "<f5>") '(lambda() (interactive) (find-file "~/git_projects/ZIPsFS/src/log.c")))
+
+
 
 * Makefile
 CFLAGS = -march=znver2 -g -rdynamic   -pthread -fsanitize=bounds
@@ -12,6 +16,7 @@ https://www.sqlite.org/c3ref/blob_open.html
 https://lwn.net/Articles/888715/
 
 * libfuse
+
 
 https://manpages.ubuntu.com/manpages/xenial/man8/mount.fuse.8.html
 
@@ -28,7 +33,15 @@ negative_timeout=T The timeout in seconds for which a negative lookup will be ca
                    and the file/directory will be assumed to not exist until then. The default is 0.0 second, meaning that caching negative lookups are disabled.
 
 
-
+** struct fuse_context {
+struct fuse *fuse;
+uid_t uid;
+gid_t gid;
+pid_t pid;
+void *private_data;
+mode_t umask;
+};
+fuse_get_context
 ** struct fuse_conn_info_opts {
 
     int atomic_o_trunc;

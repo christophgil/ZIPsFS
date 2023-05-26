@@ -1,12 +1,10 @@
 /*
   ZIPsFS   Copyright (C) 2023   christoph Gille
   This program can be distributed under the terms of the GNU GPLv2.
-  It has been developed starting with
-  fuse-3.14: Filesystem in Userspace
-  passthrough.c
-  Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
-  Copyright (C) 2011       Sebastian Pipping <sebastian@pipping.org>
-  (global-set-key (kbd "<f1>") '(lambda() (interactive) (switch-to-buffer "ZIPsFS.c")))
+  It has been developed starting with  fuse-3.14: Filesystem in Userspace  passthrough.c
+     Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
+     Copyright (C) 2011       Sebastian Pipping <sebastian@pipping.org>
+     ZIPsFS_notes.org  log.c
 */
 
 #define FUSE_USE_VERSION 31
@@ -157,7 +155,6 @@ static int _memusage_count[2*memusage_n];
 static struct fhdata _fhdata[FHDATA_MAX];
 #define LOG2_ROOTS 5
 #define ROOTS (1<<LOG2_ROOTS)
-//#define foreach_root(r)    for(int ir=0,struct rootdata *r=_root; r<_root+_root_n;r++)
 #define foreach_root(ir,r)    int ir=0;for(struct rootdata *r=_root; ir<_root_n; r++,ir++)
 static char *CACHE_FILLING="CACHE_FILLING", *CACHE_FAILED="CACHE_FAILED", **_fuse_argv;
 static int _fuse_argc;
@@ -1019,7 +1016,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_inf
     return 0;
   }
   memset(stbuf,0,sizeof(struct stat));
-  //log_entered_function("xmp_getattr %s fh=%d \n",path,fh);
+  log_entered_function("xmp_getattr %s \n",path);   log_fuse_process();
   //log_mthd_invoke(xmp_getattr);
   log_count_b(xmp_getattr_);
   struct fhdata* d=NULL;
@@ -1247,7 +1244,7 @@ static int xmp_open(const char *path, struct fuse_file_info *fi){
   if (keep_file_attribute_in_cache(path)) fi->keep_cache=1;
   FIND_REAL(path);
   if (res){
-    if (report_failure_for_tdf("xmp_open",res,path)) log_zpath("xmp_open Failed ",zpath);
+    if (report_failure_for_tdf("xmp_open",res,path)){log_zpath("xmp_open Failed ",zpath); log_fuse_process();}
   }else{
     if (ZPATH_IS_ZIP()){
       LOCK_FHDATA();
@@ -1268,6 +1265,7 @@ static int xmp_open(const char *path, struct fuse_file_info *fi){
   log_count_e(xmp_open_,path);
   if (res || handle==-1){
     report_failure_for_tdf("xmp_open",handle==-1?-1:res,path);
+      log_fuse_process();
     return res=-1?-ENOENT:-errno;
   }
   fi->fh=handle;
@@ -1290,7 +1288,8 @@ static int xmp_truncate(const char *path, off_t size,struct fuse_file_info *fi){
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi,enum fuse_readdir_flags flags){
   log_count_b(xmp_readdir_);
   (void)offset;(void)fi;(void)flags;
-  //log_entered_function("xmp_readdir %s \n",path);
+  log_entered_function("xmp_readdir %s \n",path);
+  log_fuse_process();
   log_mthd_orig(xmp_readdir);
   int res=-1;
   struct ht no_dups={0};
