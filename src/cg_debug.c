@@ -58,8 +58,8 @@ static void bt_sighandler(int sig, siginfo_t *psi, void *ctxarg){
   void *trace[16];
   mcontext_t *ctxP=&((ucontext_t *) ctxarg)->uc_mcontext;
   trace[1]=(void *)ctxP->gregs[REG_RIP];
-  if (sig==SIGSEGV) printf("Got signal %d, faulty address is %p, from %p\n",sig, (void*)ctxP->gregs[REG_RSP],trace[1]);
-  else printf("Got signal %d\n",sig);
+ printf(ANSI_RED"Got signal %d  pid=%d\n"ANSI_RESET,sig,getpid());
+  if (sig==SIGSEGV) printf(ANSI_RED"Faulty address is %p, from %p\n"ANSI_RESET,(void*)ctxP->gregs[REG_RSP],trace[1]);
   const int trace_size=backtrace(trace,16);
   /* overwrite sigaction with caller's address */
   char **messages=backtrace_symbols(trace,trace_size);

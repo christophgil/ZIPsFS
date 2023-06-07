@@ -4,6 +4,12 @@
 
 
 
+* Errors
+mit old store:
+ls -l  ~/tmp/ZIPsFS/mnt/6600-tof2/Data/30-0001/
+zpath_zip_open() muss nach fhdata
+
+
 * Makefile
 CFLAGS = -march=znver2 -g -rdynamic   -pthread -fsanitize=bounds
 # -pedantic-errors
@@ -16,6 +22,7 @@ https://www.sqlite.org/c3ref/blob_open.html
 https://lwn.net/Articles/888715/
 
 * libfuse
+
 
 
 https://manpages.ubuntu.com/manpages/xenial/man8/mount.fuse.8.html
@@ -118,7 +125,62 @@ fuse_get_context
 
 /local/filesystem/fuse-3.14.0/lib/mount.c
 
+* fuse options
+general options:
+-o opt,[opt...]        mount options
+-h   --help            print help
+-V   --version         print version
+
+FUSE options:
+-d     -o debug          enable debug output (implies -f)
+-f                     foreground operation
+-s                     disable multi-threaded operation
+
+Available mount options:
+-o allow_other         allow access to others besides the user who mounted
+the file system
+-o allow_recursion     allow a mount point that itself resides on a OSXFUSE
+volume (by default, such mounting is disallowed)
+-o allow_root          allow access to root (can't be used with allow_other)
+-o auto_xattr          handle extended attributes entirely through ._ files
+-o blocksize=<size>    specify block size in bytes of "storage"
+-o daemon_timeout=<s>  timeout in seconds for kernel calls to daemon
+-o debug               turn on debug information printing
+-o default_permissions let the kernel handle permission checks locally
+-o defer_permissions   defer permission checks to file operations themselves
+-o direct_io           use alternative (direct) path for kernel-user I/O
+-o extended_security   turn on Mac OS X extended security (ACLs)
+-o fsid=<fsid>         set the second 32-bit component of the fsid
+-o fsname=<name>       set the file system's name
+-o fssubtype=<num>     set the file system's fssubtype identifier
+-o fstypename=<name>   set the file system's type name
+-o iosize=<size>       specify maximum I/O size in bytes
+-o jail_symlinks       contain symbolic links within the mount
+-o kill_on_unmount     kernel will send a signal (SIGKILL by default) to the
+daemon after unmount finishes
+-o local               mark the volume as "local" (default is "nonlocal")
+-o negative_vncache    enable vnode name caching of non-existent objects
+-o sparse              enable support for sparse files
+-o volname=<name>      set the file system's volume name
+
+Available negative mount options:
+-o noalerts            disable all graphical alerts (if any) in OSXFUSE Core
+-o noappledouble       ignore Apple Double (._) and .DS_Store files entirely
+-o noapplexattr        ignore all "com.apple.*" extended attributes
+-o nobrowse            mark the volume as non-browsable by the Finder
+-o nolocalcaches       meta option equivalent to noreadahead,noubc,novncache
+-o noreadahead         disable I/O read-ahead behavior for this file system
+-o nosynconclose       disable sync-on-close behavior (enabled by default)
+-o nosyncwrites        disable synchronous-writes behavior (dangerous)
+-o noubc               disable the unified buffer cache for this file system
+-o novncache           disable the vnode name cache for this file system
+
+
 * Debugging
+
+** gdb
+https://www.cs.umd.edu/~srhuang/teaching/cmsc212/gdb-tutorial-handout.pdf
+https://developers.redhat.com/blog/2021/04/30/the-gdb-developers-gnu-debugger-tutorial-part-1-getting-started-with-the-debugger#starting_gdb
 
 https://jesseevers.com/segfault-malloc-consolidate/
 https://www.brendangregg.com/blog/2016-08-09/gdb-example-ncurses.html

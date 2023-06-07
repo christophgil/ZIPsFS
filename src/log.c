@@ -1,4 +1,6 @@
 //   (global-set-key (kbd "<f4>") '(lambda() (interactive) (switch-to-buffer "log.c")))
+static char *_thisPrg;
+static time_t _timeAtStart;
 static void log_path(const char *f,const char *path){
   log_msg("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
 }
@@ -24,8 +26,26 @@ static void log_fh(char *title,long fh){
   log_debug_now("%s  fh: %ld %s \n",title?title:"", fh,p);
 }
 #define MAX_INFO 33333 // DEBUG_NOW
-static char _info[MAX_INFO+1];
-#define PRINTINFO(...)  n+=snprintf(_info+n,MAX_INFO-n,__VA_ARGS__)
+static  char _info[MAX_INFO+1];
+#ifdef __cppcheck__
+#define PRINTINFO(...)   printf(__VA_ARGS__)
+#else
+#define PRINTINFO(...)   n=printinfo(n,__VA_ARGS__)
+#endif
+int printinfo(int n, const char *format,...){
+  if (n<MAX_INFO && n>=0){
+    va_list argptr;
+    va_start(argptr,format);
+    //fprintf(stderr,"printinfo: MAX_INFO=%d n=%d _info=%p \n",MAX_INFO,n,_info);
+    //vprintf(format,argptr);
+    n+=vsnprintf(_info+n,MAX_INFO-n,format,argptr);
+    va_end(argptr);
+  }
+  return n;
+}
+
+
+
 #define PROC_PATH_MAX 256
 
 static int print_fuse_argv(int n){
@@ -35,7 +55,7 @@ static int print_fuse_argv(int n){
   return n;
 }
 static int print_roots(int n){
-  if (n>=0) PRINTINFO("<H1>Roots</H1>\n<TABLE><THEAD><TR><TH>Path</TH><TH>Writable</TH><TH align=\"right\">Response</TH><TH align=\"right\">Delayed</TH><TH>Free GB</TH></TR></THEAD>\n");
+  PRINTINFO("<H1>Roots</H1>\n<TABLE><THEAD><TR><TH>Path</TH><TH>Writable</TH><TH align=\"right\">Response</TH><TH align=\"right\">Delayed</TH><TH>Free GB</TH></TR></THEAD>\n");
   foreach_root(i,r){
     const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30), diff=currentTimeMillis()-r->statfs_when;
     if (n>=0){
@@ -47,7 +67,7 @@ static int print_roots(int n){
       log_msg("\t%d\t%s\t%s\n",i,r->path,!my_strlen(r->path)?"":(f&ROOT_REMOTE)?"Remote":(f&ROOT_WRITABLE)?"Writable":"Local");
     }
   }
-  if (n>=0) PRINTINFO("</TABLE>\n");
+  PRINTINFO("</TABLE>\n");
   return n;
 }
 
@@ -66,7 +86,7 @@ static int print_bar(int n,float rel){
 //////////////////
 #ifdef __linux__
 static int print_proc_status(int n,char *filter,int *val){
-  if (n>=0)PRINTINFO("<B>/proc/%ld/status</B>\n<PRE>\n", (long)getpid());
+  PRINTINFO("<B>/proc/%ld/status</B>\n<PRE>\n", (long)getpid());
   char buffer[1024]="";
   FILE* file=fopen("/proc/self/status","r");
   while (fscanf(file,"%1023s",buffer)==1){
@@ -78,7 +98,7 @@ static int print_proc_status(int n,char *filter,int *val){
       }
     }
   }
-  if (n>=0) PRINTINFO("</PRE>\n");
+  PRINTINFO("</PRE>\n");
   fclose(file);
   return n;
 }
@@ -91,7 +111,7 @@ static int print_open_files(int n, int *fd_count){
   static char path[256];
   struct dirent *dp;
   DIR *dir=opendir("/proc/self/fd/");
-  if (n>=0) PRINTINFO("<OL>\n");
+  PRINTINFO("<OL>\n");
   for(int i=0;(dp=readdir(dir));i++){
     if (fd_count) (*fd_count)++;
     if (n<0 || atoi(dp->d_name)<4) continue;
@@ -102,7 +122,7 @@ static int print_open_files(int n, int *fd_count){
     PRINTINFO("<LI>%s -- %s</LI>\n",proc_path,path);
   }
   closedir(dir);
-  if (n>=0) PRINTINFO("</OL>\n");
+  PRINTINFO("</OL>\n");
   return n;
 }
 static int print_maps(int n){
@@ -205,24 +225,27 @@ static int print_fhdata(int n,char *title){
   if (n<0) log_cache("print_fhdata %s\n",snull(title));
   else PRINTINFO("<H1>Data associated to file descriptors</H1>\n");
   if (!_fhdata_n){
-    if (n>0) PRINTINFO("The cache is empty which is good. It means that no entry is locked or leaked.<BR>\n");
-    else log_msg("_fhdata_n is 0\n");
+    if (n<0) log_msg("_fhdata_n is 0\n");
+    else PRINTINFO("The cache is empty which is good. It means that no entry is locked or leaked.<BR>\n");
   }else{
     PRINTINFO("Table should be empty when idle.<BR>Column <I><B>fd</B></I> file descriptor. Column <I><B>Last access</B></I>:    Column <I><B>Millisec</B></I>:  time to read entry en bloc into cache.  Column <I><B>R</B></I>: number of threads in currently in xmp_read(). \
 Column <I><B>F</B></I>: flags. (D)elete insicates that it is marked for closing and (K)eep indicates that it can currently not be closed. Two possible reasons why data cannot be released: (I)  xmp_read() is currently run (II) the cached zip entry is needed by another file descriptor  with the same virtual path.<BR>\n \
 <TABLE>\n<THEAD><TR><TH>Path</TH><TH>fd</TH><TH>Last access</TH><TH>Cache addr</TH><TH>Cache kB</TH><TH>Millisec</TH><TH> F</TH><TH>R</TH></TR></THEAD>\n");
-    char buf[999];
+    //    char buf[999];
+    const time_t t0=time(NULL);
     foreach_fhdata_path_not_null(d){
-      if (n<0) log_msg("\t%p\t%s\t%p\t%zu\n",d, d->path,d->cache,d->cache_l);
+      if (n<0) log_msg("\t%p\t%s\t%p\t%zu\n",d,snull(d->path),d->cache,d->cache_l);
       else{
-        PRINTINFO("<TR><TD>%s</TD><TD>%lu</TD>",d->path,d->fh);
-        PRINTINFO("<TD align=\"right\">"); if (d->access) PRINTINFO("%'ld s</TD>",time(NULL)-d->access); else PRINTINFO("Never</TD>");
-        strcpy(buf,"<TD></TD><TD></TD><TD></TD>");
-        if (d->cache) sprintf(buf,"<TD>%p</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD>",d->cache,MAX(d->cache_l>>10,!!d->cache_l),d->cache_read_seconds);
-        PRINTINFO("%s<TD>%c%c</TD><TD>%d</TD></TR>\n",buf,d->close_later?'D':' ', fhdata_can_destroy(d)?' ':'K',d->xmp_read);
+        PRINTINFO("<TR><TD>%s</TD><TD>%lu</TD>",snull(d->path),d->fh);
+        PRINTINFO("<TD align=\"right\">"); if (d->access) PRINTINFO("%'ld s</TD>",t0-d->access); else PRINTINFO("Never</TD>");
+        //                strcpy(buf,"<TD></TD><TD></TD><TD></TD>");        if (d->cache) sprintf(buf,"<TD>%p</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD>",d->cache,MAX(d->cache_l>>10,!!d->cache_l),d->cache_read_seconds);
+        //PRINTINFO("%s<TD>%c%c</TD><TD>%d</TD></TR>\n",buf,d->close_later?'D':' ', fhdata_can_destroy(d)?' ':'K',d->xmp_read);
+        if (d->cache) PRINTINFO("<TD>%p</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD>",d->cache,MAX(d->cache_l>>10,!!d->cache_l),d->cache_read_seconds);
+        else PRINTINFO("<TD></TD><TD></TD><TD></TD>");
+        PRINTINFO("<TD>%c%c</TD><TD>%d</TD></TR>\n",d->close_later?'D':' ', fhdata_can_destroy(d)?' ':'K',d->xmp_read);
       }
     }
-    if (n>=0) PRINTINFO("</TABLE>");
+    PRINTINFO("</TABLE>");
   }
   return n;
 }
@@ -244,15 +267,19 @@ TBODY>TR:nth-child(odd){background-color:#CCccFF;}\n\
 THEAD{background-color:black;color:white;}\n\
 TD{padding:5px;}\n\
 </STYLE>\n</HEAD>\n<BODY>\n\
-<B>ZIPsFS:</B> <A href=\"%s\">%s</A> \n",HOMEPAGE,HOMEPAGE);
-
+<B>ZIPsFS:</B> <A href=\"%s\">%s</A><BR> \n",HOMEPAGE,HOMEPAGE);
+  {
+    struct stat statbuf;
+    stat(_thisPrg,&statbuf);
+    PRINTINFO("\nStarted %s:  %s &nbsp; Compiled: %s<BR>",_thisPrg,ctime(&_timeAtStart),ctime(&statbuf.st_mtime));
+  }
   n=print_roots(n);
   n=print_fuse_argv(n);
   n=print_open_files(n,NULL);
   n=print_memory(n);
-
   n=print_fhdata(n,"");
   n=print_memory_details(n);
+  PRINTINFO("_mutex=%p\n<BR>",_mutex);
   PRINTINFO("<H1>Inodes</H1>Created sequentially: %'d\n",_countSeqInode);
   n=print_read_statistics(n);
   PRINTINFO("</BODY>\n</HTML>\n");
@@ -281,7 +308,7 @@ static void fhdata_log_cache(const struct fhdata *d){
   const int index=(int)(_fhdata-d);
   log_msg("log_cache: d= %p path= %s cache: %s cache_l= %zu can_destroy: %s  index: %d  hasc: %s\n",d,d->path,s,d->cache_l,yes_no(fhdata_can_destroy(d)),index,yes_no(fhdata_has_cache(d)));
 }
-static void log_zpath(char *msg, struct zippath *zpath){
+static void log_zpath(const char *msg, struct zippath *zpath){
   log_msg(ANSI_UNDERLINE"%s"ANSI_RESET,msg);
   log_msg("   this= %p   only slash: %d\n",zpath,0!=(zpath->flags&ZP_PATH_IS_ONLY_SLASH));
   log_msg("    %p strgs="ANSI_FG_BLUE"%s"ANSI_RESET"  "ANSI_FG_BLUE"%d\n"ANSI_RESET   ,zpath->strgs, (zpath->flags&ZP_STRGS_ON_HEAP)?"Heap":"Stack", zpath->strgs_l);
@@ -300,7 +327,7 @@ static bool fhdata_not_yet_logged(unsigned int flag,struct fhdata *d){
 }
 
 void log_fuse_process(){
-  log_debug_now(ANSI_YELLOW"log_fuse_process"ANSI_RESET"\n");
+  log_debug_now(ANSI_YELLOW"log_fuse_process"ANSI_RESET" ");
   struct fuse_context *fc=fuse_get_context();
   const int BUF=99;
   char buf[BUF+1];

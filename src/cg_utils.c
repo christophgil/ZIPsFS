@@ -65,7 +65,6 @@ static int pathlen_ignore_trailing_slash(const char *p){
   return n && p[n-1]=='/'?n-1:n;
 }
 
-
 static int path_for_fd(const char *title, char *path, int fd){
   *path=0;
   char buf[99];
