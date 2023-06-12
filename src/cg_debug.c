@@ -30,13 +30,13 @@ static char *path_of_this_executable(){
   }
   return _p;
 }
-static void print_trace_using_debugger() {
+static void print_trace_using_debugger(){
   fputs(ANSI_INVERSE"print_trace_using_debugger"ANSI_RESET"\n",stderr);
   char pid_buf[30];
   sprintf(pid_buf, "%d", getpid());
   prctl(PR_SET_PTRACER,PR_SET_PTRACER_ANY, 0,0, 0);
   const int child_pid=fork();
-  if (!child_pid) {
+  if (!child_pid){
 #ifdef __clang__
     execl("/usr/bin/lldb", "lldb", "-p", pid_buf, "-b", "-o","bt","-o","quit" ,NULL);
 #else
@@ -48,7 +48,7 @@ static void print_trace_using_debugger() {
   }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-static void addr2line(void *p, void *messageP) {
+static void addr2line(void *p, void *messageP){
   char cmd[999];
   sprintf(cmd,"/usr/bin/addr2line -p %p -e %s",p,path_of_this_executable());
   system(cmd);
@@ -133,7 +133,7 @@ static void debug_my_file_checks(const char *p, struct stat *s){
   if(file_starts_year_ends_dot_d(p)) assert_dir(p,s);
   if (file_ends_tdf_bin(p)) assert_r_ok(p,s);
 }
-bool tdf_or_tdf_bin(const char *p) {return endsWith(p,".tdf") || endsWith(p,".tdf_bin");}
+bool tdf_or_tdf_bin(const char *p){return endsWith(p,".tdf") || endsWith(p,".tdf_bin");}
 
 
 

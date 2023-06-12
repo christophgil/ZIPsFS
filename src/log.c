@@ -60,7 +60,7 @@ static int print_roots(int n){
     const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30), diff=currentTimeMillis()-r->statfs_when;
     if (n>=0){
       PRINTINFO("<TR><TD>%s</TD><TD align=\"center\">%s</TD>",r->path,yes_no(f&ROOT_WRITABLE));
-      if (f&ROOT_REMOTE) PRINTINFO("<TD align=\"right\">%'d ms</TD><TD align=\"right\">%'d</TD>",  diff>ROOT_OBSERVE_EVERY_MSECONDS*3?diff:r->statfs_mseconds,r->delayed);
+      if (f&ROOT_REMOTE) PRINTINFO("<TD align=\"right\">%'d ms</TD><TD align=\"right\">%'d</TD>",  diff>ROOT_OBSERVE_EVERY_MSECONDS*3?diff:r->statfs_mseconds,r->count_delayed);
       else PRINTINFO("<TD align=\"right\">Local</TD><TD></TD>");
       PRINTINFO("<TD align=\"right\">%'d</TD></TR>\n",freeGB);
     }else{
@@ -207,12 +207,13 @@ static int print_memory(int n){
 static int print_read_statistics(int n){
   PRINTINFO("<H1>Read bytes statistics</H1>\n<TABLE><THEAD><TR><TH>Event</TH><TH>Count</TH></TR></THEAD>\n");
 #define TABLEROW(a,skip) PRINTINFO("<TR><TD><B>%s</B></TD><TD align=\"right\">%'d</TD></TR>\n",(#a)+skip,a)
-  TABLEROW(_count_read_zip_cached,7);
-  TABLEROW(_count_read_zip_regular,7);
-  TABLEROW(_count_read_zip_seekable,7);
-  TABLEROW(_count_read_zip_no_seek,7);
-  TABLEROW(_count_read_zip_seek_fwd,7);
-  TABLEROW(_count_read_zip_seek_bwd,7);
+  TABLEROW(_count_readzip_cached,7);
+  TABLEROW(_count_readzip_regular,7);
+  TABLEROW(_count_readzip_seekable,7);
+  TABLEROW(_count_readzip_no_seek,7);
+  TABLEROW(_count_readzip_seek_fwd,7);
+  TABLEROW(_count_readzip_cache_because_seek_bwd,7);
+  TABLEROW(_count_readzip_reopen_because_seek_bwd,7);
   TABLEROW(_count_close_later,7);
   TABLEROW(_read_max_size,7);
   PRINTINFO("</TABLE>");
@@ -310,13 +311,13 @@ static void fhdata_log_cache(const struct fhdata *d){
 }
 static void log_zpath(const char *msg, struct zippath *zpath){
   log_msg(ANSI_UNDERLINE"%s"ANSI_RESET,msg);
-  log_msg("   this= %p   only slash: %d\n",zpath,0!=(zpath->flags&ZP_PATH_IS_ONLY_SLASH));
+  log_msg("   this= %p   \n",zpath);
   log_msg("    %p strgs="ANSI_FG_BLUE"%s"ANSI_RESET"  "ANSI_FG_BLUE"%d\n"ANSI_RESET   ,zpath->strgs, (zpath->flags&ZP_STRGS_ON_HEAP)?"Heap":"Stack", zpath->strgs_l);
   log_msg("    %p    VP="ANSI_FG_BLUE"'%s' VP_LEN: %d"ANSI_RESET,VP(),snull(VP()),VP_LEN()); log_file_stat("",&zpath->stat_vp);
   log_msg("    %p   VP0="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,VP0(),  snull(VP0()));
   log_msg("    %p entry="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,EP(), snull(EP()));
   log_msg("    %p    RP="ANSI_FG_BLUE"'%s'"ANSI_RESET,RP(), snull(RP())); log_file_stat("",&zpath->stat_rp);
-  log_msg("    zip: %s  ZIP %s"ANSI_RESET"\n",yes_no(ZPATH_IS_ZIP()),  zpath->zarchive?ANSI_FG_GREEN"opened":ANSI_FG_RED"closed");
+  log_msg("    zip: %s"ANSI_RESET"\n",yes_no(ZPATH_IS_ZIP()));
 }
 #define FHDATA_ALREADY_LOGGED_VIA_ZIP (1<<0)
 #define FHDATA_ALREADY_LOGGED_FAILED_DIFF (1<<1)
@@ -329,11 +330,45 @@ static bool fhdata_not_yet_logged(unsigned int flag,struct fhdata *d){
 void log_fuse_process(){
   log_debug_now(ANSI_YELLOW"log_fuse_process"ANSI_RESET" ");
   struct fuse_context *fc=fuse_get_context();
-  const int BUF=99;
+  const int BUF=333;
   char buf[BUF+1];
   snprintf(buf,BUF-1,"/proc/%d/cmdline",fc->pid);
   FILE *f=fopen(buf,"r");
-  fscanf(f,"%99s",buf);
-  log_msg("PID=%d cmd=%s\n",fc->pid,buf);
-  fclose(f);
+  if (!f){
+    perror("log_fuse_process");
+    log_error("Open %s failed\n",buf);
+  }else{
+    fscanf(f,"%333s",buf);
+    log_msg("PID=%d cmd=%s\n",fc->pid,buf);
+    fclose(f);
+  }
+}
+static void usage(){
+  fputs(ANSI_INVERSE"ZIPsFS"ANSI_RESET"\n\nCompiled: "__DATE__"  "__TIME__"\n\n",LOG_STREAM);
+  fputs(ANSI_UNDERLINE"Usage:"ANSI_RESET"  ZIPsFS [options]  root-dir1 root-dir2 ... root-dir-n : [libfuse-options]  mount-Point\n\n"
+        ANSI_UNDERLINE"Example:"ANSI_RESET"  ZIPsFS -l 2GB  ~/tmp/ZIPsFS/writable  ~/local/folder //computer/pub :  -f -o allow_other  ~/tmp/ZIPsFS/mnt\n\n\
+The first root directory (here  ~/tmp/ZIPsFS/writable)  is writable and allows file creation and deletion, the others are read-only.\n\
+Root directories starting with double slash (here //computer/pub) are regarded as less reliable and potentially blocking.\n\n\
+Options and arguments before the colon are interpreted by ZIPsFS.  Those after the colon are passed to fuse_main(...).\n\n",LOG_STREAM);
+    fputs(ANSI_UNDERLINE"ZIPsFS options:"ANSI_RESET"\n\n\
+      -h Print usage.\n\
+      -q quiet, no debug messages to stdout\n\
+         Without the option -f (foreground) all logs are suppressed anyway.\n\
+      -c [",LOG_STREAM);
+    for(char **s=WHEN_CACHE_S;*s;s++){if (s!=WHEN_CACHE_S) putchar('|');fputs(*s,LOG_STREAM);}
+    fputs("]    When to read zip entries into RAM\n\
+         seek: When the data is not read continuously\n\
+         rule: According to rules based on the file name encoded in configuration.h\n\
+         The default is when backward seeking would be requires otherwise\n\
+      -d <sqlite database file>    The database stores directory information. In this case the database will not be cleared.\n\
+      -k Kill on error. For debugging only.\n\
+      -l Limit memory usage for caching ZIP entries.\n\
+         Without caching, moving read positions backwards for an non-seek-able ZIP-stream would require closing, reopening and skipping.\n\
+         To avoid this, the limit is multiplied with factor 1.5 in such cases.\n\n",LOG_STREAM);
+    fputs(ANSI_UNDERLINE"Fuse options:"ANSI_RESET"These options are given after a colon.\n\n\
+ -d Debug information\n\
+ -f File system should not detach from the controlling terminal and run in the foreground.\n\
+ -s Single threaded mode. Maybe tried in case the default mode does not work properly.\n\
+ -h Print usage information.\n\
+ -V Version\n\n",LOG_STREAM);
 }

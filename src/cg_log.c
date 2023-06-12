@@ -129,7 +129,7 @@ static void _log_mthd(char *s,int count){
 
 
 
-// #define log_to_file(chanel,path,format,...) { if (_log_to_file_and_stream(chanel,path,format,__VA_ARGS__)) printf(format,__VA_ARGS__);}
+// #define log_to_file(chanel,path,format,...){ if (_log_to_file_and_stream(chanel,path,format,__VA_ARGS__)) printf(format,__VA_ARGS__);}
 
 // (buffer-file-name)
 static int _count_mmap,_count_munmap;
@@ -194,7 +194,6 @@ static void warning(const unsigned int channel,const char* path,const char *form
       (channel&WARN_FLAG_ONCE_PER_PATH) && path &&  ht_get(NULL,path) ||
 #endif
       false) toFile=false;
-  log_debug_now("warning toFile=%d\n",toFile);
   _warning_count[i]++;
   written+=strlen(format)+strlen(p);
   char errx[222];*errx=0;

@@ -24,6 +24,7 @@ static int test_realpath(struct zippath *zpath, const int root);
 static int test_realpath_any_root(struct zippath *zpath,const int onlyThisRoot, const int notThisRoot);
 static int find_realpath_any_root(struct zippath *zpath,const int onlyThisRoot);
 static bool fhdata_can_destroy(const struct fhdata *d);
+static void fhdata_zip_close(bool alsoZipArchive,struct fhdata *d);
 static void fhdata_destroy(struct fhdata *d);
 static zip_file_t *fhdata_zip_open(struct fhdata *d,const char *msg);
 static struct fhdata* fhdata_create(const char *path,const uint64_t fh);
@@ -58,4 +59,3 @@ static int _xmp_read_fhdata(char *buf, const size_t size, const off_t offset,str
 static int xmp_read(const char *path, char *buf, const size_t size, const off_t offset,struct fuse_file_info *fi);
 static int xmp_release(const char *path, struct fuse_file_info *fi);
 static int xmp_flush(const char *path, struct fuse_file_info *fi);
-static void usage();

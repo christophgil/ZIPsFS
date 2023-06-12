@@ -68,7 +68,7 @@ static int pathlen_ignore_trailing_slash(const char *p){
 static int path_for_fd(const char *title, char *path, int fd){
   *path=0;
   char buf[99];
-  sprintf(buf,"/proc/%d/fd/%d",getpid(),fd);
+  sprintf(buf,"/proc/self/fd/%d",fd);
   const ssize_t n=readlink(buf,path, MAX_PATHLEN-1);
   if (n<0){
     log_error("\n%s  %s: path_for_fd ",snull(title),buf);
@@ -78,6 +78,13 @@ static int path_for_fd(const char *title, char *path, int fd){
   return path[n]=0;
 }
 
+int get_num_fd(){
+  int n=0;
+  DIR *dir=opendir("/proc/self/fd");
+  while(readdir(dir)) n++;
+  closedir(dir);
+  return n;
+}
 
 static bool check_path_for_fd(const char *title, const char *path, int fd){
   char check_path[MAX_PATHLEN],rp[PATH_MAX];
@@ -95,7 +102,7 @@ static bool check_path_for_fd(const char *title, const char *path, int fd){
 
 static void print_path_for_fd(int fd){
   char buf[99],path[512];
-  sprintf(buf,"/proc/%d/fd/%d",getpid(),fd);
+  sprintf(buf,"/proc/self/fd/%d",fd);
   const ssize_t n=readlink(buf,path,511);
   if (n<0){
     printf(ANSI_FG_RED"Warning %s  No path\n"ANSI_RESET,buf);
@@ -208,7 +215,7 @@ static void print_substring(int fd,char *s,int f,int t){  write(fd,s,min_int(my_
 static void recursive_mkdir(char *p){
   const int n=pathlen_ignore_trailing_slash(p);
   for(int i=2;i<n;i++){
-    if (p[i]=='/') {
+    if (p[i]=='/'){
       p[i]=0;
       mkdir(p,S_IRWXU);
       p[i]='/';
@@ -221,7 +228,7 @@ static void recursive_mkdir(char *p){
 /* *** CRC32 *** */
 /* Source:  http://home.thep.lu.se/~bjorn/crc/ */
 
-static uint32_t crc32_for_byte(uint32_t r) {
+static uint32_t crc32_for_byte(uint32_t r){
   for(int j=0; j<8; ++j) r=((r&1)?0:(uint32_t)0xEDB88320L)^r>>1;
   return r^(uint32_t)0xFF000000L;
 }

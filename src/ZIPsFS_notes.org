@@ -23,7 +23,8 @@ https://lwn.net/Articles/888715/
 
 * libfuse
 
-
+** fuse extensions
+xfuse https://www.usenix.org/system/files/atc21_slides_huai.pdf
 
 https://manpages.ubuntu.com/manpages/xenial/man8/mount.fuse.8.html
 
