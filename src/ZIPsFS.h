@@ -13,7 +13,7 @@ static char *zpath_newstr(struct zippath *zpath);
 static void zpath_destroy(struct zippath *zpath);
 static int zpath_stat(struct zippath *zpath,const struct rootdata *r);
 static struct zip *zip_open_ro(const char *orig,int equivalent);
-static int zip_contained_in_virtual_path(const char *path, char *append[]);
+static int zip_contained_in_virtual_path(const char *path, int *shorten, char *append[]);
 static int sql_exec(const int flags,const char* sql, int (*callback)(void*,int,char**,char**), void* udp );
 static int readdir_callback(void *arg1,  int argc,  char **argv, char **name);
 static void readdir_append(struct my_strg *s, long inode, const char *n,bool append_slash,long size, zip_uint32_t crc);

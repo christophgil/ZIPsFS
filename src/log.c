@@ -209,7 +209,8 @@ static int print_read_statistics(int n){
 #define TABLEROW(a,skip) PRINTINFO("<TR><TD><B>%s</B></TD><TD align=\"right\">%'d</TD></TR>\n",(#a)+skip,a)
   TABLEROW(_count_readzip_cached,7);
   TABLEROW(_count_readzip_regular,7);
-  TABLEROW(_count_readzip_seekable,7);
+  TABLEROW(_count_readzip_seekable_fwd,7);
+  TABLEROW(_count_readzip_seekable_bwd,7);
   TABLEROW(_count_readzip_no_seek,7);
   TABLEROW(_count_readzip_seek_fwd,7);
   TABLEROW(_count_readzip_cache_because_seek_bwd,7);
@@ -232,7 +233,6 @@ static int print_fhdata(int n,char *title){
     PRINTINFO("Table should be empty when idle.<BR>Column <I><B>fd</B></I> file descriptor. Column <I><B>Last access</B></I>:    Column <I><B>Millisec</B></I>:  time to read entry en bloc into cache.  Column <I><B>R</B></I>: number of threads in currently in xmp_read(). \
 Column <I><B>F</B></I>: flags. (D)elete insicates that it is marked for closing and (K)eep indicates that it can currently not be closed. Two possible reasons why data cannot be released: (I)  xmp_read() is currently run (II) the cached zip entry is needed by another file descriptor  with the same virtual path.<BR>\n \
 <TABLE>\n<THEAD><TR><TH>Path</TH><TH>fd</TH><TH>Last access</TH><TH>Cache addr</TH><TH>Cache kB</TH><TH>Millisec</TH><TH> F</TH><TH>R</TH></TR></THEAD>\n");
-    //    char buf[999];
     const time_t t0=time(NULL);
     foreach_fhdata_path_not_null(d){
       if (n<0) log_msg("\t%p\t%s\t%p\t%zu\n",d,snull(d->path),d->cache,d->cache_l);

@@ -212,7 +212,9 @@ strace -e trace=write df -h
 https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html
 gcc -fsanitize=thread
 
-
+** Threading concurrency
+  https://www.youtube.com/watch?v=9axu8CUvOKY
+/usr/include/pthread.h
 
 * core-dumps
 * Reading
@@ -822,3 +824,35 @@ $ sudo ls /proc/1243126/fd
         [sudo] password for cgille:
 $ sudo ls /proc/1243126/fd
 $ sudo ls /proc/1789635/fd
+
+
+
+
+* Statistics
+** No cache
+# [106:25] Log saved to /no_raid/Users/cgille/tmp/ZIPsFS/diann/test/report.log.txt
+# Finished
+
+** cache tdf
+# [103:36] Log saved to /no_raid/Users/cgille/tmp/ZIPsFS/diann/test/report.log.txt
+# Finished
+              Event                 Count
+readzip_cached                       50,987
+readzip_regular                   1,256,113
+readzip_seekable_fwd                107,538
+readzip_seekable_bwd                  6,597
+readzip_no_seek                   1,141,965
+readzip_seek_fwd                          0
+readzip_cache_because_seek_bwd            0
+readzip_reopen_because_seek_bwd           0
+close_later                               0
+ax_size                             131,072
+
+** cache tdf_bin
+
+zipfile_name_to_display_name
+RECOGNIZE_ZIP_FILES_1
+
+** cache tdf and tdf_bin
+[108:03] Log saved to /no_raid/Users/cgille/tmp/ZIPsFS/diann/test/report.log.txt
+Finished

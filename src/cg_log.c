@@ -137,6 +137,7 @@ static void log_mem(FILE *f){
   fprintf(f,"pid=%d  uordblks=%'d  mmap/munmap=%'d/%'d\n",getpid(),mallinfo().uordblks,_count_mmap,_count_munmap);
 }
 
+
 ///////////
 /// log ///
 ///////////
