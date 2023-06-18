@@ -1,8 +1,11 @@
   (global-set-key (kbd "<f1>") '(lambda() (interactive) (switch-to-buffer "ZIPsFS.c")))
   (global-set-key (kbd "<f4>") '(lambda() (interactive) (find-file "~/git_projects/common/ht4.c")))
     (global-set-key (kbd "<f5>") '(lambda() (interactive) (find-file "~/git_projects/ZIPsFS/src/log.c")))
+        (global-set-key (kbd "<f6>") '(lambda() (interactive) (find-file "~/git_projects/ZIPsFS/src/configuration.h")))
 
 
+* C language
+http://port70.net/~nsz/c/c99/n1256.html
 
 * Errors
 mit old store:
@@ -178,7 +181,9 @@ Available negative mount options:
 
 
 * Debugging
-
+https://developers.redhat.com/blog/2021/05/05/memory-error-checking-in-c-and-c-comparing-sanitizers-and-valgrind
+https://clang.llvm.org/docs/AddressSanitizer.html
+https://www.usenix.org/system/files/conference/atc12/atc12-final39.pdf
 ** gdb
 https://www.cs.umd.edu/~srhuang/teaching/cmsc212/gdb-tutorial-handout.pdf
 https://developers.redhat.com/blog/2021/04/30/the-gdb-developers-gnu-debugger-tutorial-part-1-getting-started-with-the-debugger#starting_gdb

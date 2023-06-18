@@ -76,6 +76,7 @@ static void bt_sighandler(int sig, siginfo_t *psi, void *ctxarg){
 }
 void init_handler() __attribute((constructor));
 void init_handler(){
+  return; // DEBUG_NOW
   log_debug_now("init_handler\n");
   struct sigaction sa;
   sa.sa_sigaction=bt_sighandler;
@@ -129,10 +130,10 @@ static void assert_r_ok(const char *p, struct stat *st){
     print_trace_using_debugger();
   }
 }
-static void debug_my_file_checks(const char *p, struct stat *s){
-  if(file_starts_year_ends_dot_d(p)) assert_dir(p,s);
-  if (file_ends_tdf_bin(p)) assert_r_ok(p,s);
-}
+
+
+
+
 bool tdf_or_tdf_bin(const char *p){return endsWith(p,".tdf") || endsWith(p,".tdf_bin");}
 
 

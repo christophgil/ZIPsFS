@@ -26,7 +26,7 @@ static void log_fh(char *title,long fh){
   log_debug_now("%s  fh: %ld %s \n",title?title:"", fh,p);
 }
 #define MAX_INFO 33333 // DEBUG_NOW
-static  char _info[MAX_INFO+1];
+static  char _info[MAX_INFO+2];
 #ifdef __cppcheck__
 #define PRINTINFO(...)   printf(__VA_ARGS__)
 #else
@@ -70,15 +70,21 @@ static int print_roots(int n){
   PRINTINFO("</TABLE>\n");
   return n;
 }
+int repeat_chars_info(int n,char c, int i){
+  if (i>0 && n+i<MAX_INFO){
+    memset(_info+n,c,i);
+    n+=i;
+  }
+  return n;
+}
 
 static int print_bar(int n,float rel){
-  const int L=100;
-  static char A[L],B[L];
-  memset(A,'#',L);
-  memset(B,'~',L);\
-  //  const int k=min_int(L,(int)(L*(rel+.5)));
-  const int a=max_int(0,min_int(L,(int)(L*rel)));
-  PRINTINFO("<SPAN style=\"border-style:solid;\"><SPAN style=\"background-color:red;color:red;\">%s</SPAN><SPAN style=\"background-color:blue;color:blue;\">%s</SPAN></SPAN> ",A+L-a,B+a);
+  const int L=100, a=max_int(0,min_int(L,(int)(L*rel)));
+  PRINTINFO("<SPAN style=\"border-style:solid;\"><SPAN style=\"background-color:red;color:red;\">");
+  n=repeat_chars_info(n,'#',a);
+  PRINTINFO("</SPAN><SPAN style=\"background-color:blue;color:blue;\">");
+  n=repeat_chars_info(n,'~',L-a);
+  PRINTINFO("</SPAN></SPAN>\n");
   return n;
 }
 //////////////////
@@ -136,8 +142,6 @@ static int print_maps(int n){
   }
   PRINTINFO("<TABLE>\n<THEAD><TR><TH>Addr&gt;&gt;12</TH><TH>Name</TH><TH>kB</TH><TH></TH></TR></THEAD>\n");
   const int L=333;
-  static char A[L];
-  memset(A,'-',L);
   while(!feof(f)) {
     char buf[PATH_MAX+100],perm[5],dev[6],mapname[PATH_MAX]={0};
     unsigned long begin,end,inode,foo;
@@ -148,8 +152,9 @@ static int print_maps(int n){
       const long size=end-begin;
       total+=size;
       if (!strchr(mapname,'/') && size>=SIZE_CUTOFF_MMAP_vs_MALLOC){
-        PRINTINFO("<TR><TD>%08lx</TD><TD>%s</TD><TD align=\"right\">%'ld</TD>",begin>>12,mapname,size>>10);
-        PRINTINFO("<TD>%s</TD></TR>\n",A+L-max_int(0,min_int(L,(int)(3*log(size)))));
+        PRINTINFO("<TR><TD>%08lx</TD><TD>%s</TD><TD align=\"right\">%'ld</TD><TD>",begin>>12,mapname,size>>10);
+        n=repeat_chars_info(n,'-',min_int(L,(int)(3*log(size))));
+        PRINTINFO("</TD></TR>\n");
       }
     } else log_debug_now("sscanf scanned n=%d\n",k);
   }
@@ -216,6 +221,7 @@ static int print_read_statistics(int n){
   TABLEROW(_count_readzip_cache_because_seek_bwd,7);
   TABLEROW(_count_readzip_reopen_because_seek_bwd,7);
   TABLEROW(_count_close_later,7);
+  TABLEROW(_count_getattr_from_cache,7);
   TABLEROW(_read_max_size,7);
   PRINTINFO("</TABLE>");
 #undef TABLEROW
