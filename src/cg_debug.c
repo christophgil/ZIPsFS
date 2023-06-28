@@ -30,6 +30,10 @@ static char *path_of_this_executable(){
   }
   return _p;
 }
+
+/////////////////////////////////
+/// Stacktrace on error/exit  ///
+/////////////////////////////////
 static void print_trace_using_debugger(){
   fputs(ANSI_INVERSE"print_trace_using_debugger"ANSI_RESET"\n",stderr);
   char pid_buf[30];
@@ -58,7 +62,7 @@ static void bt_sighandler(int sig, siginfo_t *psi, void *ctxarg){
   void *trace[16];
   mcontext_t *ctxP=&((ucontext_t *) ctxarg)->uc_mcontext;
   trace[1]=(void *)ctxP->gregs[REG_RIP];
- printf(ANSI_RED"Got signal %d  pid=%d\n"ANSI_RESET,sig,getpid());
+  printf(ANSI_RED"Got signal %d  pid=%d\n"ANSI_RESET,sig,getpid());
   if (sig==SIGSEGV) printf(ANSI_RED"Faulty address is %p, from %p\n"ANSI_RESET,(void*)ctxP->gregs[REG_RSP],trace[1]);
   const int trace_size=backtrace(trace,16);
   /* overwrite sigaction with caller's address */
@@ -74,9 +78,8 @@ static void bt_sighandler(int sig, siginfo_t *psi, void *ctxarg){
   print_trace_using_debugger();
   exit(0);
 }
-void init_handler() __attribute((constructor));
+// void init_handler() __attribute((constructor));
 void init_handler(){
-  return; // DEBUG_NOW
   log_debug_now("init_handler\n");
   struct sigaction sa;
   sa.sa_sigaction=bt_sighandler;
@@ -89,19 +92,34 @@ void init_handler(){
   struct rlimit core_limit={RLIM_INFINITY,RLIM_INFINITY};
   assert(!setrlimit(RLIMIT_CORE,&core_limit)); // enable core dumps
 }
-// sigaction signal signalfd
-
 /*********************************************************************************/
 
+////////////////////////////////////
+/// recognize certain file names ///
+////////////////////////////////////
+static bool tdf_or_tdf_bin(const char *p){
+  return endsWith(p,".tdf") || endsWith(p,".tdf_bin");
+}
+static bool filename_starts_year(const char *p,int l){
+  if (l<20) return false;
+  const int slash=last_slash(p);
+  return slash>=0 && !strncmp(p+slash,"/202",4);
+}
 static bool file_starts_year_ends_dot_d(const char *p){
   const int l=my_strlen(p);
   if (l<20 || p[l-1]!='d' || p[l-2]!='.') return false;
-  const int slash=last_slash(p);
-  if (slash<0 || strncmp(p+slash,"/202",4)) return false;
-  return true;
+  return filename_starts_year(p,l);
 }
-
-static void assert_dir(const char *p, struct stat *st){
+#define report_failure_for_tdf(...) _report_failure_for_tdf(__func__,__VA_ARGS__)
+static bool _report_failure_for_tdf(const char *mthd, int res, const char *path){
+  if (res && tdf_or_tdf_bin(path)){
+    log_debug_abort("xmp_getattr res=%d  path=%s",res,path);
+    return true;
+  }
+  return false;
+}
+/*********************************************************************************/
+static void assert_dir(const char *p, const struct stat *st){
   if (!st) return;
   //  log("st=%s  %p\n",p, st);
   if(!S_ISDIR(st->st_mode)){
@@ -116,14 +134,7 @@ static void assert_dir(const char *p, struct stat *st){
     log_file_stat("",st);
   }
 }
-static bool file_ends_tdf_bin(const char *p){
-  const int l=my_strlen(p);
-  if (l<20) return false;
-  const int slash=last_slash(p);
-  if (slash<0 || strncmp(p+slash,"/202",4)) return false;
-  return endsWith(p,".tdf") || endsWith(p,".tdf_bin");
-}
-static void assert_r_ok(const char *p, struct stat *st){
+static void assert_r_ok(const char *p, const struct stat *st){
   if(!access_from_stat(st,R_OK)){
     log_error("assert_r_ok  %s  ",p);
     log_file_stat("",st);
@@ -131,24 +142,9 @@ static void assert_r_ok(const char *p, struct stat *st){
   }
 }
 
-
-
-
-bool tdf_or_tdf_bin(const char *p){return endsWith(p,".tdf") || endsWith(p,".tdf_bin");}
-
-
-
-
-
-static bool report_failure_for_tdf(const char *mthd, int res, const char *path){
-  if (res && tdf_or_tdf_bin(path)){
-    log_debug_abort("xmp_getattr res=%d  path=%s",res,path);
-    return true;
-  }
-  return false;
-}
-
-
+//////////////////////////////////
+/// Count function invocations ///
+//////////////////////////////////
 enum functions{xmp_open_,xmp_access_,xmp_getattr_,xmp_read_,xmp_readdir_,mcze_,functions_l};
 #if 0
 static int functions_count[functions_l];
@@ -158,15 +154,15 @@ static const char *function_name(enum functions f){
   return C(xmp_open) C(xmp_access) C(xmp_getattr) C(xmp_read) C(xmp_readdir) C(mcze) "null";
 #undef C
 }
-static void log_count_b(enum functions f){
-  functions_time[f]=time_ms();
+static void _log_count_b(enum functions f){
+  functions_time[f]=currentTimeMillis();
   log(" >>%s%d ",function_name(f),functions_count[f]);
   pthread_mutex_lock(mutex+mutex_log_count);
   functions_count[f]++;
   pthread_mutex_unlock(mutex+mutex_log_count);
 }
-static void log_count_e(enum functions f,const char *path){
-  const int ms=(int)(time_ms()-functions_time[f]);
+static void _log_count_e(enum functions f,const char *path){
+  const long ms=currentTimeMillis()-functions_time[f];
   pthread_mutex_lock(mutex+mutex_log_count);
   --functions_count[f];
   pthread_mutex_unlock(mutex+mutex_log_count);

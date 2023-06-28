@@ -25,7 +25,7 @@ static void log_fh(char *title,long fh){
   path_for_fd(title,p,fh);
   log_debug_now("%s  fh: %ld %s \n",title?title:"", fh,p);
 }
-#define MAX_INFO 33333 // DEBUG_NOW
+#define MAX_INFO 55555
 static  char _info[MAX_INFO+2];
 #ifdef __cppcheck__
 #define PRINTINFO(...)   printf(__VA_ARGS__)
@@ -44,10 +44,7 @@ int printinfo(int n, const char *format,...){
   return n;
 }
 
-
-
 #define PROC_PATH_MAX 256
-
 static int print_fuse_argv(int n){
   PRINTINFO("<H1>Fuse Parameters</H1><OL>");
   for(int i=1;i<_fuse_argc;i++) PRINTINFO("<LI>%s</LI>\n",_fuse_argv[i]);
@@ -57,10 +54,10 @@ static int print_fuse_argv(int n){
 static int print_roots(int n){
   PRINTINFO("<H1>Roots</H1>\n<TABLE><THEAD><TR><TH>Path</TH><TH>Writable</TH><TH align=\"right\">Response</TH><TH align=\"right\">Delayed</TH><TH>Free GB</TH></TR></THEAD>\n");
   foreach_root(i,r){
-    const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30), diff=currentTimeMillis()-r->statfs_when;
+    const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30),diff=deciSecondsSinceStart()-r->statfs_when_decisecons;
     if (n>=0){
       PRINTINFO("<TR><TD>%s</TD><TD align=\"center\">%s</TD>",r->path,yes_no(f&ROOT_WRITABLE));
-      if (f&ROOT_REMOTE) PRINTINFO("<TD align=\"right\">%'d ms</TD><TD align=\"right\">%'d</TD>",  diff>ROOT_OBSERVE_EVERY_MSECONDS*3?diff:r->statfs_mseconds,r->count_delayed);
+      if (f&ROOT_REMOTE) PRINTINFO("<TD align=\"right\">%'ld ms</TD><TD align=\"right\">%'d</TD>", 10L*(diff>ROOT_OBSERVE_EVERY_DECISECONDS*3?diff:r->statfs_deciseconds),r->count_delayed);
       else PRINTINFO("<TD align=\"right\">Local</TD><TD></TD>");
       PRINTINFO("<TD align=\"right\">%'d</TD></TR>\n",freeGB);
     }else{
@@ -229,7 +226,7 @@ static int print_read_statistics(int n){
 }
 
 
-static int print_fhdata(int n,char *title){
+static int print_fhdata(int n,const char *title){
   if (n<0) log_cache("print_fhdata %s\n",snull(title));
   else PRINTINFO("<H1>Data associated to file descriptors</H1>\n");
   if (!_fhdata_n){
@@ -240,6 +237,7 @@ static int print_fhdata(int n,char *title){
 Column <I><B>F</B></I>: flags. (D)elete insicates that it is marked for closing and (K)eep indicates that it can currently not be closed. Two possible reasons why data cannot be released: (I)  xmp_read() is currently run (II) the cached zip entry is needed by another file descriptor  with the same virtual path.<BR>\n \
 <TABLE>\n<THEAD><TR><TH>Path</TH><TH>fd</TH><TH>Last access</TH><TH>Cache addr</TH><TH>Cache kB</TH><TH>Millisec</TH><TH> F</TH><TH>R</TH></TR></THEAD>\n");
     const time_t t0=time(NULL);
+
     foreach_fhdata_path_not_null(d){
       if (n<0) log_msg("\t%p\t%s\t%p\t%zu\n",d,snull(d->path),d->cache,d->cache_l);
       else{
@@ -247,9 +245,9 @@ Column <I><B>F</B></I>: flags. (D)elete insicates that it is marked for closing 
         PRINTINFO("<TD align=\"right\">"); if (d->access) PRINTINFO("%'ld s</TD>",t0-d->access); else PRINTINFO("Never</TD>");
         //                strcpy(buf,"<TD></TD><TD></TD><TD></TD>");        if (d->cache) sprintf(buf,"<TD>%p</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD>",d->cache,MAX(d->cache_l>>10,!!d->cache_l),d->cache_read_seconds);
         //PRINTINFO("%s<TD>%c%c</TD><TD>%d</TD></TR>\n",buf,d->close_later?'D':' ', fhdata_can_destroy(d)?' ':'K',d->xmp_read);
-        if (d->cache) PRINTINFO("<TD>%p</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD>",d->cache,MAX(d->cache_l>>10,!!d->cache_l),d->cache_read_seconds);
+        if (d->cache) PRINTINFO("<TD>%p</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'ld</TD>",d->cache,MAX(d->cache_l>>10,!!d->cache_l),d->cache_read_mseconds);
         else PRINTINFO("<TD></TD><TD></TD><TD></TD>");
-        PRINTINFO("<TD>%c%c</TD><TD>%d</TD></TR>\n",d->close_later?'D':' ', fhdata_can_destroy(d)?' ':'K',d->xmp_read);
+        PRINTINFO("<TD>%c%c</TD><TD>%d</TD></TR>\n",d->close_later?'D':' ', fhdata_can_destroy(d)?' ':'K',d->is_xmp_read);
       }
     }
     PRINTINFO("</TABLE>");
@@ -312,11 +310,12 @@ static void fhdata_log_cache(const struct fhdata *d){
   const char
     *c=d->cache,
     *s= !c?"Null":c==CACHE_FAILED?"FAILED":c==CACHE_FILLING?"FILLING":"Yes";
-  const int index=(int)(_fhdata-d);
-  log_msg("log_cache: d= %p path= %s cache: %s cache_l= %zu can_destroy: %s  index: %d  hasc: %s\n",d,d->path,s,d->cache_l,yes_no(fhdata_can_destroy(d)),index,yes_no(fhdata_has_cache(d)));
+  const int idx=(int)(_fhdata-d);
+  log_msg("log_cache: d= %p path= %s cache: %s cache_l= %zu can_destroy: %s  idx: %d  hasc: %s\n",d,d->path,s,d->cache_l,yes_no(fhdata_can_destroy(d)),idx,yes_no(fhdata_has_cache(d)));
 }
-static void log_zpath(const char *msg, struct zippath *zpath){
-  log_msg(ANSI_UNDERLINE"%s"ANSI_RESET,msg);
+#define log_zpath(...) _log_zpath
+static void _log_zpath(const char fn,const char *msg, struct zippath *zpath){
+  log_msg(ANSI_UNDERLINE"%s() %s"ANSI_RESET,fn,msg);
   log_msg("   this= %p   \n",zpath);
   log_msg("    %p strgs="ANSI_FG_BLUE"%s"ANSI_RESET"  "ANSI_FG_BLUE"%d\n"ANSI_RESET   ,zpath->strgs, (zpath->flags&ZP_STRGS_ON_HEAP)?"Heap":"Stack", zpath->strgs_l);
   log_msg("    %p    VP="ANSI_FG_BLUE"'%s' VP_LEN: %d"ANSI_RESET,VP(),snull(VP()),VP_LEN()); log_file_stat("",&zpath->stat_vp);
@@ -334,7 +333,7 @@ static bool fhdata_not_yet_logged(unsigned int flag,struct fhdata *d){
 }
 
 void log_fuse_process(){
-  log_debug_now(ANSI_YELLOW"log_fuse_process"ANSI_RESET" ");
+  //log_debug_now(ANSI_YELLOW"log_fuse_process"ANSI_RESET" ");
   struct fuse_context *fc=fuse_get_context();
   const int BUF=333;
   char buf[BUF+1];

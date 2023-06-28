@@ -5,6 +5,9 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
+
+#include <dirent.h>
+
 #include <stdio.h>
 #include <assert.h>
 #include <sys/types.h>
@@ -23,6 +26,14 @@
 #define MAX_PATHLEN 512
 #define DEBUG_NOW 1
 #define FREE(s) free((void*)s),s=NULL
+#define CONCAT(a, b) CONCAT_INNER(a, b)
+#define CONCAT_INNER(a, b) a ## b
+#define NAME_LINE(base) CONCAT(base, __LINE__)
+#define FREE2(a) { void *NAME_LINE(tmp)=(void*)a; a=NULL;free(NAME_LINE(tmp));}
+
+
+
+
 /*********************************************************************************/
 /* *** String *** */
 static int empty_dot_dotdot(const char *s){ return !*s || (*s=='.' && (!s[1] || (s[1]=='.' && !s[2]))); }
@@ -56,10 +67,7 @@ static int last_slash(const char *path){
   }
   return -1;
 }
-static int slash_not_trailing(const char *path){
-  char *p=strchr(path,'/');
-  return p && p[1]?(int)(p-path):-1;
-}
+// static int slash_not_trailing(const char *path){ const char *p=strchr(path,'/');  return p && p[1]?(int)(p-path):-1; }
 static int pathlen_ignore_trailing_slash(const char *p){
   const int n=my_strlen(p);
   return n && p[n-1]=='/'?n-1:n;
@@ -139,12 +147,13 @@ static void log_file_mode(mode_t m){
   log_strg(mode);
 }
 
-static void log_file_stat(const char * name,const struct stat *s){
+#define log_file_stat(...) _log_file_stat(__func__,__VA_ARGS__)
+static void _log_file_stat(const char *fn,const char * name,const struct stat *s){
   char *color=ANSI_FG_BLUE;
 #if defined SHIFT_INODE_ROOT
   if (s->st_ino>(1L<<SHIFT_INODE_ROOT)) color=ANSI_FG_MAGENTA;
 #endif
-  log_msg("%s  size=%lu blksize=%lu blocks=%lu links=%lu inode=%s%lu"ANSI_RESET" dir=%s uid=%u gid=%u ",name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
+  log_msg("%s() %s  size=%lu blksize=%lu blocks=%lu links=%lu inode=%s%lu"ANSI_RESET" dir=%s uid=%u gid=%u ",fn,name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
   //st_blksize st_blocks f_bsize
   log_file_mode(s->st_mode);
   log_strg("\n");
@@ -161,11 +170,6 @@ static void log_open_flags(int flags){
 }
 
 static void clear_stat(struct stat *st){ if(st) memset(st,0,sizeof(struct stat));}
-static long time_ms(){
-  struct timeval tp;
-  gettimeofday(&tp,NULL);
-  return tp.tv_sec*1000+tp.tv_usec/1000;
-}
 static long file_mtime(const char *f){
   struct stat st={0};
   return stat(f,&st)?0:st.st_mtime;
@@ -194,7 +198,7 @@ static int is_regular_file(const char *path){
   stat(path,&path_stat);
   return S_ISREG(path_stat.st_mode);
 }
-bool access_from_stat(struct stat *stats,int mode){ // equivaletn to access(path,mode)
+bool access_from_stat(const struct stat *stats,int mode){ // equivaletn to access(path,mode)
   int granted;
   mode&=(X_OK|W_OK|R_OK);
 #if R_OK!=S_IROTH || W_OK!=S_IWOTH || X_OK!=S_IXOTH
@@ -211,7 +215,7 @@ bool access_from_stat(struct stat *stats,int mode){ // equivaletn to access(path
 }
 /*********************************************************************************/
 /* *** io *** */
-static void print_substring(int fd,char *s,int f,int t){  write(fd,s,min_int(my_strlen(s),t)); }
+static void print_substring(int fd,const char *s,int f,int t){  write(fd,s,min_int(my_strlen(s),t)); }
 static void recursive_mkdir(char *p){
   const int n=pathlen_ignore_trailing_slash(p);
   for(int i=2;i<n;i++){
@@ -252,7 +256,7 @@ static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc){
     const accum_t a=crc^((accum_t*)data)[i];
 #define C(j) (wtable[(j<<8)+(uint8_t)(a>>8*j)])
     if (sizeof(accum_t)==8){
-      crc=crc^C(0)^C(1)^C(2)^C(3)^C(4)^C(5)^C(6)^C(7);
+      crc=C(0)^C(1)^C(2)^C(3)^C(4)^C(5)^C(6)^C(7);
     }else{
       for(int j=crc=0; j<sizeof(accum_t); ++j) crc^=C(j);
     }
@@ -264,33 +268,27 @@ static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc){
 
 
 
-
-
-
-
 #endif // _cg_utils_dot_c
 // 1111111111111111111111111111111111111111111111111111111111111
 
 
 #if __INCLUDE_LEVEL__ == 0
-
+#include "cg_read_entire_file.c"
 int main(int argc, char *argv[]){
   setlocale(LC_NUMERIC,""); /* Enables decimal grouping in printf */
   //char *s=argv[1];    printf("%s = %'ld\n",s,atol_kmgt(s));
-  {
+  if (0){
     const char *s=argv[1];
-  int l=strlen(s);
-  printf("l=%d\n",l);
-
-  printf("strcmp %d\n",ENDSWITH(s,l,".zip"));
-  printf("strcmp %d\n",ENDSWITHI(s,l,".zip"));
-
-}
+    int l=strlen(s);
+    printf("l=%d\n",l);
+    printf("strcmp %d\n",ENDSWITH(s,l,".zip"));
+    printf("strcmp %d\n",ENDSWITHI(s,l,".zip"));
+  }
   /*
-  const char *path="/home/cgille/tmp/ZIPsFS/modified/PRO1/Data/30-0046/20230126_PRO1_KTT_004_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMFormate20mM_dia_BD11_1_12097.d/analysis.tdf";
-  //  int res=open(path,8201,509);
+    const char *path="/home/cgille/tmp/ZIPsFS/modified/PRO1/Data/30-0046/20230126_PRO1_KTT_004_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMFormate20mM_dia_BD11_1_12097.d/analysis.tdf";
+    //  int res=open(path,8201,509);
     int res=open(path,O_WRONLY|O_TRUNC);
-  printf("res=%d path=%s\n",res,path);
+    printf("res=%d path=%s\n",res,path);
   */
 
 
@@ -305,6 +303,22 @@ int main(int argc, char *argv[]){
     printf("%s crc=%x\n",a,crc);
     //    abcdefghij crc=3981703a
     exit(9);
+  }
+  if (1){
+    char *buf[1];
+    if (argc!=2){
+      fprintf(stderr,"Expectd file path\n");
+    }else{
+      const long size=read_entire_file(argv[1],buf);
+      fprintf(stderr,"Read %ld bytes\n",size);
+      puts(*buf);
+      const uint32_t crc=cg_crc32(*buf,size,0);
+      printf("crc=%x\n",crc);
+
+      free(*buf);
+    }
+
+
   }
 }
 #endif

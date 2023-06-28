@@ -287,7 +287,7 @@ void ht_test_keystore(int argc, char *argv[]){
   char **copy=malloc(argc*8);
   for(int i=1;i<argc;i++){
     printf("i=%d argv=%s\n",i,argv[i]);
-    char *a=argv[i];
+    const char *a=argv[i];
     assert(ks.dim>0);
     copy[i]=(char*)keystore_push(&ks,a,strlen(a));
     assert(ks.dim>0);
@@ -309,7 +309,7 @@ void ht_test1(int argc, char *argv[]){
   char *VV[]={"A","B","C","D","E","F","G","H","I"};
   const int L=9;
   for(int i=1;i<argc;i++){
-    char *a=argv[i];
+    const char *a=argv[i];
     ht_set(&no_dups,a,VV[i%L]);
   }
   for(int i=1;i<argc;i++){
@@ -318,15 +318,15 @@ void ht_test1(int argc, char *argv[]){
     assert(!strcmp(fetched,VV[i%L]));
   }
   if (0){
-    int index=0;
+    int idx=0;
     struct ht_entry *e;
-    while((e=ht_next(&no_dups,&index))){
+    while((e=ht_next(&no_dups,&idx))){
       printf("iter %s=%s  ",e->key,(char*)e->value);
     }
   }
   ht_destroy(&no_dups);
 }
-void test_int(int argc, char *argv[]){
+void test_int(int argc, const char *argv[]){
   const int n=atoi(argv[1]);
   struct ht table={0};
   ht_init(&table,7);

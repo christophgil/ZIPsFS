@@ -40,16 +40,10 @@
 #endif
 #define log_struct(st,field,format)   printf("    " #field "=" #format "\n",st->field)
 
-static bool _logIsSilent=false, _logIsSilentFailed=false,_logIsSilentWarn=false,_logIsSilentError=false;
+static bool _killOnError=false,_logIsSilent=false, _logIsSilentFailed=false,_logIsSilentWarn=false,_logIsSilentError=false;
 #define log_argptr() va_list argptr;va_start(argptr,format);vfprintf(LOG_STREAM,format,argptr);va_end(argptr)
 static void log_strg(const char *s){
   if(!_logIsSilent && s) fputs(s,LOG_STREAM);
-}
-static void log_already_exists(const char *format,...){
-  if(!_logIsSilent){
-    log_strg(" Already exists "ANSI_RESET);
-    log_argptr();
-  }
 }
 
 static void log_msg(const char *format,...){
@@ -58,55 +52,106 @@ static void log_msg(const char *format,...){
   }
 }
 
-static void log_failed(const char *format,...){
+
+
+enum Logs{Log_already_exists,Log_failed,Log_warn,Log_error,Log_succes,Log_debug_now,Log_entered_function,Log_exited_function,Log_cache};
+
+
+
+#define log_already_exists(...)    _log_common(__func__,Log_already_exists,__VA_ARGS__)
+#define log_failed(...)            _log_common(__func__,Log_failed,__VA_ARGS__)
+#define log_warn(...)              _log_common(__func__,Log_warn,__VA_ARGS__)
+#define log_error(...)             _log_common(__func__,Log_error,__VA_ARGS__)
+#define log_succes(...)            _log_common(__func__,Log_succes,__VA_ARGS__)
+#define log_debug_now(...)         _log_common(__func__,Log_debug_now,__VA_ARGS__)
+#define log_entered_function(...)  _log_common(__func__,Log_entered_function,__VA_ARGS__)
+#define log_exited_function(...)   _log_common(__func__,Log_exited_function,__VA_ARGS__)
+#define log_cache(...)             _log_common(__func__,Log_cache,__VA_ARGS__)
+
+
+
+static void _log_common(const char *fn,enum Logs t,const char *format,...){
+  if(_logIsSilent) return;
+  log_strg(fn);
+  log_strg("() ");
+  switch(t){
+  case Log_already_exists:    log_strg("Already exists "ANSI_RESET);break;
+  case Log_failed:            log_msg(ANSI_FG_RED" $$ %d Failed "ANSI_RESET,getpid());break;
+  case Log_warn:              log_msg(ANSI_FG_RED" $$ %d Warn "ANSI_RESET,getpid());break;
+  case Log_error:             log_msg(ANSI_FG_RED" $$ %d Error "ANSI_RESET,getpid());break;
+  case Log_succes:            log_strg(ANSI_FG_GREEN" Success "ANSI_RESET);break;
+  case Log_debug_now:         log_msg(ANSI_FG_MAGENTA" Debug "ANSI_RESET" ");break;
+  case Log_entered_function:  log_msg(ANSI_INVERSE">>>"ANSI_RESET);break;
+  case Log_exited_function:   log_strg(ANSI_INVERSE"< < < <"ANSI_RESET);break;
+  case Log_cache:             log_msg(ANSI_MAGENTA" $$ %d CACHE"ANSI_RESET" ",getpid());break;
+
+  }
+  log_argptr();
+
+}
+
+
+
+
+/*
+  static void _log_already_exists(const char *fn,const char *format,...){
+  if(!_logIsSilent){
+  log_strg(fn);
+  log_strg("() Already exists "ANSI_RESET);
+  log_argptr();
+  }
+  }
+
+  static void log_failed(const char *format,...){
   if(!_logIsSilentFailed){
-    log_msg(ANSI_FG_RED" $$ %d Failed "ANSI_RESET,getpid());
-    log_argptr();
+  log_msg(ANSI_FG_RED" $$ %d Failed "ANSI_RESET,getpid());
+  log_argptr();
   }
-}
-static void log_warn(const char *format,...){
+  }
+  static void log_warn(const char *format,...){
   if(!_logIsSilentWarn){
-    log_msg(ANSI_FG_RED" $$ %d Warn "ANSI_RESET,getpid());
-    log_argptr();
+  log_msg(ANSI_FG_RED" $$ %d Warn "ANSI_RESET,getpid());
+  log_argptr();
   }
-}
-static void log_error(const char *format,...){
+  }
+  static void log_error(const char *format,...){
   if(!_logIsSilentError){
-    log_msg(ANSI_FG_RED" $$ %d Error "ANSI_RESET,getpid());
-    log_argptr();
+  log_msg(ANSI_FG_RED" $$ %d Error "ANSI_RESET,getpid());
+  log_argptr();
   }
-}
-static void log_succes(const char *format,...){
+  }
+  static void log_succes(const char *format,...){
   if(!_logIsSilent){
-    log_strg(ANSI_FG_GREEN" Success "ANSI_RESET);
-    log_argptr();
+  log_strg(ANSI_FG_GREEN" Success "ANSI_RESET);
+  log_argptr();
   }
-}
-static void log_debug_now(const char *format,...){
+  }
+  static void log_debug_now(const char *format,...){
   if(!_logIsSilent){
-    //log_msg(ANSI_FG_MAGENTA" Debug "ANSI_RESET" %lx ",pthread_self());
-    log_msg(ANSI_FG_MAGENTA" Debug "ANSI_RESET" ");
-    log_argptr();
+  //log_msg(ANSI_FG_MAGENTA" Debug "ANSI_RESET" %lx ",pthread_self());
+  log_msg(ANSI_FG_MAGENTA" Debug "ANSI_RESET" ");
+  log_argptr();
   }
-}
-static void log_entered_function(const char *format,...){
+  }
+  static void log_entered_function(const char *format,...){
   if(!_logIsSilent){
-    log_msg(ANSI_INVERSE">>>"ANSI_RESET);
-    log_argptr();
+  log_msg(ANSI_INVERSE">>>"ANSI_RESET);
+  log_argptr();
   }
-}
-static void log_exited_function(const char *format,...){
+  }
+  static void log_exited_function(const char *format,...){
   if(!_logIsSilent){
-    log_strg(ANSI_INVERSE"< < < <"ANSI_RESET);
-    log_argptr();
+  log_strg(ANSI_INVERSE"< < < <"ANSI_RESET);
+  log_argptr();
   }
-}
-static void log_cache(const char *format,...){
+  }
+  static void log_cache(const char *format,...){
   if(!_logIsSilent){
-    log_msg(ANSI_MAGENTA" $$ %d CACHE"ANSI_RESET" ",getpid());
-    log_argptr();
+  log_msg(ANSI_MAGENTA" $$ %d CACHE"ANSI_RESET" ",getpid());
+  log_argptr();
   }
-}
+  }
+*/
 static int isPowerOfTwo(unsigned int n){
   return n && (n&(n-1))==0;
 }
@@ -153,19 +198,11 @@ static long currentTimeMillis(){
   return tv.tv_sec*1000+tv.tv_usec/1000;
 }
 
-static int millisSinceStart(){
+static unsigned int deciSecondsSinceStart(){
   if (!_startTimeMillis)_startTimeMillis=currentTimeMillis();
-  return (int)(currentTimeMillis()-_startTimeMillis);
+  return (int)((currentTimeMillis()-_startTimeMillis)/100);
 }
 
-
-static bool _killOnError=false;
-static void killOnError_exit(){
-  if (_killOnError){
-    log_msg("Thread %lx\nTime=%'ld\n  killOnError_exit\n",pthread_self(),_startTimeMillis-currentTimeMillis());
-    exit(9);
-  }
-}
 #define WARN_SHIFT_MAX 8
 char *_warning_channel_name[1<<WARN_SHIFT_MAX];
 char *_warning_pfx[1<<WARN_SHIFT_MAX]={0};
@@ -175,7 +212,8 @@ static int _warning_count[1<<WARN_SHIFT_MAX];
 #define WARN_FLAG_ERRNO (1<<28)
 #define WARN_FLAG_ONCE_PER_PATH (1<<27)
 #define WARN_FLAG_ONCE (1<<26)
-static void warning(const unsigned int channel,const char* path,const char *format,...){
+#define warning(...) _warning(__func__,__VA_ARGS__)
+static void _warning(const char *fn,const unsigned int channel,const char* path,const char *format,...){
   static pthread_mutex_t mutex;
   static bool initialized;
   static FILE *file;
@@ -207,7 +245,7 @@ static void warning(const unsigned int channel,const char* path,const char *form
       false) toFile=false;
   _warning_count[i]++;
   written+=strlen(format)+strlen(p);
-      char errx[222];*errx=0;
+  char errx[222];*errx=0;
   pthread_mutex_lock(&mutex);
   if ((channel&WARN_FLAG_ERRNO)){
     const int errn=errno;
@@ -216,7 +254,7 @@ static void warning(const unsigned int channel,const char* path,const char *form
   for(int j=2;--j>=0;){
     FILE *f=j?(_logIsSilent?NULL:LOG_STREAM):(toFile?file:NULL);
     if (!f) continue;
-    fprintf(f,"%s\t%d\t%s\t",_warning_pfx[i]?_warning_pfx[i]:(ANSI_FG_RED"ERROR "ANSI_RESET),_warning_count[i],p);
+    fprintf(f,"%s\t%s()\t%d\t%s\t",_warning_pfx[i]?_warning_pfx[i]:(ANSI_FG_RED"ERROR "ANSI_RESET),fn,_warning_count[i],p);
     va_list argptr; va_start(argptr,format);vfprintf(f,format,argptr);va_end(argptr);
     if (*errx) fprintf(f,"\t%s",errx);
     fputs("\n\n",f);
@@ -224,7 +262,9 @@ static void warning(const unsigned int channel,const char* path,const char *form
   }
   pthread_mutex_unlock(&mutex);
   if ((channel&WARN_FLAG_EXIT)) exit(1);
-  if ((channel&WARN_FLAG_MAYBE_EXIT)) killOnError_exit();
+
+  if (_killOnError && (channel&WARN_FLAG_MAYBE_EXIT)){ log_warn("Thread %lx\nTime=%'ld\n  _killOnError\n",pthread_self(),_startTimeMillis-currentTimeMillis()); exit(9);}
+
 }
 
 /* *** Enable format string warnings for cppcheck *** */
