@@ -1,4 +1,4 @@
-# ZIPsFS - Fuse-based  overlay file system which expands  ZIP files
+    # ZIPsFS - Fuse-based  overlay file system which expands  ZIP files
 
 # Motivation
 
@@ -16,87 +16,187 @@ Furthermore we are concerned about the health of our conventional hard disks sin
 There are also files which are sqlite3 databases. This leads to large numbers of seek operations which is inefficient for compressed and remote files.
 
 ZIPsFS has been developed to solve all these problems.
+<!---
+(defun Make-man()
+(interactive)
+(save-some-buffers t)
+(shell-command "pandoc ZIPsFS.1.md -s -t man | /usr/bin/man -l -")
+)
+-->
 
-# Usage
 
 
-## General:
+% ZIPsFS(1)
 
-    ZIPsFS [ZIPsFS-options] path-of-root1 path-of-root2 path-of-root3 :  [fuse-options] mount-point
+NAME
+====
+
+**ZIPsFS** — FUSE-based  overlay union file system which expands ZIP files
+
+SYNOPSIS
+========
+
+
+ZIPsFS \[*ZIPsFS-options*\] *path-of-root1* *path-of-root*  *path-of-root3*   :  \[*fuse-options*\] *mount-point*
 
 ## Example 1
 
-    ZIPsFS -l 2GB  ~/tmp/ZIPsFS/writable ~/local/file/tree  //computer1/pub  //computer2/pub :  -f -o allow_other  ~/tmp/ZIPsFS/mnt
+ZIPsFS -l 2GB  ~/tmp/ZIPsFS/writable ~/local/file/tree  //computer1/pub  //computer2/pub :  -f -o allow_other  ~/tmp/ZIPsFS/mnt
 
-With this command, all files in the three sources can be accessed via the path ~/tmp/ZIPsFS/mnt.
-In this respect, ZIPsFS is a so-called union or overlay file system.
-When files are created or modified, they will be stored in ~/tmp/ZIPsFS/writable.
 
-Paths starting with double slash such as  //computer1/pub are regarded as unstable and potentially blocking.
-ZIPsFS will periodically check these file systems and skip them if they are not responding. This is useful for remote paths.
+DESCRIPTION
+===========
 
-With the  option -l an upper limit of memory consumption for the ZIP file RAM cache is specified. The overall size of all cached ZIP entries should not exceed 2 GB here.
-With the fuse option -f, it is running in the foreground such that some debugging output can be observed at
-the command prompt. In this mode the program can be stopped normally with Ctrl-C or Ctrl-Backslash. With  -o allow_other, also other users can access the the file system.
+## Summary
 
-For more information on command line arguments  run ZIPsFS without parameters or with -h.
+ZIPsFS combines multiple file structures into one, resulting in single directory structure that
+contains underlying files and sub-directories from the given sources.  Created or modified files are stored in
+the first file structure. The other file sources  are only read and never modified.  ZIPsFS expands ZIP files as folders. The
+folder name is formed from the ZIP file name by appending ".Contents/".  This can be changed by the
+user with rules based on file name patterns. It is also possible to get the content of the zip file
+online directly into the containing folder without a parent folder.
+
+## Configuration
+
+The default behavior can be modified with rules based on file names in *configuration.c*.
+For changes to take effect, re-compilation is necessary.
+
+## Union / overlay file system
+
+All files in the file trees (in the example four) can be accessed via the mount point (in the example *~/tmp/ZIPsFS/mnt*).
+When files are created or modified, they will be stored in the first file tree (in the example *~/tmp/ZIPsFS/writable*).
+If files exist in two locations, the left most root takes precedence.
+
+## Unreliable roots
+
+Source  file structures may come from remote sites and it may happen that a file structure is temporarily not available.
+In such case, ZIPsFS should not block. It should continue to work with the remaining file systems. This is implemented as follows:
+Paths starting with double slash (in the example  *//computer1/pub*) are regarded as remote paths that may be temporarily unavailable.
+ZIPsFS will periodically check  file systems starting with a double slash.
+If the last responds was too long ago then the respective file system is skipped.
+
+## Modified and created files
+
+New files are created in the first file tree, while the following file trees are not modified.
+If the first root is an  empty string is passed as first file tree, no files can be created and the virtual file system is read-only.
+
+## Cache
+
+ZIPsFS can read certain ZIP entries entirely into RAM and provide the data from the RAM copy  at higher speed.
+This may improve performance in particular  for compressed ZIP entries that are read from varying positions in the file, so-called file seek.
+Which  ZIP entries are copied into RAM is controlled by rules based on file names and compression in *configuration.c*.
+
+In addition, compressed ZIP entries are cached in RAM if the reading position ever jumps backward.
+
+With the  option **-l** an upper limit of memory consumption for the ZIP  RAM cache is specified.
 
 ## Logs
 
-We recommend to run ZIPsFS in a tmux session, using the option -f (foreground).
-In this mode, logs at stdout are enabled and are directly observable. In addition, a log file with errors and warnings
-is  written into the first root folder. An HTML file with status information is found int the root of the file system.
+Running ZIPsFS in the foreground with the option *-f*, allows to observe logs continuously at the console.
+Running it in a terminal multiplexer like  *tmux* has the advantage that the session is persistent and continues even when
+the windowing system or the terminal emulator terminate.
+A log file is written in **~/.ZIPsFS/**  and is also accessible from the root of  the virtual file system.
+An HTML file with status information is found in the root of the file system.
 
-# Features
+## ZIP files
 
-## Acts like a union or overlay file system
+Let *file.zip* be a ZIP file in any of the roots. It will  appear in the virtual file system together with a folder *file.zip.Content*.
+Special rules based on file name patterns can be defined whether the contained files are shown in a sub-folder or directly in the file listing.
+Normally, the folder name is formed by appending "*.Content*" to the zip file name. Conversely, complex rules can be implemented in
+**configuration.c**.
 
-- The contents of several root folders given as absolute paths are combined.
-- Only the first root is writable.
 
 
-## fail-safe
+ZIPsFS Options
+--------------
 
-- Root folders can be marked as less reliable  by starting the absolute file path with two slashes rather than just one.  This is in analogy to remote  paths in Windows.
-  ZIPsFS queries all remote root folders periodically. If a remote file system fails to  respond in time, it will be skipped.
-  This may avoid block by  broken mounts.
+-h
 
-## Adaptations to the file tree
+:   Prints brief usage information.
 
-- Normally, the names of ZIP files appear as folders. The ZIP entries are files in these folders. However, our software requires folders ending with  ".d" instead of  ".d.Zip".
-  Therefore  ZIPsFS is capable of suppressing the  ".Zip" suffix for selected file paths.
 
-- For other data file types the name of the ZIP file must not appear in the file tree at all. The containing files within the ZIP file appear directly in the file listing.
+-d *SQLite-database-file*
 
-The rules in the user-defined configuration file  src/configuration.h are based on file paths. Changing these rules requires recompilation.
+:   To improve performance, ZIPsFS caches file directories using the name and the last-modified time stamp as key. With this option the SQLite3 database file can be specified. In this case, the database will not be cleared when ZIPsFS is started which will be done otherwise.
 
-## File seek
 
-For remote and/or compressed files, data is best read sequentially.
-Reading at changing file positions is unfavorable.
 
-ZIPsFS can store the entire ZIP entry in RAM. All threads can read the data from the in-RAM copy.
-When all file connections are closed, the file date in the RAM is released.
+-l  *Maximum memory for caching ZIP-entries in the RAM*
 
+:   Specifies a limit for the cache.  For example *-l  8G* would limit the size of the cache to 8 Gigabyte.
+
+- c \[NEVER,SEEK,RULE,ALWAYS\]
+
+:   Policy when ZIP entries are cached in RAM.
+
+
+-o *comma separated Options*
+
+:   *-o allow_other*     Other users can read the files
+
+
+|           |                                                                                  |
+|:---------:|----------------------------------------------------------------------------------|
+|    NEVER  | ZIP are never cached, even not in case of backward seek.                         |
+|           |                                                                                  |
+|    SEEK   | ZIP entries are cached if the file position jumps backward. This is the default  |
+|           |                                                                                  |
+|   RULE    | ZIP entries are cached according to rules in **configuration.c**.                |
+|           |                                                                                  |
+|  ALWAYS   | All ZIP entries are cached.                                                      |
+|           |                                                                                  |
+
+
+FUSE Options
+------------
+
+-f
+
+:   Run in foreground and display some logs at stdout. This mode is useful inside tmux.
+
+
+-s
+
+:   Disable multi-threaded operation
+
+
+FILES
+=====
+
+- configuration.c:  Customizable rules. Modification requires recompilation.
+- ~/.ZIPsFS:
+  Contains the log file and the SQLite3 DB file
 
 # Implementation
 
-Written in Gnu-C.
-Based on fuse3 example passthrough.
+Written in GNU-C.
 
-ZIPsFS uses SQLite3 to keep directory listings.
-When the last-modified file attribute has not changed, the stored directory listings are still valid and
-does not need to be read from the ZIP files again.
+## Dependencies
 
-# Current status
+ - fuse3
+ - libzip
+ - SQLite3
 
-Testing and Bug fixing
+## Operation system
 
-# Operation system
+  - Linux 64
+  - MacOS: Would require minor adaptations.
 
-Developed and tested on Linux 64 bit. May requires  minor adaptations for other UNIX like platforms like MacOS.
 
-## Also see
+BUGS
+====
+
+Current status: Testing and Bug fixing
+
+
+AUTHOR
+======
+
+Christoph Gille
+
+SEE ALSO
+========
+
 
 - https://github.com/openscopeproject/ZipROFS
 - https://github.com/google/fuse-archive
