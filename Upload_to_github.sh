@@ -11,25 +11,34 @@ make_man(){
 }
 make_readme(){
     cat <<EOF
-    # ZIPsFS - Fuse-based  overlay file system which expands  ZIP files
+    # ZIPsFS - FUSE-based  overlay file system which expands  ZIP files
 
-# Motivation
+# MOTIVATION
 
-We use closed-source proprietary Windows software and shared libraries for data conversion of high throughput experimental data. However,
-the sheer amount of file data brought the high-performance Windows machine regularly to a stand still.
-We ended up with Wine on Ubuntu which easily copes with the high amount of data.
-Unfortunately, implementation and  user interface prevents usage of  UNIX techniques  to use  zipped files from our storage without creating intermediate files.
-Furthermore some software demands write access to the file location.
+We use closed-source proprietary Windows software and shared libraries for reading  experimental data from mass spectrometry machines.
+Unfortunately, the sheer amount of file data brought our high-performance Windows server to a stand still.
+Currently we are using  Wine on Ubuntu which works much better for large files.
+Our data is archived in a read-only WORM file system. To reduce the number of individual files,  all files of one  record are bundled in one ZIP.
 
-We used to use zip-fuse to mount  ZIP files in the storage. Before starting computation, all required ZIP files were mounted.
-Symbolic links solved the problem of demanded write access.
-However, recently  the size of our experiments and thus the number of ZIP files grew, which rendered this method unusable.
+We hoped that we could use pipes or process substitution to access the data inside the ZIP, however this is not possible for the  software we are using.
+However, mounting all ZIP files before starting the computation worked well in the past.
 
-Furthermore we are concerned about the health of our conventional hard disks since many  threads are simultaneously reading files of 2GB and more at different file positions.
-There are also files which are sqlite3 databases. This leads to large numbers of seek operations which is inefficient for compressed and remote files.
+ZIPsFS has been developed to solve the following  problems:
 
-ZIPsFS has been developed to solve all these problems.
+- Recently  the size of our experiments and thus the number of ZIP files grew enormously.
+  Mounting thousands of individual ZIP files at the same time is not feasible.
+
+- Some proprietary  software for mass spectrometry software requires write access for the volume where the data is loaded from.
+
+- Some of the  files are  not read  sequentially. Instead data is read  from varying file positions. This is particularly  inefficient
+  for compressed  ZIP entries. The worst case is a  negative i.e. backward  seek operation.
+  It  will result in a new remote request from the beginning of the member content.
+
+- When experimental records  are archived the files are first stored in an  intermediate storage as a ZIP file. Later after verification, these ZIP files are moved to the WORM file system.
+  Consequently there are different places where files could be located.
+
 EOF
+    echo
     cat $MD
 }
 
