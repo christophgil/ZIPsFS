@@ -38,8 +38,7 @@ EOF
 
 main(){
 
-    local msg="${1:--}"
-    echo mmmmmmmmmmmmmmmmmmmmmmmm $msg
+    local msg="${1:-}"
     if [[ -z $msg ]]; then
         echo "Missing: commit message"
     else
