@@ -31,10 +31,19 @@ static char *path_of_this_executable(){
   return _p;
 }
 
+
+static void provoke_idx_out_of_bounds(){
+  char a[10];
+  char *b=a;
+b[11]='x';
+
+}
+
 /////////////////////////////////
 /// Stacktrace on error/exit  ///
 /////////////////////////////////
 static void print_trace_using_debugger(){
+  return;
   fputs(ANSI_INVERSE"print_trace_using_debugger"ANSI_RESET"\n",stderr);
   char pid_buf[30];
   sprintf(pid_buf, "%d", getpid());
@@ -79,7 +88,7 @@ static void bt_sighandler(int sig, siginfo_t *psi, void *ctxarg){
   exit(0);
 }
 // void init_handler() __attribute((constructor));
-void init_handler(){
+void init_handlerXXXXXXXXXXXx(){
   log_debug_now("init_handler\n");
   struct sigaction sa;
   sa.sa_sigaction=bt_sighandler;

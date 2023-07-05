@@ -34,12 +34,13 @@
 #define ANSI_BOLD "\x1B[1m"
 #define ANSI_UNDERLINE "\x1B[4m"
 #define ANSI_RESET "\x1B[0m"
+
 #define TERMINAL_CLR_LINE "\r\x1B[K"
 #ifndef LOG_STREAM
 #define LOG_STREAM stdout
 #endif
 #define log_struct(st,field,format)   printf("    " #field "=" #format "\n",st->field)
-
+#include "ht4.c"
 static bool _killOnError=false,_logIsSilent=false, _logIsSilentFailed=false,_logIsSilentWarn=false,_logIsSilentError=false;
 #define log_argptr() va_list argptr;va_start(argptr,format);vfprintf(LOG_STREAM,format,argptr);va_end(argptr)
 static void log_strg(const char *s){
@@ -224,10 +225,12 @@ static void _warning(const char *fn,const unsigned int channel,const char* path,
   if (!channel){
     initialized=true;
     pthread_mutex_init(&mutex,NULL);
-    if (path  && !(file=fopen(path,"w"))) log_debug_now(" Error fopen  %s 'n",path), perror("");
-#if defined _ht_dot_c_end
+    if (path  && !(file=fopen(path,"w"))){
+      perror("");
+    }
+    //#if defined _ht_dot_c_end
     ht_init(&ht,7);
-#endif
+    //#endif
     return;
   }
   const int i=channel&((1<<WARN_SHIFT_MAX)-1);
@@ -240,7 +243,7 @@ static void _warning(const char *fn,const unsigned int channel,const char* path,
       written>1000*1000*1000 ||
       ((channel&WARN_FLAG_ONCE) && _warning_count[i]) ||
 #if defined _ht_dot_c_end
-      (channel&WARN_FLAG_ONCE_PER_PATH) && path &&  ht_get(NULL,path) ||
+      ((channel&WARN_FLAG_ONCE_PER_PATH) && path &&  ht_get(NULL,path)) ||
 #endif
       false) toFile=false;
   _warning_count[i]++;

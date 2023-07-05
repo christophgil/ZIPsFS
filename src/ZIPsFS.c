@@ -29,10 +29,10 @@
 #include <zip.h>
 #include <sqlite3.h>
 #define LOG_STREAM stdout
+#include "ht4.c"
 #include "cg_log.c"
 #include "cg_utils.c"
 #include "configuration.c"
-#include "ht4.c"
 #include "cg_debug.c"
 #define SIZE_CUTOFF_MMAP_vs_MALLOC 100000
 #define DEBUG_ABORT_MISSING_TDF 1
@@ -963,7 +963,6 @@ static int impl_readdir(const struct rootdata *r,struct zippath *zpath, void *bu
         char *append="";
         //init_stat(&st,(nis.is_dir||zip_contained_in_virtual_path(n,NULL,&append))?-1:nis.size,NULL);
         init_stat(&st,(nis.opt&DIRENT_ISDIR)?-1:nis.size,NULL);
-        log_debug_now("n=%s  nis.isdir=%d\n",n, nis.opt&DIRENT_ISDIR);
         //if (endsWith(n,"zip/") || endsWith(n,"zip") )  log_debug_now("%s isdir=%d  %d\n",n,nis.is_dir,S_ISDIR(st.st_mode));
         st.st_ino=make_inode(zpath->stat_rp.st_ino,r->index,0,RP());
         if (filter_files_in_listing(rp,n)){
@@ -1178,14 +1177,18 @@ static struct fhdata *cache_zip_entry(const enum data_op op,struct fhdata *d){
         d->cache=CACHE_FAILED;
         return d;
       }else{
-
         trackMemUsage(d->is_cache_heap?memusage_malloc:memusage_mmap,len);
         struct zip *za=zip_open_ro(d->zpath.realpath);
-        zip_file_t *zf=za?zip_fopen(za,d->zpath.entry_path,ZIP_RDONLY):NULL;
-        if (!zf) warning(WARN_CACHE|WARN_FLAG_MAYBE_EXIT,d->zpath.realpath,"cache_zip_entry-CREATE: d= %p Failed zip_open za= %p",d,za);
-        bool ok=(zf!=NULL);
+                if (!za){
+          warning(WARN_CACHE|WARN_FLAG_MAYBE_EXIT,d->zpath.realpath,"cache_zip_entry-CREATE: d= %p Failed zip_open za= %p",d,za);
+        }else{
 
-        if (zf){
+
+        zip_file_t *zf=zip_fopen(za,d->zpath.entry_path,ZIP_RDONLY);
+        if (!zf){
+          warning(WARN_CACHE|WARN_FLAG_MAYBE_EXIT,d->zpath.realpath,"cache_zip_entry-CREATE: d= %p Failed zip_fopen zf= %p",d,zf);
+        }else{
+          bool ok=true;
           const long start=currentTimeMillis();
           long already=0;
           int count=0;
@@ -1212,9 +1215,10 @@ static struct fhdata *cache_zip_entry(const enum data_op op,struct fhdata *d){
             d->cache_read_mseconds=currentTimeMillis()-start;
           }
           UNLOCK_FHDATA();
+          zip_fclose(zf);
         }
-        zip_fclose(zf);
         zip_close(za);
+        }
         return d;
       }
     }
@@ -1514,7 +1518,6 @@ static int xmp_read(const char *path, char *buf, const size_t size, const off_t 
   if (endsWith(path,"20230612_PRO3_AF_004_MA_HEK200ng_5minHF_001_V11-20-HSoff_INF-B_1.d/analysis.tdf_bin")){
     for(int i=1000;--i>=0 && _debug_offset>offset;) usleep(1000);
     if (_debug_offset>offset) log_msg(ANSI_RED"BACKWARD"ANSI_RESET" ");
-    log_debug_now(ANSI_MAGENTA"%s"ANSI_RESET" %lx\n",path,offset);
     _debug_offset=offset;
   }
   log_mthd_orig();
@@ -1602,7 +1605,8 @@ int main(int argc,char *argv[]){
     foreground|=colon && !strcmp("-f",argv[i]);
   }
   if (!colon){ log_warn("No colon found in parameter list\n"); usage(); return 1; }
-  log_msg(ANSI_INVERSE""ANSI_UNDERLINE"This is %s  main(...)"ANSI_RESET"\n",path_of_this_executable());
+  log_msg(ANSI_INVERSE""ANSI_UNDERLINE"This is %s  main(...)"ANSI_RESET"\nCompiled: %s %s\n",path_of_this_executable(),__DATE__,__TIME__);
+
   setlocale(LC_NUMERIC,""); /* Enables decimal grouping in printf */
   assert(S_IXOTH==(S_IROTH>>2));
   zipentry_to_zipfile_test();
@@ -1636,6 +1640,7 @@ int main(int argc,char *argv[]){
     case 'L':{
       static struct rlimit _rlimit={0};
       _rlimit.rlim_cur=_rlimit.rlim_max=atol_kmgt(optarg);
+      log_debug_now("Setting rlimit to %ld MB \n",_rlimit.rlim_max>>20);
       setrlimit(RLIMIT_AS,&_rlimit);
     } break;
     case 'c':
@@ -1699,7 +1704,9 @@ int main(int argc,char *argv[]){
     pthread_mutexattr_settype(&_mutex_attr_recursive,PTHREAD_MUTEX_RECURSIVE);
     for(int i=mutex_roots+_root_n;--i>=0;) pthread_mutex_init(_mutex+i, &_mutex_attr_recursive);
   }
+  log_debug_now("Going to start_threads ...\n");
   start_threads();
+  log_debug_now("Going to fuse_main ...\n");
   const int fuse_stat=fuse_main(_fuse_argc=argc-colon,_fuse_argv=argv+colon,&xmp_oper,NULL);
   log_msg("fuse_main returned %d\n",fuse_stat);
   return fuse_stat;

@@ -12,7 +12,8 @@
        + Keys can be stored in a pool to reduce the number of malloc invocations.
    - Can be used for int-values as keys and int values as values.
 */
-
+#define ANSI_RESET "\x1B[0m"
+#define ANSI_FG_RED "\x1B[31m"
 #ifndef _ht_dot_c
 #define _ht_dot_c
 #include <assert.h>
@@ -25,12 +26,12 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <malloc.h>
-#include "cg_log.c"
+//#include "cg_log.c"
 #include <sys/types.h>
 #include <unistd.h>
-#ifndef log_error
-#define log_error(...)  printf("\x1B[31m Error \x1B[0m"),fprintf(stderr,__VA_ARGS__)
-#endif
+
+#define log_ht_error(...)  fprintf(stderr,"\x1B[31m Error \x1B[0m"),fprintf(stderr,__VA_ARGS__)
+
 #define HT_INTKEY (1<<30)
 /* ***************** */
 /* *** keystore ***  */
@@ -113,19 +114,18 @@ struct ht{
 bool ht_init_with_keystore(struct ht *table,uint32_t log2initalCapacity,uint32_t log2keystoreDim){
   if (!table) return false;
   if (table->must_be_zero){
-    log_error("The struct ht must be initialized with zero\n");
+    log_ht_error("The struct ht must be initialized with zero\n");
     return false;
   }
   if (log2keystoreDim) table->keystore.dim=(1<<log2keystoreDim);
   table->flags=log2initalCapacity&0xFF000000;
   if (table->entries){
-    log_debug_now("HT already initialized\n");
     return true;
   }
   //  memset(table,0,sizeof(struct ht));
   table->capacity=(log2initalCapacity&0xff)?(1<<(log2initalCapacity&0xff)):256;
   if (!(table->entries=calloc(table->capacity,sizeof(struct ht_entry)))){
-    log_error("ht.c: calloc table->entries\n");
+    log_ht_error("ht.c: calloc table->entries\n");
     return false;
   }
   return true;
@@ -209,7 +209,7 @@ static struct ht_entry* ht_set_entry(struct ht *table,struct ht_entry* ee, uint3
       if ((table->keystore.dim)){
         key=keystore_push(&table->keystore,key,strlen(key));
       }else if (!(table->flags&HT_INTKEY) &&  !(key=strdup(key))){
-        log_error("ht.c: strdup(key)\n");
+        log_ht_error("ht.c: strdup(key)\n");
         return NULL;
       }
     }
@@ -226,7 +226,7 @@ static bool ht_expand(struct ht *table){
   const uint32_t new_capacity=table->capacity<<1;
   if (new_capacity<table->capacity) return false;  // overflow (capacity would be too big)
   struct ht_entry* new_ee=calloc(new_capacity,sizeof(struct ht_entry));
-  if (!new_ee){ log_error("ht.c: calloc new_ee\n"); return false; }
+  if (!new_ee){ log_ht_error("ht.c: calloc new_ee\n"); return false; }
   for (uint32_t i=0; i<table->capacity; i++){
     const struct ht_entry e=table->entries[i];
     if (e.key) ht_set_entry(table,new_ee,new_capacity,e.key,e.key_hash,e.value,NULL);
@@ -297,7 +297,6 @@ void ht_test_keystore(int argc, char *argv[]){
     for(int i=1;i<argc;i++){
       printf("%d\t%s\t%s\n",i,argv[i],copy[i]);
     }
-    log_debug_now("GOING TO keystore_destroy\n");
     keystore_destroy(&ks);
   }
   free(copy);

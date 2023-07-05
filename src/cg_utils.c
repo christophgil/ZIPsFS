@@ -274,7 +274,7 @@ static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc){
 
 #if __INCLUDE_LEVEL__ == 0
 #include "cg_read_entire_file.c"
-int main(int argc, char *argv[]){
+int mainYYYYYY(int argc, char *argv[]){
   setlocale(LC_NUMERIC,""); /* Enables decimal grouping in printf */
   //char *s=argv[1];    printf("%s = %'ld\n",s,atol_kmgt(s));
   if (0){
