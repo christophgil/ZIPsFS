@@ -52,14 +52,14 @@ static int print_fuse_argv(int n){
   return n;
 }
 static int print_roots(int n){
-  PRINTINFO("<H1>Roots</H1>\n<TABLE><THEAD><TR><TH>Path</TH><TH>Writable</TH><TH align=\"right\">Response</TH><TH align=\"right\">Delayed</TH><TH>Free GB</TH></TR></THEAD>\n");
+  PRINTINFO("<H1>Roots</H1>\n<TABLE><THEAD><TR><TH>Path</TH><TH>Writable</TH><TH align=\"right\">Response</TH><TH align=\"right\">Delayed</TH><TH>Free[GB]</TH><TH>Cache[kB]</TH></TR></THEAD>\n");
   foreach_root(i,r){
-    const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30),diff=deciSecondsSinceStart()-r->statfs_when_decisecons;
+    const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30),diff=deciSecondsSinceStart()-r->statfs_when_deciSec;
     if (n>=0){
       PRINTINFO("<TR><TD>%s</TD><TD align=\"center\">%s</TD>",r->path,yes_no(f&ROOT_WRITABLE));
       if (f&ROOT_REMOTE) PRINTINFO("<TD align=\"right\">%'ld ms</TD><TD align=\"right\">%'d</TD>", 10L*(diff>ROOT_OBSERVE_EVERY_DECISECONDS*3?diff:r->statfs_deciseconds),r->count_delayed);
       else PRINTINFO("<TD align=\"right\">Local</TD><TD></TD>");
-      PRINTINFO("<TD align=\"right\">%'d</TD></TR>\n",freeGB);
+      PRINTINFO("<TD align=\"right\">%'d</TD><TD align=\"right\">%'d</TD></TR>\n",freeGB,mstore_usage(&r->storedir)/1024);
     }else{
       log_msg("\t%d\t%s\t%s\n",i,r->path,!my_strlen(r->path)?"":(f&ROOT_REMOTE)?"Remote":(f&ROOT_WRITABLE)?"Writable":"Local");
     }
@@ -128,6 +128,8 @@ static int print_open_files(int n, int *fd_count){
   PRINTINFO("</OL>\n");
   return n;
 }
+#if 0
+// TODO Error in sscanf
 static int print_maps(int n){
   PRINTINFO("<H1>/proc/%ld/maps</H1>\n", (long)getpid());
   unsigned long total=0;
@@ -144,6 +146,7 @@ static int print_maps(int n){
     unsigned long begin,end,inode,foo;
     if(fgets(buf,sizeof(buf),f)==0) break;
     *mapname=0;
+    //    %*[^\n]\n   /home/cgille/tmp/map.txt
     const int k=sscanf(buf, "%lx-%lx %4s %lx %5s %lu %100s",&begin,&end,perm,&foo,dev, &inode,mapname);
     if (k>=6){
       const long size=end-begin;
@@ -159,6 +162,7 @@ static int print_maps(int n){
   PRINTINFO("<TFOOT><TR><TD></TD><TD></TD><TD>%'lu</TD><TD></TD></TR></TFOOT>\n</TABLE>\n",total>>10);
   return n;
 }
+#endif
 static int print_memory_details(int n){
   PRINTINFO("<H1>Memory - details</H1>\n<PRE>");
   {
@@ -166,11 +170,14 @@ static int print_memory_details(int n){
     getrlimit(RLIMIT_AS,&rl);
     if (rl.rlim_cur!=-1) PRINTINFO("Rlim soft: %lx MB   hard: %lx MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
   }
-  PRINTINFO("uordblks: %'d bytes (Total allocated heap space)\n</PRE>\n",mallinfo().uordblks);
-  n=print_maps(n);
+  PRINTINFO("uordblks: %'d bytes (Total allocated heap space)\n",mallinfo().uordblks);
+  //    PRINTINFO("Memory for storing directories=%'ld kB\n",mmapstore_used(_db_readdir)<<10);
+  PRINTINFO("</PRE>\n");
+  //n=print_maps(n);
   {
     int val; n=print_proc_status(n,"VmRSS:|VmHWM:|VmSize:|VmPeak:",&val);
   }
+
   return n;
 }
 #else
@@ -200,8 +207,6 @@ static int print_memory(int n){
   PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",WHEN_CACHE_S[_when_cache]);
   PRINTINFO("Number of calls to mmap: %d to munmap:%d<BR>\n",_memusage_count[2*memusage_mmap],_memusage_count[2*memusage_mmap+1]);
   PRINTINFO("Number of calls to malloc: %d to free:%d<BR>\n",_memusage_count[2*memusage_malloc],_memusage_count[2*memusage_malloc+1]);
-  PRINTINFO("Sqlite-db stores file listings: %s<BR>\n",_sqlitefile);
-
   return n;
 }
 
@@ -241,7 +246,7 @@ Column <I><B>F</B></I>: flags. (D)elete insicates that it is marked for closing 
     foreach_fhdata_path_not_null(d){
       if (n<0) log_msg("\t%p\t%s\t%p\t%zu\n",d,snull(d->path),d->cache,d->cache_l);
       else{
-        PRINTINFO("<TR><TD>%s</TD><TD>%lu</TD>",snull(d->path),d->fh);
+        PRINTINFO("<TR><TD>%s</TD><TD>%llu</TD>",snull(d->path),d->fh);
         PRINTINFO("<TD align=\"right\">"); if (d->access) PRINTINFO("%'ld s</TD>",t0-d->access); else PRINTINFO("Never</TD>");
         //                strcpy(buf,"<TD></TD><TD></TD><TD></TD>");        if (d->cache) sprintf(buf,"<TD>%p</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD>",d->cache,MAX(d->cache_l>>10,!!d->cache_l),d->cache_read_seconds);
         //PRINTINFO("%s<TD>%c%c</TD><TD>%d</TD></TR>\n",buf,d->close_later?'D':' ', fhdata_can_destroy(d)?' ':'K',d->xmp_read);
@@ -287,6 +292,7 @@ TD{padding:5px;}\n\
   PRINTINFO("_mutex=%p\n<BR>",_mutex);
   PRINTINFO("<H1>Inodes</H1>Created sequentially: %'d\n",_countSeqInode);
   n=print_read_statistics(n);
+  //  PRINTINFO("_cumul_time_store=%lf\n<BR>",((double)_cumul_time_store)/CLOCKS_PER_SEC);
   PRINTINFO("</BODY>\n</HTML>\n");
   log_exited_function("get_info\n %d",n);
   return n;
@@ -365,7 +371,6 @@ Options and arguments before the colon are interpreted by ZIPsFS.  Those after t
          seek: When the data is not read continuously\n\
          rule: According to rules based on the file name encoded in configuration.h\n\
          The default is when backward seeking would be requires otherwise\n\
-      -d <sqlite database file>    The database stores directory information. In this case the database will not be cleared.\n\
       -k Kill on error. For debugging only.\n\
       -l Limit memory usage for caching ZIP entries.\n\
          Without caching, moving read positions backwards for an non-seek-able ZIP-stream would require closing, reopening and skipping.\n\

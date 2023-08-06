@@ -1,10 +1,14 @@
-  (global-set-key (kbd "<f1>") '(lambda() (interactive) (find-file "~/git_projects/ZIPsFS/src/ZIPsFS.c")))
+(progn
+(global-set-key (kbd "<f1>") '(lambda() (interactive) (find-file "~/git_projects/ZIPsFS/src/ZIPsFS.c")))
         (global-set-key (kbd "<f2>") '(lambda() (interactive) (find-file "~/git_projects/cache_readdir_stat/cache_readdir_stat.c")))
-(global-set-key (kbd "<f4>") '(lambda() (interactive) (find-file "~/git_projects/common/ht4.c")))
-    (global-set-key (kbd "<f5>") '(lambda() (interactive) (find-file "~/git_projects/ZIPsFS/src/log.c")))
+(global-set-key (kbd "<f4>") '(lambda() (interactive) (find-file "~/git_projects/ZIPsFS/src/cg_mstore_v2.c")))
+    (global-set-key (kbd "<f5>") '(lambda() (interactive) (find-file "~/git_projects/ZIPsFS/src/cg_ht_v5.c")))
         (global-set-key (kbd "<f6>") '(lambda() (interactive) (find-file "~/git_projects/ZIPsFS/src/configuration.h")))
 
 
+        (use-package afternoon-theme) (load-theme  'afternoon)
+        )
+https://www.dunebook.com/best-emacs-themes/
 * C language
 http://port70.net/~nsz/c/c99/n1256.html
 
@@ -213,6 +217,9 @@ strace -e trace=write df -h
 
 
 
+* Optimization
+https://www.codee.com/flexibility-and-performance-introduction-to-loop-unswitching/
+
 * gcc
 ** gcc instrumentation
 https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html
@@ -273,6 +280,8 @@ struct zip_file {
     zip_source_t *src; /* data source */
 };
 ** Zip_fopen
+
+O_DIRECT: You can add support for this yourself, without modifying libzip, by creating a custom source via zip_source_function_crreate() and passing that source to zip_open_from_source().
 libzip (-lzip)
 
 Synopsis
@@ -392,6 +401,8 @@ struct fuse_file_info {
 
 * Error code
 es
+ https://android.googlesource.com/kernel/lk/+/dima/for-travis/include/errno.h
+
     EPERM 1		/* Not super-user */
 !   ENOENT 2	/* No such file or directory */
     ESRCH 3		/* No such process */
@@ -862,3 +873,39 @@ RECOGNIZE_ZIP_FILES_1
 ** cache tdf and tdf_bin
 [108:03] Log saved to /no_raid/Users/cgille/tmp/ZIPsFS/diann/test/report.log.txt
 Finished
+
+* Fehler:
+ - dir->filenames_l+=len1;
+ - LOCK UNLOCK braces
+ - zip_open zip_close braces
+ - init_stat(&st,(f2.opt&DIRENT_ISDIR)?-1:f.size,&zpath->stat_rp);
+
+   order of evaluation
+   alignment in memory
+* Benchmark
+** Still SQL
+*** Cold
+Cache tdf_bin
+[64:24] File #30/30
+[66:27] Cross-run analysis
+*** Repeat
+  [31:34] File #17/30
+
+** mmap
+[61:56] Cross-run analysis
+[111:45] Log saved to /no_raid/Users/cgille/tmp/ZIPsFS/diann/test/report.log.txt
+
+
+
+
+                         Path                           Writable Response Delayed Free[GB] Cache[kB]
+                         /home/cgille/tmp/ZIPsFS/modified                          Yes       Local                0         0
+                         /slow2/incoming                                            No        0 ms       0    1,385     3,737
+                         /s-mcpb-ms03.charite.de/fularchiv01.d/EquiValent/152/1     No        0 ms       0  298,018     5,290
+
+
+
+* nocache
+https://linux.die.net/man/2/fadvise
+    const int pos=
+    https://www.dell.com/support/kbdoc/de-de/000140396/5-wege-die-festplattengeschwindigkeit-unter-linux-zu-verbessern

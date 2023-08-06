@@ -36,14 +36,18 @@
 
 /*********************************************************************************/
 /* *** String *** */
-static int empty_dot_dotdot(const char *s){ return !*s || (*s=='.' && (!s[1] || (s[1]=='.' && !s[2]))); }
+static int empty_dot_dotdot(const char *s){
+  return !s || !*s || (*s=='.' && (!s[1] || (s[1]=='.' && !s[2])));
+}
 static char *my_strncpy(char *dst,const char *src, int n){
   *dst=0;
   if (src) strncat(dst,src,n);
   return dst;
 }
 #define SNPRINTF(dest,max,...)   (max<=snprintf(dest,max,__VA_ARGS__) && (log_error("Exceed snprintf "),true))
-static unsigned int my_strlen(const char *s){ return !s?0:strnlen(s,MAX_PATHLEN);}
+static unsigned int my_strlen(const char *s){
+  return !s?0:strnlen(s,MAX_PATHLEN);
+}
 static const char* snull(const char *s){ return s?s:"Null";}
 static inline char *yes_no(int i){ return i?"Yes":"No";}
 
@@ -216,7 +220,10 @@ bool access_from_stat(const struct stat *stats,int mode){ // equivaletn to acces
 /*********************************************************************************/
 /* *** io *** */
 static void print_substring(int fd,const char *s,int f,int t){  write(fd,s,min_int(my_strlen(s),t)); }
-static void recursive_mkdir(char *p){
+static void recursive_mkdir(const char *path){
+  char p[PATH_MAX];
+  strcpy(p,path);
+
   const int n=pathlen_ignore_trailing_slash(p);
   for(int i=2;i<n;i++){
     if (p[i]=='/'){
@@ -272,8 +279,11 @@ static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc){
 // 1111111111111111111111111111111111111111111111111111111111111
 
 
-#if __INCLUDE_LEVEL__ == 0
+#if defined __IN__INCLUDE_LEVEL__ && __INCLUDE_LEVEL__ == 0
 #include "cg_read_entire_file.c"
+
+aaa
+
 int mainYYYYYY(int argc, char *argv[]){
   setlocale(LC_NUMERIC,""); /* Enables decimal grouping in printf */
   //char *s=argv[1];    printf("%s = %'ld\n",s,atol_kmgt(s));
@@ -320,5 +330,6 @@ int mainYYYYYY(int argc, char *argv[]){
 
 
   }
+  return 0;
 }
 #endif

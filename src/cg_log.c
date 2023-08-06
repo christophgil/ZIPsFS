@@ -35,12 +35,15 @@
 #define ANSI_UNDERLINE "\x1B[4m"
 #define ANSI_RESET "\x1B[0m"
 
+
+#define GREEN_SUCCESS ANSI_GREEN" SUCCESS "ANSI_RESET
+#define RED_WARNING ANSI_RED" WARNING "ANSI_RESET
 #define TERMINAL_CLR_LINE "\r\x1B[K"
 #ifndef LOG_STREAM
 #define LOG_STREAM stdout
 #endif
 #define log_struct(st,field,format)   printf("    " #field "=" #format "\n",st->field)
-#include "ht4.c"
+#include "cg_ht_v5.c"
 static bool _killOnError=false,_logIsSilent=false, _logIsSilentFailed=false,_logIsSilentWarn=false,_logIsSilentError=false;
 #define log_argptr() va_list argptr;va_start(argptr,format);vfprintf(LOG_STREAM,format,argptr);va_end(argptr)
 static void log_strg(const char *s){
@@ -55,13 +58,14 @@ static void log_msg(const char *format,...){
 
 
 
-enum Logs{Log_already_exists,Log_failed,Log_warn,Log_error,Log_succes,Log_debug_now,Log_entered_function,Log_exited_function,Log_cache};
+enum Logs{Log_already_exists,Log_failed,Log_warn,Log_warne,Log_error,Log_succes,Log_debug_now,Log_entered_function,Log_exited_function,Log_cache};
 
 
 
 #define log_already_exists(...)    _log_common(__func__,Log_already_exists,__VA_ARGS__)
 #define log_failed(...)            _log_common(__func__,Log_failed,__VA_ARGS__)
 #define log_warn(...)              _log_common(__func__,Log_warn,__VA_ARGS__)
+#define log_warne(...)              _log_common(__func__,Log_warne,__VA_ARGS__)
 #define log_error(...)             _log_common(__func__,Log_error,__VA_ARGS__)
 #define log_succes(...)            _log_common(__func__,Log_succes,__VA_ARGS__)
 #define log_debug_now(...)         _log_common(__func__,Log_debug_now,__VA_ARGS__)
@@ -73,22 +77,30 @@ enum Logs{Log_already_exists,Log_failed,Log_warn,Log_error,Log_succes,Log_debug_
 
 static void _log_common(const char *fn,enum Logs t,const char *format,...){
   if(_logIsSilent) return;
+  switch(t){
+  case Log_entered_function:  log_msg(ANSI_INVERSE">>>"ANSI_RESET);break;
+  case Log_exited_function:   log_strg(ANSI_INVERSE"< < < <"ANSI_RESET);break;
+  default:;
+  }
+
   log_strg(fn);
   log_strg("() ");
   switch(t){
   case Log_already_exists:    log_strg("Already exists "ANSI_RESET);break;
   case Log_failed:            log_msg(ANSI_FG_RED" $$ %d Failed "ANSI_RESET,getpid());break;
-  case Log_warn:              log_msg(ANSI_FG_RED" $$ %d Warn "ANSI_RESET,getpid());break;
   case Log_error:             log_msg(ANSI_FG_RED" $$ %d Error "ANSI_RESET,getpid());break;
   case Log_succes:            log_strg(ANSI_FG_GREEN" Success "ANSI_RESET);break;
   case Log_debug_now:         log_msg(ANSI_FG_MAGENTA" Debug "ANSI_RESET" ");break;
-  case Log_entered_function:  log_msg(ANSI_INVERSE">>>"ANSI_RESET);break;
-  case Log_exited_function:   log_strg(ANSI_INVERSE"< < < <"ANSI_RESET);break;
   case Log_cache:             log_msg(ANSI_MAGENTA" $$ %d CACHE"ANSI_RESET" ",getpid());break;
-
+  case Log_warne:
+  case Log_warn:              log_msg(ANSI_FG_RED" $$ %d Warn "ANSI_RESET,getpid());break;
+      default:;
   }
   log_argptr();
-
+  const int e=errno;
+  if (e){
+    if (t==Log_warne) log_warn("%s\n",strerror(e));
+  }
 }
 
 
@@ -193,13 +205,20 @@ static void log_mem(FILE *f){
 ///////////
 /* *** time *** */
 static long _startTimeMillis=0;
+
+/* static long currentTimeMicros(){ */
+/*   struct timeval tv={0}; */
+/*   gettimeofday(&tv,NULL); */
+/*   return tv.tv_sec*1000000+tv.tv_usec; */
+/* } */
+
 static long currentTimeMillis(){
   struct timeval tv={0};
   gettimeofday(&tv,NULL);
   return tv.tv_sec*1000+tv.tv_usec/1000;
 }
 
-static unsigned int deciSecondsSinceStart(){
+static uint32_t deciSecondsSinceStart(){
   if (!_startTimeMillis)_startTimeMillis=currentTimeMillis();
   return (int)((currentTimeMillis()-_startTimeMillis)/100);
 }
@@ -229,7 +248,7 @@ static void _warning(const char *fn,const unsigned int channel,const char* path,
       perror("");
     }
     //#if defined _ht_dot_c_end
-    ht_init(&ht,7);
+    ht_init(&ht,0,7);
     //#endif
     return;
   }
@@ -243,7 +262,7 @@ static void _warning(const char *fn,const unsigned int channel,const char* path,
       written>1000*1000*1000 ||
       ((channel&WARN_FLAG_ONCE) && _warning_count[i]) ||
 #if defined _ht_dot_c_end
-      ((channel&WARN_FLAG_ONCE_PER_PATH) && path &&  ht_get(NULL,path)) ||
+      ((channel&WARN_FLAG_ONCE_PER_PATH) && path &&  ht_get(&ht,path,0,0)) ||
 #endif
       false) toFile=false;
   _warning_count[i]++;
