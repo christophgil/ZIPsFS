@@ -26,6 +26,7 @@
 #include <fuse.h>
 #define fill_dir_plus 0
 #include <zip.h>
+#include <stdbool.h>
 #define LOG_STREAM stdout
 
 #include "cg_ht_v5.c"
@@ -1768,7 +1769,7 @@ int main(int argc,char *argv[]){
     char *s=dot_ZIPsFS+sprintf(dot_ZIPsFS,"%s/.ZIPsFS/",getenv("HOME"));
     strcat(s,mnt);
     for(;*s;s++) if (*s=='/') *s='_';
-    sprintf(_fwarn,"%s%s",dot_ZIPsFS,FILE_LOG_WARNINGS);
+    snprintf(_fwarn,MAX_PATHLEN,"%s%s",dot_ZIPsFS,FILE_LOG_WARNINGS);
     warning(WARN_INIT,_fwarn,"");
   }
   recursive_mkdir(dot_ZIPsFS);

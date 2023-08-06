@@ -171,8 +171,7 @@ AUTOMAKE = ${SHELL} /home/cgille/git_projects/ZIPsFS/missing automake-1.16
 AWK = gawk
 CC = gcc
 CCDEPMODE = depmode=gcc3
-CFLAGS =   -rdynamic   -g
-# -fsanitize=bounds
+CFLAGS = -march=znver2
 CPP = gcc -E
 CPPFLAGS = 
 CYGPATH_W = echo
@@ -203,20 +202,18 @@ OBJEXT = o
 PACKAGE = zipsfs
 PACKAGE_BUGREPORT = christophgil@gmail.com
 PACKAGE_NAME = ZIPsFS
-PACKAGE_STRING = ZIPsFS 2023-02-22
+PACKAGE_STRING = ZIPsFS 2023-08-01
 PACKAGE_TARNAME = zipsfs
 PACKAGE_URL = 
-PACKAGE_VERSION = 2023-02-22
+PACKAGE_VERSION = 2023-08-01
 PATH_SEPARATOR = :
 PKG_CONFIG = /usr/bin/pkg-config
 PKG_CONFIG_LIBDIR = 
 PKG_CONFIG_PATH = 
 SET_MAKE = 
 SHELL = /bin/bash
-SQLITE_CFLAGS = -I/usr/local/include
-SQLITE_LIBS = -L/usr/local/lib -lsqlite3
 STRIP = 
-VERSION = 2023-02-22
+VERSION = 2023-08-01
 abs_builddir = /home/cgille/git_projects/ZIPsFS/src
 abs_srcdir = /home/cgille/git_projects/ZIPsFS/src
 abs_top_builddir = /home/cgille/git_projects/ZIPsFS
@@ -260,9 +257,9 @@ target_alias =
 top_build_prefix = ../
 top_builddir = ..
 top_srcdir = ..
-ZIPsFS_SOURCES = ZIPsFS.c  log.h
-LDADD = -L/usr/local/lib/x86_64-linux-gnu -lfuse3 -lpthread -L/usr/local/lib -lzip  -L/usr/local/lib -lsqlite3
-AM_CFLAGS = -I/usr/local/include/fuse3 -O0 -D_FILE_OFFSET_BITS=64 
+ZIPsFS_SOURCES = ZIPsFS.c
+LDADD = -L/usr/local/lib/x86_64-linux-gnu -lfuse3 -lpthread -L/usr/local/lib -lzip  
+AM_CFLAGS = -I/usr/local/include/fuse3 -g3 -O0 -D_FILE_OFFSET_BITS=64 
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am
 

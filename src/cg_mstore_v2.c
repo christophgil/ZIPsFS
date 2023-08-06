@@ -25,7 +25,7 @@
 ////////////
 #define FNV_OFFSET 14695981039346656037UL
 #define FNV_PRIME 1099511628211UL
-// Return 64-bit FNV-1a hash for key (NUL-terminated). See  https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
+// Retur0n 64-bit FNV-1a hash for key (NUL-terminated). See  https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
 #define HASH_VALUE_LOG (1UL<<61)
 uint64_t hash_value(const char* key, size_t len){
   uint64_t hash=FNV_OFFSET;

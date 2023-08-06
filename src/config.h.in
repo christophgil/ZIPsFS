@@ -6,11 +6,11 @@
 /* Define to 1 if you have the <fcntl.h> header file. */
 #undef HAVE_FCNTL_H
 
-/* Define to 1 if you have the `fdatasync' function. */
-#undef HAVE_FDATASYNC
-
 /* Define to 1 if you have the `ftruncate' function. */
 #undef HAVE_FTRUNCATE
+
+/* Define to 1 if you have the <fuse.h> header file. */
+#undef HAVE_FUSE_H
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
@@ -28,17 +28,11 @@
 /* Define to 1 if you have the `mkdir' function. */
 #undef HAVE_MKDIR
 
-/* Define to 1 if you have the `mkfifo' function. */
-#undef HAVE_MKFIFO
-
 /* Define to 1 if you have the `realpath' function. */
 #undef HAVE_REALPATH
 
 /* Define to 1 if you have the `rmdir' function. */
 #undef HAVE_RMDIR
-
-/* Define to 1 if you have the <sqlite3.h> header file. */
-#undef HAVE_SQLITE3_H
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
@@ -77,17 +71,11 @@
 /* Define to 1 if you have the <sys/types.h> header file. */
 #undef HAVE_SYS_TYPES_H
 
-/* Define to 1 if you have the <sys/xattr.h> header file. */
-#undef HAVE_SYS_XATTR_H
-
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
 /* Define to 1 if you have the `utime' function. */
 #undef HAVE_UTIME
-
-/* Define to 1 if you have the <utime.h> header file. */
-#undef HAVE_UTIME_H
 
 /* Define to 1 if you have the <zip.h> header file. */
 #undef HAVE_ZIP_H

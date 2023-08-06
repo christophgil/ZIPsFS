@@ -7,11 +7,11 @@
 /* Define to 1 if you have the <fcntl.h> header file. */
 #define HAVE_FCNTL_H 1
 
-/* Define to 1 if you have the `fdatasync' function. */
-#define HAVE_FDATASYNC 1
-
 /* Define to 1 if you have the `ftruncate' function. */
 #define HAVE_FTRUNCATE 1
+
+/* Define to 1 if you have the <fuse.h> header file. */
+/* #undef HAVE_FUSE_H */
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
@@ -29,17 +29,11 @@
 /* Define to 1 if you have the `mkdir' function. */
 #define HAVE_MKDIR 1
 
-/* Define to 1 if you have the `mkfifo' function. */
-#define HAVE_MKFIFO 1
-
 /* Define to 1 if you have the `realpath' function. */
 #define HAVE_REALPATH 1
 
 /* Define to 1 if you have the `rmdir' function. */
 #define HAVE_RMDIR 1
-
-/* Define to 1 if you have the <sqlite3.h> header file. */
-#define HAVE_SQLITE3_H 1
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #define HAVE_STDINT_H 1
@@ -78,17 +72,11 @@
 /* Define to 1 if you have the <sys/types.h> header file. */
 #define HAVE_SYS_TYPES_H 1
 
-/* Define to 1 if you have the <sys/xattr.h> header file. */
-#define HAVE_SYS_XATTR_H 1
-
 /* Define to 1 if you have the <unistd.h> header file. */
 #define HAVE_UNISTD_H 1
 
 /* Define to 1 if you have the `utime' function. */
 #define HAVE_UTIME 1
-
-/* Define to 1 if you have the <utime.h> header file. */
-#define HAVE_UTIME_H 1
 
 /* Define to 1 if you have the <zip.h> header file. */
 #define HAVE_ZIP_H 1
@@ -107,7 +95,7 @@
 #define PACKAGE_NAME "ZIPsFS"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "ZIPsFS 2023-02-22"
+#define PACKAGE_STRING "ZIPsFS 2023-08-01"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "zipsfs"
@@ -116,13 +104,13 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2023-02-22"
+#define PACKAGE_VERSION "2023-08-01"
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
 
 /* Version number of package */
-#define VERSION "2023-02-22"
+#define VERSION "2023-08-01"
 
 /* Define for Solaris 2.5.1 so the uint64_t typedef from <sys/synch.h>,
    <pthread.h>, or <semaphore.h> is not used. If the typedef were allowed, the

@@ -2,16 +2,18 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([0.1])
-AC_INIT([ZIPsFS], [2023-02-22], [christophgil@gmail.com])
+AC_INIT([ZIPsFS], [2023-08-01], [christophgil@gmail.com])
 AM_INIT_AUTOMAKE
+AC_PROG_CC
+
 AC_CONFIG_SRCDIR([src/ZIPsFS.c])
 AC_CONFIG_HEADERS([src/config.h])
 
-# Checks for programs.
-AC_PROG_CC
+AC_CONFIG_FILES([src/Makefile])
+
 
 # Checks for header files.
-AC_CHECK_HEADERS([fcntl.h limits.h stdlib.h string.h sys/statvfs.h unistd.h utime.h sys/xattr.h fuse.h zip.h])
+AC_CHECK_HEADERS([stdlib.h string.h  fcntl.h limits.h sys/statvfs.h unistd.h  fuse.h zip.h])
 
 # Check for FUSE development environment
 PKG_CHECK_MODULES(FUSE,fuse3)
@@ -32,10 +34,7 @@ AC_TYPE_UINT64_T
 AC_FUNC_CHOWN
 AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
 AC_FUNC_MALLOC
-AC_CHECK_FUNCS([ftruncate mkdir mkfifo realpath rmdir strerror utime])
+AC_CHECK_FUNCS([ftruncate mkdir realpath rmdir strerror utime])
 
-# Not all systems that support FUSE also support fdatasync (notably freebsd)
-AC_CHECK_FUNCS([fdatasync])
 
-AC_CONFIG_FILES([src/Makefile])
 AC_OUTPUT

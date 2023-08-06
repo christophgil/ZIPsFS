@@ -1,8 +1,0 @@
-Install libfuse3
-
-
-Then cd into the ZIPsFS/ folder
-
-./configure
-cd src
-make

@@ -157,7 +157,6 @@ Written in GNU-C.
 
  - fuse3
  - libzip
- - SQLite3
 
 ## Operation system
 

@@ -44,7 +44,6 @@ int printinfo(int n, const char *format,...){
   return n;
 }
 
-#define PROC_PATH_MAX 256
 static int print_fuse_argv(int n){
   PRINTINFO("<H1>Fuse Parameters</H1><OL>");
   for(int i=1;i<_fuse_argc;i++) PRINTINFO("<LI>%s</LI>\n",_fuse_argv[i]);
@@ -118,8 +117,8 @@ static int print_open_files(int n, int *fd_count){
   for(int i=0;(dp=readdir(dir));i++){
     if (fd_count) (*fd_count)++;
     if (n<0 || atoi(dp->d_name)<4) continue;
-    static char proc_path[PROC_PATH_MAX];
-    snprintf(proc_path,PROC_PATH_MAX,"/proc/self/fd/%s",dp->d_name);
+    static char proc_path[PATH_MAX];
+    snprintf(proc_path,PATH_MAX,"/proc/self/fd/%s",dp->d_name);
     const int l=readlink(proc_path,path,255);path[MAX(l,0)]=0;
     if (endsWith(path,FILE_LOG_WARNINGS)||!strncmp(path,"/dev/",5)|| !strncmp(path,"/proc/",6) || !strncmp(path,"pipe:",5)) continue;
     PRINTINFO("<LI>%s -- %s</LI>\n",proc_path,path);
