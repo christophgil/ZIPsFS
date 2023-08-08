@@ -1,7 +1,7 @@
 # DEPENDENCIES
-## Install libfuse3-dev
+## Install libfuse3 and libzip
 
-sudoe apt-get install libfuse3-dev
+sudo apt-get install  libfuse3 libzip libfuse3-dev libzip-dev
 
 # OPTIONAL: AUTOCONF
 
