@@ -43,7 +43,7 @@ ZIPsFS has been developed to solve the following  problems:
 - Some proprietary  software fires millions of redundant requests to the file system.
   This is a problem for remote files and mounted ZIP files.
 
-    <DIV style="padding:1em;border:2px solid gray;float:left;">
+<DIV style="padding:1em;border:2px solid gray;float:left;">
       File tree with zip files on hard disk:
 <BR>
       <PRE style="font-family: monospace,courier,ariel,sans-serif;">
@@ -55,9 +55,9 @@ ZIPsFS has been developed to solve the following  problems:
    ├── my_manuscript.zip.Content
            ├── my-modified-text.txt
       </PRE>
-    </div>
+</div>
 
-    <DIV style="padding:1em;border:2px solid gray;float:right;">
+<DIV style="padding:1em;border:2px solid gray;float:right;">
       Virtual file tree presented by ZIPsFS:
       <PRE style="font-family: monospace,courier,ariel,sans-serif;">
 ├── <B style="color:#1111FF;">InstallablePrograms</B>
@@ -73,16 +73,18 @@ ZIPsFS has been developed to solve the following  problems:
 │       ├── fig1.png
 │       └── fig2.png
       </PRE>
-    </DIV>
-    <DIV style="clear:both;">
+</DIV>
+
+<DIV style="clear:both;">
     The file tree can be adapted to specific needs by editing <I>ZIPsFS_configuration.c</I>.
     Our mass-spectrometry files are processed with special software.
     It expects a file tree in its original form i.e. as files would not have been zipped.
     Furthermore, write permission is required for files and containing folders while files are permanently stored and cannot be modified any more.
     The folder names need to be ".d" instead of ".d.Zip.Content".
     For Sciex (zenotof) machines, all files must be in one folder without intermediate folders.
-    </DIV>
-     <DIV style="padding:1em;border:2px solid gray;float:left;">
+</DIV>
+
+<DIV style="padding:1em;border:2px solid gray;float:left;">
                     File tree with zip files on hard disk:
       <PRE style="font-family: monospace,courier,ariel,sans-serif;">
 ├── <B style="color:#1111FF;">brukertimstof</B>
@@ -102,10 +104,10 @@ ZIPsFS has been developed to solve the following  problems:
 ...
         └── 270230402_hsapiens_Sample_099.wiff2.Zip
       </PRE>
-    </DIV>
+</DIV>
 
 
-    <DIV style="padding:1em;border:2px solid gray;float:right;">
+<DIV style="padding:1em;border:2px solid gray;float:right;">
             Virtual file tree presented by ZIPsFS:
             <PRE style="font-family: monospace,courier,ariel,sans-serif;">
 ├── <B style="color:#1111FF;">brukertimstof</B>
@@ -147,8 +149,9 @@ ZIPsFS has been developed to solve the following  problems:
           ├── 20230402_hsapiens_Sample_099.wiff2
           └── 20230402_hsapiens_Sample_099.wiff.scan
           </PRE>
-    </DIV>
-        <DIV style="clear:both;"></DIV>
+</DIV>
+
+<DIV style="clear:both;"></DIV>
 
 
 
