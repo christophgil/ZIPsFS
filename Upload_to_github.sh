@@ -43,116 +43,118 @@ ZIPsFS has been developed to solve the following  problems:
 - Some proprietary  software fires millions of redundant requests to the file system.
   This is a problem for remote files and mounted ZIP files.
 
-<DIV style="padding:1em;border:2px solid gray;float:left;">
-      File tree with zip files on hard disk:
-<BR>
-      <PRE style="font-family: monospace,courier,ariel,sans-serif;">
-├── <B style="color:#1111FF;">src</B>
-│   ├── <B style="color:#1111FF;">InstallablePrograms</B>
-│   │   └── some_software.zip
-│   │   └── my_manuscript.zip
-└── <B style="color:#1111FF;">read-write</B>
-   ├── my_manuscript.zip.Content
-           ├── my-modified-text.txt
-      </PRE>
-</div>
+<DIV>
+ <DIV style="padding:1em;border:2px solid gray;float:left;">
+       File tree with zip files on hard disk:
+ <BR>
+       <PRE style="font-family: monospace,courier,ariel,sans-serif;">
+ ├── <B style="color:#1111FF;">src</B>
+ │   ├── <B style="color:#1111FF;">InstallablePrograms</B>
+ │   │   └── some_software.zip
+ │   │   └── my_manuscript.zip
+ └── <B style="color:#1111FF;">read-write</B>
+    ├── my_manuscript.zip.Content
+            ├── my-modified-text.txt
+       </PRE>
+ </div>
 
-<DIV style="padding:1em;border:2px solid gray;float:right;">
-      Virtual file tree presented by ZIPsFS:
-      <PRE style="font-family: monospace,courier,ariel,sans-serif;">
-├── <B style="color:#1111FF;">InstallablePrograms</B>
-│   ├── some_software.zip
-│   └── <B style="color:#1111FF;">some_software.zip.Content</B>
-│       ├── help.html
-│       ├── program.dll
-│       └── program.exe
-│   ├── my_manuscript.zip
-│   └── <B style="color:#1111FF;">my_manuscript.zip.Content</B>
-│       ├── my_text.tex
-│       ├── my_lit.bib
-│       ├── fig1.png
-│       └── fig2.png
-      </PRE>
-</DIV>
+ <DIV style="padding:1em;border:2px solid gray;float:right;">
+       Virtual file tree presented by ZIPsFS:
+       <PRE style="font-family: monospace,courier,ariel,sans-serif;">
+ ├── <B style="color:#1111FF;">InstallablePrograms</B>
+ │   ├── some_software.zip
+ │   └── <B style="color:#1111FF;">some_software.zip.Content</B>
+ │       ├── help.html
+ │       ├── program.dll
+ │       └── program.exe
+ │   ├── my_manuscript.zip
+ │   └── <B style="color:#1111FF;">my_manuscript.zip.Content</B>
+ │       ├── my_text.tex
+ │       ├── my_lit.bib
+ │       ├── fig1.png
+ │       └── fig2.png
+       </PRE>
+ </DIV>
 
-<DIV style="clear:both;">
-    The file tree can be adapted to specific needs by editing <I>ZIPsFS_configuration.c</I>.
-    Our mass-spectrometry files are processed with special software.
-    It expects a file tree in its original form i.e. as files would not have been zipped.
-    Furthermore, write permission is required for files and containing folders while files are permanently stored and cannot be modified any more.
-    The folder names need to be ".d" instead of ".d.Zip.Content".
-    For Sciex (zenotof) machines, all files must be in one folder without intermediate folders.
-</DIV>
+ <DIV style="clear:both;">
+     The file tree can be adapted to specific needs by editing <I>ZIPsFS_configuration.c</I>.
+     Our mass-spectrometry files are processed with special software.
+     It expects a file tree in its original form i.e. as files would not have been zipped.
+     Furthermore, write permission is required for files and containing folders while files are permanently stored and cannot be modified any more.
+     The folder names need to be ".d" instead of ".d.Zip.Content".
+     For Sciex (zenotof) machines, all files must be in one folder without intermediate folders.
+ </DIV>
 
-<DIV style="padding:1em;border:2px solid gray;float:left;">
-                    File tree with zip files on hard disk:
-      <PRE style="font-family: monospace,courier,ariel,sans-serif;">
-├── <B style="color:#1111FF;">brukertimstof</B>
-│   └── <B style="color:#1111FF;">202302</B>
-│       ├── 20230209_hsapiens_Sample_001.d.Zip
-│       ├── 20230209_hsapiens_Sample_002.d.Zip
-│       └── 20230209_hsapiens_Sample_003.d.Zip
+ <DIV style="padding:1em;border:2px solid gray;float:left;">
+                     File tree with zip files on hard disk:
+       <PRE style="font-family: monospace,courier,ariel,sans-serif;">
+ ├── <B style="color:#1111FF;">brukertimstof</B>
+ │   └── <B style="color:#1111FF;">202302</B>
+ │       ├── 20230209_hsapiens_Sample_001.d.Zip
+ │       ├── 20230209_hsapiens_Sample_002.d.Zip
+ │       └── 20230209_hsapiens_Sample_003.d.Zip
 
-...
+ ...
 
-│       └── 20230209_hsapiens_Sample_099.d.Zip
-└── <B style="color:#1111FF;">zenotof</B>
-   └── <B style="color:#1111FF;">202304</B>
-   ├── 20230402_hsapiens_Sample_001.wiff2.Zip
-   ├── 20230402_hsapiens_Sample_002.wiff2.Zip
-   └── 270230402_hsapiens_Sample_003.wiff2.Zip
-...
-        └── 270230402_hsapiens_Sample_099.wiff2.Zip
-      </PRE>
-</DIV>
-
-
-<DIV style="padding:1em;border:2px solid gray;float:right;">
-            Virtual file tree presented by ZIPsFS:
-            <PRE style="font-family: monospace,courier,ariel,sans-serif;">
-├── <B style="color:#1111FF;">brukertimstof</B>
-│   └── <B style="color:#1111FF;">202302</B>
-│       ├── <B style="color:#1111FF;">20230209_hsapiens_Sample_001.d</B>
-│       │   ├── analysis.tdf
-│       │   └── analysis.tdf_bin
-│       ├── <B style="color:#1111FF;">20230209_hsapiens_Sample_002.d</B>
-│       │   ├── analysis.tdf
-│       │   └── analysis.tdf_bin
-│       └── <B style="color:#1111FF;">20230209_hsapiens_Sample_003.d</B>
-│           ├── analysis.tdf
-│           └── analysis.tdf_bin
-
-...
-
-│       └── <B style="color:#1111FF;">20230209_hsapiens_Sample_099.d</B>
-│           ├── analysis.tdf
-│           └── analysis.tdf_bin
-└── <B style="color:#1111FF;">zenotof</B>
+ │       └── 20230209_hsapiens_Sample_099.d.Zip
+ └── <B style="color:#1111FF;">zenotof</B>
     └── <B style="color:#1111FF;">202304</B>
-          ├── 20230402_hsapiens_Sample_001.timeseries.data
-          ├── 20230402_hsapiens_Sample_001.wiff
-          ├── 20230402_hsapiens_Sample_001.wiff2
-          ├── 20230402_hsapiens_Sample_001.wiff.scan
-          ├── 20230402_hsapiens_Sample_002.timeseries.data
-          ├── 20230402_hsapiens_Sample_002.wiff
-          ├── 20230402_hsapiens_Sample_002.wiff2
-          ├── 20230402_hsapiens_Sample_002.wiff.scan
-          ├── 20230402_hsapiens_Sample_003.timeseries.data
-          ├── 20230402_hsapiens_Sample_003.wiff
-          ├── 20230402_hsapiens_Sample_003.wiff2
-          └── 20230402_hsapiens_Sample_003.wiff.scan
+    ├── 20230402_hsapiens_Sample_001.wiff2.Zip
+    ├── 20230402_hsapiens_Sample_002.wiff2.Zip
+    └── 270230402_hsapiens_Sample_003.wiff2.Zip
+ ...
+         └── 270230402_hsapiens_Sample_099.wiff2.Zip
+       </PRE>
+ </DIV>
 
-...
 
-          ├── 20230402_hsapiens_Sample_099.timeseries.data
-          ├── 20230402_hsapiens_Sample_099.wiff
-          ├── 20230402_hsapiens_Sample_099.wiff2
-          └── 20230402_hsapiens_Sample_099.wiff.scan
-          </PRE>
+ <DIV style="padding:1em;border:2px solid gray;float:right;">
+             Virtual file tree presented by ZIPsFS:
+             <PRE style="font-family: monospace,courier,ariel,sans-serif;">
+ ├── <B style="color:#1111FF;">brukertimstof</B>
+ │   └── <B style="color:#1111FF;">202302</B>
+ │       ├── <B style="color:#1111FF;">20230209_hsapiens_Sample_001.d</B>
+ │       │   ├── analysis.tdf
+ │       │   └── analysis.tdf_bin
+ │       ├── <B style="color:#1111FF;">20230209_hsapiens_Sample_002.d</B>
+ │       │   ├── analysis.tdf
+ │       │   └── analysis.tdf_bin
+ │       └── <B style="color:#1111FF;">20230209_hsapiens_Sample_003.d</B>
+ │           ├── analysis.tdf
+ │           └── analysis.tdf_bin
+
+ ...
+
+ │       └── <B style="color:#1111FF;">20230209_hsapiens_Sample_099.d</B>
+ │           ├── analysis.tdf
+ │           └── analysis.tdf_bin
+ └── <B style="color:#1111FF;">zenotof</B>
+     └── <B style="color:#1111FF;">202304</B>
+           ├── 20230402_hsapiens_Sample_001.timeseries.data
+           ├── 20230402_hsapiens_Sample_001.wiff
+           ├── 20230402_hsapiens_Sample_001.wiff2
+           ├── 20230402_hsapiens_Sample_001.wiff.scan
+           ├── 20230402_hsapiens_Sample_002.timeseries.data
+           ├── 20230402_hsapiens_Sample_002.wiff
+           ├── 20230402_hsapiens_Sample_002.wiff2
+           ├── 20230402_hsapiens_Sample_002.wiff.scan
+           ├── 20230402_hsapiens_Sample_003.timeseries.data
+           ├── 20230402_hsapiens_Sample_003.wiff
+           ├── 20230402_hsapiens_Sample_003.wiff2
+           └── 20230402_hsapiens_Sample_003.wiff.scan
+
+ ...
+
+           ├── 20230402_hsapiens_Sample_099.timeseries.data
+           ├── 20230402_hsapiens_Sample_099.wiff
+           ├── 20230402_hsapiens_Sample_099.wiff2
+           └── 20230402_hsapiens_Sample_099.wiff.scan
+ </PRE>
+ </DIV>
+
+ <DIV style="clear:both;"></DIV>
+
 </DIV>
-
-<DIV style="clear:both;"></DIV>
-
 
 
 EOF
