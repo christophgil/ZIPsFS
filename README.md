@@ -31,7 +31,8 @@ ZIPsFS has been developed to solve the following  problems:
   This is a problem for remote files and mounted ZIP files.
 
 <DIV>
- <DIV style="padding:1em;border:2px solid gray;float:left;">
+
+<DIV style="padding:1em;border:2px solid gray;float:left;">
        File tree with zip files on hard disk:
  <BR>
        <PRE style="font-family: monospace,courier,ariel,sans-serif;">
