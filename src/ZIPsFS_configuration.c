@@ -57,8 +57,9 @@ int config_zipentry_to_zipfile(const int approach,const char *virtualpath, char 
     const char *e=virtualpath+path_l;
     int d=0;
     *suffix=NULL;
-#define C(x) ((d=sizeof(#x)-1),(e[-d]=='.' && !strcmp(e-d,#x)))
-    if (C(.SSMetaData)||C(.timeseries.data)||C(.1.~idx2)){
+#define A(x,c) ((d=sizeof(#x)-1),(e[-d]==c && !strcmp(e-d,#x)))
+#define C(x) A(x,'.')
+    if (C(.SSMetaData)||C(.timeseries.data)||C(.wiff.1.~idx2) || C(.wiff2.bak) || C(.Q1Cal) ||  A(_report.txt,'_')){
       switch(approach){
       case 0: *suffix=".wiff.Zip"; return path_l-d;
       case 1: *suffix=".wiff2.Zip"; return path_l-d;
@@ -88,6 +89,7 @@ int config_zipentry_to_zipfile(const int approach,const char *virtualpath, char 
   }
   return 0;
 #undef C
+#undef A
 }
 
 void config_zipentry_to_zipfile_test(){

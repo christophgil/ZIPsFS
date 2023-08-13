@@ -19,6 +19,7 @@
 #include <pthread.h>
 #include <dirent.h>
 #include <math.h>
+#include <stdbool.h>
 #ifdef __FreeBSD__
 #include <sys/un.h>
 #endif
@@ -26,7 +27,7 @@
 #include <fuse.h>
 #define fill_dir_plus 0
 #include <zip.h>
-#include <stdbool.h>
+
 #define LOG_STREAM stdout
 
 #include "cg_ht_v5.c"

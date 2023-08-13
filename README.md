@@ -8,11 +8,13 @@ However, we are still fixing minor bugs.
 
 # MOTIVATION
 
-We use closed-source proprietary Windows software and shared libraries for reading experimental data from different types of mass spectrometry machines.
+We use closed-source proprietary Windows software and shared libraries for reading huge experimental data from different types of mass spectrometry machines.
 Most data is archived in a read-only WORM file system.
+With large numbers of individual files, access becomes slow for Windows OS. To reduce the number of files, all files of one record are bundled in one ZIP.
 
-To reduce the number of individual files,  files of one record are bundled in one ZIP.
-We hoped that the data inside the ZIP was easily accessible using  pipes or process substitution. Unfortunately, this is not the case  for the proprietary  Windows software we are using.
+We hoped that the data inside the ZIP was easily accessible using  pipes, named pipes or process substitution.
+Unfortunately, these UNIX techiques do not work for the proprietary software. Mounting individual ZIP files worked for
+moderate numbers of ZIP files.
 
 ZIPsFS has been developed to solve the following  problems:
 
@@ -250,24 +252,13 @@ ZIPsFS Options
 :   Prints brief usage information.
 
 
--d *SQLite-database-file*
-
-:   To improve performance, ZIPsFS caches file directories using the name and the last-modified time stamp as key. With this option the SQLite3 database file can be specified. In this case, the database will not be cleared when ZIPsFS is started which will be done otherwise.
-
-
-
 -l  *Maximum memory for caching ZIP-entries in the RAM*
 
 :   Specifies a limit for the cache.  For example *-l  8G* would limit the size of the cache to 8 Gigabyte.
 
-- c \[NEVER,SEEK,RULE,ALWAYS\]
+-c \[NEVER,SEEK,RULE,ALWAYS\]
 
 :   Policy when ZIP entries are cached in RAM.
-
-
--o *comma separated Options*
-
-:   *-o allow_other*     Other users can read the files
 
 
 |           |                                                                                  |

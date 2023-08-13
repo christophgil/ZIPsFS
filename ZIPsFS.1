@@ -106,23 +106,13 @@ Conversely, complex rules can be implemented in
 .B \-h
 Prints brief usage information.
 .TP
-.B \-d \f[I]SQLite\-database\-file\f[R]
-To improve performance, ZIPsFS caches file directories using the name
-and the last\-modified time stamp as key.
-With this option the SQLite3 database file can be specified.
-In this case, the database will not be cleared when ZIPsFS is started
-which will be done otherwise.
-.TP
 .B \-l \f[I]Maximum memory for caching ZIP\-entries in the RAM\f[R]
 Specifies a limit for the cache.
 For example \f[I]\-l 8G\f[R] would limit the size of the cache to 8
 Gigabyte.
 .TP
-.B \- c [NEVER,SEEK,RULE,ALWAYS]
+.B \-c [NEVER,SEEK,RULE,ALWAYS]
 Policy when ZIP entries are cached in RAM.
-.TP
-.B \-o \f[I]comma separated Options\f[R]
-\f[I]\-o allow_other\f[R] Other users can read the files
 .PP
 .TS
 tab(@);
