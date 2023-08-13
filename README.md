@@ -273,6 +273,8 @@ ZIPsFS Options
 |           |                                                                                  |
 
 
+
+
 FUSE Options
 ------------
 
@@ -283,8 +285,11 @@ FUSE Options
 
 -s
 
-:   Disable multi-threaded operation
+:   Disable multi-threaded operation to rescue ZIPsFS in case of threading related bugs.
 
+-o *comma separated Options*
+
+:   *-o allow_other*     Other users can read the files
 
 FILES
 =====

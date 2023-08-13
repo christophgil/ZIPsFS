@@ -158,7 +158,11 @@ Run in foreground and display some logs at stdout.
 This mode is useful inside tmux.
 .TP
 .B \-s
-Disable multi\-threaded operation
+Disable multi\-threaded operation to rescue ZIPsFS in case of threading
+related bugs.
+.TP
+.B \-o \f[I]comma separated Options\f[R]
+\f[I]\-o allow_other\f[R] Other users can read the files
 .SH FILES
 .IP \[bu] 2
 configuration.c: Customizable rules.
