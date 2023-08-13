@@ -10,7 +10,7 @@ However, we are still fixing minor bugs.
 
 We use closed-source proprietary Windows software and shared libraries for reading huge experimental data from different types of mass spectrometry machines.
 Most data is archived in a read-only WORM file system.
-With large numbers of individual files, access becomes slow for Windows OS. To reduce the number of files, all files of one record are bundled in one ZIP.
+With large numbers of individual files, access becomes slow for Windows OS. To reduce the number of files and to keep a record of the CRC hash sum, all files of one record are bundled in one ZIP.
 
 We hoped that the data inside the ZIP was easily accessible using  pipes, named pipes or process substitution.
 Unfortunately, these UNIX techiques do not work for the proprietary software. Mounting individual ZIP files worked for
