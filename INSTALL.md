@@ -25,6 +25,7 @@ It is unlikely that this is necessary.
 # ALTERNATIVE METHOD
 
 Edit and run the file
+
     src/ZIPsFS.compile.sh
 
 # OS OTHER THAN LINUX

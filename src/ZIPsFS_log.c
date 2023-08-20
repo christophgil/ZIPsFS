@@ -1,4 +1,16 @@
 //   (global-set-key (kbd "<f4>") '(lambda() (interactive) (switch-to-buffer "log.c")))
+#define TDr(x) "<TD align=\"right\">" x "</TD>"
+#define TDc(x) "<TD align=\"center\">" x "</TD>"
+#define THr(x) "<TH align=\"right\">" x "</TH>"
+#define TH(x) "<TH>" x "</TH>"
+#define TD(x) "<TD>" x "</TD>"
+//#define TD_zu() "<TD align=\"right\">%'zu</TD>"
+
+
+
+static char **_fuse_argv;
+static int _fuse_argc;
+
 static char *_thisPrg;
 static time_t _timeAtStart;
 static void log_path(const char *f,const char *path){
@@ -51,14 +63,14 @@ static int print_fuse_argv(int n){
   return n;
 }
 static int print_roots(int n){
-  PRINTINFO("<H1>Roots</H1>\n<TABLE><THEAD><TR><TH>Path</TH><TH>Writable</TH><TH align=\"right\">Response</TH><TH align=\"right\">Delayed</TH><TH>Free[GB]</TH><TH>Cache[kB]</TH></TR></THEAD>\n");
+  PRINTINFO("<H1>Roots</H1>\n<TABLE><THEAD><TR>"TH("Path")TH("Writable")THr("Response")THr("Delayed")TH("Free[GB]")TH("Dir-Cache[kB]")"</TR></THEAD>\n");
   foreach_root(i,r){
     const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30),diff=deciSecondsSinceStart()-r->statfs_when_deciSec;
     if (n>=0){
-      PRINTINFO("<TR><TD>%s</TD><TD align=\"center\">%s</TD>",r->path,yes_no(f&ROOT_WRITABLE));
-      if (f&ROOT_REMOTE) PRINTINFO("<TD align=\"right\">%'ld ms</TD><TD align=\"right\">%'d</TD>", 10L*(diff>ROOT_OBSERVE_EVERY_DECISECONDS*3?diff:r->statfs_deciseconds),r->count_delayed);
-      else PRINTINFO("<TD align=\"right\">Local</TD><TD></TD>");
-      PRINTINFO("<TD align=\"right\">%'d</TD><TD align=\"right\">%'d</TD></TR>\n",freeGB,mstore_usage(&r->storedir)/1024);
+      PRINTINFO("<TR>"TD("%s")TDc("%s"),r->path,yes_no(f&ROOT_WRITABLE));
+      if (f&ROOT_REMOTE) PRINTINFO(TDr("%'ld ms")TDr("%'d"), 10L*(diff>ROOT_OBSERVE_EVERY_DECISECONDS*3?diff:r->statfs_took_deciseconds),r->count_delayed);
+      else PRINTINFO(TDr("Local")TD(""));
+      PRINTINFO(TDr("%'d")TDr("%'zu")"</TR>\n",freeGB,mstore_usage(&r->dircache)/1024);
     }else{
       log_msg("\t%d\t%s\t%s\n",i,r->path,!my_strlen(r->path)?"":(f&ROOT_REMOTE)?"Remote":(f&ROOT_WRITABLE)?"Writable":"Local");
     }
@@ -131,34 +143,34 @@ static int print_open_files(int n, int *fd_count){
 // TODO Error in sscanf
 static int print_maps(int n){
   PRINTINFO("<H1>/proc/%ld/maps</H1>\n", (long)getpid());
-  unsigned long total=0;
+  size_t total=0;
   //char fname[99];snprintf(fname,sizeof(fname),"/proc/%ld/maps", (long)getpid());
   FILE *f=fopen("/proc/self/maps","r");
   if(!f) {
     PRINTINFO("/proc/self/maps: %s\n",strerror(errno));
     return n;
   }
-  PRINTINFO("<TABLE>\n<THEAD><TR><TH>Addr&gt;&gt;12</TH><TH>Name</TH><TH>kB</TH><TH></TH></TR></THEAD>\n");
+  PRINTINFO("<TABLE>\n<THEAD><TR>"TH("Addr&gt;&gt;12")TH("Name")TH("kB")TH("")"</TR></THEAD>\n");
   const int L=333;
   while(!feof(f)) {
     char buf[PATH_MAX+100],perm[5],dev[6],mapname[PATH_MAX]={0};
-    unsigned long begin,end,inode,foo;
+   uint64_t begin,end,inode,foo;
     if(fgets(buf,sizeof(buf),f)==0) break;
     *mapname=0;
     //    %*[^\n]\n   /home/cgille/tmp/map.txt
     const int k=sscanf(buf, "%lx-%lx %4s %lx %5s %lu %100s",&begin,&end,perm,&foo,dev, &inode,mapname);
     if (k>=6){
-      const long size=end-begin;
+      const int64_t size=end-begin;
       total+=size;
       if (!strchr(mapname,'/') && size>=SIZE_CUTOFF_MMAP_vs_MALLOC){
-        PRINTINFO("<TR><TD>%08lx</TD><TD>%s</TD><TD align=\"right\">%'ld</TD><TD>",begin>>12,mapname,size>>10);
+        PRINTINFO("<TR>"TD("%08lx")TD("%s")""TDr("%'ld")"<TD>",begin>>12,mapname,size>>10);
         n=repeat_chars_info(n,'-',min_int(L,(int)(3*log(size))));
         PRINTINFO("</TD></TR>\n");
       }
     } else log_debug_now("sscanf scanned n=%d\n",k);
   }
   fclose(f);
-  PRINTINFO("<TFOOT><TR><TD></TD><TD></TD><TD>%'lu</TD><TD></TD></TR></TFOOT>\n</TABLE>\n",total>>10);
+  PRINTINFO("<TFOOT><TR>"TD("")TD("")TD("%'lu")TD("")"</TR></TFOOT>\n</TABLE>\n",total>>10);
   return n;
 }
 #endif
@@ -190,8 +202,8 @@ static int print_memory_details(int n){
 
 static int print_memory(int n){
   PRINTINFO("<H1>Cache of ZIP entries</H1><PRE>");
-  n=print_bar(n,trackMemUsage(0,0)/(float)_maxMemForCache);  PRINTINFO("Current usage %'ld MB of %'ld MB \n",trackMemUsage(memusage_get_curr,0)>>20,_maxMemForCache>>20);
-  n=print_bar(n,trackMemUsage(0,0)/(float)_maxMemForCache);  PRINTINFO("Peak usage    %'ld MB of %'ld MB  \n",trackMemUsage(memusage_get_peak,0)>>20,_maxMemForCache>>20);
+  n=print_bar(n,trackMemUsage(0,0)/(float)_memcache_maxbytes);  PRINTINFO("Current usage %'ld MB of %'ld MB \n",trackMemUsage(memusage_get_curr,0)>>20,_memcache_maxbytes>>20);
+  n=print_bar(n,trackMemUsage(0,0)/(float)_memcache_maxbytes);  PRINTINFO("Peak usage    %'ld MB of %'ld MB  \n",trackMemUsage(memusage_get_peak,0)>>20,_memcache_maxbytes>>20);
   {
 #ifdef __linux__
     struct rlimit rl={0}; getrlimit(RLIMIT_AS,&rl);
@@ -203,7 +215,7 @@ static int print_memory(int n){
 #endif
   }
   PRINTINFO("</PRE>\n");
-  PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",WHEN_CACHE_S[_when_cache]);
+  PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",WHEN_CACHE_S[_memcache_policy]);
   PRINTINFO("Number of calls to mmap: %d to munmap:%d<BR>\n",_memusage_count[2*memusage_mmap],_memusage_count[2*memusage_mmap+1]);
   PRINTINFO("Number of calls to malloc: %d to free:%d<BR>\n",_memusage_count[2*memusage_malloc],_memusage_count[2*memusage_malloc+1]);
   return n;
@@ -211,25 +223,27 @@ static int print_memory(int n){
 
 
 static int print_read_statistics(int n){
-  PRINTINFO("<H1>Read bytes statistics</H1>\n<TABLE><THEAD><TR><TH>Event</TH><TH>Count</TH></TR></THEAD>\n");
-#define TABLEROW(a,skip) PRINTINFO("<TR><TD><B>%s</B></TD><TD align=\"right\">%'d</TD></TR>\n",(#a)+skip,a)
+  PRINTINFO("<H1>Read bytes statistics</H1>\n<TABLE><THEAD><TR>"TH("Event")TH("Count")"</TR></THEAD>\n");
+#define TABLEROW(a,skip) PRINTINFO("<TR>"TD("<B>%s</B>")TDr("%'d")"</TR>\n",(#a)+skip,a)
   TABLEROW(_count_readzip_cached,7);
   TABLEROW(_count_readzip_regular,7);
-  TABLEROW(_count_readzip_seekable_fwd,7);
-  TABLEROW(_count_readzip_seekable_bwd,7);
+  TABLEROW(_count_readzip_seekable[1],7);
+  TABLEROW(_count_readzip_seekable[0],7);
   TABLEROW(_count_readzip_no_seek,7);
   TABLEROW(_count_readzip_seek_fwd,7);
   TABLEROW(_count_readzip_cache_because_seek_bwd,7);
   TABLEROW(_count_readzip_reopen_because_seek_bwd,7);
   TABLEROW(_count_close_later,7);
   TABLEROW(_count_getattr_from_cache,7);
-  TABLEROW(_read_max_size,7);
+  TABLEROW(_log_read_max_size,7);
   PRINTINFO("</TABLE>");
 #undef TABLEROW
   return n;
 }
 
-
+static size_t _kilo(size_t x){
+  return ((1<<10)-1+x)>>10;
+}
 static int print_fhdata(int n,const char *title){
   if (n<0) log_cache("print_fhdata %s\n",snull(title));
   else PRINTINFO("<H1>Data associated to file descriptors</H1>\n");
@@ -239,19 +253,18 @@ static int print_fhdata(int n,const char *title){
   }else{
     PRINTINFO("Table should be empty when idle.<BR>Column <I><B>fd</B></I> file descriptor. Column <I><B>Last access</B></I>:    Column <I><B>Millisec</B></I>:  time to read entry en bloc into cache.  Column <I><B>R</B></I>: number of threads in currently in xmp_read(). \
 Column <I><B>F</B></I>: flags. (D)elete insicates that it is marked for closing and (K)eep indicates that it can currently not be closed. Two possible reasons why data cannot be released: (I)  xmp_read() is currently run (II) the cached zip entry is needed by another file descriptor  with the same virtual path.<BR>\n \
-<TABLE>\n<THEAD><TR><TH>Path</TH><TH>fd</TH><TH>Last access</TH><TH>Cache addr</TH><TH>Cache kB</TH><TH>Millisec</TH><TH> F</TH><TH>R</TH></TR></THEAD>\n");
+<TABLE>\n<THEAD><TR>"TH("Path")TH("fd")TH("Last access")TH("Cache addr")TH("Cache read kB")TH("Entry kB")TH("Millisec")TH(" F")TH("R")"</TR></THEAD>\n");
     const time_t t0=time(NULL);
 
     foreach_fhdata_path_not_null(d){
-      if (n<0) log_msg("\t%p\t%s\t%p\t%zu\n",d,snull(d->path),d->cache,d->cache_l);
+      if (n<0) log_msg("\t%p\t%s\t%p\t%zu\n",d,snull(d->path),d->memcache,d->memcache_l);
       else{
-        PRINTINFO("<TR><TD>%s</TD><TD>%llu</TD>",snull(d->path),d->fh);
-        PRINTINFO("<TD align=\"right\">"); if (d->access) PRINTINFO("%'ld s</TD>",t0-d->access); else PRINTINFO("Never</TD>");
-        //                strcpy(buf,"<TD></TD><TD></TD><TD></TD>");        if (d->cache) sprintf(buf,"<TD>%p</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'d</TD>",d->cache,MAX(d->cache_l>>10,!!d->cache_l),d->cache_read_seconds);
-        //PRINTINFO("%s<TD>%c%c</TD><TD>%d</TD></TR>\n",buf,d->close_later?'D':' ', fhdata_can_destroy(d)?' ':'K',d->xmp_read);
-        if (d->cache) PRINTINFO("<TD>%p</TD><TD align=\"right\">%'zu</TD><TD align=\"right\">%'ld</TD>",d->cache,MAX(d->cache_l>>10,!!d->cache_l),d->cache_read_mseconds);
-        else PRINTINFO("<TD></TD><TD></TD><TD></TD>");
-        PRINTINFO("<TD>%c%c</TD><TD>%d</TD></TR>\n",d->close_later?'D':' ', fhdata_can_destroy(d)?' ':'K',d->is_xmp_read);
+        PRINTINFO("<TR>"TD("%s")TD("%llu"),snull(d->path),d->fh);
+        if (d->accesstime) PRINTINFO(TDr("%'ld s"),t0-d->accesstime);  else PRINTINFO(TDr("Never"));
+        if (d->memcache) PRINTINFO(TD("%p")""TDr("%'zu")TDr("%'zu")TDr("%'ld"),d->memcache,_kilo(d->memcache_already),_kilo(d->memcache_l),d->memcache_took_mseconds);
+        else PRINTINFO(TD("")TD("")TD(""));
+        SYNCHRONIZE(mutex_fhdata,  const bool can_destroy=fhdata_can_destroy(d));
+        PRINTINFO(TD("%c%c")TD("%d")"</TR>\n",d->close_later?'D':' ', can_destroy?' ':'K',d->is_xmp_read);
       }
     }
     PRINTINFO("</TABLE>");
@@ -312,14 +325,10 @@ static const char *zip_fdopen_err(int err){
 }
 static void fhdata_log_cache(const struct fhdata *d){
   if (!d){ log_msg("\n");return;}
-  const char
-    *c=d->cache,
-    *s= !c?"Null":c==CACHE_FAILED?"FAILED":c==CACHE_FILLING?"FILLING":"Yes";
   const int idx=(int)(_fhdata-d);
-  log_msg("log_cache: d= %p path= %s cache: %s cache_l= %zu can_destroy: %s  idx: %d  hasc: %s\n",d,d->path,s,d->cache_l,yes_no(fhdata_can_destroy(d)),idx,yes_no(fhdata_has_cache(d)));
+  log_msg("log_cache: d= %p path= %s cache: %s,%s cache_l= %zu/%zu idx: %d  hasc: %s\n",d,d->path,yes_no(d->memcache!=NULL),MEMCACHE_STATUS_S[d->memcache_status],d->memcache_already/d->memcache_l,idx,yes_no(fhdata_has_cache(d)));
 }
-#define log_zpath(...) _log_zpath
-static void _log_zpath(const char fn,const char *msg, struct zippath *zpath){
+static void _log_zpath(const char *fn,const char *msg, struct zippath *zpath){
   log_msg(ANSI_UNDERLINE"%s() %s"ANSI_RESET,fn,msg);
   log_msg("   this= %p   \n",zpath);
   log_msg("    %p strgs="ANSI_FG_BLUE"%s"ANSI_RESET"  "ANSI_FG_BLUE"%d\n"ANSI_RESET   ,zpath->strgs, (zpath->flags&ZP_STRGS_ON_HEAP)?"Heap":"Stack", zpath->strgs_l);
@@ -329,6 +338,8 @@ static void _log_zpath(const char fn,const char *msg, struct zippath *zpath){
   log_msg("    %p    RP="ANSI_FG_BLUE"'%s'"ANSI_RESET,RP(), snull(RP())); log_file_stat("",&zpath->stat_rp);
   log_msg("    zip: %s"ANSI_RESET"\n",yes_no(ZPATH_IS_ZIP()));
 }
+#define log_zpath(...) _log_zpath(__func__,__VA_ARGS__)
+
 #define FHDATA_ALREADY_LOGGED_VIA_ZIP (1<<0)
 #define FHDATA_ALREADY_LOGGED_FAILED_DIFF (1<<1)
 static bool fhdata_not_yet_logged(unsigned int flag,struct fhdata *d){
@@ -365,7 +376,8 @@ Options and arguments before the colon are interpreted by ZIPsFS.  Those after t
       -q quiet, no debug messages to stdout\n\
          Without the option -f (foreground) all logs are suppressed anyway.\n\
       -c [",LOG_STREAM);
-    for(char **s=WHEN_CACHE_S;*s;s++){if (s!=WHEN_CACHE_S) putchar('|');fputs(*s,LOG_STREAM);}
+  //  for(char **s=WHEN_CACHE_S;*s;s++){if (s!=WHEN_CACHE_S) putchar('|');fputs(*s,LOG_STREAM);}
+  for(int i=0;WHEN_CACHE_S[i];i++){ if (i) putchar('|');fputs(WHEN_CACHE_S[i],LOG_STREAM);}
     fputs("]    When to read zip entries into RAM\n\
          seek: When the data is not read continuously\n\
          rule: According to rules based on the file name encoded in configuration.h\n\

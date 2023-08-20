@@ -9,8 +9,8 @@ static void debug_triggerd_by_magic_files(const char *path){
       usleep(300);
     }
     foreach_root(i,r){
-      mstore_clear(&r->storedir);
-      ht_destroy(&r->storedir_ht);
+      mstore_clear(&r->dircache);
+      ht_destroy(&r->dircache_ht);
       }
                        //                       /local/filesystem/fuse-3.14.0/lib/helper.c fuse_main
     //          fuse_session_exit();
@@ -19,7 +19,7 @@ static void debug_triggerd_by_magic_files(const char *path){
   }
   if (!strcmp(path,FILE_DEBUG_CLEARCACHE)){
     warning(WARN_MISC,FILE_DEBUG_CLEARCACHE,"");
-    roots_clear_cache();
+    dircache_clear_if_reached_limit_all();
   }
 }
 static bool debug_fhdata(const struct fhdata *d){ return d && !d->n_read && tdf_or_tdf_bin(d->path);}

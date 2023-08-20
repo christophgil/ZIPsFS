@@ -5,8 +5,8 @@
 #define ROOT_OBSERVE_EVERY_DECISECONDS 3 // Check availability of remote roots to prevent blocking
 #define LOG2_ROOTS 5  // How many file systems are combined
 #define DIRECTORY_CACHE_SIZE (1L<<28) // Size of file to cache directory listings
-#define DIRECTORY_CACHE_SEGMENTS 4 // Number of files to cache directory listings
-
+#define DIRECTORY_CACHE_SEGMENTS 4 // Number of files to cache directory listings. If Exceeded, the directory cache is cleared and filled again.
+#define MEMCACHE_READ_BYTES_NUM 16*1024*1024 // When storing zip entries in RAM, number of bytes read in one go
 ////////////////////////
 /// Helper functions ///
 ////////////////////////
@@ -172,12 +172,14 @@ bool _is_tdf_or_tdf_bin(const char *path){
 ///      -c rule                                 ///
 ////////////////////////////////////////////////////
 bool config_store_zipentry_in_cache(long filesize,const char *path,bool is_compressed){
-  if (path){
-    const int b=last_slash(path)+1;
-    //  !strcmp(path+b,"analysis.tdf_bin") ||
-    //    if (path[b]=='a'  && (is_compressed && !strcmp(path+b,"analysis.tdf_bin") || !strcmp(path+b,"analysis.tdf"))) return true;
-        if (path[b]=='a'  && (!strcmp(path+b,"analysis.tdf_bin") || !strcmp(path+b,"analysis.tdf"))) return true;
-  }
+  if (_is_tdf_or_tdf_bin(path)) return true;
+  return false;
+}
+
+bool configuration_evict_from_filecache(const char *realpath,const char *zipentryOrNull){
+  if (_is_tdf_or_tdf_bin(zipentryOrNull) ||
+
+      _is_tdf_or_tdf_bin(realpath)) return true;
   return false;
 }
 /////////////////////////////////////////////////////////////////////////
@@ -185,7 +187,7 @@ bool config_store_zipentry_in_cache(long filesize,const char *path,bool is_compr
 /// With the rule  -c always, all .exe files would be loaded into RAM ///
 /// when a file listing is displayed in File Explorerer               ///
 /////////////////////////////////////////////////////////////////////////
-bool config_not_cache_zip_entry(const char *path){
+bool config_not_memcache_zip_entry(const char *path){
   const int len=!path?0:strlen(path);
   const char *e=path+len;
   return len>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e';  /* if endsWithIgnoreCase .exe  */
@@ -253,5 +255,5 @@ bool config_cache_directory(const char *path, bool isRemote, int changed_seconds
 #define DIRECTORYCACHE_OPTIMIZE_NAMES 1
 #define DIRECTORYCACHE_OPTIMIZE_NAMES_RESTORE 1
 
-#define ZIPPEDDATACACHE_PUT 1
-#define ZIPPEDDATACACHE_GET 1
+#define MEMCACHE_PUT 1
+#define MEMCACHE_GET 1

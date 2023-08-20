@@ -45,7 +45,7 @@ static char *my_strncpy(char *dst,const char *src, int n){
   return dst;
 }
 #define SNPRINTF(dest,max,...)   (max<=snprintf(dest,max,__VA_ARGS__) && (log_error("Exceed snprintf "),true))
-static unsigned int my_strlen(const char *s){
+static uint32_t my_strlen(const char *s){
   return !s?0:strnlen(s,MAX_PATHLEN);
 }
 static const char* snull(const char *s){ return s?s:"Null";}
@@ -90,7 +90,7 @@ static int path_for_fd(const char *title, char *path, int fd){
   return path[n]=0;
 }
 
-int get_num_fd(){
+static int count_fd_this_prg(){
   int n=0;
   DIR *dir=opendir("/proc/self/fd");
   while(readdir(dir)) n++;
@@ -130,9 +130,9 @@ static void print_path_for_fd(int fd){
 
 static int min_int(int a,int b){ return MIN(a,b);}
 static int max_int(int a,int b){ return MAX(a,b);}
-static long min_long(long a,long b){ return MIN(a,b);}
-static long max_long(long a,long b){ return MAX(a,b);}
-static long atol_kmgt(const char *s){
+static int64_t min_long(int64_t a,int64_t b){ return MIN(a,b);}
+static int64_t max_long(int64_t a,int64_t b){ return MAX(a,b);}
+static int64_t atol_kmgt(const char *s){
   if (!s) return 0;
   char *c=(char*)s;
   while(*c && '0'<=*c && *c<='9') c++;
@@ -174,7 +174,7 @@ static void log_open_flags(int flags){
 }
 
 static void clear_stat(struct stat *st){ if(st) memset(st,0,sizeof(struct stat));}
-static long file_mtime(const char *f){
+static int64_t file_mtime(const char *f){
   struct stat st={0};
   return stat(f,&st)?0:st.st_mtime;
 }
@@ -243,7 +243,7 @@ static uint32_t crc32_for_byte(uint32_t r){
   for(int j=0; j<8; ++j) r=((r&1)?0:(uint32_t)0xEDB88320L)^r>>1;
   return r^(uint32_t)0xFF000000L;
 }
-typedef unsigned long accum_t; /* Or unsigned int */
+typedef uint64_t accum_t; /* Or uint32_t */
 static void cg_crc32_init_tables(uint32_t* table, uint32_t* wtable){
   for(size_t i=0; i<0x100; ++i) table[i]=crc32_for_byte(i);
   for(size_t k=0; k<sizeof(accum_t); ++k){
@@ -281,9 +281,6 @@ static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc){
 
 #if defined __IN__INCLUDE_LEVEL__ && __INCLUDE_LEVEL__ == 0
 #include "cg_read_entire_file.c"
-
-aaa
-
 int mainYYYYYY(int argc, char *argv[]){
   setlocale(LC_NUMERIC,""); /* Enables decimal grouping in printf */
   //char *s=argv[1];    printf("%s = %'ld\n",s,atol_kmgt(s));
@@ -319,7 +316,7 @@ int mainYYYYYY(int argc, char *argv[]){
     if (argc!=2){
       fprintf(stderr,"Expectd file path\n");
     }else{
-      const long size=read_entire_file(argv[1],buf);
+      const int64_t size=read_entire_file(argv[1],buf);
       fprintf(stderr,"Read %ld bytes\n",size);
       puts(*buf);
       const uint32_t crc=cg_crc32(*buf,size,0);

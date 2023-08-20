@@ -185,9 +185,9 @@ static size_t mstore_count_segments(struct mstore *m){
 static void mstore_clear(struct mstore *m){
   _mstore_common(m,_mstore_clear);
 }
-static void mstore_free(struct mstore *m,const void *addr,const int len){
-  /* not yet implemented */
-}
+
+// static void mstore_free(struct mstore *m,const void *addr,const int len){}  /* not yet implemented */
+
 #undef D
 #undef DD
 #undef _MSTORE_BYHASH
@@ -257,7 +257,7 @@ const void *mstore_add_reuse(struct mstore *m, const void *str, size_t len,const
 #if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__ == 0
 //#include "cg_utils.c"
 struct mytest{
-  long l;
+  int64_t l;
   bool b;
 };
 

@@ -204,15 +204,15 @@ static void log_mem(FILE *f){
 /// log ///
 ///////////
 /* *** time *** */
-static long _startTimeMillis=0;
+static int64_t _startTimeMillis=0;
 
-/* static long currentTimeMicros(){ */
+/* static int64_t currentTimeMicros(){ */
 /*   struct timeval tv={0}; */
 /*   gettimeofday(&tv,NULL); */
 /*   return tv.tv_sec*1000000+tv.tv_usec; */
 /* } */
 
-static long currentTimeMillis(){
+static int64_t currentTimeMillis(){
   struct timeval tv={0};
   gettimeofday(&tv,NULL);
   return tv.tv_sec*1000+tv.tv_usec/1000;
@@ -224,8 +224,9 @@ static uint32_t deciSecondsSinceStart(){
 }
 
 #define WARN_SHIFT_MAX 8
-char *_warning_channel_name[1<<WARN_SHIFT_MAX];
-char *_warning_pfx[1<<WARN_SHIFT_MAX]={0};
+char *_warning_channel_name[1<<WARN_SHIFT_MAX]={0};
+//char **_warning_channel_name=NULL;
+//char *_warning_pfx[1<<WARN_SHIFT_MAX]={0};
 static int _warning_count[1<<WARN_SHIFT_MAX];
 #define WARN_FLAG_EXIT (1<<30)
 #define WARN_FLAG_MAYBE_EXIT (1<<29)
@@ -233,7 +234,7 @@ static int _warning_count[1<<WARN_SHIFT_MAX];
 #define WARN_FLAG_ONCE_PER_PATH (1<<27)
 #define WARN_FLAG_ONCE (1<<26)
 #define warning(...) _warning(__func__,__VA_ARGS__)
-static void _warning(const char *fn,const unsigned int channel,const char* path,const char *format,...){
+static void _warning(const char *fn,const uint32_t channel,const char* path,const char *format,...){
   static pthread_mutex_t mutex;
   static bool initialized;
   static FILE *file;
@@ -254,7 +255,7 @@ static void _warning(const char *fn,const unsigned int channel,const char* path,
   }
   const int i=channel&((1<<WARN_SHIFT_MAX)-1);
   if (!initialized){ log_error("Initialization  with warning(0,NULL) required.\n");exit(1);}
-  if (!_warning_channel_name[i]){ log_error("_log_channels not initialized.\n");exit(1);}
+  if (!_warning_channel_name[i]){ log_error("_log_channels not initialized: %d.\n",i);exit(1);}
   const int mx=(channel>>WARN_SHIFT_MAX)&0xFFff;
   const char *p=path?path:"";
   bool toFile=true;
@@ -276,7 +277,16 @@ static void _warning(const char *fn,const unsigned int channel,const char* path,
   for(int j=2;--j>=0;){
     FILE *f=j?(_logIsSilent?NULL:LOG_STREAM):(toFile?file:NULL);
     if (!f) continue;
-    fprintf(f,"%s\t%s()\t%d\t%s\t",_warning_pfx[i]?_warning_pfx[i]:(ANSI_FG_RED"ERROR "ANSI_RESET),fn,_warning_count[i],p);
+
+    char *pfx=_warning_channel_name[i], *color=ANSI_FG_RED;
+    if (!pfx){
+      pfx="ERROR";
+    }else{
+      char *us=strchr(pfx,'_');
+      if (us) pfx=us+1;
+    }
+    //fprintf(f,"%s\t%s()\t%d\t%s\t",_warning_pfx[i]?_warning_pfx[i]:(ANSI_FG_RED"ERROR "ANSI_RESET),fn,_warning_count[i],p);
+    fprintf(f,"%s%s"ANSI_RESET"\t%s()\t%d\t%s\t",color,pfx,fn,_warning_count[i],p);
     va_list argptr; va_start(argptr,format);vfprintf(f,format,argptr);va_end(argptr);
     if (*errx) fprintf(f,"\t%s",errx);
     fputs("\n\n",f);

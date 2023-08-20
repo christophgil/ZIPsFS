@@ -157,7 +157,7 @@ static void assert_r_ok(const char *p, const struct stat *st){
 enum functions{xmp_open_,xmp_access_,xmp_getattr_,xmp_read_,xmp_readdir_,mcze_,functions_l};
 #if 0
 static int functions_count[functions_l];
-static long functions_time[functions_l];
+static int64_t functions_time[functions_l];
 static const char *function_name(enum functions f){
 #define C(x) f==x ## _ ? #x :
   return C(xmp_open) C(xmp_access) C(xmp_getattr) C(xmp_read) C(xmp_readdir) C(mcze) "null";
@@ -171,7 +171,7 @@ static void _log_count_b(enum functions f){
   pthread_mutex_unlock(mutex+mutex_log_count);
 }
 static void _log_count_e(enum functions f,const char *path){
-  const long ms=currentTimeMillis()-functions_time[f];
+  const int64_t ms=currentTimeMillis()-functions_time[f];
   pthread_mutex_lock(mutex+mutex_log_count);
   --functions_count[f];
   pthread_mutex_unlock(mutex+mutex_log_count);
