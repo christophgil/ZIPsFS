@@ -19,7 +19,7 @@ SYNOPSIS
 ========
 
 
-ZIPsFS \[*ZIPsFS-options*\] *path-of-root1* *path-of-root*  *path-of-root3*   :  \[*fuse-options*\] *mount-point*
+ZIPsFS \[*ZIPsFS-options*\] *path-of-root1* *path-of-root2*  *path-of-root3*   :  \[*fuse-options*\] *mount-point*
 
 ## Example 1
 

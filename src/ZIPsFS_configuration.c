@@ -171,14 +171,13 @@ bool _is_tdf_or_tdf_bin(const char *path){
 /// This is active when started with option      ///
 ///      -c rule                                 ///
 ////////////////////////////////////////////////////
-bool config_store_zipentry_in_cache(long filesize,const char *path,bool is_compressed){
+bool config_store_zipentry_in_memcache(long filesize,const char *path,bool is_compressed){
   if (_is_tdf_or_tdf_bin(path)) return true;
   return false;
 }
 
 bool configuration_evict_from_filecache(const char *realpath,const char *zipentryOrNull){
   if (_is_tdf_or_tdf_bin(zipentryOrNull) ||
-
       _is_tdf_or_tdf_bin(realpath)) return true;
   return false;
 }
@@ -249,11 +248,11 @@ bool config_cache_directory(const char *path, bool isRemote, int changed_seconds
 /// can be set to 0 can                    ///
 //////////////////////////////////////////////
 
-#define DIRECTORYCACHE_PUT 1
-#define DIRECTORYCACHE_GET 1
+#define DIRCACHE_PUT 1
+#define DIRCACHE_GET 1
 
-#define DIRECTORYCACHE_OPTIMIZE_NAMES 1
-#define DIRECTORYCACHE_OPTIMIZE_NAMES_RESTORE 1
+#define DIRCACHE_OPTIMIZE_NAMES 1
+#define DIRCACHE_OPTIMIZE_NAMES_RESTORE 1
 
 #define MEMCACHE_PUT 1
 #define MEMCACHE_GET 1

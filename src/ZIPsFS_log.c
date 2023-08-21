@@ -215,7 +215,7 @@ static int print_memory(int n){
 #endif
   }
   PRINTINFO("</PRE>\n");
-  PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",WHEN_CACHE_S[_memcache_policy]);
+  PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",WHEN_MEMCACHE_S[_memcache_policy]);
   PRINTINFO("Number of calls to mmap: %d to munmap:%d<BR>\n",_memusage_count[2*memusage_mmap],_memusage_count[2*memusage_mmap+1]);
   PRINTINFO("Number of calls to malloc: %d to free:%d<BR>\n",_memusage_count[2*memusage_malloc],_memusage_count[2*memusage_malloc+1]);
   return n;
@@ -225,16 +225,16 @@ static int print_memory(int n){
 static int print_read_statistics(int n){
   PRINTINFO("<H1>Read bytes statistics</H1>\n<TABLE><THEAD><TR>"TH("Event")TH("Count")"</TR></THEAD>\n");
 #define TABLEROW(a,skip) PRINTINFO("<TR>"TD("<B>%s</B>")TDr("%'d")"</TR>\n",(#a)+skip,a)
-  TABLEROW(_count_readzip_cached,7);
+  TABLEROW(_count_readzip_memcache,7);
   TABLEROW(_count_readzip_regular,7);
   TABLEROW(_count_readzip_seekable[1],7);
   TABLEROW(_count_readzip_seekable[0],7);
   TABLEROW(_count_readzip_no_seek,7);
   TABLEROW(_count_readzip_seek_fwd,7);
-  TABLEROW(_count_readzip_cache_because_seek_bwd,7);
+  TABLEROW(_count_readzip_memcache_because_seek_bwd,7);
   TABLEROW(_count_readzip_reopen_because_seek_bwd,7);
   TABLEROW(_count_close_later,7);
-  TABLEROW(_count_getattr_from_cache,7);
+  TABLEROW(_count_statcache_get,7);
   TABLEROW(_log_read_max_size,7);
   PRINTINFO("</TABLE>");
 #undef TABLEROW
@@ -302,7 +302,7 @@ TD{padding:5px;}\n\
   n=print_fhdata(n,"");
   n=print_memory_details(n);
   PRINTINFO("_mutex=%p\n<BR>",_mutex);
-  PRINTINFO("<H1>Inodes</H1>Created sequentially: %'d\n",_countSeqInode);
+  PRINTINFO("<H1>Inodes</H1>Created sequentially: %'d\n",_count_SeqInode);
   n=print_read_statistics(n);
   //  PRINTINFO("_cumul_time_store=%lf\n<BR>",((double)_cumul_time_store)/CLOCKS_PER_SEC);
   PRINTINFO("</BODY>\n</HTML>\n");
@@ -326,7 +326,7 @@ static const char *zip_fdopen_err(int err){
 static void fhdata_log_cache(const struct fhdata *d){
   if (!d){ log_msg("\n");return;}
   const int idx=(int)(_fhdata-d);
-  log_msg("log_cache: d= %p path= %s cache: %s,%s cache_l= %zu/%zu idx: %d  hasc: %s\n",d,d->path,yes_no(d->memcache!=NULL),MEMCACHE_STATUS_S[d->memcache_status],d->memcache_already/d->memcache_l,idx,yes_no(fhdata_has_cache(d)));
+  log_msg("log_cache: d= %p path= %s cache: %s,%s cache_l= %zu/%zu idx: %d  hasc: %s\n",d,d->path,yes_no(d->memcache!=NULL),MEMCACHE_STATUS_S[d->memcache_status],d->memcache_already/d->memcache_l,idx,yes_no(fhdata_has_memcache(d)));
 }
 static void _log_zpath(const char *fn,const char *msg, struct zippath *zpath){
   log_msg(ANSI_UNDERLINE"%s() %s"ANSI_RESET,fn,msg);
@@ -376,8 +376,8 @@ Options and arguments before the colon are interpreted by ZIPsFS.  Those after t
       -q quiet, no debug messages to stdout\n\
          Without the option -f (foreground) all logs are suppressed anyway.\n\
       -c [",LOG_STREAM);
-  //  for(char **s=WHEN_CACHE_S;*s;s++){if (s!=WHEN_CACHE_S) putchar('|');fputs(*s,LOG_STREAM);}
-  for(int i=0;WHEN_CACHE_S[i];i++){ if (i) putchar('|');fputs(WHEN_CACHE_S[i],LOG_STREAM);}
+  //  for(char **s=WHEN_MEMCACHE_S;*s;s++){if (s!=WHEN_MEMCACHE_S) putchar('|');fputs(*s,LOG_STREAM);}
+  for(int i=0;WHEN_MEMCACHE_S[i];i++){ if (i) putchar('|');fputs(WHEN_MEMCACHE_S[i],LOG_STREAM);}
     fputs("]    When to read zip entries into RAM\n\
          seek: When the data is not read continuously\n\
          rule: According to rules based on the file name encoded in configuration.h\n\
