@@ -96,9 +96,3 @@ Because of the  granularity of time measurement in files last-modified attribute
 Solution?
 
 ## Failure of remote roots
-
-Currently, file access coming from the libfuse functions are not put into separate threads.
-If a call to the file system (stat(), open(), read() etc. blocks) this blocks the thread and the client application.
-
-Because remote roots are observed and non-responding roots are skipped, this can only happen when a file system just starts to fail exactly at the time when a file  is accessed.
-What happens? ... Needs further investigation ...

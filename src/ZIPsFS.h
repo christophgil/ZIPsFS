@@ -1,4 +1,7 @@
+static void mstore_assert_thread();
 static int mutex_count(int mutex,int inc);
+static bool _assert_locked(int mutex,bool yesno,bool log);
+static void mstore_hook_a(const char *msg);
 static const char *simplify_name(char *s,const char *u, const char *zipfile);
 static const char *unsimplify_name(char *u,const char *s,const char *zipfile);
 static void directory_debug_filenames(const char *func,const char *msg,const struct directory_core *d);

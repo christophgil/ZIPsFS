@@ -263,7 +263,7 @@ Column <I><B>F</B></I>: flags. (D)elete insicates that it is marked for closing 
         if (d->accesstime) PRINTINFO(TDr("%'ld s"),t0-d->accesstime);  else PRINTINFO(TDr("Never"));
         if (d->memcache) PRINTINFO(TD("%p")""TDr("%'zu")TDr("%'zu")TDr("%'ld"),d->memcache,_kilo(d->memcache_already),_kilo(d->memcache_l),d->memcache_took_mseconds);
         else PRINTINFO(TD("")TD("")TD(""));
-        SYNCHRONIZE(mutex_fhdata,  const bool can_destroy=fhdata_can_destroy(d));
+        LOCK(mutex_fhdata,  const bool can_destroy=fhdata_can_destroy(d));
         PRINTINFO(TD("%c%c")TD("%d")"</TR>\n",d->close_later?'D':' ', can_destroy?' ':'K',d->is_xmp_read);
       }
     }

@@ -40,13 +40,19 @@ uint64_t hash_value(const char* key, size_t len){
   return hash;
 }
 /////////////////////////////////////////////////////////
+
+// void test(){};   void (*fun_ptr())=&test;
+typedef void (*mstore_hook)(const char*);
+
 #define _STACK_DATA (ULIMIT_S*8)
 struct mstore{
   char *pointers_data_on_stack[_MSTORE_SEGMENTS],_stack_data[_STACK_DATA];
   char **data, *files;
   size_t dim;
   uint32_t opt,segmentLast,capacity;
+  mstore_hook hook_a;
 };
+
 //////////////////////////////////////////////////////////////////////////
 // Initialize                                                           //
 //   dir: Path of existing folder where the mmap files will be written. //
@@ -91,6 +97,7 @@ static int _mstoreOpenFile(struct mstore *m,uint32_t segment,const size_t adim){
 
 #define _MSTORE_FREE_DATA(m)  if (m->data!=m->pointers_data_on_stack) free(m->data)
 static void *mstore_malloc(struct mstore *m,const size_t bytes, const int align){
+  if (m->hook_a) m->hook_a(__func__);
   assert(align==1||align==2||align==4||align==8);
 #define D m->data[segment]
 #define DD ((size_t*)d)
@@ -147,6 +154,7 @@ static void *mstore_add(struct mstore *m,const void *src, const size_t bytes,con
 }
 enum _mstore_operation{_mstore_destroy,_mstore_usage,_mstore_clear,_mstore_segments};
 static size_t _mstore_common(struct mstore *m,int opt){
+    if (m->hook_a) m->hook_a(__func__);
   size_t sum=0;
   for(int segment=m->capacity;--segment>=0;){
     char *d=D;
@@ -261,7 +269,11 @@ struct mytest{
   bool b;
 };
 
+
 int main(int argc,char *argv[]){
+
+
+
   const char *dir="/home/cgille/tmp/test/mstore_mstore1";
   //recursive_mkdir(dir);
   struct mstore m={0};
