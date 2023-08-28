@@ -59,6 +59,9 @@ static bool endsWith(const char* s,const char* e){
   const int sn=strlen(s),en=strlen(e);
   return en<=sn && 0==strcmp(s+sn-en,e);
 }
+static bool endsWithZip(const char *s){
+  return s && ENDSWITHI(s,my_strlen(s),".zip");
+}
 static int count_slash(const char *p){
   const int n=my_strlen(p);
   int count=0;
@@ -75,6 +78,35 @@ static int last_slash(const char *path){
 static int pathlen_ignore_trailing_slash(const char *p){
   const int n=my_strlen(p);
   return n && p[n-1]=='/'?n-1:n;
+}
+
+enum validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NUM};
+static bool *validchars(enum validchars type){
+  static bool ccc[VALIDCHARS_NUM][128];
+  static bool initialized;
+  if (!initialized){
+    for(int t=VALIDCHARS_NUM;--t>=0;){
+      bool *cc=ccc[t];
+      for(int i='A';i<='Z';i++) cc[i|32]=cc[i]=true;
+      for(int i='0';i<='9';i++) cc[i]=true;
+      const char *s="=+-_$@.~";
+      for(int i=strlen(s);--i>=0;) cc[s[i]]=true;
+    }
+    ccc[VALIDCHARS_PATH]['/']=true;
+    initialized=true;
+  }
+  return ccc[type];
+}
+
+static int find_invalidchar(enum validchars type,const char *s,const int len){
+  if (s){
+    const bool *bb=validchars(type);
+    for(int i=0;i<len;i++){
+      const char c=s[i];
+      if (c<0||!bb[c]) return i;
+    }
+  }
+  return -1;
 }
 
 static int path_for_fd(const char *title, char *path, int fd){
@@ -148,6 +180,7 @@ static void log_file_mode(mode_t m){
   C(S_IRGRP,'r');C(S_IWGRP,'w');C(S_IXGRP,'x');
   C(S_IROTH,'r');C(S_IWOTH,'w');C(S_IXOTH,'x');
 #undef C
+  mode[i++]=0;
   log_strg(mode);
 }
 
@@ -202,7 +235,7 @@ static int is_regular_file(const char *path){
   stat(path,&path_stat);
   return S_ISREG(path_stat.st_mode);
 }
-bool access_from_stat(const struct stat *stats,int mode){ // equivaletn to access(path,mode)
+static bool access_from_stat(const struct stat *stats,int mode){ // equivaletn to access(path,mode)
   int granted;
   mode&=(X_OK|W_OK|R_OK);
 #if R_OK!=S_IROTH || W_OK!=S_IWOTH || X_OK!=S_IXOTH
@@ -277,56 +310,17 @@ static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc){
 
 #endif // _cg_utils_dot_c
 // 1111111111111111111111111111111111111111111111111111111111111
+#if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__ == 0
+int main(int argc, char *argv[]){
 
 
-#if defined __IN__INCLUDE_LEVEL__ && __INCLUDE_LEVEL__ == 0
-#include "cg_read_entire_file.c"
-int mainYYYYYY(int argc, char *argv[]){
-  setlocale(LC_NUMERIC,""); /* Enables decimal grouping in printf */
-  //char *s=argv[1];    printf("%s = %'ld\n",s,atol_kmgt(s));
-  if (0){
-    const char *s=argv[1];
-    int l=strlen(s);
-    printf("l=%d\n",l);
-    printf("strcmp %d\n",ENDSWITH(s,l,".zip"));
-    printf("strcmp %d\n",ENDSWITHI(s,l,".zip"));
+  bool *ccpath=validchars(VALIDCHARS_PATH);
+  printf("ccpath\n");
+  for(int c=0;c<256;c++){
+    if (ccpath[c]) putchar(c);
   }
-  /*
-    const char *path="/home/cgille/tmp/ZIPsFS/modified/PRO1/Data/30-0046/20230126_PRO1_KTT_004_30-0046_LisaKahl_P01_VNATSerAuxpM1evoM2Glucose10mMFormate20mM_dia_BD11_1_12097.d/analysis.tdf";
-    //  int res=open(path,8201,509);
-    int res=open(path,O_WRONLY|O_TRUNC);
-    printf("res=%d path=%s\n",res,path);
-  */
-
-
-
-  if (0){
-    printf("sizeof=%zu\n",sizeof(".txt"));
-    printf("ENDSWITH=%d\n",ENDSWITH(argv[1],strlen(argv[1]),".txt"));
-  }
-  if (0){
-    char *a="abcdefghij";
-    const uint32_t crc=cg_crc32(a,strlen(a),0);
-    printf("%s crc=%x\n",a,crc);
-    //    abcdefghij crc=3981703a
-    exit(9);
-  }
-  if (1){
-    char *buf[1];
-    if (argc!=2){
-      fprintf(stderr,"Expectd file path\n");
-    }else{
-      const int64_t size=read_entire_file(argv[1],buf);
-      fprintf(stderr,"Read %ld bytes\n",size);
-      puts(*buf);
-      const uint32_t crc=cg_crc32(*buf,size,0);
-      printf("crc=%x\n",crc);
-
-      free(*buf);
-    }
-
-
-  }
-  return 0;
+  printf("\n");
+  printf("find_invalidchar %d\n",find_invalidchar(VALIDCHARS_PATH,argv[1],strlen(argv[1])));
 }
+
 #endif

@@ -27,7 +27,7 @@
 #define FNV_PRIME 1099511628211UL
 // Retur0n 64-bit FNV-1a hash for key (NUL-terminated). See  https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
 #define HASH_VALUE_LOG (1UL<<61)
-uint64_t hash_value(const char* key, size_t len){
+static uint64_t hash_value(const char* key, size_t len){
   uint64_t hash=FNV_OFFSET;
   const bool log=(len&HASH_VALUE_LOG)!=0;
   if (log) len&=~HASH_VALUE_LOG;
@@ -41,16 +41,16 @@ uint64_t hash_value(const char* key, size_t len){
 }
 /////////////////////////////////////////////////////////
 
-// void test(){};   void (*fun_ptr())=&test;
-typedef void (*mstore_hook)(const char*);
-
 #define _STACK_DATA (ULIMIT_S*8)
+
 struct mstore{
   char *pointers_data_on_stack[_MSTORE_SEGMENTS],_stack_data[_STACK_DATA];
   char **data, *files;
   size_t dim;
   uint32_t opt,segmentLast,capacity;
-  mstore_hook hook_a;
+  uint64_t debug_thread;
+  int debug_mutex;
+
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -61,7 +61,7 @@ struct mstore{
 #define NEXTMULTIPLE2(x,word) ((x+(word-1))&~(word-1))
 #define MSTORE_OPT_MALLOC (1LU<<63)
 #define _MSTORE_OPTS MSTORE_OPT_MALLOC
-struct mstore *mstore_init(struct mstore *m,const char *dir,size_t size_and_opt){
+static struct mstore *mstore_init(struct mstore *m,const char *dir,size_t size_and_opt){
   memset(m,0,sizeof(struct mstore));
   memset(m->data=m->pointers_data_on_stack,0,_MSTORE_SEGMENTS*SIZE_T);
   m->files=(char*)dir;
@@ -97,7 +97,6 @@ static int _mstoreOpenFile(struct mstore *m,uint32_t segment,const size_t adim){
 
 #define _MSTORE_FREE_DATA(m)  if (m->data!=m->pointers_data_on_stack) free(m->data)
 static void *mstore_malloc(struct mstore *m,const size_t bytes, const int align){
-  if (m->hook_a) m->hook_a(__func__);
   assert(align==1||align==2||align==4||align==8);
 #define D m->data[segment]
 #define DD ((size_t*)d)
@@ -148,13 +147,11 @@ static void *mstore_malloc(struct mstore *m,const size_t bytes, const int align)
   }
   return NULL;
 }
-
 static void *mstore_add(struct mstore *m,const void *src, const size_t bytes,const int align){
   return memcpy(mstore_malloc(m,bytes,align),src,bytes);
 }
 enum _mstore_operation{_mstore_destroy,_mstore_usage,_mstore_clear,_mstore_segments};
 static size_t _mstore_common(struct mstore *m,int opt){
-    if (m->hook_a) m->hook_a(__func__);
   size_t sum=0;
   for(int segment=m->capacity;--segment>=0;){
     char *d=D;
@@ -194,7 +191,7 @@ static void mstore_clear(struct mstore *m){
   _mstore_common(m,_mstore_clear);
 }
 
-// static void mstore_free(struct mstore *m,const void *addr,const int len){}  /* not yet implemented */
+
 
 #undef D
 #undef DD
@@ -223,18 +220,18 @@ struct cache_by_hash{
   char **str;
   size_t *len;
 };
-void cache_by_hash_init(struct cache_by_hash *c,int log2size,int align){
+static void cache_by_hash_init(struct cache_by_hash *c,int log2size,int align){
   c->size=1<<log2size;
   c->align=align;
   c->str=calloc(c->size,sizeof(char*));
   c->len=calloc(c->size,8);
 }
-void cache_by_hash_clear(struct cache_by_hash *c){
+static void cache_by_hash_clear(struct cache_by_hash *c){
   memset(c->str,0,c->size*sizeof(char**));
 }
 #define MSTORE_ADD_REUSE_LOG (1LU<<62)
 #define MSTORE_ADD_REUSE_FLAGS (1LU<<62)
-const void *mstore_add_reuse(struct mstore *m, const void *str, size_t len,const uint64_t hash,struct cache_by_hash  *byhash){
+static const void *mstore_add_reuse(struct mstore *m, const void *str, size_t len,const uint64_t hash,struct cache_by_hash  *byhash){
   if (!str) return NULL;
   const bool log=(len&MSTORE_ADD_REUSE_LOG)!=0;
   len&=~MSTORE_ADD_REUSE_FLAGS;

@@ -24,7 +24,7 @@ static bool is_Zip(const char *s){
 /// return on success: Amount of bytes to be deleted from the end e of the path.
 ///               append: String that needs to be added.
 //////////////////////////////////////////////////////////////
-const int config_virtualpath_is_zipfile(const char *b, const char *e,char *append[]){
+static const int config_virtualpath_is_zipfile(const char *b, const char *e,char *append[]){
   if (e-b>12 && is_zip(e-12)  && !memcmp(e-8,".Content",8)) return -8;
   if (e[-2]=='.' && (e[-1]|32)=='d') {
     *append=".Zip";
@@ -50,7 +50,7 @@ const int config_virtualpath_is_zipfile(const char *b, const char *e,char *appen
 /// See: config_zipentries_instead_of_zipfile()
 ///      config_zipentry_to_zipfile_test()
 ////////////////////////////////////////////////////
-int config_zipentry_to_zipfile(const int approach,const char *virtualpath, char *suffix[]){
+static int config_zipentry_to_zipfile(const int approach,const char *virtualpath, char *suffix[]){
   //log_debug_now("config_zipentry_to_zipfile  virtualpath=%s\n",virtualpath);
   const int path_l=strlen(virtualpath);
   if (path_l>20){
@@ -92,7 +92,7 @@ int config_zipentry_to_zipfile(const int approach,const char *virtualpath, char 
 #undef A
 }
 
-void config_zipentry_to_zipfile_test(){
+static void config_zipentry_to_zipfile_test(){
   if (true) return; /* Remove to run tests */
   char *ff[]={
     "20230310_aaaaaaaaaaa.wiff",
@@ -119,7 +119,7 @@ void config_zipentry_to_zipfile_test(){
 /////////////////////////////////////////////
 /// Convert a real path to a virtual path ///
 /////////////////////////////////////////////
-char *config_zipfilename_real_to_virtual(char *new_name,const char *n){
+static char *config_zipfilename_real_to_virtual(char *new_name,const char *n){
   const int len=strlen(n);
   strcpy(new_name,n);
   const char *e=n+len;
@@ -132,9 +132,9 @@ char *config_zipfilename_real_to_virtual(char *new_name,const char *n){
   }
   return new_name;
 }
-const char *WITHOUT_PARENT[]={".wiff.Zip",".wiff2.Zip",".rawIdx.Zip",".raw.Zip",NULL};
-int WITHOUT_PARENT_LEN[10];
-bool config_zipentries_instead_of_zipfile(const char *realpath){
+static const char *WITHOUT_PARENT[]={".wiff.Zip",".wiff2.Zip",".rawIdx.Zip",".raw.Zip",NULL};
+static int WITHOUT_PARENT_LEN[10];
+static bool config_zipentries_instead_of_zipfile(const char *realpath){
   const int len=strlen(realpath);
   const char *e=realpath+len;
   if(len>20 && is_Zip(e-4)){
@@ -145,7 +145,7 @@ bool config_zipentries_instead_of_zipfile(const char *realpath){
   }
   return false;
 }
-bool config_also_show_zipfile_in_listing(const char *path){ /* Not only the content of the zip file but also the zip file itself. */
+static bool config_also_show_zipfile_in_listing(const char *path){ /* Not only the content of the zip file but also the zip file itself. */
   const int len=strlen(path);
   return len>5 && is_zip(path+len -4) && !is_Zip(path+len-4);
 }
@@ -153,15 +153,15 @@ bool config_also_show_zipfile_in_listing(const char *path){ /* Not only the cont
 /// With the bruker dll, two non existing files are requested extremely often. //
 /// Improving performance by refusing those file names                         //
 /////////////////////////////////////////////////////////////////////////////////
-bool config_not_report_stat_error(const char *path ){
+static bool config_not_report_stat_error(const char *path ){
   if (!path)return false;
   const int l=strlen(path);
-#define I(s) ENDSWITH(path,l,#s)
-  if (I(/analysis.tdf-wal) || I(/analysis.tdf-journal) ||  I(/.ciopfs) || I(.quant)) return true;
+#define I(s) ENDSWITH(path,l,#s)||
+  if (I(/analysis.tdf-wal)  I(/analysis.tdf-journal)   I(/.ciopfs)  I(.quant)  I(/autorun.inf)  I(/.xdg-volume-info) I(/.Trash)false) return true;
 #undef I
   return false;
 }
-bool _is_tdf_or_tdf_bin(const char *path){
+static bool _is_tdf_or_tdf_bin(const char *path){
   if (!path || !*path)return false;
   const int slash=last_slash(path);
   return !strcmp(path+slash+1,"analysis.tdf") || !strcmp(path+slash+1,"analysis.tdf_bin");
@@ -171,12 +171,12 @@ bool _is_tdf_or_tdf_bin(const char *path){
 /// This is active when started with option      ///
 ///      -c rule                                 ///
 ////////////////////////////////////////////////////
-bool config_store_zipentry_in_memcache(long filesize,const char *path,bool is_compressed){
+static bool config_store_zipentry_in_memcache(long filesize,const char *path,bool is_compressed){
   if (_is_tdf_or_tdf_bin(path)) return true;
   return false;
 }
 
-bool configuration_evict_from_filecache(const char *realpath,const char *zipentryOrNull){
+static bool configuration_evict_from_filecache(const char *realpath,const char *zipentryOrNull){
   if (_is_tdf_or_tdf_bin(zipentryOrNull) ||
       _is_tdf_or_tdf_bin(realpath)) return true;
   return false;
@@ -186,7 +186,7 @@ bool configuration_evict_from_filecache(const char *realpath,const char *zipentr
 /// With the rule  -c always, all .exe files would be loaded into RAM ///
 /// when a file listing is displayed in File Explorerer               ///
 /////////////////////////////////////////////////////////////////////////
-bool config_not_memcache_zip_entry(const char *path){
+static bool config_not_memcache_zip_entry(const char *path){
   const int len=!path?0:strlen(path);
   const char *e=path+len;
   return len>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e';  /* if endsWithIgnoreCase .exe  */
@@ -194,7 +194,7 @@ bool config_not_memcache_zip_entry(const char *path){
 //////////////////////////////////////////////////////////////
 /// This activates  fuse_file_info->keep_cache  upon open ////
 //////////////////////////////////////////////////////////////
-bool config_keep_file_attribute_in_cache(const char *path){
+static bool config_keep_file_attribute_in_cache(const char *path){
   if (!_is_tdf_or_tdf_bin(path)) return false;
   const int slash=last_slash(path);
   return slash>0 && !strncmp(path+slash,"/202",4);
@@ -204,7 +204,7 @@ bool config_keep_file_attribute_in_cache(const char *path){
 /// For a certain software we use it is important ///
 /// only certain files in a ZIP are visible       ///
 ////////////////////////////////////////////////////
-bool config_zipentry_filter(const char *parent, const char *name){
+static bool config_zipentry_filter(const char *parent, const char *name){
   return true;
   if (ENDSWITH(parent,strlen(parent),".d.Zip")){
     const int slash=last_slash(parent);
@@ -217,7 +217,7 @@ bool config_zipentry_filter(const char *parent, const char *name){
 ////////////////////////////////////////////////////////////
 /// Certain files may be hidden in file listings         ///
 ////////////////////////////////////////////////////////////
-bool config_filter_files_in_listing(const char *parent, const char *name){
+static bool config_filter_files_in_listing(const char *parent, const char *name){
   const int l=my_strlen(name);
 #define C(x) ENDSWITH(name,l,#x)
   if (l>12 && C(.md5) && (C(.Zip.md5) || C(.wiff.md5) || C(.wiff.scan.md5) || C(.raw.md5) || C(.rawIdx.md5))) return false;
@@ -229,7 +229,7 @@ bool config_filter_files_in_listing(const char *parent, const char *name){
 /// The new file is stored in the first root.            ///
 /// Certain files may be protected from beeing changed.  ///
 ////////////////////////////////////////////////////////////
-bool config_not_overwrite(const char *path){
+static bool config_not_overwrite(const char *path){
   const int l=strlen(path);
 #define C(a) ENDSWITH(path,l,#a)
   return C(.tdf)||C(.tdf_bin)||C(.wiff)||C(.wiff2)||C(.wiff.scan)||C(.raw)||C(.rawIdx);
@@ -240,7 +240,7 @@ bool config_not_overwrite(const char *path){
 /// What about file directories, should they be cached?  ///
 /// Maybe remote folders that have not changed recently  ///
 ////////////////////////////////////////////////////////////
-bool config_cache_directory(const char *path, bool isRemote, int changed_seconds_ago){
+static bool config_cache_directory(const char *path, bool isRemote, int changed_seconds_ago){
   return isRemote && changed_seconds_ago>60*60;
 }
 //////////////////////////////////////////////

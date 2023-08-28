@@ -5,21 +5,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
 #include <assert.h>
-#include <sys/wait.h>
-#include <sys/prctl.h>
-#include <execinfo.h>
-#include <signal.h>
-#include <ucontext.h>
 #include <stdbool.h>
 #include <errno.h>
-#include <malloc.h>
-#include <unistd.h>
 #include <sys/time.h>
 #include "cg_log.c"
 #include "cg_utils.c"
+#include "cg_stacktrace.c"
 #include <sys/resource.h>
 static char *path_of_this_executable(){
   static char* _p;
@@ -35,74 +27,21 @@ static char *path_of_this_executable(){
 static void provoke_idx_out_of_bounds(){
   char a[10];
   char *b=a;
-b[11]='x';
+  b[11]='x';
 
 }
 
 /////////////////////////////////
 /// Stacktrace on error/exit  ///
 /////////////////////////////////
-static void print_trace_using_debugger(){
-  return;
-  fputs(ANSI_INVERSE"print_trace_using_debugger"ANSI_RESET"\n",stderr);
-  char pid_buf[30];
-  sprintf(pid_buf, "%d", getpid());
-  prctl(PR_SET_PTRACER,PR_SET_PTRACER_ANY, 0,0, 0);
-  const int child_pid=fork();
-  if (!child_pid){
-#ifdef __clang__
-    execl("/usr/bin/lldb", "lldb", "-p", pid_buf, "-b", "-o","bt","-o","quit" ,NULL);
-#else
-    execl("/usr/bin/gdb", "gdb", "--batch", "-f","-n", "-ex", "thread", "-ex", "bt",path_of_this_executable(),pid_buf,NULL);
-#endif
-    abort(); /* If gdb failed to start */
-  } else {
-    waitpid(child_pid,NULL,0);
-  }
-}
-////////////////////////////////////////////////////////////////////////////////////////////////////
-static void addr2line(void *p, void *messageP){
-  char cmd[999];
-  sprintf(cmd,"/usr/bin/addr2line -p %p -e %s",p,path_of_this_executable());
-  system(cmd);
-}
+#define ASSERT(...) (assert(__VA_ARGS__))
 
-static void bt_sighandler(int sig, siginfo_t *psi, void *ctxarg){
-  void *trace[16];
-  mcontext_t *ctxP=&((ucontext_t *) ctxarg)->uc_mcontext;
-  trace[1]=(void *)ctxP->gregs[REG_RIP];
-  printf(ANSI_RED"Got signal %d  pid=%d\n"ANSI_RESET,sig,getpid());
-  if (sig==SIGSEGV) printf(ANSI_RED"Faulty address is %p, from %p\n"ANSI_RESET,(void*)ctxP->gregs[REG_RSP],trace[1]);
-  const int trace_size=backtrace(trace,16);
-  /* overwrite sigaction with caller's address */
-  char **messages=backtrace_symbols(trace,trace_size);
-  /* skip first stack frame (points here) */
-  printf(ANSI_INVERSE"bt_sighandler  %d \n"ANSI_RESET,trace_size);
-  for(int i=1; i<trace_size; ++i){
-    printf(ANSI_FG_GRAY"pid=%d #%d %s"ANSI_RESET"\n",getpid(),i, messages[i]);
-    usleep(1000);
-    addr2line(trace[i],messages[i]);
-    fputs(ANSI_RESET,stdout);
-  }
-  print_trace_using_debugger();
-  exit(0);
-}
-// void init_handler() __attribute((constructor));
-void init_handlerXXXXXXXXXXXx(){
-  log_debug_now("init_handler\n");
-  struct sigaction sa;
-  sa.sa_sigaction=bt_sighandler;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags=SA_RESTART|SA_SIGINFO;
-  sigaction(SIGSEGV,&sa,NULL);
-  sigaction(SIGUSR1,&sa,NULL);
-  sigaction(SIGABRT,&sa,NULL);
-  log_debug_now("init_handler pid=%d\n",getpid());
-  struct rlimit core_limit={RLIM_INFINITY,RLIM_INFINITY};
-  assert(!setrlimit(RLIMIT_CORE,&core_limit)); // enable core dumps
+////////////////////////////////////////////////////////////////////////////////////////////////////
+static void enable_core_dumps(){
+ struct rlimit core_limit={RLIM_INFINITY,RLIM_INFINITY};
+  setrlimit(RLIMIT_CORE,&core_limit); // enable core dumps
 }
 /*********************************************************************************/
-
 ////////////////////////////////////
 /// recognize certain file names ///
 ////////////////////////////////////
@@ -128,13 +67,17 @@ static bool _report_failure_for_tdf(const char *mthd, int res, const char *path)
   return false;
 }
 /*********************************************************************************/
+//////////////////////////////////
+///  File ///
+//////////////////////////////////
+
 static void assert_dir(const char *p, const struct stat *st){
   if (!st) return;
   //  log("st=%s  %p\n",p, st);
   if(!S_ISDIR(st->st_mode)){
     log_error("assert_dir  stat S_ISDIR %s",p);
     log_file_stat("",st);
-    print_trace_using_debugger();
+    print_stacktrace(0);
   }
   bool r_ok=access_from_stat(st,R_OK);
   bool x_ok=access_from_stat(st,X_OK);
@@ -147,7 +90,7 @@ static void assert_r_ok(const char *p, const struct stat *st){
   if(!access_from_stat(st,R_OK)){
     log_error("assert_r_ok  %s  ",p);
     log_file_stat("",st);
-    print_trace_using_debugger();
+    print_stacktrace(0);
   }
 }
 
@@ -194,8 +137,8 @@ static void _log_count_e(enum functions f,const char *path){
 static void func3(){
   raise(SIGSEGV);
 }
-void func2(){ func3();}
-void func1(){ func2();}
+static void func2(){ func3();}
+static void func1(){ func2();}
 int main(int argc, char *argv[]){
   func1();
 }

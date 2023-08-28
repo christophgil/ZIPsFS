@@ -56,7 +56,7 @@ struct ht{
    This should be used if entries in the hashtable are not going to be removed
 *****************************************************************************/
 
-bool ht_init_with_keystore(struct ht *ht,uint32_t flags,uint32_t log2initalCapacity,uint32_t log2keystoreDim){
+static bool ht_init_with_keystore(struct ht *ht,uint32_t flags,uint32_t log2initalCapacity,uint32_t log2keystoreDim){
   memset(ht,0,sizeof(struct ht));
   if (log2keystoreDim)  mstore_init(&ht->keystore,NULL,1<<log2keystoreDim);
   ht->flags=flags|(log2initalCapacity&0xFF000000)|(log2keystoreDim?HT_FLAG_KEYSTORE:0);
@@ -72,7 +72,7 @@ bool ht_init_with_keystore(struct ht *ht,uint32_t flags,uint32_t log2initalCapac
 #undef C
   return true;
 }
-bool ht_init(struct ht *ht,uint32_t flags,uint32_t log2initalCapacity){
+static bool ht_init(struct ht *ht,uint32_t flags,uint32_t log2initalCapacity){
   return ht_init_with_keystore(ht,flags,log2initalCapacity,0);
 }
 static void _ht_free_entries(struct ht *ht){
@@ -81,7 +81,7 @@ static void _ht_free_entries(struct ht *ht){
     ht->entries=NULL;
   }
 }
-void ht_destroy(struct ht *ht){
+static void ht_destroy(struct ht *ht){
   if (ht->keystore.dim){ /* All keys are in the keystore */
     mstore_destroy(&ht->keystore);
   }else if (!(ht->flags&HT_FLAG_INTKEY)){ /* Each key has been stored on the heap individually */
@@ -114,7 +114,7 @@ static const struct ht_entry* ht_get_entry(struct ht *ht, const char* key,int le
 /*
   Both, len and hash can be  zero. In this case  they are determined.
  */
-void* ht_get(struct ht *ht, const char* key,int len,uint64_t hash){
+static void* ht_get(struct ht *ht, const char* key,int len,uint64_t hash){
   if (!key)return NULL;
   const struct ht_entry *e=ht_get_entry(ht,key,len,hash);
   return e?e->value:NULL;
@@ -171,7 +171,7 @@ static bool ht_expand(struct ht *ht){
   ht->capacity=new_capacity;
   return true;
 }
-struct ht_entry* ht_set(struct ht *ht, const char* key,int len, uint64_t hash,void* value){
+static struct ht_entry* ht_set(struct ht *ht, const char* key,int len, uint64_t hash,void* value){
   assert (ht!=NULL && ht->entries!=NULL);
     if (!key)return NULL;
     if (!len && !(ht->flags&HT_FLAG_INTKEY)) len=strlen(key);
@@ -183,18 +183,18 @@ struct ht_entry* ht_set(struct ht *ht, const char* key,int len, uint64_t hash,vo
 /* ***  Int key int value                  *** */
 /* ***  Limitation: key2 must not be zero  *** */
 /********************************************* */
-void ht_set_int(struct ht *ht, const uint64_t key1, const uint64_t key2, const uint64_t value){
+static void ht_set_int(struct ht *ht, const uint64_t key1, const uint64_t key2, const uint64_t value){
   ht->flags|=HT_FLAG_INTKEY;
   assert(key2!=0);
   ht_set(ht,(char*)key2,0,key1,(void*)value);
 }
-uint64_t ht_get_int(struct ht *ht, uint64_t const key1, uint64_t const key2){
+static uint64_t ht_get_int(struct ht *ht, uint64_t const key1, uint64_t const key2){
   ht->flags|=HT_FLAG_INTKEY;
   return (uint64_t) ht_get(ht,(char*)key2,0,key1);
 }
 //uint32_t ht_length(struct ht *ht){  return ht->length;}
 /* *** Iteration over elements ***  */
-struct ht_entry *ht_next(struct ht *ht, int *index){
+static struct ht_entry *ht_next(struct ht *ht, int *index){
   int i=*index;
   const int c=ht->capacity;
   struct ht_entry *ee=ht->entries;
@@ -204,7 +204,7 @@ struct ht_entry *ht_next(struct ht *ht, int *index){
   *index=i+1;
   return ee+i;
 }
-void ht_clear(struct ht *ht){
+static void ht_clear(struct ht *ht){
   struct ht_entry *e=ht->entries;
   if (e){
     memset(e,0,ht->capacity*S_HT_ENTRY);
@@ -214,7 +214,7 @@ void ht_clear(struct ht *ht){
 
 #if 0
 /* identical Strings will have same address */
-const char* ht_internalize_strg(struct ht *ht,const char *s){
+static const char* ht_internalize_strg(struct ht *ht,const char *s){
   if (!s) return NULL;
   const char *s2=ht_get(ht,s);
   if (s2) return s2;
@@ -236,7 +236,7 @@ static void debug_print_keys(struct ht *ht){
     }
   }
 }
-void test_ht_1(int argc, const char *argv[]){
+static void test_ht_1(int argc, const char *argv[]){
   struct ht ht={0};
   ht_init_with_keystore(&ht,0,7,4);
   //ht_init(&ht,7);
@@ -254,7 +254,7 @@ void test_ht_1(int argc, const char *argv[]){
   }
   ht_destroy(&ht);
 }
-void test_int(int argc, const char *argv[]){
+static void test_int(int argc, const char *argv[]){
   const int n=atoi(argv[1]);
   struct ht ht={0};
   ht_init(&ht,HT_FLAG_INTKEY,7);

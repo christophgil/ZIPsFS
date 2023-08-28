@@ -88,7 +88,7 @@ static void _log_common(const char *fn,enum Logs t,const char *format,...){
   switch(t){
   case Log_already_exists:    log_strg("Already exists "ANSI_RESET);break;
   case Log_failed:            log_msg(ANSI_FG_RED" $$ %d Failed "ANSI_RESET,getpid());break;
-  case Log_error:             log_msg(ANSI_FG_RED" $$ %d Error "ANSI_RESET,getpid());break;
+  case Log_error:             log_msg(ANSI_FG_RED" Error "ANSI_RESET);break;
   case Log_succes:            log_strg(ANSI_FG_GREEN" Success "ANSI_RESET);break;
   case Log_debug_now:         log_msg(ANSI_FG_MAGENTA" Debug "ANSI_RESET" ");break;
   case Log_cache:             log_msg(ANSI_MAGENTA" $$ %d CACHE"ANSI_RESET" ",getpid());break;
@@ -218,13 +218,29 @@ static int64_t currentTimeMillis(){
   return tv.tv_sec*1000+tv.tv_usec/1000;
 }
 
-static uint32_t deciSecondsSinceStart(){
+/* Advantage over currentTimeMillis() is that assigning int is atomar.
+   max int is 2147483647.
+   2147483647 sec are 68 years.
+   There will be a number overflow after 6.8 years.
+   Nevertheless, differences will be correct.
+  int main(int argc, char *argv[]){
+  int n0=2147483647, n=n0;
+  for(int i=0;i<10;i++){
+    printf("%d %d\n",n,n-n0);
+    n++;
+  }
+  }
+  The right column is correctly 0,1,2,3...10.
+*/
+static int deciSecondsSinceStart(){
   if (!_startTimeMillis)_startTimeMillis=currentTimeMillis();
   return (int)((currentTimeMillis()-_startTimeMillis)/100);
 }
 
+
+
 #define WARN_SHIFT_MAX 8
-char *_warning_channel_name[1<<WARN_SHIFT_MAX]={0};
+static char *_warning_channel_name[1<<WARN_SHIFT_MAX]={0},*_warning_color[1<<WARN_SHIFT_MAX]={0};
 //char **_warning_channel_name=NULL;
 //char *_warning_pfx[1<<WARN_SHIFT_MAX]={0};
 static int _warning_count[1<<WARN_SHIFT_MAX];
@@ -277,16 +293,9 @@ static void _warning(const char *fn,const uint32_t channel,const char* path,cons
   for(int j=2;--j>=0;){
     FILE *f=j?(_logIsSilent?NULL:LOG_STREAM):(toFile?file:NULL);
     if (!f) continue;
-
-    char *pfx=_warning_channel_name[i], *color=ANSI_FG_RED;
-    if (!pfx){
-      pfx="ERROR";
-    }else{
-      char *us=strchr(pfx,'_');
-      if (us) pfx=us+1;
-    }
+    const char *pfx=_warning_channel_name[i], *color=_warning_color[i];
     //fprintf(f,"%s\t%s()\t%d\t%s\t",_warning_pfx[i]?_warning_pfx[i]:(ANSI_FG_RED"ERROR "ANSI_RESET),fn,_warning_count[i],p);
-    fprintf(f,"%s%s"ANSI_RESET"\t%s()\t%d\t%s\t",color,pfx,fn,_warning_count[i],p);
+    fprintf(f,"\n%d\t%s%s"ANSI_RESET"\t%s()\t%s\t",_warning_count[i],color?color:ANSI_FG_RED,pfx?pfx:"ERROR",fn,p);
     va_list argptr; va_start(argptr,format);vfprintf(f,format,argptr);va_end(argptr);
     if (*errx) fprintf(f,"\t%s",errx);
     fputs("\n\n",f);

@@ -1,7 +1,12 @@
 #define FILE_DEBUG_KILL       "/ZIPsFS_KILL_878546a9e4d4b2f375a1f72b8c913a01"
+#define FILE_DEBUG_BLOCK       "/ZIPsFS_BLOCK_878546a9e4d4b2f375a1f72b8c913a01"
 #define FILE_DEBUG_CLEARCACHE "/ZIPsFS_CLEARCACHE"
 static void debug_triggerd_by_magic_files(const char *path){
   //log_debug_now("ddddddddddddd debug_triggerd_by_magic_files %s \n",path);
+  if (!strcmp(path,FILE_DEBUG_BLOCK)){
+    warning(WARN_MISC,path,"Triggered blocking of remote FS");
+    foreach_root(i,r) r->debug_pretend_blocked=true;
+  }
   if (!strcmp(path,FILE_DEBUG_KILL)){
     warning(WARN_MISC,path,"Triggered exit of ZIPsFS");
     while(_fhdata_n){

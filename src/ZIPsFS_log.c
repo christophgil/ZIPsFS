@@ -11,7 +11,7 @@
 static char **_fuse_argv;
 static int _fuse_argc;
 
-static char *_thisPrg;
+
 static time_t _timeAtStart;
 static void log_path(const char *f,const char *path){
   log_msg("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
@@ -44,7 +44,7 @@ static  char _info[MAX_INFO+2];
 #else
 #define PRINTINFO(...)   n=printinfo(n,__VA_ARGS__)
 #endif
-int printinfo(int n, const char *format,...){
+static int printinfo(int n, const char *format,...){
   if (n<MAX_INFO && n>=0){
     va_list argptr;
     va_start(argptr,format);
@@ -63,14 +63,16 @@ static int print_fuse_argv(int n){
   return n;
 }
 static int print_roots(int n){
-  PRINTINFO("<H1>Roots</H1>\n<TABLE><THEAD><TR>"TH("Path")TH("Writable")THr("Response")THr("Delayed")TH("Free[GB]")TH("Dir-Cache[kB]")"</TR></THEAD>\n");
+  PRINTINFO("<H1>Roots</H1>\n<TABLE><THEAD><TR>"TH("Path")TH("Writable")THr("Response")THr("Blocked")TH("Free[GB]")TH("Dir-Cache[kB]")"</TR></THEAD>\n");
   foreach_root(i,r){
-    const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30),diff=deciSecondsSinceStart()-r->statfs_when_deciSec;
+    const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30),diff=deciSecondsSinceStart()-r->rthread_when_response_deciSec;
     if (n>=0){
       PRINTINFO("<TR>"TD("%s")TDc("%s"),r->path,yes_no(f&ROOT_WRITABLE));
-      if (f&ROOT_REMOTE) PRINTINFO(TDr("%'ld ms")TDr("%'d"), 10L*(diff>ROOT_OBSERVE_EVERY_DECISECONDS*3?diff:r->statfs_took_deciseconds),r->count_delayed);
+
+      if (f&ROOT_REMOTE) PRINTINFO(TDr("%'ld ms")TDr("%'u"), 10L*(diff>ROOT_OBSERVE_EVERY_DECISECONDS*3?diff:r->statfs_took_deciseconds),r->log_count_delayed);
       else PRINTINFO(TDr("Local")TD(""));
-      PRINTINFO(TDr("%'d")TDr("%'zu")"</TR>\n",freeGB,mstore_usage(&r->dircache)/1024);
+      uint64_t u; LOCK(mutex_dircache, u=MSTORE_USAGE(&r->dircache)/1024);
+      PRINTINFO(TDr("%'d")TDr("%'zu")"</TR>\n",freeGB,u);
     }else{
       log_msg("\t%d\t%s\t%s\n",i,r->path,!my_strlen(r->path)?"":(f&ROOT_REMOTE)?"Remote":(f&ROOT_WRITABLE)?"Writable":"Local");
     }
@@ -78,7 +80,7 @@ static int print_roots(int n){
   PRINTINFO("</TABLE>\n");
   return n;
 }
-int repeat_chars_info(int n,char c, int i){
+static int repeat_chars_info(int n,char c, int i){
   if (i>0 && n+i<MAX_INFO){
     memset(_info+n,c,i);
     n+=i;
@@ -236,6 +238,7 @@ static int print_read_statistics(int n){
   TABLEROW(_count_close_later,7);
   TABLEROW(_count_statcache_get,7);
   TABLEROW(_log_read_max_size,7);
+  TABLEROW(_log_count_lock,7);
   PRINTINFO("</TABLE>");
 #undef TABLEROW
   return n;
@@ -305,6 +308,8 @@ TD{padding:5px;}\n\
   PRINTINFO("<H1>Inodes</H1>Created sequentially: %'d\n",_count_SeqInode);
   n=print_read_statistics(n);
   //  PRINTINFO("_cumul_time_store=%lf\n<BR>",((double)_cumul_time_store)/CLOCKS_PER_SEC);
+  //n=print_misc(n);
+
   PRINTINFO("</BODY>\n</HTML>\n");
   log_exited_function("get_info\n %d",n);
   return n;
@@ -329,13 +334,13 @@ static void fhdata_log_cache(const struct fhdata *d){
   log_msg("log_cache: d= %p path= %s cache: %s,%s cache_l= %zu/%zu idx: %d  hasc: %s\n",d,d->path,yes_no(d->memcache!=NULL),MEMCACHE_STATUS_S[d->memcache_status],d->memcache_already/d->memcache_l,idx,yes_no(fhdata_has_memcache(d)));
 }
 static void _log_zpath(const char *fn,const char *msg, struct zippath *zpath){
-  log_msg(ANSI_UNDERLINE"%s() %s"ANSI_RESET,fn,msg);
+  log_msg(ANSI_INVERSE"%s() %s"ANSI_RESET,fn,msg);
   log_msg("   this= %p   \n",zpath);
   log_msg("    %p strgs="ANSI_FG_BLUE"%s"ANSI_RESET"  "ANSI_FG_BLUE"%d\n"ANSI_RESET   ,zpath->strgs, (zpath->flags&ZP_STRGS_ON_HEAP)?"Heap":"Stack", zpath->strgs_l);
   log_msg("    %p    VP="ANSI_FG_BLUE"'%s' VP_LEN: %d"ANSI_RESET,VP(),snull(VP()),VP_LEN()); log_file_stat("",&zpath->stat_vp);
   log_msg("    %p   VP0="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,VP0(),  snull(VP0()));
   log_msg("    %p entry="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,EP(), snull(EP()));
-  log_msg("    %p    RP="ANSI_FG_BLUE"'%s'"ANSI_RESET,RP(), snull(RP())); log_file_stat("",&zpath->stat_rp);
+  log_msg("    %p    RP="ANSI_FG_BLUE"'%s' "ANSI_RESET,RP(), snull(RP())); log_file_stat("",&zpath->stat_rp);
   log_msg("    zip: %s"ANSI_RESET"\n",yes_no(ZPATH_IS_ZIP()));
 }
 #define log_zpath(...) _log_zpath(__func__,__VA_ARGS__)
@@ -348,7 +353,7 @@ static bool fhdata_not_yet_logged(unsigned int flag,struct fhdata *d){
   return true;
 }
 
-void log_fuse_process(){
+static void log_fuse_process(){
   //log_debug_now(ANSI_YELLOW"log_fuse_process"ANSI_RESET" ");
   struct fuse_context *fc=fuse_get_context();
   const int BUF=333;

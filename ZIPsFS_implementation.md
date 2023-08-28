@@ -88,11 +88,17 @@ file cache of the OS when it is unlikely that the same file will be used in near
 See  field <I>struct fuse_file_info-&gt;keep_cache</I> in function <I>xmp_open()</I>.
 
 
+
+# When a source fails
+
+When one of the roots become unavailable and calls to stat() fail or block, ZIPsFS should continue to function.
+This is achieved by running stat() in a separate threads belonging to the respective rootdata object.
+See functions starting with prefix <I>statqueue_</I>.
+If the thread <I>infloop_statqueue</I> has been blocked for a longer time, it is restarted.
+
 # Limitations:
 
 ## Cache
 
 Because of the  granularity of time measurement in files last-modified attribute, file updates may be unnoticed. This is unlikely, but theoretically possible.
 Solution?
-
-## Failure of remote roots
