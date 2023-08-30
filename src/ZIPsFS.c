@@ -93,7 +93,7 @@ static pthread_key_t _pthread_key;
 static int mutex_count(int mutex,int inc){
   int8_t *locked=pthread_getspecific(_pthread_key);
   if (!locked){
-    const int R=ROOTS*THREADS_PER_ROOT+99;
+#define  R (ROOTS*THREADS_PER_ROOT+99)
     static int i=0;
     static int8_t all_locked[R][mutex_roots+ROOTS];
     pthread_mutex_lock(_mutex+mutex_idx);i++;pthread_mutex_unlock(_mutex+mutex_idx);
@@ -102,6 +102,7 @@ static int mutex_count(int mutex,int inc){
     pthread_setspecific(_pthread_key,locked=all_locked[i]);
     ASSERT(locked!=NULL);
   }
+#undef R
   //log_debug_now("mutex_count %s %d \n",MUTEX_S[mutex],locked[mutex]);
   if (inc>0) ASSERT(locked[mutex]++<127);
   if (inc<0) ASSERT(locked[mutex]-->=0);
@@ -884,6 +885,7 @@ static int zip_contained_in_virtual_path(const char *path, int *shorten, char *a
 #define READDIR_TO_QUEUE (1<<2)
 static bool directory_from_dircache_zip_or_filesystem(const int opt, struct directory *mydir,const int64_t mtime){
   const char *rp=mydir->dir_realpath;
+  //log_debug_now("rp=%s\n",rp);
   if (!rp) return false;
   //if (endsWithZip(rp)) log_entered_function("rp=%s\n",rp);
   LOCK(mutex_dircache,int result=dircache_directory_from_cache(mydir,mtime)?1:0);
@@ -994,8 +996,8 @@ static bool find_realpath_any_root(struct zippath *zpath,const struct rootdata *
   const char *vp=VP(); /* At this point, Only zpath->virtualpath is defined. */
   const int vp_l=VP_LEN();
   foreach_root(ir,r){
+    if (onlyThisRoot && onlyThisRoot!=r || !wait_for_root_timeout(r)) continue;
     if (vp_l){
-      if (onlyThisRoot && onlyThisRoot!=r || !wait_for_root_timeout(r)) continue;
       { /* ZIP-file is a folder (usually ZIP-file.Content) in the virtual file system. */
         zpath_reset_keep_VP(zpath);
         char *append="";
@@ -1036,6 +1038,7 @@ static bool find_realpath_any_root(struct zippath *zpath,const struct rootdata *
       }
     }
     { /* Just a file */
+
       zpath_reset_keep_VP(zpath);
       if (test_realpath(zpath,r)) return true;
     }

@@ -4,7 +4,7 @@
 # makeheaders ZIPsFS.c
 sed -n 's|^\(static .*) *\){$|\1;|p' ZIPsFS.c > ZIPsFS.h
 
-if true;then
+
 
 
 
@@ -14,10 +14,9 @@ if false;then
 else
     as="-fsanitize=address -fno-omit-frame-pointer"
     #     -fsanitize=memory not combinable with =address
-  # as='-fsanitize=thread -fno-omit-frame-pointer'
-   # as=''
-##    The leak detection is turned on by default on Linux
+    # as='-fsanitize=thread -fno-omit-frame-pointer'
+    # as=''
+    ##    The leak detection is turned on by default on Linux
     clang -DHAVE_CONFIG_H -I. -I/usr/local/include/fuse3 -O0 -D_FILE_OFFSET_BITS=64 -rdynamic -g $as  $PWD/ZIPsFS.c -lfuse3 -lpthread -L/usr/local/lib -lm -lzip -lsqlite3 -o ZIPsFS
 fi
 ls -l -h ZIPsFS.h ZIPsFS
-fi
