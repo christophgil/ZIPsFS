@@ -34,9 +34,7 @@ This is usually not necessary.
 
 # Installation from source code - alternative way
 
-Edit and run the file
-
-    [src/ZIPsFS.compile.sh](src/ZIPsFS.compile.sh)
+Edit and run the file [src/ZIPsFS.compile.sh](./src/ZIPsFS.compile.sh)
 
 # Other operation systems
 
