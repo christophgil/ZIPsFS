@@ -3,9 +3,27 @@
 #define FILE_DEBUG_CLEARCACHE "/ZIPsFS_CLEARCACHE"
 static void debug_triggerd_by_magic_files(const char *path){
   //log_debug_now("ddddddddddddd debug_triggerd_by_magic_files %s \n",path);
-  if (!strcmp(path,FILE_DEBUG_BLOCK)){
-    warning(WARN_MISC,path,"Triggered blocking of remote FS");
-    foreach_root(i,r) r->debug_pretend_blocked=true;
+  {
+    const int t=
+      (!strcmp(path,"/ZIPsFS_BLOCK_PTHREAD_S"))?PTHREAD_STATQUEUE:
+      (!strcmp(path,"/ZIPsFS_BLOCK_PTHREAD_M"))?PTHREAD_MEMCACHE:
+      (!strcmp(path,"/ZIPsFS_BLOCK_PTHREAD_D"))?PTHREAD_DIRCACHE:
+      -1;
+    if (t>=0){
+      warning(WARN_DEBUG,path,"Triggered blocking of threads %s",PTHREAD_S[t]);
+      foreach_root(i,r) r->debug_pretend_blocked[t]=true;
+    }
+  }
+  {
+    const int t=
+      (!strcmp(path,"/ZIPsFS_CANCEL_PTHREAD_S"))?PTHREAD_STATQUEUE:
+      (!strcmp(path,"/ZIPsFS_CANCEL_PTHREAD_M"))?PTHREAD_MEMCACHE:
+      (!strcmp(path,"/ZIPsFS_CANCEL_PTHREAD_D"))?PTHREAD_DIRCACHE:
+      -1;
+    if(t>=0){
+      warning(WARN_DEBUG,path,"Triggered canceling of threads %s",PTHREAD_S[t]);
+      foreach_root(i,r) pthread_cancel(r->pthread[t]);
+    }
   }
   if (!strcmp(path,FILE_DEBUG_KILL)){
     warning(WARN_MISC,path,"Triggered exit of ZIPsFS");
@@ -16,8 +34,8 @@ static void debug_triggerd_by_magic_files(const char *path){
     foreach_root(i,r){
       mstore_clear(&r->dircache);
       ht_destroy(&r->dircache_ht);
-      }
-                       //                       /local/filesystem/fuse-3.14.0/lib/helper.c fuse_main
+    }
+    //                       /local/filesystem/fuse-3.14.0/lib/helper.c fuse_main
     //          fuse_session_exit();
     //fuse_session_exit(fuse_get_session(m_filesystem));
     exit(0);

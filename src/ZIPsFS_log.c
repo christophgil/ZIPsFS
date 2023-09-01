@@ -12,7 +12,7 @@ static char **_fuse_argv;
 static int _fuse_argc;
 
 
-static time_t _timeAtStart;
+
 static void log_path(const char *f,const char *path){
   log_msg("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
 }
@@ -35,7 +35,7 @@ static int log_func_error(char *func){
 static void log_fh(char *title,long fh){
   char p[MAX_PATHLEN];
   path_for_fd(title,p,fh);
-  log_debug_now("%s  fh: %ld %s \n",title?title:"", fh,p);
+  log_msg("%s  fh: %ld %s \n",title?title:"", fh,p);
 }
 #define MAX_INFO 55555
 static  char _info[MAX_INFO+2];
@@ -65,7 +65,7 @@ static int print_fuse_argv(int n){
 static int print_roots(int n){
   PRINTINFO("<H1>Roots</H1>\n<TABLE><THEAD><TR>"TH("Path")TH("Writable")THr("Response")THr("Blocked")TH("Free[GB]")TH("Dir-Cache[kB]")"</TR></THEAD>\n");
   foreach_root(i,r){
-    const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30),diff=deciSecondsSinceStart()-r->rthread_when_response_deciSec;
+    const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30),diff=deciSecondsSinceStart()-r->pthread_when_response_deciSec;
     if (n>=0){
       PRINTINFO("<TR>"TD("%s")TDc("%s"),r->path,yes_no(f&ROOT_WRITABLE));
 
@@ -169,7 +169,7 @@ static int print_maps(int n){
         n=repeat_chars_info(n,'-',min_int(L,(int)(3*log(size))));
         PRINTINFO("</TD></TR>\n");
       }
-    } else log_debug_now("sscanf scanned n=%d\n",k);
+    } else warning(WARN_FORMAT,buf,"sscanf scanned n=%d",k);
   }
   fclose(f);
   PRINTINFO("<TFOOT><TR>"TD("")TD("")TD("%'lu")TD("")"</TR></TFOOT>\n</TABLE>\n",total>>10);
@@ -293,11 +293,7 @@ THEAD{background-color:black;color:white;}\n\
 TD{padding:5px;}\n\
 </STYLE>\n</HEAD>\n<BODY>\n\
 <B>ZIPsFS:</B> <A href=\"%s\">%s</A><BR> \n",HOMEPAGE,HOMEPAGE);
-  {
-    struct stat statbuf;
-    stat(_thisPrg,&statbuf);
-    PRINTINFO("\nStarted %s:  %s &nbsp; Compiled: %s<BR>",_thisPrg,ctime(&_timeAtStart),ctime(&statbuf.st_mtime));
-  }
+  PRINTINFO("\nStarted %s: %s &nbsp; PID: %ld &nbsp; Compiled: "__DATE__"  "__TIME__"<BR>",_thisPrg,ctime(&_startTime.tv_sec),getpid());
   n=print_roots(n);
   n=print_fuse_argv(n);
   n=print_open_files(n,NULL);
@@ -331,7 +327,7 @@ static const char *zip_fdopen_err(int err){
 static void fhdata_log_cache(const struct fhdata *d){
   if (!d){ log_msg("\n");return;}
   const int idx=(int)(_fhdata-d);
-  log_msg("log_cache: d= %p path= %s cache: %s,%s cache_l= %zu/%zu idx: %d  hasc: %s\n",d,d->path,yes_no(d->memcache!=NULL),MEMCACHE_STATUS_S[d->memcache_status],d->memcache_already/d->memcache_l,idx,yes_no(fhdata_has_memcache(d)));
+  log_msg("log_cache: d= %p path= %s cache: %s,%s cache_l= %zu/%zu idx: %d  hasc: %s\n",d,d->path,yes_no(d->memcache!=NULL),MEMCACHE_STATUS_S[d->memcache_status],d->memcache_already/d->memcache_l,idx,yes_no(d->memcache_l>0));
 }
 static void _log_zpath(const char *fn,const char *msg, struct zippath *zpath){
   log_msg(ANSI_INVERSE"%s() %s"ANSI_RESET,fn,msg);

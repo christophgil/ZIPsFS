@@ -1,37 +1,46 @@
-# DEPENDENCIES
-## Install libfuse3 and libzip
+# Installation of executable
+
+First install the required libraries. The command for Ubuntu Linux:
+
+    sudo apt-get install  libfuse3 libzip
+
+A ready-to-use executable for Linux (amd64) is found in the folder RELEASE.
+[RELEASE](./RELEASE/)
+
+# Installation from source code
+
+First install the required libraries. The command for Ubuntu Linux:
 
     sudo apt-get install  libfuse3 libzip libfuse3-dev libzip-dev
 
-# OPTIONAL: AUTOCONF
+## OPTIONAL: AUTOCONF
 
-The following wil Re-generating the file ./configure from Makefile.am
-It is unlikely that this is necessary.
+The following will Re-generating the file ./configure from Makefile.am
+This is usually not necessary.
 
     aclocal
     autoconf
     automake --add-missing
 
-# CREATE MAKEFILE
+## CREATE MAKEFILE
 
     cd into the ZIPsFS/ folder
     ./configure
 
-# RUNNING MAKE
+## RUNNING MAKE
 
     cd src
     make
 
-# ALTERNATIVE METHOD
+# Installation from source code - alternative way
 
 Edit and run the file
 
     src/ZIPsFS.compile.sh
 
-# OS OTHER THAN LINUX
+# Other operation systems
 
-The following is tested on Linux.
-Other OS like MacOSX will require adaptations because the
- - /proc file system exists only on Linux
+- Windows: ZIPsFS is probably not portable to Windows. However, you can run it in a WSL environment.
 
-Please share your experience.
+- MacOSX, Free BSD, Solaris: For those UNIX or UNIX-like OS, only minor adaptations will be necessary.
+  ZIPsFS uses the /proc file system of Linux. This might not be available.

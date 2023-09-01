@@ -12,7 +12,6 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <sys/time.h>
 #include <linux/limits.h>
 #include <stdint.h>
 #include <sys/stat.h>
@@ -30,9 +29,6 @@
 #define CONCAT_INNER(a, b) a ## b
 #define NAME_LINE(base) CONCAT(base, __LINE__)
 #define FREE2(a) { void *NAME_LINE(tmp)=(void*)a; a=NULL;free(NAME_LINE(tmp));}
-
-
-
 
 /*********************************************************************************/
 /* *** String *** */
@@ -207,10 +203,6 @@ static void log_open_flags(int flags){
 }
 
 static void clear_stat(struct stat *st){ if(st) memset(st,0,sizeof(struct stat));}
-static int64_t file_mtime(const char *f){
-  struct stat st={0};
-  return stat(f,&st)?0:st.st_mtime;
-}
 static bool stat_differ(const char *title,struct stat *s1,struct stat *s2){
   if (!s1||!s2) return false; // memcmp would lead to false positives
   char *wrong=NULL;
@@ -225,16 +217,24 @@ static bool stat_differ(const char *title,struct stat *s1,struct stat *s2){
   //  log_succes("Stat are identical: %s\n",title);
   return false;
 }
-static bool is_dir(const char *f){
+
+#define is_dir(f) is_stat_mode(S_IFDIR,f)
+#define is_symlink(f) is_stat_mode(S_IFLNK,f)
+#define is_regular_file(f) is_stat_mode(S_IFREG,f)
+static bool is_stat_mode(const mode_t mode,const char *f){
   struct stat st={0};
-  return !lstat(f,&st) && S_ISDIR(st.st_mode);
+  return !lstat(f,&st) &&  (st.st_mode&S_IFMT)==mode;
 }
 
-static int is_regular_file(const char *path){
-  struct stat path_stat;
-  stat(path,&path_stat);
-  return S_ISREG(path_stat.st_mode);
+static int symlink_overwrite_atomically(const char *src,const char *lnk){
+  if (!is_symlink(lnk)) unlink(lnk);
+  char lnk_tmp[MAX_PATHLEN];
+  strcpy(lnk_tmp,lnk);strcat(lnk_tmp,".tmp");
+  unlink(lnk_tmp);
+  symlink(src,lnk_tmp);
+  return rename(lnk_tmp,lnk);
 }
+
 static bool access_from_stat(const struct stat *stats,int mode){ // equivaletn to access(path,mode)
   int granted;
   mode&=(X_OK|W_OK|R_OK);
@@ -287,11 +287,17 @@ static void cg_crc32_init_tables(uint32_t* table, uint32_t* wtable){
     }
   }
 }
-static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc){
+static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc, pthread_mutex_t *mutex){
   //assert( ((uint64_t)data)%sizeof(accum_t)==0); /* Assume alignment at 16 bytes --  No not true*/
   static uint32_t table[0x100]={0}, wtable[0x100*sizeof(accum_t)];
+  static volatile bool initialized=false;
   const size_t n_accum=n_bytes/sizeof(accum_t);
-  if(!*table) cg_crc32_init_tables(table,wtable);
+  if (!initialized){
+    if (mutex) pthread_mutex_lock(mutex);
+    if(!initialized)  cg_crc32_init_tables(table,wtable);
+    initialized=true;
+    if (mutex) pthread_mutex_unlock(mutex);
+  }
   for(size_t i=0; i<n_accum; ++i){
     const accum_t a=crc^((accum_t*)data)[i];
 #define C(j) (wtable[(j<<8)+(uint8_t)(a>>8*j)])

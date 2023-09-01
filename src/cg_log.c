@@ -11,6 +11,8 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <sys/time.h>
+#include <time.h>
+
 //#include <unistd.h>
 //#include <error.h>
 #include <errno.h>
@@ -44,6 +46,24 @@
 #endif
 #define log_struct(st,field,format)   printf("    " #field "=" #format "\n",st->field)
 #include "cg_ht_v5.c"
+
+////////////
+/// Time ///
+////////////
+static struct timeval  _startTime;
+static int64_t currentTimeMillis(){
+  struct timeval tv={0};
+  gettimeofday(&tv,NULL);
+  return tv.tv_sec*1000+tv.tv_usec/1000;
+}
+static int deciSecondsSinceStart(){
+  if (!_startTime.tv_sec) gettimeofday(&_startTime,NULL);
+  struct timeval now;
+  gettimeofday(&now,NULL);
+  return (int)((now.tv_sec-_startTime.tv_sec)*10+(now.tv_usec-_startTime.tv_usec)/100000);
+}
+
+
 static bool _killOnError=false,_logIsSilent=false, _logIsSilentFailed=false,_logIsSilentWarn=false,_logIsSilentError=false;
 #define log_argptr() va_list argptr;va_start(argptr,format);vfprintf(LOG_STREAM,format,argptr);va_end(argptr)
 static void log_strg(const char *s){
@@ -62,20 +82,20 @@ enum Logs{Log_already_exists,Log_failed,Log_warn,Log_warne,Log_error,Log_succes,
 
 
 
-#define log_already_exists(...)    _log_common(__func__,Log_already_exists,__VA_ARGS__)
-#define log_failed(...)            _log_common(__func__,Log_failed,__VA_ARGS__)
-#define log_warn(...)              _log_common(__func__,Log_warn,__VA_ARGS__)
-#define log_warne(...)              _log_common(__func__,Log_warne,__VA_ARGS__)
-#define log_error(...)             _log_common(__func__,Log_error,__VA_ARGS__)
-#define log_succes(...)            _log_common(__func__,Log_succes,__VA_ARGS__)
-#define log_debug_now(...)         _log_common(__func__,Log_debug_now,__VA_ARGS__)
-#define log_entered_function(...)  _log_common(__func__,Log_entered_function,__VA_ARGS__)
-#define log_exited_function(...)   _log_common(__func__,Log_exited_function,__VA_ARGS__)
-#define log_cache(...)             _log_common(__func__,Log_cache,__VA_ARGS__)
+#define log_already_exists(...)    _log_common(__func__,__LINE__,Log_already_exists,__VA_ARGS__)
+#define log_failed(...)            _log_common(__func__,__LINE__,Log_failed,__VA_ARGS__)
+#define log_warn(...)              _log_common(__func__,__LINE__,Log_warn,__VA_ARGS__)
+#define log_warne(...)              _log_common(__func__,__LINE__,Log_warne,__VA_ARGS__)
+#define log_error(...)             _log_common(__func__,__LINE__,Log_error,__VA_ARGS__)
+#define log_succes(...)            _log_common(__func__,__LINE__,Log_succes,__VA_ARGS__)
+#define log_debug_now(...)         _log_common(__func__,__LINE__,Log_debug_now,__VA_ARGS__)
+#define log_entered_function(...)  _log_common(__func__,__LINE__,Log_entered_function,__VA_ARGS__)
+#define log_exited_function(...)   _log_common(__func__,__LINE__,Log_exited_function,__VA_ARGS__)
+#define log_cache(...)             _log_common(__func__,__LINE__,Log_cache,__VA_ARGS__)
 
 
 
-static void _log_common(const char *fn,enum Logs t,const char *format,...){
+static void _log_common(const char *fn,int line,enum Logs t,const char *format,...){
   if(_logIsSilent) return;
   switch(t){
   case Log_entered_function:  log_msg(ANSI_INVERSE">>>"ANSI_RESET);break;
@@ -84,7 +104,7 @@ static void _log_common(const char *fn,enum Logs t,const char *format,...){
   }
 
   log_strg(fn);
-  log_strg("() ");
+  log_msg("():%d ",line);
   switch(t){
   case Log_already_exists:    log_strg("Already exists "ANSI_RESET);break;
   case Log_failed:            log_msg(ANSI_FG_RED" $$ %d Failed "ANSI_RESET,getpid());break;
@@ -204,38 +224,6 @@ static void log_mem(FILE *f){
 /// log ///
 ///////////
 /* *** time *** */
-static int64_t _startTimeMillis=0;
-
-/* static int64_t currentTimeMicros(){ */
-/*   struct timeval tv={0}; */
-/*   gettimeofday(&tv,NULL); */
-/*   return tv.tv_sec*1000000+tv.tv_usec; */
-/* } */
-
-static int64_t currentTimeMillis(){
-  struct timeval tv={0};
-  gettimeofday(&tv,NULL);
-  return tv.tv_sec*1000+tv.tv_usec/1000;
-}
-
-/* Advantage over currentTimeMillis() is that assigning int is atomar.
-   max int is 2147483647.
-   2147483647 sec are 68 years.
-   There will be a number overflow after 6.8 years.
-   Nevertheless, differences will be correct.
-  int main(int argc, char *argv[]){
-  int n0=2147483647, n=n0;
-  for(int i=0;i<10;i++){
-    printf("%d %d\n",n,n-n0);
-    n++;
-  }
-  }
-  The right column is correctly 0,1,2,3...10.
-*/
-static int deciSecondsSinceStart(){
-  if (!_startTimeMillis)_startTimeMillis=currentTimeMillis();
-  return (int)((currentTimeMillis()-_startTimeMillis)/100);
-}
 
 
 
@@ -249,8 +237,8 @@ static int _warning_count[1<<WARN_SHIFT_MAX];
 #define WARN_FLAG_ERRNO (1<<28)
 #define WARN_FLAG_ONCE_PER_PATH (1<<27)
 #define WARN_FLAG_ONCE (1<<26)
-#define warning(...) _warning(__func__,__VA_ARGS__)
-static void _warning(const char *fn,const uint32_t channel,const char* path,const char *format,...){
+#define warning(...) _warning(__func__,__LINE__,__VA_ARGS__)
+static void _warning(const char *fn,int line,const uint32_t channel,const char* path,const char *format,...){
   static pthread_mutex_t mutex;
   static bool initialized;
   static FILE *file;
@@ -295,7 +283,7 @@ static void _warning(const char *fn,const uint32_t channel,const char* path,cons
     if (!f) continue;
     const char *pfx=_warning_channel_name[i], *color=_warning_color[i];
     //fprintf(f,"%s\t%s()\t%d\t%s\t",_warning_pfx[i]?_warning_pfx[i]:(ANSI_FG_RED"ERROR "ANSI_RESET),fn,_warning_count[i],p);
-    fprintf(f,"\n%d\t%s%s"ANSI_RESET"\t%s()\t%s\t",_warning_count[i],color?color:ANSI_FG_RED,pfx?pfx:"ERROR",fn,p);
+    fprintf(f,"\n%d\t%s%s"ANSI_RESET"\t%s():%d\t%s\t",_warning_count[i],color?color:ANSI_FG_RED,pfx?pfx:"ERROR",fn,line,p);
     va_list argptr; va_start(argptr,format);vfprintf(f,format,argptr);va_end(argptr);
     if (*errx) fprintf(f,"\t%s",errx);
     fputs("\n\n",f);
@@ -303,8 +291,7 @@ static void _warning(const char *fn,const uint32_t channel,const char* path,cons
   }
   pthread_mutex_unlock(&mutex);
   if ((channel&WARN_FLAG_EXIT)) exit(1);
-
-  if (_killOnError && (channel&WARN_FLAG_MAYBE_EXIT)){ log_warn("Thread %lx\nTime=%'ld\n  _killOnError\n",pthread_self(),_startTimeMillis-currentTimeMillis()); exit(9);}
+  if (_killOnError && (channel&WARN_FLAG_MAYBE_EXIT)){ log_warn("Thread %lx\nTime=%'ld\n  _killOnError\n",pthread_self(),_startTime.tv_sec+_startTime.tv_usec/1000-currentTimeMillis()); exit(9);}
 
 }
 

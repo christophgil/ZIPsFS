@@ -1,12 +1,20 @@
-//////////////////////////////////////////////////////////////////////////////
-/// Skip remote roots if filesystem does not respond after certain time    ///
-//////////////////////////////////////////////////////////////////////////////
-
-#define ROOT_OBSERVE_EVERY_DECISECONDS 3 // Check availability of remote roots to prevent blocking
+////////////
+/// Size ///
+////////////
 #define LOG2_ROOTS 5  // How many file systems are combined
 #define DIRECTORY_CACHE_SIZE (1L<<28) // Size of file to cache directory listings
 #define DIRECTORY_CACHE_SEGMENTS 4 // Number of files to cache directory listings. If Exceeded, the directory cache is cleared and filled again.
 #define MEMCACHE_READ_BYTES_NUM 16*1024*1024 // When storing zip entries in RAM, number of bytes read in one go
+////////////
+/// Time ///
+////////////
+
+#define ROOT_OBSERVE_EVERY_DECISECONDS 3 // Check availability of remote roots to prevent blocking.
+#define ROOT_OBSERVE_TIMEOUT_DECISECONDS 300 // Skip non-responding
+#define UNBLOCK_AFTER_SEC_THREAD_STATQUEUE 12
+#define UNBLOCK_AFTER_SEC_THREAD_MEMCACHE 600
+#define UNBLOCK_AFTER_SEC_THREAD_DIRCACHE 600
+
 ////////////////////////
 /// Helper functions ///
 ////////////////////////
@@ -157,7 +165,9 @@ static bool config_not_report_stat_error(const char *path ){
   if (!path)return false;
   const int l=strlen(path);
 #define I(s) ENDSWITH(path,l,#s)||
-  if (I(/analysis.tdf-wal)  I(/analysis.tdf-journal)   I(/.ciopfs)  I(.quant)  I(/autorun.inf)  I(/.xdg-volume-info) I(/.Trash)false) return true;
+  if (I(/analysis.tdf-wal)  I(/analysis.tdf-journal)   I(/.ciopfs)  I(.quant)  I(/autorun.inf)  I(/.xdg-volume-info) I(/.Trash)
+      !strncmp(path,"/ZIPsFS_",8)
+      ) return true;
 #undef I
   return false;
 }
@@ -240,8 +250,13 @@ static bool config_not_overwrite(const char *path){
 /// What about file directories, should they be cached?  ///
 /// Maybe remote folders that have not changed recently  ///
 ////////////////////////////////////////////////////////////
-static bool config_cache_directory(const char *path, bool isRemote, int changed_seconds_ago){
-  return isRemote && changed_seconds_ago>60*60;
+static bool config_cache_directory(const char *path, bool isRemote, const struct timespec mtime){
+  if (isRemote){
+    struct timeval tv={0};
+    gettimeofday(&tv,NULL);
+    return (tv.tv_sec-mtime.tv_sec)<60*60;
+  }
+  return false;
 }
 //////////////////////////////////////////////
 /// For debugging problems, the following  ///

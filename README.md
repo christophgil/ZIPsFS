@@ -119,7 +119,12 @@ ZIPsFS Options
 |  ALWAYS   | All ZIP entries are cached.                                                      |
 |           |                                                                                  |
 
+-s *path-of-symbolic-link*
 
+: After initialization create a symlink pointing to the mount point. This allows to restart ZIPsFS without affecting
+programs which access the files. Consider a ZIPsFS instance which needs to be replaced by a newer one.
+The newer one is started with a different mount point. After initialization a symlink to the new mount point is created.
+The existing symlink if any is overwritten.
 
 
 FUSE Options
