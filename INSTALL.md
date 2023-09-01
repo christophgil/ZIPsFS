@@ -4,8 +4,8 @@ First install the required libraries. The command for Ubuntu Linux:
 
     sudo apt-get install  libfuse3 libzip
 
-A ready-to-use executable for Linux (amd64) is found in the folder RELEASE.
-[RELEASE](./RELEASE/)
+A ready-to-use executable for Linux (amd64) is found in the folder
+[RELEASE](./RELEASE/).
 
 # Installation from source code
 
@@ -36,7 +36,7 @@ This is usually not necessary.
 
 Edit and run the file
 
-    src/ZIPsFS.compile.sh
+    [src/ZIPsFS.compile.sh](src/ZIPsFS.compile.sh)
 
 # Other operation systems
 
