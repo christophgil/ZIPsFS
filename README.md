@@ -268,7 +268,7 @@ ZIPsFS has been developed to solve the following  problems:
  </DIV>
 
  <DIV style="padding:1em;border:2px solid gray;float:left;">
-                     File tree with zip files on hard disk:
+                     File tree with zip files on our NAS server:
        <PRE style="font-family: monospace,courier,ariel,sans-serif;">
  ├── <B style="color:#1111FF;">brukertimstof</B>
  │   └── <B style="color:#1111FF;">202302</B>

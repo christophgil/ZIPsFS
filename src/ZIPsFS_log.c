@@ -69,7 +69,7 @@ static int print_roots(int n){
     if (n>=0){
       PRINTINFO("<TR>"TD("%s")TDc("%s"),r->path,yes_no(f&ROOT_WRITABLE));
 
-      if (f&ROOT_REMOTE) PRINTINFO(TDr("%'ld ms")TDr("%'u"), 10L*(diff>ROOT_OBSERVE_EVERY_DECISECONDS*3?diff:r->statfs_took_deciseconds),r->log_count_delayed);
+      if (f&ROOT_REMOTE) PRINTINFO(TDr("%'ld ms")TDr("%'u"), 10L*(diff>ROOT_OBSERVE_EVERY_SECONDS*10*3?diff:r->statfs_took_deciseconds),r->log_count_delayed);
       else PRINTINFO(TDr("Local")TD(""));
       uint64_t u; LOCK(mutex_dircache, u=MSTORE_USAGE(&r->dircache)/1024);
       PRINTINFO(TDr("%'d")TDr("%'zu")"</TR>\n",freeGB,u);
@@ -123,7 +123,7 @@ static void log_virtual_memory_size(){
   log_msg("Virtual memory size: %'d kB\n",val);
 }
 static int print_open_files(int n, int *fd_count){
-  PRINTINFO("<H1>File handles</H1>\n(Should be empty if idle).<BR>");
+  PRINTINFO("<H1>File handles</H1>\n(Should be almost empty if idle).<BR>");
   static char path[256];
   struct dirent *dp;
   DIR *dir=opendir("/proc/self/fd/");

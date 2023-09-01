@@ -24,7 +24,7 @@ This is usually not necessary.
 
 ## CREATE MAKEFILE
 
-    cd into the ZIPsFS/ folder
+    cd ZIPsFS
     ./configure
 
 ## RUNNING MAKE

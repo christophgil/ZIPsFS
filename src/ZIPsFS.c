@@ -496,7 +496,6 @@ static int _count_readzip_memcache=0,_count_readzip_regular=0,_count_readzip_see
 /// statqueue - running stat() in separate thread to avoid blocking ///
 ///////////////////////////////////////////////////////////////////////
 #define foreach_statqueue_entry(i,q) struct statqueue_entry *q=r->statqueue;for(int i=0;i<STATQUEUE_ENTRY_N;q++,i++)
-#define STATQUEUE_TIMEOUT_DECISEC 30
 #define STATQUEUE_ADD_FOUND_SUCCESS (STATQUEUE_ENTRY_N+1)
 #define STATQUEUE_ADD_FOUND_FAILURE (STATQUEUE_ENTRY_N+2)
 #define STATQUEUE_ADD_NO_FREE_SLOT (STATQUEUE_ENTRY_N+3)
@@ -506,15 +505,15 @@ static int statqueue_add(struct rootdata *r, const char *rp, int rp_l, uint64_t 
   const int time=deciSecondsSinceStart();
   { /* Maybe there is already this path in the queue */
     foreach_statqueue_entry(i,q){
-      if (STATQUEUE_DONE(q->status) && q->time+STATQUEUE_TIMEOUT_DECISEC>time && q->rp_l==rp_l && q->rp_hash==rp_hash && !strncmp(q->rp,rp,MAX_PATHLEN)){
+      if (STATQUEUE_DONE(q->status) && q->time+STATQUEUE_TIMEOUT_SECONDS*10>time && q->rp_l==rp_l && q->rp_hash==rp_hash && !strncmp(q->rp,rp,MAX_PATHLEN)){
         if (q->status==STATQUEUE_OK){ *stbuf=q->stat; return STATQUEUE_ADD_FOUND_SUCCESS;}
         return STATQUEUE_ADD_FOUND_FAILURE;
       }
-      if (q->status==STATQUEUE_QUEUED && q->time+STATQUEUE_TIMEOUT_DECISEC/2>time) return i;
+      if (q->status==STATQUEUE_QUEUED && q->time+STATQUEUE_TIMEOUT_SECONDS*10/2>time) return i;
     }
   }
   foreach_statqueue_entry(i,q){
-    if (!q->status || q->time+STATQUEUE_TIMEOUT_DECISEC<time){
+    if (!q->status || q->time+STATQUEUE_TIMEOUT_SECONDS*10<time){
       memcpy(q->rp,rp,rp_l);
       q->rp[q->rp_l=rp_l]=0;
       q->rp_hash=rp_hash;
@@ -532,7 +531,7 @@ static int _statqueue_stat(const char *path, struct stat *statbuf,struct rootdat
   while(true){
     LOCK(mutex_statqueue,i=statqueue_add(r,path,len,hash,statbuf));
     if (i!=STATQUEUE_ADD_NO_FREE_SLOT) break;
-    usleep(STATQUEUE_TIMEOUT_DECISEC*100L*1000/10);
+    usleep(STATQUEUE_TIMEOUT_SECONDS*1000L*1000/10);
   }
   if (i==STATQUEUE_ADD_FOUND_FAILURE) return false;
   if (i==STATQUEUE_ADD_FOUND_SUCCESS) return true;
@@ -551,7 +550,7 @@ static int _statqueue_stat(const char *path, struct stat *statbuf,struct rootdat
       }
       return status==STATQUEUE_OK;
     }
-    usleep(MAX((STATQUEUE_TIMEOUT_DECISEC*100*1000)/TRY,1));
+    usleep(MAX((STATQUEUE_TIMEOUT_SECONDS*1000*1000)/TRY,1));
   }
   return -1; /* Timeout */
 }
@@ -619,11 +618,11 @@ static void *infloop_statqueue(void *arg){
     if (!(i&1023)){
       const int now=deciSecondsSinceStart();
       statfs(r->path,&r->statfs);
-      if ((r->statfs_took_deciseconds=(W=deciSecondsSinceStart())-now)>ROOT_OBSERVE_EVERY_DECISECONDS*4) log_warn("\nstatfs %s took %'ld ms\n",r->path,100L*(W-now));
+      if ((r->statfs_took_deciseconds=(W=deciSecondsSinceStart())-now)>ROOT_OBSERVE_EVERY_SECONDS*10*4) log_warn("\nstatfs %s took %'ld ms\n",r->path,100L*(W-now));
       r->pthread_when_loop_deciSec[PTHREAD_STATQUEUE]=deciSecondsSinceStart();
     }
     PRETEND_BLOCKED(PTHREAD_STATQUEUE);
-    usleep(1000*100*ROOT_OBSERVE_EVERY_DECISECONDS/1024);
+    usleep(1000*1000*ROOT_OBSERVE_EVERY_SECONDS/1024);
   }
   pthread_cleanup_pop(0);
 }
@@ -702,9 +701,9 @@ static bool wait_for_root_timeout(struct rootdata *r){
   if (!(r->features&ROOT_REMOTE)) return true;
   for(int try=99;--try>=0;){
     const int delay=deciSecondsSinceStart()-r->pthread_when_response_deciSec;
-    if (delay>ROOT_OBSERVE_TIMEOUT_DECISECONDS) break;
-    if (delay<ROOT_OBSERVE_EVERY_DECISECONDS*2) return true;
-    usleep((1000*100*ROOT_OBSERVE_EVERY_DECISECONDS/5)/true);
+    if (delay>ROOT_OBSERVE_TIMEOUT_SECONDS*10) break;
+    if (delay<ROOT_OBSERVE_EVERY_SECONDS*10*2) return true;
+    usleep((1000*100*ROOT_OBSERVE_EVERY_SECONDS*10/5)/true);
     if (try%10==0) log_msg("<%s %d>",__func__,try);
   }
   warning(WARN_ROOT|WARN_FLAG_ONCE_PER_PATH,r->path,"Remote root not responding.");
@@ -894,7 +893,6 @@ static int zip_contained_in_virtual_path(const char *path, int *shorten, char *a
 ////////////////////////////////////////////////////////////
 #define READDIR_ZIP (1<<1)
 #define READDIR_TO_QUEUE (1<<2)
-//static bool directory_from_dircache_zip_or_filesystem(const int opt, struct directory *mydir,const time_t mtime,long tv_nsec){
 static bool directory_from_dircache_zip_or_filesystem(const int opt, struct directory *mydir,const struct timespec mtime){
   const char *rp=mydir->dir_realpath;
   //log_debug_now("rp=%s\n",rp);
@@ -962,7 +960,7 @@ static void *infloop_dircache(void *arg){
            FREE2(e->key);
            e->value=NULL;
          });
-    if (*path && !my_stat(path,&stbuf)){
+    if (*path && statqueue_stat(path,&stbuf,r)){
       directory_init(&mydir,path,r);
       directory_from_dircache_zip_or_filesystem(READDIR_ZIP,&mydir,stbuf.st_mtim);
     }
@@ -1303,8 +1301,7 @@ static int filler_readdir(struct rootdata *r,struct zippath *zpath, void *buf, f
         bool inlined=false; /* Entries of ZIP file appear directory in the parent of the ZIP-file. */
         if (config_zipentries_instead_of_zipfile(u) && (MAX_PATHLEN>=snprintf(direct_rp,MAX_PATHLEN,"%s/%s",rp,u))){
           directory_init(&dir2,direct_rp,r);
-          my_stat(direct_rp,&stbuf);
-          if (!my_stat(direct_rp,&stbuf) && directory_from_dircache_zip_or_filesystem(READDIR_ZIP|READDIR_TO_QUEUE,&dir2,stbuf.st_mtim)){
+          if (statqueue_stat(direct_rp,&stbuf,r) && directory_from_dircache_zip_or_filesystem(READDIR_ZIP|READDIR_TO_QUEUE,&dir2,stbuf.st_mtim)){
             const struct directory_core d2=dir2.core;
             for(int j=0;j<d2.files_l;j++){/* Embedded zip file */
               const char *n2=d2.fname[j];

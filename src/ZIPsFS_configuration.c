@@ -8,9 +8,9 @@
 ////////////
 /// Time ///
 ////////////
-
-#define ROOT_OBSERVE_EVERY_DECISECONDS 3 // Check availability of remote roots to prevent blocking.
-#define ROOT_OBSERVE_TIMEOUT_DECISECONDS 300 // Skip non-responding
+#define STATQUEUE_TIMEOUT_SECONDS 3
+#define ROOT_OBSERVE_EVERY_SECONDS 0.3 // Check availability of remote roots to prevent blocking.
+#define ROOT_OBSERVE_TIMEOUT_SECONDS 30 // Skip non-responding
 #define UNBLOCK_AFTER_SEC_THREAD_STATQUEUE 12
 #define UNBLOCK_AFTER_SEC_THREAD_MEMCACHE 600
 #define UNBLOCK_AFTER_SEC_THREAD_DIRCACHE 600

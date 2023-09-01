@@ -21,29 +21,18 @@ Python is lacking a method </I>read(buffer,offset,size)</I>. Instead, a new buff
 
 For Therefore reasons  we decided to use GNU-C despite its many draw-backs.
 
-
-
 # Roots
 
-When a client program requests a file, the virtual file path needs to be translated into an existing real file or ZIP entry.
+When a client program requests a file from the virtual FUSE file system, the virtual file path needs to be translated into an existing real file or ZIP entry.
 
 All given roots are iterated  until the file or ZIP entry  is found.
 The first root is the only that allows file modification and file creation.
 All others are read only.
 
-Typically, overlay or union file systems are affected when one of the source file systems is not responding.
-In ZIPsFS there is a high probability that it continues to work.
-Remote roots are indicated by leading double slash //.
-Since they are more likely to fail, they are  observed by a specific  thread.
-File access is skipped for roots that have not recently responded.
-
-
-
 # Caches
 
 There are several caches to improve performance. For clarifications and distinction,
 functions and variables are prefixed <I>memcache_</I>, <I>dircache_<I> and <I>statcache_</I>.
-
 
 ## Memcache
 
@@ -60,15 +49,11 @@ Therefore we created our own  storage  <I>struct mstore</I>. It is basically an 
 
 A cached toc is valid until the last-modified attribute changes.
 
-
-
 We reduce memory requirement of tocs as follows:
 Zip-entries where the ZIP-file name is part of the name (after removing all trailing dot-suffix) are abbreviated using a placeholder for the name..
 After this simplification,  many of our ZIP files have identical tocs. Consequently only reference to a previously stored toc is required.
 
-
 The dircache has a maximum capacity given in ZIPsFS_configuration.c. If exceeded, the entire cache is cleared and filling starts again.
-
 
 ## statcache
 
@@ -76,29 +61,31 @@ When loading Brukertimstof mass spectrometry files with the vendor DLL,
 thousands and millions of redundant requests to the file system are issued.
 Instances of  <I>struct fhdata</I> can hold a record of <I>struct stat</I> for all sub-paths during its life span.
 
-
 ## The file cache of the OS
 After closing a file or disposing the memcache of a ZIP entry, a call to  <I>posix_fadvise(fd,0,0,POSIX_FADV_DONTNEED);</I> may remove the file from the
 file cache of the OS when it is unlikely that the same file will be used in near future.  This can be  customized in <I>ZIPsFS_configuration.c</I>.
-
-
 
 ## The cache in libfuse
 
 See  field <I>struct fuse_file_info-&gt;keep_cache</I> in function <I>xmp_open()</I>.
 
+# Infinite loops running in own threads
 
+- infloop_statqueue(): Calling stat asynchronously. Calling statfs() periodically to see whether the respective root is responding.
+- infloop_memcache(): Loading entire ZIP entries into RAM asynchronously. One thread per root.
+- infloop_dircache(): Reading directory listings and ZIP file entry listings asynchronously. One thread per root.
+- infloop_unblock():  Unblock blocked threads by calling <i>pthread_cancel()</i>. They re-start automatically with a <i>pthread_cleanup_push()</i> hook. One global thread.
 
-# When a source fails
+# When a source file system becomes unavailable
 
-When one of the roots become unavailable and calls to stat() fail or block, ZIPsFS should continue to function.
-This is achieved by running stat() in a separate threads belonging to the respective rootdata object.
-See functions starting with prefix <I>statqueue_</I>.
-If the thread <I>infloop_statqueue</I> has been blocked for a longer time, it is restarted.
+Typically, overlay or union file systems are affected when one of the source file systems is not responding.
+Remote sources are at risk of failure when for example network problems occur.
+The worst case is that a call to the  file API does not return. Consequently, the specific file access or even the entire FUSE file system is blocked.
 
-# Limitations:
+Our solution is to perform such calls in a separate thread. This requires a queue to add the specific request and an infinite loop that picks these requests from the queue and completes them.
+These infinite loops are run in separate threads for each root. They are listed above.
 
-## Cache
+Only <i>read(int fd, void *buf, size_t count)</i> and the equivalent for ZIP entries are called directly suche that a slight risk of blocking remains.
 
-Because of the  granularity of time measurement in files last-modified attribute, file updates may be unnoticed. This is unlikely, but theoretically possible.
-Solution?
+When paths of roots  are given with leading double slash <b>//</b> (according to a convention from  MS Windows),
+they are treated specially. They are used only when they have successfully run <i>fsstat()<i> recently in <i>infloop_statqueue()</i>.
