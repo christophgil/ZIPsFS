@@ -115,7 +115,7 @@ static const struct ht_entry* ht_get_entry(struct ht *ht, const char* key,int le
   Both, len and hash can be  zero. In this case  they are determined.
  */
 static void* ht_get(struct ht *ht, const char* key,int len,uint64_t hash){
-  if (!key)return NULL;
+  if (!key || !ht)return NULL;
   const struct ht_entry *e=ht_get_entry(ht,key,len,hash);
   return e?e->value:NULL;
 }

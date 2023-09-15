@@ -51,11 +51,14 @@ If files exist in two locations, the left most root takes precedence.
 
 ## Unreliable roots
 
-Source  file structures may come from remote sites and it may happen that a file structure is temporarily not available.
-In such case, ZIPsFS should not block. It should continue to work with the remaining file systems. This is implemented as follows:
-Paths starting with double slash (in the example  *//computer1/pub*) are regarded as remote paths that may be temporarily unavailable.
-ZIPsFS will periodically check  file systems starting with a double slash.
-If the last responds was too long ago then the respective file system is skipped.
+Source file structures may come from remote sites and it may happen that a file structure is
+temporarily not available and file API functions may block.  In such case, ZIPsFS should continue to
+operate with the remaining file roots. This is implemented as follows: Paths starting with double
+slash (in the example *//computer1/pub*) are regarded as remote paths and treated specially.  ZIPsFS
+will periodically check file systems starting with a double slash.  If the last responds was too
+long ago then the respective file system is skipped. Furthermore the stat() function to obtain the
+attributes of a file are performed in other threads. A request for stat() is queued and the result is waited for.
+If the result does not come in a given time the error code is returned.
 
 ## Modified and created files
 
@@ -121,10 +124,13 @@ ZIPsFS Options
 
 -s *path-of-symbolic-link*
 
-: After initialization create a symlink pointing to the mount point. This allows to restart ZIPsFS without affecting
-programs which access the files. Consider a ZIPsFS instance which needs to be replaced by a newer one.
-The newer one is started with a different mount point. After initialization a symlink to the new mount point is created.
-The existing symlink if any is overwritten.
+: After initialization the specified  symlink is created and points to the mount point. Previously existing links are overwritten.
+This allows to restart ZIPsFS without affecting running programs.
+Programs refer to the symlink rather than the real mount-point.
+Consider a ZIPsFS instance which needs to be replaced by a newer one.  The newer one is started with
+a different mount point. For some time both instances work simultaneously and the old instance can
+be deleted after some time.
+After initialization a symlink to the new mount point is created and programs start to use the new instance.
 
 
 FUSE Options
@@ -197,23 +203,22 @@ However, we are still fixing minor bugs.
 # MOTIVATION
 
 We use closed-source proprietary Windows software for reading huge experimental data from different types of mass spectrometry machines.
-Most data is finally archived in a read-only WORM file system.
-With large numbers of individual files, access becomes slow particularly on Windows.
-To reduce the number of files and to keep a record of the CRC hash sum, all files of one record are bundled in one ZIP.
-This accelerates listing data folders and allows us to search file name patterns in less than 1 h.
-
-We hoped that ZIP-ed data was easily accessible using pipes, named pipes or process substitution or unzipping.
-Unfortunately, these techiques did not work for us and  mounting individual ZIP files was the only feasible approach.
+Most data is eventually archived in a read-only WORM file system.
+With large file directories, access becomes slow particularly on Windows.
+To reduce the number of files and to record the CRC hash sum, all files of one mass spectrometry measurement are bundled in one ZIP.
+With less individual files search in the entire directory hierarchy takes less than 1 h.
+We hoped that files in ZIP files were easily accessible using pipes, named pipes or process substitution or unzipping.
+Unfortunately, these techiques did not work for us and  mounting individual ZIP files was the only successful approach.
 
 ZIPsFS has been developed to solve the following  problems:
 
 - Recently  the size of our experiments and thus the number of ZIP files grew enormously.
-  Mounting thousands of individual ZIP files at a time is not feasible.
+  Mounting thousands of individual ZIP files produces a very long <i>/etc/mtab</i> and puts strain on the OS.
 
 - Some proprietary  software requires write access for files and their parent folders.
 
-- Files may not be read  sequentially. Instead bytes are read  from varying file positions. This is particularly  inefficient
-  for compressed  ZIP entries. The worst case is jumping backwards  <I>i.e.</I>  negative seek operation.
+- Mass spectrometry software do not read files sequentially. Instead bytes are read  from varying file positions. This is particularly  inefficient
+  for compressed  ZIP entries. The worst case is jumping backwards  <I>i.e.</I>  calling seek() with a negative value.
 
 - Experimental records are first stored in an intermediate storage and later after verification in the final archive.
   Consequently there are different places to look for a particular file.

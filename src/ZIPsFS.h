@@ -10,7 +10,7 @@ static void directory_debug_filenames(const char *func,const char *msg,const str
 static void mstore_assert_lock(struct mstore *m);
 static void directory_init(struct directory *d, const char *realpath, struct rootdata *r);
 static void directory_destroy(struct directory *d);
-static void directory_add_file(uint8_t flags,struct directory *dir, int64_t inode, const char *n0,uint64_t size, zip_uint32_t crc);
+static void directory_add_file(uint8_t flags,struct directory *dir, int64_t inode, const char *n0,uint64_t size, time_t mtime,zip_uint32_t crc);
 static void dircache_directory_to_cache(const struct directory *dir);
 static bool dircache_directory_from_cache(struct directory *dir,const struct timespec mtime);
 static int statqueue_add(struct rootdata *r, const char *rp, int rp_l, uint64_t rp_hash, struct stat *stbuf);
@@ -35,7 +35,7 @@ static void zpath_destroy(struct zippath *zpath);
 static bool zpath_stat(struct zippath *zpath,struct rootdata *r);
 static struct zip *zip_open_ro(const char *orig);
 static int zip_contained_in_virtual_path(const char *path, int *shorten, char *append[]);
-static bool directory_from_dircache_zip_or_filesystem(const int opt, struct directory *mydir,const struct timespec mtime);
+static bool directory_from_dircache_zip_or_filesystem(const int opt, struct directory *mydir,const struct stat *st);
 static void *infloop_dircache(void *arg);
 static bool test_realpath(struct zippath *zpath, struct rootdata *r);
 static bool find_realpath_special_file(struct zippath *zpath);

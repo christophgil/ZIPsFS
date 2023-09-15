@@ -81,14 +81,16 @@ static bool *validchars(enum validchars type){
   static bool ccc[VALIDCHARS_NUM][128];
   static bool initialized;
   if (!initialized){
+    if (type==VALIDCHARS_FILE||type==VALIDCHARS_PATH){
     for(int t=VALIDCHARS_NUM;--t>=0;){
       bool *cc=ccc[t];
       for(int i='A';i<='Z';i++) cc[i|32]=cc[i]=true;
       for(int i='0';i<='9';i++) cc[i]=true;
-      const char *s="=+-_$@.~";
+      const char *s="=+-_$@.~ ";
       for(int i=strlen(s);--i>=0;) cc[s[i]]=true;
     }
     ccc[VALIDCHARS_PATH]['/']=true;
+    }
     initialized=true;
   }
   return ccc[type];
@@ -217,6 +219,12 @@ static bool stat_differ(const char *title,struct stat *s1,struct stat *s2){
   //  log_succes("Stat are identical: %s\n",title);
   return false;
 }
+static double diff_timespec(const struct timespec a, const struct timespec b) {
+  double v= (a.tv_sec-b.tv_sec)+(a.tv_nsec-b.tv_nsec)/(1000*1000*1000.0);
+  log_debug_now("v=%f\n",v);
+  return v;
+}
+
 
 #define is_dir(f) is_stat_mode(S_IFDIR,f)
 #define is_symlink(f) is_stat_mode(S_IFLNK,f)

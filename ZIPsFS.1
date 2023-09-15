@@ -48,16 +48,21 @@ If files exist in two locations, the left most root takes precedence.
 .SS Unreliable roots
 .PP
 Source file structures may come from remote sites and it may happen that
-a file structure is temporarily not available.
-In such case, ZIPsFS should not block.
-It should continue to work with the remaining file systems.
+a file structure is temporarily not available and file API functions may
+block.
+In such case, ZIPsFS should continue to operate with the remaining file
+roots.
 This is implemented as follows: Paths starting with double slash (in the
-example \f[I]//computer1/pub\f[R]) are regarded as remote paths that may
-be temporarily unavailable.
+example \f[I]//computer1/pub\f[R]) are regarded as remote paths and
+treated specially.
 ZIPsFS will periodically check file systems starting with a double
 slash.
 If the last responds was too long ago then the respective file system is
 skipped.
+Furthermore the stat() function to obtain the attributes of a file are
+performed in other threads.
+A request for stat() is queued and the result is waited for.
+If the result does not come in a given time the error code is returned.
 .SS Modified and created files
 .PP
 New files are created in the first file tree, while the following file
@@ -153,13 +158,17 @@ T}
 .TE
 .TP
 .B \-s \f[I]path\-of\-symbolic\-link\f[R]
-After initialization create a symlink pointing to the mount point.
-This allows to restart ZIPsFS without affecting programs which access
-the files.
+After initialization the specified symlink is created and points to the
+mount point.
+Previously existing links are overwritten.
+This allows to restart ZIPsFS without affecting running programs.
+Programs refer to the symlink rather than the real mount\-point.
 Consider a ZIPsFS instance which needs to be replaced by a newer one.
 The newer one is started with a different mount point.
-After initialization a symlink to the new mount point is created.
-The existing symlink if any is overwritten.
+For some time both instances work simultaneously and the old instance
+can be deleted after some time.
+After initialization a symlink to the new mount point is created and
+programs start to use the new instance.
 .SS FUSE Options
 .TP
 .B \-f

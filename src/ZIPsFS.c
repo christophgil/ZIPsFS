@@ -116,7 +116,10 @@ static void unlock(int mutex){
   if (DO_ASSERT_LOCK) mutex_count(mutex,-1);
   pthread_mutex_unlock(_mutex+mutex);
 }
+static int _oldstate_not_needed;
 #define LOCK(mutex,code) lock(mutex);code;unlock(mutex)
+#define LOCK_NCANCEL(mutex,code) pthread_setcancelstate(PTHREAD_CANCEL_DISABLE,&_oldstate_not_needed);lock(mutex);code;unlock(mutex);pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&_oldstate_not_needed);
+
 #define ASSERT_LOCKED_FHDATA() assert_locked(mutex_fhdata)
 static bool _assert_locked(int mutex,bool yesno,bool log){
   const int count=mutex_count(mutex,0), ok=(yesno==(count>0));
@@ -251,11 +254,11 @@ static void _assert_validchars(enum validchars t,const char *s,int len,const cha
   if (!initialized) initialized=validchars(VALIDCHARS_PATH)[PLACEHOLDER_NAME]=validchars(VALIDCHARS_FILE)[PLACEHOLDER_NAME]=true;
   const int pos=find_invalidchar(t,s,len);
   if (pos>=0){
-    LOCK(mutex_validchars,
-         static struct ht ht={0};
-         if (!ht.capacity) ht_init(&ht,HT_FLAG_INTKEY,12);
-         const uint64_t hash=hash_value(s,len);
-         if (!ht_get_int(&ht,len,hash)){ ht_set_int(&ht,len,hash,1); warning(WARN_CHARS|WARN_FLAG_ONCE_PER_PATH,s,ANSI_FG_BLUE"%s()"ANSI_RESET" %s: position: %d",fn,msg?msg:"",pos); });
+    LOCK_NCANCEL(mutex_validchars,
+                 static struct ht ht={0};
+                 if (!ht.capacity) ht_init(&ht,HT_FLAG_INTKEY,12);
+                 const uint64_t hash=hash_value(s,len);
+                 if (!ht_get_int(&ht,len,hash)){ ht_set_int(&ht,len,hash,1); warning(WARN_CHARS|WARN_FLAG_ONCE_PER_PATH,s,ANSI_FG_BLUE"%s()"ANSI_RESET" %s: position: %d",fn,msg?msg:"",pos); });
   }
 }
 #define  assert_validchars_direntries(t,dir) _assert_validchars_direntries(t,dir,__func__)
@@ -369,7 +372,7 @@ static void directory_destroy(struct directory *d){
 /////////////////////////////////////////////////////////////
 /// Read directory
 ////////////////////////////////////////////////////////////
-static void directory_add_file(uint8_t flags,struct directory *dir, int64_t inode, const char *n0,uint64_t size, zip_uint32_t crc){
+static void directory_add_file(uint8_t flags,struct directory *dir, int64_t inode, const char *n0,uint64_t size, time_t mtime,zip_uint32_t crc){
   ASSERT(n0!=NULL); ASSERT(dir!=NULL); ASSERT(!(dir->flags&DIRECTORY_IS_DIRCACHE));
   if (empty_dot_dotdot(n0)) return;
   char buf_for_s[MAX_PATHLEN+1];
@@ -389,6 +392,7 @@ static void directory_add_file(uint8_t flags,struct directory *dir, int64_t inod
   }
   if (d->fflags) d->fflags[L]=flags|(s[len]=='/'?DIRENT_ISDIR:0);
 #define C(name) if (d->f##name) d->f##name[L]=name
+  C(mtime);
   C(size);
   C(crc);
   C(inode);
@@ -430,13 +434,13 @@ static void dircache_directory_to_cache(const struct directory *dir){
   //log_debug_now(ANSI_FG_MAGENTA"bytes=%lu  hash=%lu\n"ANSI_RESET,bytes,hash);
   ht_set(&r->dircache_ht,dir->dir_realpath,0,0,d);
 }
-
+#define timespec_equals(a,b) (a.tv_sec==mtime.tv_sec && a.tv_nsec==b.tv_nsec)
 static bool dircache_directory_from_cache(struct directory *dir,const struct timespec mtime){
   assert_locked(mutex_dircache);
   if (!DIRCACHE_GET) return false;
   struct directory_core *s=ht_get(&dir->root->dircache_ht,dir->dir_realpath,0,0);
   if (s){
-    if ((s->mtime.tv_sec!=mtime.tv_sec || s->mtime.tv_nsec!=mtime.tv_nsec)){/* Cached data not valid any more. */
+    if (!timespec_equals(s->mtime,mtime)){/* Cached data not valid any more. */
       ht_set(&dir->root->dircache_ht,dir->dir_realpath,0,0,NULL);
     }else{
       dir->core=*s;
@@ -508,8 +512,8 @@ static int statqueue_add(struct rootdata *r, const char *rp, int rp_l, uint64_t 
       if (STATQUEUE_DONE(q->status) && q->time+STATQUEUE_TIMEOUT_SECONDS*10>time && q->rp_l==rp_l && q->rp_hash==rp_hash && !strncmp(q->rp,rp,MAX_PATHLEN)){
         if (q->status==STATQUEUE_OK){ *stbuf=q->stat; return STATQUEUE_ADD_FOUND_SUCCESS;}
         return STATQUEUE_ADD_FOUND_FAILURE;
+        if (q->status==STATQUEUE_QUEUED && q->time+STATQUEUE_TIMEOUT_SECONDS*10/2>time) return i;
       }
-      if (q->status==STATQUEUE_QUEUED && q->time+STATQUEUE_TIMEOUT_SECONDS*10/2>time) return i;
     }
   }
   foreach_statqueue_entry(i,q){
@@ -554,8 +558,6 @@ static int _statqueue_stat(const char *path, struct stat *statbuf,struct rootdat
   }
   return -1; /* Timeout */
 }
-
-
 static bool statqueue_stat(const char *path, struct stat *statbuf,struct rootdata *r){
   if (!r || !(r->features&ROOT_REMOTE)) return 0==my_stat(path,statbuf);
   int ret=-1;
@@ -594,32 +596,31 @@ static void *infloop_statqueue(void *arg){
   pthread_cleanup_push(infloop_statqueue_start,r);
   char path[MAX_PATHLEN+1];
   struct stat statbuf;
-  for(int i=0;true;i++){
+  for(int j=0;true;j++){
     foreach_statqueue_entry(i,q){
       if IS_Q(){
           uint64_t hash;
           int l=*path=0;
-          LOCK(mutex_statqueue,if IS_Q(){ memcpy(path,q->rp,(l=q->rp_l)+1);hash=q->rp_hash;});
+          LOCK_NCANCEL(mutex_statqueue,if IS_Q(){ memcpy(path,q->rp,(l=q->rp_l)+1);hash=q->rp_hash;});
           path[l]=0;
           if (*path){
             const int res=my_stat(path,&statbuf);
             if (!res) r->pthread_when_loop_deciSec[PTHREAD_STATQUEUE]=W=deciSecondsSinceStart();
             //if (DEBUG_NOW==DEBUG_NOW  && res && !config_not_report_stat_error(path)) log_debug_now("stat failed %s\n",path);
-            LOCK(mutex_statqueue,
-                 if (IS_Q() && l==q->rp_l && hash==q->rp_hash && !memcmp(path,q->rp,l)){
-                   q->time=deciSecondsSinceStart();
-                   q->stat=statbuf;
-                   q->status=res?STATQUEUE_FAILED:STATQUEUE_OK;});
+            LOCK_NCANCEL(mutex_statqueue,
+                         if (IS_Q() && l==q->rp_l && hash==q->rp_hash && !memcmp(path,q->rp,l)){
+                           q->time=deciSecondsSinceStart();
+                           q->stat=statbuf;
+                           q->status=res?STATQUEUE_FAILED:STATQUEUE_OK;});
           }
         }
-
     }
-    if (!(i&8191)){ LOCK(mutex_fhdata,fhdata_destroy_those_that_are_marked()); }
-    if (!(i&1023)){
+    if (!(j&8191)){ LOCK_NCANCEL(mutex_fhdata,fhdata_destroy_those_that_are_marked()); }
+    if (!(j&1023)){
       const int now=deciSecondsSinceStart();
       statfs(r->path,&r->statfs);
-      if ((r->statfs_took_deciseconds=(W=deciSecondsSinceStart())-now)>ROOT_OBSERVE_EVERY_SECONDS*10*4) log_warn("\nstatfs %s took %'ld ms\n",r->path,100L*(W-now));
       r->pthread_when_loop_deciSec[PTHREAD_STATQUEUE]=deciSecondsSinceStart();
+      if ((r->statfs_took_deciseconds=(W=deciSecondsSinceStart())-now)>ROOT_OBSERVE_EVERY_SECONDS*10*4) log_warn("\nstatfs %s took %'ld ms\n",r->path,100L*(W-now));
     }
     PRETEND_BLOCKED(PTHREAD_STATQUEUE);
     usleep(1000*1000*ROOT_OBSERVE_EVERY_SECONDS/1024);
@@ -703,14 +704,13 @@ static bool wait_for_root_timeout(struct rootdata *r){
     const int delay=deciSecondsSinceStart()-r->pthread_when_response_deciSec;
     if (delay>ROOT_OBSERVE_TIMEOUT_SECONDS*10) break;
     if (delay<ROOT_OBSERVE_EVERY_SECONDS*10*2) return true;
-    usleep((1000*100*ROOT_OBSERVE_EVERY_SECONDS*10/5)/true);
+    usleep(1000*1000*ROOT_OBSERVE_EVERY_SECONDS/10);
     if (try%10==0) log_msg("<%s %d>",__func__,try);
   }
   warning(WARN_ROOT|WARN_FLAG_ONCE_PER_PATH,r->path,"Remote root not responding.");
   r->log_count_delayed++;
   return false;
 }
-
 //////////////////////
 /////    Utils   /////
 //////////////////////
@@ -756,9 +756,12 @@ static void maybe_evict_from_filecache(const int fdOrZero,const char *realpath,c
     }
   }
 }
-//////////////////////
-/////    zpath   /////
-//////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////
+/// zpath                                                                                ///
+/// All strings like virtualpath are within strgs which initially lives on the stack     ///
+/// A new one is created with zpath_newstr() and one or several calls to zpath_strncat() ///
+/// The length of the created string is finally obtained with zpath_commit()             ///
+////////////////////////////////////////////////////////////////////////////////////////////
 static char *zpath_newstr(struct zippath *zpath){
   char *s=zpath->strgs+(zpath->current_string=++zpath->strgs_l);
   *s=0;
@@ -834,7 +837,6 @@ static void zpath_init(struct zippath *zpath,const char *virtualpath,char *strgs
   zpath->virtualpath[VP_LEN()=l-removed]=0;
   zpath_reset_keep_VP(zpath);
 }
-
 static void zpath_destroy(struct zippath *zpath){
   if (zpath){
     clear_stat(&zpath->stat_rp);
@@ -845,10 +847,23 @@ static void zpath_destroy(struct zippath *zpath){
 }
 static bool zpath_stat(struct zippath *zpath,struct rootdata *r){
   if (!zpath) return false;
-  if (zpath->stat_rp.st_ino) return true;
-  if (!statqueue_stat(RP(),&zpath->stat_rp,r)) return false;
-  zpath->stat_vp=zpath->stat_rp;
-  ASSERT(zpath->stat_rp.st_ino!=0);
+  /*
+  if (r && !zpath->stat_rp.st_ino){
+    struct directory_core *core;
+    LOCK(mutex_dircache,core=ht_get(&r->dircache_ht,RP(),0,0));
+    if (core){
+      zpath->stat_rp=core->stat;
+        struct timeval tv={0};
+        gettimeofday(&tv,NULL);
+    }
+    //    if (zpath->stat_rp.st_ino) log_debug_now("stat wiederverwendet %s  %ld\n",RP(), zpath->stat_rp.st_ino);
+  }
+  */
+  if (!zpath->stat_rp.st_ino){
+    if (!statqueue_stat(RP(),&zpath->stat_rp,r)) return false;
+    zpath->stat_vp=zpath->stat_rp;
+  }
+  //ASSERT(zpath->stat_rp.st_ino!=0);
   return true;
 }
 //#define log_seek_ZIP(delta,...)   log_msg(ANSI_FG_RED""ANSI_YELLOW"SEEK ZIP FILE:"ANSI_RESET" %'16ld ",delta),log_msg(__VA_ARGS__)
@@ -893,14 +908,14 @@ static int zip_contained_in_virtual_path(const char *path, int *shorten, char *a
 ////////////////////////////////////////////////////////////
 #define READDIR_ZIP (1<<1)
 #define READDIR_TO_QUEUE (1<<2)
-static bool directory_from_dircache_zip_or_filesystem(const int opt, struct directory *mydir,const struct timespec mtime){
+static bool directory_from_dircache_zip_or_filesystem(const int opt, struct directory *mydir,const struct stat *st){
   const char *rp=mydir->dir_realpath;
   //log_debug_now("rp=%s\n",rp);
   if (!rp) return false;
   //if (endsWithZip(rp)) log_entered_function("rp=%s\n",rp);
-  LOCK(mutex_dircache,int result=dircache_directory_from_cache(mydir,mtime)?1:0);
+  LOCK_NCANCEL(mutex_dircache,int result=dircache_directory_from_cache(mydir,st->st_mtim)?1:0);
   if (!result && (opt&READDIR_TO_QUEUE)){ /* Read zib dir asynchronously */
-    LOCK(mutex_dircachejobs,ht_set(&mydir->root->dircache_queue,rp,0,0,""));
+    LOCK_NCANCEL(mutex_dircachejobs,ht_set(&mydir->root->dircache_queue,rp,0,0,""));
     result=-1;
   }
   if(!result){
@@ -914,7 +929,7 @@ static bool directory_from_dircache_zip_or_filesystem(const int opt, struct dire
         mydir->core.finode=NULL;
         for(int k=0; k<n; k++){
           if (!zip_stat_index(zip,k,0,&sb)){
-            directory_add_file((sb.comp_method?DIRENT_IS_COMPRESSED:0),mydir,0,sb.name,sb.size,sb.crc);
+            directory_add_file((sb.comp_method?DIRENT_IS_COMPRESSED:0),mydir,0,sb.name,sb.size,sb.mtime,sb.crc);
           }
         }
         result=1;
@@ -927,22 +942,21 @@ static bool directory_from_dircache_zip_or_filesystem(const int opt, struct dire
         struct dirent *de;
         mydir->core.fsize=NULL;
         mydir->core.fcrc=NULL;
-        while((de=readdir(dir))){ directory_add_file((de->d_type==(S_IFDIR>>12))?DIRENT_ISDIR:0,mydir,de->d_ino,de->d_name,0,0); }
+        while((de=readdir(dir))){ directory_add_file((de->d_type==(S_IFDIR>>12))?DIRENT_ISDIR:0,mydir,de->d_ino,de->d_name,0,0,0); }
         result=1;
       }
       closedir(dir);
     }
     if (result>0){
-      mydir->core.mtime=mtime;
-      if ((opt&READDIR_ZIP) || config_cache_directory(rp,mydir->root->features&ROOT_REMOTE,mtime)){
-        LOCK(mutex_dircache,dircache_directory_to_cache(mydir));
+      mydir->core.mtime=st->st_mtim;
+      if ((opt&READDIR_ZIP) || config_cache_directory(rp,mydir->root->features&ROOT_REMOTE,st->st_mtim)){
+        LOCK_NCANCEL(mutex_dircache,dircache_directory_to_cache(mydir));
       }
     }
   }
   return result>0;
 }
 /* Reading zip dirs asynchroneously */
-
 
 static void *infloop_dircache(void *arg){
   struct rootdata *r=arg;
@@ -953,16 +967,16 @@ static void *infloop_dircache(void *arg){
   while(true){
     int iteration=*path=0;
     struct ht_entry *e;
-    LOCK(mutex_dircachejobs,
-         e=ht_next(&r->dircache_queue,&iteration);
-         if (e && e->key){
-           my_strncpy(path,e->key,MAX_PATHLEN);
-           FREE2(e->key);
-           e->value=NULL;
-         });
+    LOCK_NCANCEL(mutex_dircachejobs,
+                 e=ht_next(&r->dircache_queue,&iteration);
+                 if (e && e->key){
+                   my_strncpy(path,e->key,MAX_PATHLEN);
+                   FREE2(e->key);
+                   e->value=NULL;
+                 });
     if (*path && statqueue_stat(path,&stbuf,r)){
       directory_init(&mydir,path,r);
-      directory_from_dircache_zip_or_filesystem(READDIR_ZIP,&mydir,stbuf.st_mtim);
+      directory_from_dircache_zip_or_filesystem(READDIR_ZIP,&mydir,&stbuf);
     }
     r->pthread_when_loop_deciSec[PTHREAD_DIRCACHE]=deciSecondsSinceStart();
     PRETEND_BLOCKED(PTHREAD_DIRCACHE);
@@ -1027,8 +1041,11 @@ static bool find_realpath_any_root(struct zippath *zpath,const struct rootdata *
           EP_LEN()=zpath_commit(zpath);
           zpath->flags|=ZP_ZIP;
           zpath_assert_strlen(zpath);
+
+                if (endsWith(VP(),".tdf")) log_debug_now("mmmmmmmmmmmmmmmmmmmmm 10  zpath->stat_vp.st_mtime=%ld\n",zpath->stat_vp.st_mtime);
           if (test_realpath(zpath,r)){
             if (!EP_LEN()) stat_set_dir(&zpath->stat_vp); /* ZIP file without entry path */
+                  if (endsWith(VP(),".tdf")) log_debug_now("mmmmmmmmmmmmmmmmmmm 20  zpath->stat_vp.st_mtime=%ld\n",zpath->stat_vp.st_mtime);
             return true;
           }
         }
@@ -1045,7 +1062,9 @@ static bool find_realpath_any_root(struct zippath *zpath,const struct rootdata *
           if (!zpath_strcat(zpath,vp+last_slash(vp)+1)) return false;
           EP_LEN()=zpath_commit(zpath);
           zpath_assert_strlen(zpath);
+                                      if (endsWith(VP(),".raw")) log_debug_now("mmmmmmmmmmmmmmmmmmm 10  zpath->stat_vp.st_mtime=%ld\n",zpath->stat_vp.st_mtime);
           if (test_realpath(zpath,r)) return true;
+                            if (endsWith(VP(),".raw")) log_debug_now("mmmmmmmmmmmmmmmmmmm 20  zpath->stat_vp.st_mtime=%ld\n",zpath->stat_vp.st_mtime);
         }
       }
     }
@@ -1142,7 +1161,6 @@ static zip_file_t *fhdata_zip_open(struct fhdata *d,const char *msg){
   }
   return zf;
 }
-
 static struct fhdata* fhdata_create(const char *path,const uint64_t fh){
   ASSERT_LOCKED_FHDATA();
   struct fhdata *d=NULL;
@@ -1217,28 +1235,28 @@ static ino_t make_inode(const ino_t inode0,const int  iroot, const int ientry_pl
     const uint64_t key1=inode0+1;
     const uint64_t key2=(ientry_plus_1<<1)|1; /* Because of the implementation of hash table ht, key2 must not be zero. We multiply by 2 and add 1. */
     static uint64_t seq=1UL<<63;
-    LOCK(mutex_inode,
-         if (!ht->capacity) ht_init(ht,HT_FLAG_INTKEY,16);
-         uint64_t inod=ht_get_int(ht,key1,key2);
-         if (!inod){ ht_set_int(ht,key1,key2,inod=++seq);_count_SeqInode++;});
+    LOCK_NCANCEL(mutex_inode,
+                 if (!ht->capacity) ht_init(ht,HT_FLAG_INTKEY,16);
+                 uint64_t inod=ht_get_int(ht,key1,key2);
+                 if (!inod){ ht_set_int(ht,key1,key2,inod=++seq);_count_SeqInode++;});
     return inod;
   }
 }
 /* ******************************************************************************** */
 /* *** Zip *** */
 #define SET_STAT() init_stat(st,isdir?-1: Nth0(d.fsize,i),&zpath->stat_rp);  st->st_ino=make_inode(zpath->stat_rp.st_ino,r->index,Nth(d.finode,i,i)+1,rp); zpath->rp_crc=Nth0(d.fcrc,i); \
-  if (Nth0(d.fflags,i)&DIRENT_IS_COMPRESSED) zpath->flags|=ZP_IS_COMPRESSED
+  if (Nth0(d.fflags,i)&DIRENT_IS_COMPRESSED) zpath->flags|=ZP_IS_COMPRESSED; \
+  st->st_mtim=d.mtime
 static int filler_readdir_zip(struct rootdata *r,struct zippath *zpath,void *buf, fuse_fill_dir_t filler_maybe_null,struct ht *no_dups){
   log_mthd_orig();
   const char *rp=RP();
   const int ep_len=EP_LEN();
-  if (endsWithZip(rp)) log_entered_function("read_zipdir rp=%s filler=%p  vp=%s  entry_path=%s   ep_len=%d\n",rp,filler_maybe_null,VP(),EP(),ep_len);
+  //if (endsWithZip(rp)) log_entered_function("read_zipdir rp=%s filler=%p  vp=%s  entry_path=%s   ep_len=%d\n",rp,filler_maybe_null,VP(),EP(),ep_len);
   if(!ep_len && !filler_maybe_null) return 0; /* When the virtual path is a Zip file then just report success */
   if (!zpath_stat(zpath,r)) return ENOENT;
   struct directory mydir={0};
   directory_init(&mydir,rp,r);
-  struct stat stbuf;
-  if (!directory_from_dircache_zip_or_filesystem(READDIR_ZIP,&mydir,zpath->stat_rp.st_mtim)) return ENOENT;
+  if (!directory_from_dircache_zip_or_filesystem(READDIR_ZIP,&mydir,&zpath->stat_rp)) return ENOENT;
   char u[MAX_PATHLEN+1];
   struct directory_core d=mydir.core;
   for(int i=0; i<d.files_l;i++){
@@ -1269,6 +1287,7 @@ static int filler_readdir_zip(struct rootdata *r,struct zippath *zpath,void *buf
         filler_maybe_null(buf,n0,st,0,fill_dir_plus);
       }else if (ep_len==len && !strncmp(EP(),u,len)){ /* ---  filler_readdir_zip() has been called from test_realpath(). The goal is to set zpath->stat_vp --- */
         struct stat *st=&zpath->stat_vp;
+        st->st_mtime=88;
         SET_STAT();
         return 0;
       }
@@ -1292,7 +1311,7 @@ static int filler_readdir(struct rootdata *r,struct zippath *zpath, void *buf, f
     char direct_rp[MAX_PATHLEN+1], virtual_name[MAX_PATHLEN+1];
     struct directory dir={0},dir2={0};
     directory_init(&dir,rp,r);
-      if (directory_from_dircache_zip_or_filesystem(0,&dir,zpath->stat_rp.st_mtim)){
+    if (directory_from_dircache_zip_or_filesystem(0,&dir,&zpath->stat_rp)){
       char buf_for_u[MAX_PATHLEN+1], buf_for_u2[MAX_PATHLEN+1];
       const struct directory_core d=dir.core;
       for(int i=0;i<d.files_l;i++){
@@ -1301,7 +1320,7 @@ static int filler_readdir(struct rootdata *r,struct zippath *zpath, void *buf, f
         bool inlined=false; /* Entries of ZIP file appear directory in the parent of the ZIP-file. */
         if (config_zipentries_instead_of_zipfile(u) && (MAX_PATHLEN>=snprintf(direct_rp,MAX_PATHLEN,"%s/%s",rp,u))){
           directory_init(&dir2,direct_rp,r);
-          if (statqueue_stat(direct_rp,&stbuf,r) && directory_from_dircache_zip_or_filesystem(READDIR_ZIP|READDIR_TO_QUEUE,&dir2,stbuf.st_mtim)){
+          if (statqueue_stat(direct_rp,&stbuf,r) && directory_from_dircache_zip_or_filesystem(READDIR_ZIP|READDIR_TO_QUEUE,&dir2,&stbuf)){
             const struct directory_core d2=dir2.core;
             for(int j=0;j<d2.files_l;j++){/* Embedded zip file */
               const char *n2=d2.fname[j];
@@ -1427,6 +1446,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_inf
     FIND_REALPATH(path);
     if(!res){
       *stbuf=zpath->stat_vp;
+      if (endsWith(VP(),".raw")) log_debug_now("mmmmmmmmmmmmmmmmm 30  zpath->stat_vp.st_mtime=%ld\n",zpath->stat_vp.st_mtime);
       if (IS_STATCACHE){ LOCK(mutex_fhdata, D() if (C){ ASSERT(slashes+1<L); C[slashes+1]=*stbuf;}); }
 #undef D
 #undef L
@@ -1590,7 +1610,7 @@ static void *infloop_memcache(void *arg){
   struct rootdata *r=arg;
   pthread_cleanup_push(infloop_memcache_start,r);
   if (r->memcache_d){
-    LOCK(mutex_fhdata,r->memcache_d->memcache_status=memcache_interrupted);
+    LOCK_NCANCEL(mutex_fhdata,r->memcache_d->memcache_status=memcache_interrupted);
   }
   while(true){
     r->memcache_d=NULL;
@@ -1729,8 +1749,6 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t
     }
     zpath_destroy(zpath);
   }
-
-
   ht_destroy(&no_dups);
   log_count_e(xmp_readdir_,path);
   //log_exited_function("%s %d\n",path,res);
