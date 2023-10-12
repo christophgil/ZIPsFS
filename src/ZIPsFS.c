@@ -243,8 +243,7 @@ enum memusage{memusage_mmap,memusage_malloc,memusage_n,memusage_get_curr,memusag
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #if 0
 static int my_stat(const char *path,struct stat *statbuf){
-  static int count=0;
-  if (!(count++&1023)) log_msg("\n"ANSI_MAGENTA"my_stat ncount=%d"ANSI_RESET"\n",count);
+    static int count=0;  if (!(count++&1023)) log_msg("\n"ANSI_MAGENTA"my_stat ncount=%d"ANSI_RESET"\n",count);
   return stat(path,statbuf);
 }
 #else
@@ -1407,8 +1406,7 @@ static void *xmp_init(struct fuse_conn_info *conn,struct fuse_config *cfg){
 
 static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi_or_null){
   {
-    static int count=0;
-    if (count++%100==0){ log_msg("");log_debug_now("count=%d  path=%s\n",count,path);}
+    //    static int count=0;    if (count++%100==0){ log_msg("");log_debug_now("count=%d  path=%s\n",count,path);}
   }
   if (!strcmp(path,FILE_FS_INFO)){
     init_stat(stbuf,MAX_INFO,NULL);
