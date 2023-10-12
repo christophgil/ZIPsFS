@@ -106,7 +106,7 @@ ZIPsFS Options
 
 :   Specifies a limit for the cache.  For example *-l  8G* would limit the size of the cache to 8 Gigabyte.
 
--c \[NEVER,SEEK,RULE,ALWAYS\]
+-c \[NEVER,SEEK,RULE,COMPRESSED,ALWAYS\]
 
 :   Policy when ZIP entries are cached in RAM.
 
@@ -118,6 +118,8 @@ ZIPsFS Options
 |    SEEK   | ZIP entries are cached if the file position jumps backward. This is the default  |
 |           |                                                                                  |
 |   RULE    | ZIP entries are cached according to rules in **configuration.c**.                |
+|           |                                                                                  |
+|COMPRESSED | All compressed ZIP entries are cached.                                           |
 |           |                                                                                  |
 |  ALWAYS   | All ZIP entries are cached.                                                      |
 |           |                                                                                  |
@@ -154,7 +156,7 @@ FILES
 
 - configuration.c:  Customizable rules. Modification requires recompilation.
 - ~/.ZIPsFS:
-  Contains the log file and the SQLite3 DB file
+  Contains the log file and cache
 
 # Implementation
 

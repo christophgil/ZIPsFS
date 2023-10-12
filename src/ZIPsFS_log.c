@@ -226,7 +226,7 @@ static int print_memory(int n){
 
 static int print_read_statistics(int n){
   PRINTINFO("<H1>Read bytes statistics</H1>\n<TABLE><THEAD><TR>"TH("Event")TH("Count")"</TR></THEAD>\n");
-#define TABLEROW(a,skip) PRINTINFO("<TR>"TD("<B>%s</B>")TDr("%'d")"</TR>\n",(#a)+skip,a)
+#define TABLEROW(a,skip) PRINTINFO("<TR>"TD("<B>%s</B>")TDr("%'ld")"</TR>\n",(#a)+skip,a)
   TABLEROW(_count_readzip_memcache,7);
   TABLEROW(_count_readzip_regular,7);
   TABLEROW(_count_readzip_seekable[1],7);
@@ -235,10 +235,9 @@ static int print_read_statistics(int n){
   TABLEROW(_count_readzip_seek_fwd,7);
   TABLEROW(_count_readzip_memcache_because_seek_bwd,7);
   TABLEROW(_count_readzip_reopen_because_seek_bwd,7);
-  TABLEROW(_count_close_later,7);
   TABLEROW(_count_statcache_get,7);
   TABLEROW(_log_read_max_size,7);
-  TABLEROW(_log_count_lock,7);
+  TABLEROW((long)_log_count_lock,7);
   PRINTINFO("</TABLE>");
 #undef TABLEROW
   return n;
@@ -293,7 +292,7 @@ THEAD{background-color:black;color:white;}\n\
 TD{padding:5px;}\n\
 </STYLE>\n</HEAD>\n<BODY>\n\
 <B>ZIPsFS:</B> <A href=\"%s\">%s</A><BR> \n",HOMEPAGE,HOMEPAGE);
-  PRINTINFO("\nStarted %s: %s &nbsp; PID: %ld &nbsp; Compiled: "__DATE__"  "__TIME__"<BR>",_thisPrg,ctime(&_startTime.tv_sec),getpid());
+  PRINTINFO("\nStarted %s: %s &nbsp; PID: %d &nbsp; Compiled: "__DATE__"  "__TIME__"<BR>",_thisPrg,ctime(&_startTime.tv_sec),getpid());
   n=print_roots(n);
   n=print_fuse_argv(n);
   n=print_open_files(n,NULL);
@@ -301,7 +300,7 @@ TD{padding:5px;}\n\
   n=print_fhdata(n,"");
   n=print_memory_details(n);
   PRINTINFO("_mutex=%p\n<BR>",_mutex);
-  PRINTINFO("<H1>Inodes</H1>Created sequentially: %'d\n",_count_SeqInode);
+  PRINTINFO("<H1>Inodes</H1>Created sequentially: %'ld\n",_count_SeqInode);
   n=print_read_statistics(n);
   //  PRINTINFO("_cumul_time_store=%lf\n<BR>",((double)_cumul_time_store)/CLOCKS_PER_SEC);
   //n=print_misc(n);

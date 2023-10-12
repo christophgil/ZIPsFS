@@ -116,7 +116,7 @@ Specifies a limit for the cache.
 For example \f[I]\-l 8G\f[R] would limit the size of the cache to 8
 Gigabyte.
 .TP
-.B \-c [NEVER,SEEK,RULE,ALWAYS]
+.B \-c [NEVER,SEEK,RULE,COMPRESSED,ALWAYS]
 Policy when ZIP entries are cached in RAM.
 .PP
 .TS
@@ -143,6 +143,14 @@ T{
 RULE
 T}@T{
 ZIP entries are cached according to rules in \f[B]configuration.c\f[R].
+T}
+T{
+T}@T{
+T}
+T{
+COMPRESSED
+T}@T{
+All compressed ZIP entries are cached.
 T}
 T{
 T}@T{
@@ -186,7 +194,7 @@ related bugs.
 configuration.c: Customizable rules.
 Modification requires recompilation.
 .IP \[bu] 2
-\[ti]/.ZIPsFS: Contains the log file and the SQLite3 DB file
+\[ti]/.ZIPsFS: Contains the log file and cache
 .SH Implementation
 .PP
 Written in GNU\-C.

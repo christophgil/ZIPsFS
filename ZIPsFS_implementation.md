@@ -44,8 +44,7 @@ Upon close, such <I>struct fhdata</I> instance is not deleted when there are sti
 ## Dircache
 
 The table of content (toc) of ZIP files is stored in memory mapped files. The data structure is <I>struct mstore</I>.
-Originally, SQLite had been used. However, we noticed that some performance suffers because we use software that does a large number of requests.
-Therefore we created our own  storage  <I>struct mstore</I>. It is basically an array of memory mapped files.
+We created our own  storage  <I>struct mstore</I>. It is basically an array of memory mapped files.
 
 A cached toc is valid until the last-modified attribute changes.
 

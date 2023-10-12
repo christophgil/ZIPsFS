@@ -264,7 +264,6 @@ static void print_substring(int fd,const char *s,int f,int t){  write(fd,s,min_i
 static void recursive_mkdir(const char *path){
   char p[PATH_MAX];
   strcpy(p,path);
-
   const int n=pathlen_ignore_trailing_slash(p);
   for(int i=2;i<n;i++){
     if (p[i]=='/'){
@@ -302,7 +301,7 @@ static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc, pthread
   const size_t n_accum=n_bytes/sizeof(accum_t);
   if (!initialized){
     if (mutex) pthread_mutex_lock(mutex);
-    if(!initialized)  cg_crc32_init_tables(table,wtable);
+    cg_crc32_init_tables(table,wtable);
     initialized=true;
     if (mutex) pthread_mutex_unlock(mutex);
   }

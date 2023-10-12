@@ -1,22 +1,26 @@
 #!/usr/bin/env bash
 [[ -s ZIPsFS ]] && rm -v ZIPsFS
 
+
+
 # makeheaders ZIPsFS.c
 sed -n 's|^\(static .*) *\){$|\1;|p' ZIPsFS.c > ZIPsFS.h
 
 
-
-
+dir=$PWD
+cd ~ # Otherwise the logs contain relative paths
 
 
 if false;then
-    gcc -DHAVE_CONFIG_H -I. -I/usr/local/include/fuse3 -O0 -D_FILE_OFFSET_BITS=64 -rdynamic -ggdb  ZIPsFS.c -lfuse3 -lpthread -L/usr/local/lib -lm -lzip -lsqlite3 -o ZIPsFS
+    gcc -DHAVE_CONFIG_H -I. -I/usr/local/include/fuse3 -O0 -D_FILE_OFFSET_BITS=64 -rdynamic -ggdb  $dir/ZIPsFS.c -lfuse3 -lpthread -L/usr/local/lib -lm -lzip -o $dir/ZIPsFS
 else
+
     as="-fsanitize=address -fno-omit-frame-pointer"
     #     -fsanitize=memory not combinable with =address
     # as='-fsanitize=thread -fno-omit-frame-pointer'
     # as=''
     ##    The leak detection is turned on by default on Linux
-    clang -DHAVE_CONFIG_H -I. -I/usr/local/include/fuse3 -O0 -D_FILE_OFFSET_BITS=64 -rdynamic -g $as  $PWD/ZIPsFS.c -lfuse3 -lpthread -L/usr/local/lib -lm -lzip -lsqlite3 -o ZIPsFS
+
+    clang -DHAVE_CONFIG_H -I. -I/usr/local/include/fuse3 -O0 -D_FILE_OFFSET_BITS=64 -rdynamic -g $as  $dir/ZIPsFS.c -lfuse3 -lpthread -L/usr/local/lib -lm -lzip -o $dir/ZIPsFS
 fi
-ls -l -h ZIPsFS.h ZIPsFS
+ls -l -h $dir/ZIPsFS{.h,}

@@ -78,15 +78,19 @@ static int config_zipentry_to_zipfile(const int approach,const char *virtualpath
       }
     }else if (C(.wiff) || C(.wiff2) || C(.wiff.scan)){
       switch(approach){
+      case 2: *suffix=".wiff2.Zip"; return path_l-d;
       case 0: *suffix=".wiff.Zip"; return path_l-d;
       case 1: *suffix=".rawIdx.Zip"; return path_l-d;
+      }
+    }else if (C(.wiff2)){
+      switch(approach){
       case 2: *suffix=".wiff2.Zip"; return path_l-d;
       }
-    }else if (C(.wiff.scan)){
-      switch(approach){
-      case 0: *suffix=".wiff.Zip"; return path_l-d;
-      case 1: *suffix=".rawIdx.Zip"; return path_l-d;
-      }
+    /* }else if (C(.wiff.scan)){ */
+    /*   switch(approach){ */
+    /*   case 0: *suffix=".wiff.Zip"; return path_l-d; */
+    /*   case 1: *suffix=".rawIdx.Zip"; return path_l-d; */
+    /*   } */
     }else if (C(.raw)){
       switch(approach){
       case 0: *suffix=".Zip"; return path_l;
