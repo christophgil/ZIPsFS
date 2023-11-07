@@ -23,21 +23,33 @@
 ////////////
 /// Hash ///
 ////////////
-#define FNV_OFFSET 14695981039346656037UL
-#define FNV_PRIME 1099511628211UL
 // Retur0n 64-bit FNV-1a hash for key (NUL-terminated). See  https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
-#define HASH_VALUE_LOG (1UL<<61)
-static uint64_t hash_value(const char* key, size_t len){
-  uint64_t hash=FNV_OFFSET;
-  const bool log=(len&HASH_VALUE_LOG)!=0;
-  if (log) len&=~HASH_VALUE_LOG;
-  for(int i=0;i<len;i++){
+// https://softwareengineering.stackexchange.com/questions/49550/which-hashing-algorithm-is-best-for-uniqueness-and-speed
+typedef int hthash;
+static uint64_t hash64(const char* key, const size_t len){
+  uint64_t hash=14695981039346656037UL;
+  for(int i=len;--i>=0;){
     hash^=(uint64_t)(unsigned char)(key[i]);
-    if(log) printf("%02x ",(unsigned char)key[i]);
-    hash*=FNV_PRIME;
+    hash*=1099511628211UL;
   }
-  if (log)printf("\n");
   return hash;
+}
+static uint32_t hash32(const char* key, const uint32_t len){
+  uint32_t hash=2166136261U;
+  for(int i=len;--i>=0;){
+    hash^=(uint32_t)(unsigned char)(key[i]);
+    hash*=16777619U;
+  }
+  return hash;
+}
+static int java_hashCode(const char *str,const size_t len){
+  int hash=0;
+  for(int i=0;i<len; i++) hash=31*hash+str[i];
+  return hash;
+}
+
+static uint64_t hash_value_strg(const char* key){
+  return !key?0:hash64(key,strlen(key));
 }
 /////////////////////////////////////////////////////////
 
@@ -100,7 +112,7 @@ static void *mstore_malloc(struct mstore *m,const size_t bytes, const int align)
   assert(align==1||align==2||align==4||align==8);
 #define D m->data[segment]
 #define DD ((size_t*)d)
-  assert(bytes%align==0);
+  //  assert(bytes%align==0); Nein muss nicht sein
   size_t adim=bytes>m->dim?bytes:m->dim;  adim=NEXTMULTIPLE2(adim,4096); /* Aligned array dim */
   for(uint32_t s0=0;;s0++){
     const uint32_t segment=!s0?m->segmentLast:s0-1;
@@ -150,8 +162,8 @@ static void *mstore_malloc(struct mstore *m,const size_t bytes, const int align)
 static void *mstore_add(struct mstore *m,const void *src, const size_t bytes,const int align){
   return memcpy(mstore_malloc(m,bytes,align),src,bytes);
 }
-enum _mstore_operation{_mstore_destroy,_mstore_usage,_mstore_clear,_mstore_segments};
-static size_t _mstore_common(struct mstore *m,int opt){
+enum _mstore_operation{_mstore_destroy,_mstore_usage,_mstore_clear,_mstore_contains,_mstore_segments};
+static size_t _mstore_common(struct mstore *m,int opt,const char *pointer){
   size_t sum=0;
   for(int segment=m->capacity;--segment>=0;){
     char *d=D;
@@ -160,8 +172,8 @@ static size_t _mstore_common(struct mstore *m,int opt){
       case _mstore_destroy:
         D=NULL;
         if (d!=m->_stack_data){
-        if (m->opt&MSTORE_OPT_MALLOC) free(d);
-        else munmap(d,_MSTORE_MEM(DD[1]));
+          if (m->opt&MSTORE_OPT_MALLOC) free(d);
+          else munmap(d,_MSTORE_MEM(DD[1]));
         }
         break;
       case _mstore_usage: sum+=DD[0]; break;
@@ -172,23 +184,29 @@ static size_t _mstore_common(struct mstore *m,int opt){
         // fprintf(stderr," xxxxxxxx DD[0]=%ld   DD[1]=%ld",DD[0],DD[1]);
         //memset(d+_MSTORE_LEADING,0,DD[1]);
         break;
+      case _mstore_contains:
+        if (d<pointer && pointer<d+m->dim) return true;
+        break;
       }
     }
   }
   return sum;
 }
 static void mstore_destroy(struct mstore *m){
-  _mstore_common(m,_mstore_destroy);
+  _mstore_common(m,_mstore_destroy,NULL);
   _MSTORE_FREE_DATA(m);
 }
 static size_t mstore_usage(struct mstore *m){
-  return _mstore_common(m,_mstore_usage);
+  return _mstore_common(m,_mstore_usage,NULL);
 }
 static size_t mstore_count_segments(struct mstore *m){
-  return _mstore_common(m,_mstore_segments);
+  return _mstore_common(m,_mstore_segments,NULL);
 }
 static void mstore_clear(struct mstore *m){
-  _mstore_common(m,_mstore_clear);
+  _mstore_common(m,_mstore_clear,NULL);
+}
+static bool mstore_contains(struct mstore *m, const char *pointer){
+  return 0!=_mstore_common(m,_mstore_contains,pointer);
 }
 
 
@@ -201,16 +219,24 @@ static void mstore_clear(struct mstore *m){
 // ///////////////
 
 
+
 static const char *mstore_addstr(struct mstore *m, const char *str,size_t len){
-  if (!str || !*str) return "";
+  if (!str) return NULL;
+
+
+
+  if (!*str) return "";
+
+
+
+
+
   if (!len) len=strlen(str);
- char *s=mstore_malloc(m,len+1,1);
-  memcpy(s,str,len+1);
-  assert(s);
+  char *s=mstore_malloc(m,len+1,1);
+  assert(s!=NULL);
+  memcpy(s,str,len);
   s[len]=0;
-  assert(strlen(s)==len);
   assert(!strncmp(s,str,len));
-  //putchar('%');
   return s;
 }
 
@@ -259,7 +285,7 @@ static const void *mstore_add_reuse(struct mstore *m, const void *str, size_t le
 
 
 
-#if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__ == 0
+#if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__==0
 //#include "cg_utils.c"
 struct mytest{
   int64_t l;
@@ -268,9 +294,6 @@ struct mytest{
 
 
 int main(int argc,char *argv[]){
-
-
-
   const char *dir="/home/cgille/tmp/test/mstore_mstore1";
   //recursive_mkdir(dir);
   struct mstore m={0};

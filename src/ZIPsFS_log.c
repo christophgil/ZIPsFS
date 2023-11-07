@@ -67,14 +67,14 @@ static int print_roots(int n){
   foreach_root(i,r){
     const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30),diff=deciSecondsSinceStart()-r->pthread_when_response_deciSec;
     if (n>=0){
-      PRINTINFO("<TR>"TD("%s")TDc("%s"),r->path,yes_no(f&ROOT_WRITABLE));
+      PRINTINFO("<TR>"TD("%s")TDc("%s"),r->root_path,yes_no(f&ROOT_WRITABLE));
 
       if (f&ROOT_REMOTE) PRINTINFO(TDr("%'ld ms")TDr("%'u"), 10L*(diff>ROOT_OBSERVE_EVERY_SECONDS*10*3?diff:r->statfs_took_deciseconds),r->log_count_delayed);
       else PRINTINFO(TDr("Local")TD(""));
       uint64_t u; LOCK(mutex_dircache, u=MSTORE_USAGE(&r->dircache)/1024);
       PRINTINFO(TDr("%'d")TDr("%'zu")"</TR>\n",freeGB,u);
     }else{
-      log_msg("\t%d\t%s\t%s\n",i,r->path,!my_strlen(r->path)?"":(f&ROOT_REMOTE)?"Remote":(f&ROOT_WRITABLE)?"Writable":"Local");
+      log_msg("\t%d\t%s\t%s\n",i,r->root_path,!my_strlen(r->root_path)?"":(f&ROOT_REMOTE)?"Remote":(f&ROOT_WRITABLE)?"Writable":"Local");
     }
   }
   PRINTINFO("</TABLE>\n");
@@ -235,9 +235,14 @@ static int print_read_statistics(int n){
   TABLEROW(_count_readzip_seek_fwd,7);
   TABLEROW(_count_readzip_memcache_because_seek_bwd,7);
   TABLEROW(_count_readzip_reopen_because_seek_bwd,7);
-  TABLEROW(_count_statcache_get,7);
+  TABLEROW(_count_stat_cache_from_fhdata,7);
+  TABLEROW(_count_stat_success,7);
+  TABLEROW(_count_stat_fail,7);
+  TABLEROW(_count_stat_from_cache,7);
   TABLEROW(_log_read_max_size,7);
   TABLEROW((long)_log_count_lock,7);
+    TABLEROW((long)_count_crc32_ok,7);
+        TABLEROW((long)_count_crc32_bad,7);
   PRINTINFO("</TABLE>");
 #undef TABLEROW
   return n;

@@ -253,7 +253,7 @@ static void _warning(const char *fn,int line,const uint32_t channel,const char* 
       perror("");
     }
     //#if defined _ht_dot_c_end
-    ht_init(&ht,0,7);
+    ht_init(&ht,7);
     //#endif
     return;
   }

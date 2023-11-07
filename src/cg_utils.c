@@ -55,8 +55,9 @@ static bool endsWith(const char* s,const char* e){
   const int sn=strlen(s),en=strlen(e);
   return en<=sn && 0==strcmp(s+sn-en,e);
 }
-static bool endsWithZip(const char *s){
-  return s && ENDSWITHI(s,my_strlen(s),".zip");
+static bool endsWithZip(const char *s, int len){
+  if(!len)len=my_strlen(s);
+  return s && ENDSWITHI(s, len,".zip");
 }
 static int count_slash(const char *p){
   const int n=my_strlen(p);

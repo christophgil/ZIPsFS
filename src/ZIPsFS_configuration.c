@@ -1,3 +1,21 @@
+////////////////////////////////////////////////////////////////////////////////////
+/// The following optional optimazations can be deactivated with 0 for debugging ///
+////////////////////////////////////////////////////////////////////////////////////
+#define IS_DIRCACHE_PUT 1
+#define IS_DIRCACHE_GET 1
+
+#define IS_DIRCACHE_OPTIMIZE_NAMES 1
+#define IS_DIRCACHE_OPTIMIZE_NAMES_RESTORE 1
+
+#define IS_MEMCACHE_PUT 1
+#define IS_MEMCACHE_GET 1
+
+#define IS_STATCACHE_IN_FHDATA 1
+#define IS_ZIPINLINE_CACHE 1
+#define IS_STAT_CACHE 1
+/* --- */
+
+
 ////////////
 /// Size ///
 ////////////
@@ -58,52 +76,50 @@ static const int config_virtualpath_is_zipfile(const char *b, const char *e,char
 /// See: config_zipentries_instead_of_zipfile()
 ///      config_zipentry_to_zipfile_test()
 ////////////////////////////////////////////////////
-static int config_zipentry_to_zipfile(const int approach,const char *virtualpath, char *suffix[]){
-  //log_debug_now("config_zipentry_to_zipfile  virtualpath=%s\n",virtualpath);
-  const int path_l=strlen(virtualpath);
+static int config_zipentry_to_zipfile(const int approach,const char *path, char *suffix[]){
+  //log_debug_now("config_zipentry_to_zipfile  path=%s\n",path);
+  const int path_l=strlen(path);
   if (path_l>20){
-    const char *e=virtualpath+path_l;
+    const char *e=path+path_l;
     int d=0;
-    *suffix=NULL;
+    if (suffix) *suffix=NULL;
 #define A(x,c) ((d=sizeof(#x)-1),(e[-d]==c && !strcmp(e-d,#x)))
 #define C(x) A(x,'.')
-    if (C(.SSMetaData)||C(.timeseries.data)||C(.wiff.1.~idx2) || C(.wiff2.bak) || C(.Q1Cal) ||  A(_report.txt,'_')){
+#define S(x) if (suffix)*suffix=x;return path_l-d
+    if (C(.wiff) || C(.wiff2) || C(.wiff.scan)){
       switch(approach){
-      case 0: *suffix=".wiff.Zip"; return path_l-d;
-      case 1: *suffix=".wiff2.Zip"; return path_l-d;
+      case 0: S(".wiff.Zip");
+      case 1: S(".rawIdx.Zip");
+      case 2: S(".wiff2.Zip");
       }
     }else if (C(.rawIdx)){
       switch(approach){
-      case 0: *suffix=".Zip";return path_l;
+      case 0: S(".rawIdx.Zip");
       }
-    }else if (C(.wiff) || C(.wiff2) || C(.wiff.scan)){
-      switch(approach){
-      case 2: *suffix=".wiff2.Zip"; return path_l-d;
-      case 0: *suffix=".wiff.Zip"; return path_l-d;
-      case 1: *suffix=".rawIdx.Zip"; return path_l-d;
-      }
-    }else if (C(.wiff2)){
-      switch(approach){
-      case 2: *suffix=".wiff2.Zip"; return path_l-d;
-      }
-    /* }else if (C(.wiff.scan)){ */
-    /*   switch(approach){ */
-    /*   case 0: *suffix=".wiff.Zip"; return path_l-d; */
-    /*   case 1: *suffix=".rawIdx.Zip"; return path_l-d; */
-    /*   } */
     }else if (C(.raw)){
       switch(approach){
-      case 0: *suffix=".Zip"; return path_l;
-      case 1: *suffix=".wiff2.Zip"; return path_l-d;
-      case 2: *suffix="Idx.Zip"; return path_l;
+      case 0: S(".raw.Zip");
+      case 1: S(".wiff2.Zip");
+      case 2: S(".rawIdx.Zip");
+      }
+    }else if (C(.SSMetaData) || C(.timeseries.data) || A(_report.txt,'_')){
+      switch(approach){
+      case 0: S(".wiff.Zip");
+      case 1: S(".wiff2.Zip");
       }
     }
   }
   return 0;
+  #undef S
 #undef C
 #undef A
 }
 
+static uint32_t config_file_attribute_valid_seconds(const bool isReadOnly, const char *path,const int path_l){
+  if (isReadOnly && endsWithZip(path,path_l)  && (strstr(path,"/fularchiv01")||strstr(path,"/CHA-CHA-RALSER-RAW"))) return UINT32_MAX;
+  return 0;
+}
+//S_ISREG(st->st_mode) && !(st->st_mode&( S_IWUSR| S_IWGRP |S_IWOTH))
 static void config_zipentry_to_zipfile_test(){
   if (true) return; /* Remove to run tests */
   char *ff[]={
@@ -262,16 +278,3 @@ static bool config_cache_directory(const char *path, bool isRemote, const struct
   }
   return false;
 }
-//////////////////////////////////////////////
-/// For debugging problems, the following  ///
-/// can be set to 0 can                    ///
-//////////////////////////////////////////////
-
-#define DIRCACHE_PUT 1
-#define DIRCACHE_GET 1
-
-#define DIRCACHE_OPTIMIZE_NAMES 1
-#define DIRCACHE_OPTIMIZE_NAMES_RESTORE 1
-
-#define MEMCACHE_PUT 1
-#define MEMCACHE_GET 1
