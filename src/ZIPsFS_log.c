@@ -1,18 +1,102 @@
-//   (global-set-key (kbd "<f4>") '(lambda() (interactive) (switch-to-buffer "log.c")))
-#define TDr(x) "<TD align=\"right\">" x "</TD>"
-#define TDc(x) "<TD align=\"center\">" x "</TD>"
-#define THr(x) "<TH align=\"right\">" x "</TH>"
+//////////////////////////////////////
+// logs per file type
+/////////////////////////////////////
+
+static struct ht ht_count_getattr;
+static void init_count_getattr(){
+  static bool initialized;
+  if (!initialized){
+    initialized=true;
+    ht_init_with_keystore(&ht_count_getattr,11,&mstore_persistent);
+  }
+}
+
+static void inc_count_getattr(const char *path,enum enum_count_getattr field){
+  init_count_getattr();
+  if (path && ht_count_getattr.length<1024){
+    const char *ext=strrchr(path+last_slash(path)+1,'.');
+    if (ext && ext[1]){
+      struct ht_entry *e=ht_get_entry(&ht_count_getattr,ext,0,0,true);
+      assert(e!=NULL);
+      assert(e->key!=NULL);
+      int *counts=e->value;
+      if (!counts) e->value=counts=mstore_malloc(&mstore_persistent,sizeof(int)*enum_count_getattr_length,8);
+      if (counts) counts[field]++;
+    }
+  }
+}
+//#define FT_INC_PATH(path,field,r) { filetypedata_for_ext(path,r)->field++;r->filetypedata_all.field++;}
+
+static const char *fileExtension(const char *path,const int len){
+  if (len){
+    const char *ext=strrchr(path+last_slash(path)+1,'.');
+    if (ext && ext[1] && /* empty */
+        ext!=path && ext[-1]!='/' &&  /* dotted file */
+        path+len-ext<9){ /* Extension too long */
+      return ext;
+    }
+  }
+  return NULL;
+}
+static struct rootdata root_dummy;
+static counter_rootdata_t *filetypedata_for_ext(const char *path,struct rootdata *r){
+  ASSERT_LOCKED_FHDATA();
+  assert(r>=_root);
+  if (!r) r=&root_dummy;
+  if(!r->filetypedata_initialized){
+    assert(FILETYPEDATA_FREQUENT_NUM>_FILE_EXT_TO-_FILE_EXT_FROM);
+    init_count_getattr();
+    r->filetypedata_initialized=true;
+    ht_init_with_keystore(&r->ht_filetypedata,10,&mstore_persistent);
+    ht_set(&r->ht_filetypedata, r->filetypedata_all.ext=".*", 0,0,&r->filetypedata_all);
+    ht_set(&r->ht_filetypedata, r->filetypedata_dummy.ext="*", 0,0,&r->filetypedata_dummy);
+  }
+  const int len=my_strlen(path);
+  counter_rootdata_t *d=NULL;
+  const char *ext;
+  if (len){
+    static int return_i,i;
+    if ((ext=(char*)some_file_path_extensions(path,len,&return_i))){
+      d=r->filetypedata_frequent+return_i;
+      if (!d->ext) ht_set(&r->ht_filetypedata, d->ext=ext, 0,0,d);
+    }
+    if(!d && (ext=(char*)fileExtension(path,len))){
+      struct ht_entry *e=ht_get_entry(&r->ht_filetypedata,ext,0,0, i<FILETYPEDATA_NUM);
+      if (!(d=e->value) && i<FILETYPEDATA_NUM  && (d=e->value=r->filetypedata+i++)){
+        d->ext=e->key=ext=ht_internalize_string(&ht_intern_strg,ext,0,0);
+      }
+    }
+  }
+  return d?d:&r->filetypedata_dummy;
+}
+static void _rootdata_counter_inc(counter_rootdata_t *c, enum enum_counter_rootdata f){
+  if (c->counts[f]<UINT32_MAX) c->counts[f]++;
+}
+static void fhdata_counter_inc(struct fhdata* d, enum enum_counter_rootdata f){
+  if (d->zpath.root>=0){
+    if (!d->filetypedata) d->filetypedata=filetypedata_for_ext(d->path, _root+d->zpath.root);
+    _rootdata_counter_inc(d->filetypedata,f);
+  }
+}
+static void rootdata_counter_inc(const char *path, enum enum_counter_rootdata f, struct rootdata* r){
+  _rootdata_counter_inc(filetypedata_for_ext(path,r),f);
+}
+
 #define TH(x) "<TH>" x "</TH>"
+#define THcolspan(n,x) "<TH colspan=\"" #n "\">" x "</TH>"
+#define THfail() TH("<EM>&#x26A0;</EM>") // Consider sadsmily&#9785; &#x2639;fail
 #define TD(x) "<TD>" x "</TD>"
-//#define TD_zu() "<TD align=\"right\">%'zu</TD>"
-
-
-
+#define TDl(x) "<TD style=\"text-align:left;\">"x"</TD>"
+#define TDc(x) "<TD style=\"text-align:center;\">"x"</TD>"
+#define dTDfail(x) "<TD><EM>%'d</EM></TD>"
+#define sTDl() TDl("%s")
+#define sTDlb() TDl("<B>%s</B>")
+#define sTDc(x) TDc("%s")
+#define dTD() TD("%'d")
+#define lTD() TD("%'ld")
+#define zTD() TD("%'zu")
 static char **_fuse_argv;
 static int _fuse_argc;
-
-
-
 static void log_path(const char *f,const char *path){
   log_msg("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,my_strlen(path));
 }
@@ -22,57 +106,152 @@ static int log_func_error(char *func){
   perror("");
   return ret;
 }
-/*
-  static void log_strings(const char *pfx, char *ss[],int n){
-  if (ss){
-  for(int i=0;i<n;i++){
-  log_msg("   %s %3d./.%d "ANSI_FG_BLUE"'%s'",pfx,i,n,ss[i]);
-  puts(ANSI_RESET);
-  }
-  }
-  }
-*/
 static void log_fh(char *title,long fh){
   char p[MAX_PATHLEN];
   path_for_fd(title,p,fh);
   log_msg("%s  fh: %ld %s \n",title?title:"", fh,p);
 }
-#define MAX_INFO 55555
-static  char _info[MAX_INFO+2];
+static int _size_info=256*1024;
+static  char *_info=NULL;
 #ifdef __cppcheck__
 #define PRINTINFO(...)   printf(__VA_ARGS__)
 #else
 #define PRINTINFO(...)   n=printinfo(n,__VA_ARGS__)
 #endif
 static int printinfo(int n, const char *format,...){
-  if (n<MAX_INFO && n>=0){
+  if (n<_size_info && n>=0){
     va_list argptr;
     va_start(argptr,format);
-    //fprintf(stderr,"printinfo: MAX_INFO=%d n=%d _info=%p \n",MAX_INFO,n,_info);
+    //fprintf(stderr,"printinfo: _size_info=%d n=%d _info=%p \n",_size_info,n,_info);
     //vprintf(format,argptr);
-    n+=vsnprintf(_info+n,MAX_INFO-n,format,argptr);
+    n+=vsnprintf(_info+n,_size_info-n,format,argptr);
     va_end(argptr);
   }
   return n;
 }
+static bool isKnownExt(const char *path, int len){
+    static int index_not_needed;
+    return some_file_path_extensions(path,len?len:strlen(path),&index_not_needed);
+}
 
-static int print_fuse_argv(int n){
-  PRINTINFO("<H1>Fuse Parameters</H1><OL>");
+static int log_print_filetypedata_row0(const char *ext,int n){
+  if (ext) PRINTINFO("<TR>"TD("%c")sTDlb(),isKnownExt(ext,0)?'+':' ',ext);
+  return n;
+}
+static int log_print_filetypedata_r(int n,struct rootdata *r, int *count_explain){
+  ASSERT_LOCKED_FHDATA();
+  struct ht_entry *ee=r->ht_filetypedata.entries;
+  int count=0;
+  FOR(0,pass,r->ht_filetypedata.capacity){
+    counter_rootdata_t *x=NULL;
+    RLOOP(i,r->ht_filetypedata.capacity){
+      counter_rootdata_t *d=ee[i].value;
+      if (!d) continue;
+      if(!pass){
+#define C(significance,x) (((long)d->counts[x])<<significance)
+        d->rank=
+          C(00,ZIP_OPEN_SUCCESS)+C(10,ZIP_OPEN_FAIL)+
+          C(00,ZIP_READ_NOCACHE_SUCCESS)+C(00,ZIP_READ_NOCACHE_FAIL)+C(00,ZIP_READ_NOCACHE_ZERO)+
+          C(00,ZIP_READ_NOCACHE_SEEK_SUCCESS)+C(8,ZIP_READ_NOCACHE_SEEK_FAIL)+
+          C(00,ZIP_READ_CACHE_SUCCESS)+C(12,ZIP_READ_CACHE_FAIL)+
+          C(14,ZIP_READ_CACHE_CRC32_SUCCESS)+C(00,ZIP_READ_CACHE_CRC32_FAIL)+
+          C(00,COUNT_RETRY_STAT)+C(00,COUNT_RETRY_MEMCACHE)+C(00,COUNT_RETRY_ZIP_FREAD)+
+              (isKnownExt(d->ext,0)?(1L<<28):0);
+#undef C
+      }else if (!x || d->rank>x->rank){
+        x=d;
+      }
+    }
+#undef C
+    if (pass){
+      if (!x) break;
+      if (!x->rank) continue;
+      assert(x->ext!=NULL);
+      x->rank=0;
+      if (!count++){
+        PRINTINFO("<H1>Counts by file type for root %s</H1>\n",r->root_path);
+        if (!*count_explain++) PRINTINFO("<B>Columns explained:</B><OL>\n\
+  <LI>zip_open(): How often are ZIP entries opened..</LI>\
+  <LI>ZIP read no-cache: Count direct read operations for ZIP entries</LI>\n\
+  <LI>ZIP read cache: Count loading ZIP entries into RAM. If entirely read, count computation of CRC32 checksum</LI>\n\
+  <LI>How often operation succeed, that failed before.</LI></OL>\n");
+        PRINTINFO("<TABLE border=\"1\">\n<THEAD><TR>"TH("")TH("Ext")THcolspan(2,"ZIP open") THcolspan(5,"ZIP read no-cache") THcolspan(4,"ZIP read cache") THcolspan(3,"Success when tried again")"</TR>\n\
+<TR>"TH("")TH("")  TH("ZIP open &check;")THfail()  TH("Read &check;")THfail()TH("Read 0 bytes") TH("Seek &check;")THfail()  TH("Read &check;")THfail() TH("Checksum match")TH("~ mismatch")  TH("stat()")TH("Cache entry")TH("zip_fread()") "</TR></THEAD>\n");
+      }
+#define C(field) x->counts[field]
+#define SF(field) x->counts[field##_SUCCESS],x->counts[field##_FAIL]
+      n=log_print_filetypedata_row0(x->ext,n);
+      PRINTINFO(dTD()dTDfail() dTD()dTDfail()dTD()dTD()dTDfail() dTD()dTDfail()dTD()dTDfail() dTD()dTD()dTD()"</TR>\n",
+                SF(ZIP_OPEN),
+                SF(ZIP_READ_NOCACHE),C(ZIP_READ_NOCACHE_ZERO),SF(ZIP_READ_NOCACHE_SEEK),
+                SF(ZIP_READ_CACHE),SF(ZIP_READ_CACHE_CRC32),
+                C(COUNT_RETRY_STAT),C(COUNT_RETRY_MEMCACHE), C(COUNT_RETRY_ZIP_FREAD));
+#undef C
+#undef SF
+    }
+  }
+  if (count) PRINTINFO("</TABLE>\n");
+  return n;
+}
+static long counter_getattr_rank(struct ht_entry *e){
+  const int *vv=e->value;
+  return !vv?0:
+    ((vv[COUNTER_GETATTR_FAIL]+vv[COUNTER_READDIR_FAIL]+vv[COUNTER_ACCESS_FAIL])<<10L)+
+    ((vv[COUNTER_STAT_FAIL]+vv[COUNTER_OPENDIR_SUCCESS])<<10L)+
+    vv[COUNTER_GETATTR_SUCCESS]+vv[COUNTER_READDIR_SUCCESS]+vv[COUNTER_ACCESS_SUCCESS]+
+    vv[COUNTER_STAT_SUCCESS]+vv[COUNTER_OPENDIR_SUCCESS]+
+    (isKnownExt(e->key,e->keylen_hash>>HT_KEYLEN_SHIFT)?(1L<<30):0);
+}
+static int log_print_filetypedata(int n){
+  const int c=ht_count_getattr.capacity;
+  int count_explain=0;
+  foreach_root(ir,r) n=log_print_filetypedata_r(n,r,&count_explain);
+  int count=0;
+  bool done[c];
+  memset(done,0,sizeof(done));
+  FOR(0,pass,c){
+    struct ht_entry *x=NULL, *ee=ht_count_getattr.entries;
+    RLOOP(i,c){
+      if (!done[i] && ee[i].key && (!x || counter_getattr_rank(ee+i) < counter_getattr_rank(x))) x=ee+i;
+    }
+    if (!x || !x->value) break;
+    if (!count++){
+#define SF(counter) TH(#counter"() &check;")THfail()
+      PRINTINFO("<H1>Count calls to getattr() and stat()  per file type</H1>\n\
+<B>Columns explained:</B><OL>\n\
+<LI>getattr(), readdir(): Number of successful and failed calls to the FUSE call-back function.</LI>\n\
+<LI>stat(): Number of successful and failed calls to the C function. The goal of the cache is to reduce the number of stat-calls.</LI></OL>\n\
+<TABLE border=\"1\">\n<THEAD>\n\
+<TR>"TH("")TH("Ext")THcolspan(4,"Count call to FUSE call-back")THcolspan(6,"Count calls to C-libraries")"</TR>\n\
+<TR>"TH("")TH("")SF(getattr)SF(readdir)SF(access)SF(stat)SF(opendir)"</TR>\n</THEAD>\n");
+#undef SF
+    }
+    done[x-ht_count_getattr.entries]=true;
+    const int *vv=x->value;
+    n=log_print_filetypedata_row0(x->key,n);
+#define C(counter) vv[COUNTER_##counter##_SUCCESS],vv[COUNTER_##counter##_FAIL]
+    PRINTINFO(dTD()dTDfail() dTD()dTDfail() dTD()dTDfail() dTD()dTDfail() dTD()dTDfail()"</TR>\n",C(GETATTR),C(READDIR),C(ACCESS),C(STAT),C(OPENDIR));
+#undef C
+  }
+  if (count) PRINTINFO("</TABLE>\n");
+  return n;
+}
+static int log_print_fuse_argv(int n){
+  PRINTINFO("<H1>Fuse Parameters</H1>\n<OL>");
   for(int i=1;i<_fuse_argc;i++) PRINTINFO("<LI>%s</LI>\n",_fuse_argv[i]);
   PRINTINFO("</OL>\n");
   return n;
 }
-static int print_roots(int n){
-  PRINTINFO("<H1>Roots</H1>\n<TABLE><THEAD><TR>"TH("Path")TH("Writable")THr("Response")THr("Blocked")TH("Free[GB]")TH("Dir-Cache[kB]")"</TR></THEAD>\n");
+static int log_print_roots(int n){
+  PRINTINFO("<H1>Roots</H1>\n<TABLE border=\"1\"><THEAD><TR>"TH("Path")TH("Writable")TH("Response")TH("Blocked")TH("Free[GB]")TH("Dir-Cache[kB]")"</TR></THEAD>\n");
   foreach_root(i,r){
     const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30),diff=deciSecondsSinceStart()-r->pthread_when_response_deciSec;
     if (n>=0){
-      PRINTINFO("<TR>"TD("%s")TDc("%s"),r->root_path,yes_no(f&ROOT_WRITABLE));
-
-      if (f&ROOT_REMOTE) PRINTINFO(TDr("%'ld ms")TDr("%'u"), 10L*(diff>ROOT_OBSERVE_EVERY_SECONDS*10*3?diff:r->statfs_took_deciseconds),r->log_count_delayed);
-      else PRINTINFO(TDr("Local")TD(""));
+      PRINTINFO("<TR>"sTDl()sTDc(),r->root_path,yes_no(f&ROOT_WRITABLE));
+      if (f&ROOT_REMOTE) PRINTINFO(TD("%'ld ms")TD("%'u"), 10L*(diff>ROOT_OBSERVE_EVERY_SECONDS*10*3?diff:r->statfs_took_deciseconds),r->log_count_delayed);
+      else PRINTINFO(TD("Local")TD(""));
       uint64_t u; LOCK(mutex_dircache, u=MSTORE_USAGE(&r->dircache)/1024);
-      PRINTINFO(TDr("%'d")TDr("%'zu")"</TR>\n",freeGB,u);
+      PRINTINFO(dTD()zTD()"</TR>\n",freeGB,u);
     }else{
       log_msg("\t%d\t%s\t%s\n",i,r->root_path,!my_strlen(r->root_path)?"":(f&ROOT_REMOTE)?"Remote":(f&ROOT_WRITABLE)?"Writable":"Local");
     }
@@ -81,7 +260,7 @@ static int print_roots(int n){
   return n;
 }
 static int repeat_chars_info(int n,char c, int i){
-  if (i>0 && n+i<MAX_INFO){
+  if (i>0 && n+i<_size_info){
     memset(_info+n,c,i);
     n+=i;
   }
@@ -92,9 +271,9 @@ static int print_bar(int n,float rel){
   const int L=100, a=max_int(0,min_int(L,(int)(L*rel)));
   PRINTINFO("<SPAN style=\"border-style:solid;\"><SPAN style=\"background-color:red;color:red;\">");
   n=repeat_chars_info(n,'#',a);
-  PRINTINFO("</SPAN><SPAN style=\"background-color:blue;color:blue;\">");
+  PRINTINFO("</SPAN>\n<SPAN style=\"background-color:blue;color:blue;\">");
   n=repeat_chars_info(n,'~',L-a);
-  PRINTINFO("</SPAN></SPAN>\n");
+  PRINTINFO("</SPAN>\n</SPAN>\n");
   return n;
 }
 //////////////////
@@ -122,7 +301,7 @@ static void log_virtual_memory_size(){
   int val;print_proc_status(-1,"VmSize:",&val);
   log_msg("Virtual memory size: %'d kB\n",val);
 }
-static int print_open_files(int n, int *fd_count){
+static int log_print_open_files(int n, int *fd_count){
   PRINTINFO("<H1>File handles</H1>\n(Should be almost empty if idle).<BR>");
   static char path[256];
   struct dirent *dp;
@@ -134,14 +313,14 @@ static int print_open_files(int n, int *fd_count){
     static char proc_path[PATH_MAX];
     snprintf(proc_path,PATH_MAX,"/proc/self/fd/%s",dp->d_name);
     const int l=readlink(proc_path,path,255);path[MAX(l,0)]=0;
-    if (endsWith(path,FILE_LOG_WARNINGS)||!strncmp(path,"/dev/",5)|| !strncmp(path,"/proc/",6) || !strncmp(path,"pipe:",5)) continue;
+    if (endsWith(path,SPECIAL_FILES[SFILE_LOG_WARNINGS])||!strncmp(path,"/dev/",5)|| !strncmp(path,"/proc/",6) || !strncmp(path,"pipe:",5)) continue;
     PRINTINFO("<LI>%s -- %s</LI>\n",proc_path,path);
   }
   closedir(dir);
   PRINTINFO("</OL>\n");
   return n;
 }
-#if 0
+
 // TODO Error in sscanf
 static int print_maps(int n){
   PRINTINFO("<H1>/proc/%ld/maps</H1>\n", (long)getpid());
@@ -152,11 +331,11 @@ static int print_maps(int n){
     PRINTINFO("/proc/self/maps: %s\n",strerror(errno));
     return n;
   }
-  PRINTINFO("<TABLE>\n<THEAD><TR>"TH("Addr&gt;&gt;12")TH("Name")TH("kB")TH("")"</TR></THEAD>\n");
+  PRINTINFO("<TABLE border=\"1\">\n<THEAD><TR>"TH("Addr&gt;&gt;12")TH("Name")TH("kB")TH("")"</TR></THEAD>\n");
   const int L=333;
   while(!feof(f)) {
     char buf[PATH_MAX+100],perm[5],dev[6],mapname[PATH_MAX]={0};
-   uint64_t begin,end,inode,foo;
+    uint64_t begin,end,inode,foo;
     if(fgets(buf,sizeof(buf),f)==0) break;
     *mapname=0;
     //    %*[^\n]\n   /home/cgille/tmp/map.txt
@@ -165,18 +344,18 @@ static int print_maps(int n){
       const int64_t size=end-begin;
       total+=size;
       if (!strchr(mapname,'/') && size>=SIZE_CUTOFF_MMAP_vs_MALLOC){
-        PRINTINFO("<TR>"TD("%08lx")TD("%s")""TDr("%'ld")"<TD>",begin>>12,mapname,size>>10);
+        PRINTINFO("<TR>"TD("%08lx")sTDl()""lTD()"<TD>",begin>>12,mapname,size>>10);
         n=repeat_chars_info(n,'-',min_int(L,(int)(3*log(size))));
         PRINTINFO("</TD></TR>\n");
       }
-    } else warning(WARN_FORMAT,buf,"sscanf scanned n=%d",k);
+    }else warning(WARN_FORMAT,buf,"sscanf scanned n=%d",k);
   }
   fclose(f);
   PRINTINFO("<TFOOT><TR>"TD("")TD("")TD("%'lu")TD("")"</TR></TFOOT>\n</TABLE>\n",total>>10);
   return n;
 }
-#endif
-static int print_memory_details(int n){
+
+static int log_print_memory_details(int n){
   PRINTINFO("<H1>Memory - details</H1>\n<PRE>");
   {
     struct rlimit rl={0};
@@ -196,16 +375,16 @@ static int print_memory_details(int n){
 #else
 #define print_proc_status(...) 1
 #define log_virtual_memory_size(...) 1
-#define print_open_files(...) 1
-#define print_memory_details(...) 1
+#define log_print_open_files(...) 1
+#define log_print_memory_details(...) 1
 #define print_maps(...) 1
 #endif
 ////////////////////////////////////////////////////////////////////
 
-static int print_memory(int n){
-  PRINTINFO("<H1>Cache of ZIP entries</H1><PRE>");
-  n=print_bar(n,trackMemUsage(0,0)/(float)_memcache_maxbytes);  PRINTINFO("Current usage %'ld MB of %'ld MB \n",trackMemUsage(memusage_get_curr,0)>>20,_memcache_maxbytes>>20);
-  n=print_bar(n,trackMemUsage(0,0)/(float)_memcache_maxbytes);  PRINTINFO("Peak usage    %'ld MB of %'ld MB  \n",trackMemUsage(memusage_get_peak,0)>>20,_memcache_maxbytes>>20);
+static int log_print_memory(int n){
+  PRINTINFO("<H1>Cache of ZIP entries</H1>\n<PRE>");
+  n=print_bar(n,trackMemUsage(0,0)/(float)_memcache_maxbytes);  PRINTINFO("<BR>Current usage %'ld MB of %'ld MB \n",trackMemUsage(memusage_get_curr,0)>>20,_memcache_maxbytes>>20);
+  n=print_bar(n,trackMemUsage(0,0)/(float)_memcache_maxbytes);  PRINTINFO("<BR>Peak usage    %'ld MB of %'ld MB  \n",trackMemUsage(memusage_get_peak,0)>>20,_memcache_maxbytes>>20);
   {
 #ifdef __linux__
     struct rlimit rl={0}; getrlimit(RLIMIT_AS,&rl);
@@ -223,26 +402,16 @@ static int print_memory(int n){
   return n;
 }
 
-
-static int print_read_statistics(int n){
-  PRINTINFO("<H1>Read bytes statistics</H1>\n<TABLE><THEAD><TR>"TH("Event")TH("Count")"</TR></THEAD>\n");
-#define TABLEROW(a,skip) PRINTINFO("<TR>"TD("<B>%s</B>")TDr("%'ld")"</TR>\n",(#a)+skip,a)
-  TABLEROW(_count_readzip_memcache,7);
-  TABLEROW(_count_readzip_regular,7);
-  TABLEROW(_count_readzip_seekable[1],7);
-  TABLEROW(_count_readzip_seekable[0],7);
-  TABLEROW(_count_readzip_no_seek,7);
-  TABLEROW(_count_readzip_seek_fwd,7);
-  TABLEROW(_count_readzip_memcache_because_seek_bwd,7);
-  TABLEROW(_count_readzip_reopen_because_seek_bwd,7);
-  TABLEROW(_count_stat_cache_from_fhdata,7);
-  TABLEROW(_count_stat_success,7);
-  TABLEROW(_count_stat_fail,7);
-  TABLEROW(_count_stat_from_cache,7);
-  TABLEROW(_log_read_max_size,7);
-  TABLEROW((long)_log_count_lock,7);
-    TABLEROW((long)_count_crc32_ok,7);
-        TABLEROW((long)_count_crc32_bad,7);
+static long _count_readzip_memcache=0,_count_readzip_memcache_because_seek_bwd=0,_log_read_max_size=0,_count_SeqInode=0, _count_stat_cache_from_fhdata=0;
+static int log_print_statistics_of_read(int n){
+  PRINTINFO("<H1>Count events related to cache</H1>\n<TABLE border=\"1\"><THEAD><TR>"TH("Event")TH("Count")"</TR></THEAD>\n");
+#define TABLEROW(a) { const char *us=strchr(#a,'_'); PRINTINFO("<TR>"sTDlb()lTD()"</TR>\n",us?us+1:"Null",a);}
+  TABLEROW(_count_readzip_memcache);
+  TABLEROW(_count_readzip_memcache_because_seek_bwd);
+  TABLEROW(_count_stat_cache_from_fhdata);
+  TABLEROW(_count_stat_from_cache);
+  TABLEROW(_log_read_max_size);
+  TABLEROW((long)_log_count_lock);
   PRINTINFO("</TABLE>");
 #undef TABLEROW
   return n;
@@ -260,18 +429,18 @@ static int print_fhdata(int n,const char *title){
   }else{
     PRINTINFO("Table should be empty when idle.<BR>Column <I><B>fd</B></I> file descriptor. Column <I><B>Last access</B></I>:    Column <I><B>Millisec</B></I>:  time to read entry en bloc into cache.  Column <I><B>R</B></I>: number of threads in currently in xmp_read(). \
 Column <I><B>F</B></I>: flags. (D)elete insicates that it is marked for closing and (K)eep indicates that it can currently not be closed. Two possible reasons why data cannot be released: (I)  xmp_read() is currently run (II) the cached zip entry is needed by another file descriptor  with the same virtual path.<BR>\n \
-<TABLE>\n<THEAD><TR>"TH("Path")TH("fd")TH("Last access")TH("Cache addr")TH("Cache read kB")TH("Entry kB")TH("Millisec")TH(" F")TH("R")"</TR></THEAD>\n");
+<TABLE border=\"1\">\n<THEAD><TR>"TH("Path")TH("fd")TH("Last access")TH("Cache addr")TH("Cache read kB")TH("Entry kB")TH("Millisec")TH(" F")TH("R")"</TR></THEAD>\n");
     const time_t t0=time(NULL);
 
     foreach_fhdata_path_not_null(d){
       if (n<0) log_msg("\t%p\t%s\t%p\t%zu\n",d,snull(d->path),d->memcache,d->memcache_l);
       else{
-        PRINTINFO("<TR>"TD("%s")TD("%llu"),snull(d->path),d->fh);
-        if (d->accesstime) PRINTINFO(TDr("%'ld s"),t0-d->accesstime);  else PRINTINFO(TDr("Never"));
-        if (d->memcache) PRINTINFO(TD("%p")""TDr("%'zu")TDr("%'zu")TDr("%'ld"),d->memcache,_kilo(d->memcache_already),_kilo(d->memcache_l),d->memcache_took_mseconds);
+        PRINTINFO("<TR>"sTDl()TD("%llu"),snull(d->path),d->fh);
+        if (d->accesstime) PRINTINFO(TD("%'ld s"),t0-d->accesstime);  else PRINTINFO(TD("Never"));
+        if (d->memcache) PRINTINFO(TD("%p")""zTD()zTD()lTD(),d->memcache,_kilo(d->memcache_already),_kilo(d->memcache_l),d->memcache_took_mseconds);
         else PRINTINFO(TD("")TD("")TD(""));
-        LOCK(mutex_fhdata,  const bool can_destroy=fhdata_can_destroy(d));
-        PRINTINFO(TD("%c%c")TD("%d")"</TR>\n",d->close_later?'D':' ', can_destroy?' ':'K',d->is_xmp_read);
+        const bool can_destroy=fhdata_can_destroy(d);
+        PRINTINFO(TD("%c%c")dTD()"</TR>\n",d->close_later?'D':' ', can_destroy?' ':'K',d->is_xmp_read);
       }
     }
     PRINTINFO("</TABLE>");
@@ -288,29 +457,31 @@ static int print_all_info(){
 <META http-equiv=\"Pragma\" content=\"no-cache\"/>\n\
 <META http-equiv=\"Expires\" content=\"0\"/>\n\
 <STYLE>\n\
+EM{color:red;}\n\
 H1{color:blue;}\n\
 TABLE{borborder-color:black;border-style:groove;}\n\
 table,th,td{border:1pxsolidblack;border-collapse:collapse;}\n\
 TBODY>TR:nth-child(even){background-color:#FFFFaa;}\n\
 TBODY>TR:nth-child(odd){background-color:#CCccFF;}\n\
 THEAD{background-color:black;color:white;}\n\
-TD{padding:5px;}\n\
+TD,TH {padding:5px;padding-right:2EM;}\n\
+TD {text-align:right;}\n\
 </STYLE>\n</HEAD>\n<BODY>\n\
 <B>ZIPsFS:</B> <A href=\"%s\">%s</A><BR> \n",HOMEPAGE,HOMEPAGE);
   PRINTINFO("\nStarted %s: %s &nbsp; PID: %d &nbsp; Compiled: "__DATE__"  "__TIME__"<BR>",_thisPrg,ctime(&_startTime.tv_sec),getpid());
-  n=print_roots(n);
-  n=print_fuse_argv(n);
-  n=print_open_files(n,NULL);
-  n=print_memory(n);
-  n=print_fhdata(n,"");
-  n=print_memory_details(n);
+  n=log_print_roots(n);
+  n=log_print_fuse_argv(n);
+  n=log_print_open_files(n,NULL);
+  n=log_print_memory(n);
+  LOCK(mutex_fhdata,n=print_fhdata(n,""));
+  n=log_print_memory_details(n);
   PRINTINFO("_mutex=%p\n<BR>",_mutex);
-  PRINTINFO("<H1>Inodes</H1>Created sequentially: %'ld\n",_count_SeqInode);
-  n=print_read_statistics(n);
+  PRINTINFO("<H1>Inodes</H1>\nCreated sequentially: %'ld\n",_count_SeqInode);
+  n=log_print_statistics_of_read(n);
   //  PRINTINFO("_cumul_time_store=%lf\n<BR>",((double)_cumul_time_store)/CLOCKS_PER_SEC);
   //n=print_misc(n);
-
-  PRINTINFO("</BODY>\n</HTML>\n");
+  LOCK(mutex_fhdata,n=log_print_filetypedata(n));
+  PRINTINFO("</BODY>\n</HTML>\n\0\0\0");
   log_exited_function("get_info\n %d",n);
   return n;
 }
@@ -352,9 +523,7 @@ static bool fhdata_not_yet_logged(unsigned int flag,struct fhdata *d){
   d->already_logged|=flag;
   return true;
 }
-
 static void log_fuse_process(){
-  //log_debug_now(ANSI_YELLOW"log_fuse_process"ANSI_RESET" ");
   struct fuse_context *fc=fuse_get_context();
   const int BUF=333;
   char buf[BUF+1];
@@ -376,14 +545,14 @@ static void usage(){
 The first root directory (here  ~/tmp/ZIPsFS/writable)  is writable and allows file creation and deletion, the others are read-only.\n\
 Root directories starting with double slash (here //computer/pub) are regarded as less reliable and potentially blocking.\n\n\
 Options and arguments before the colon are interpreted by ZIPsFS.  Those after the colon are passed to fuse_main(...).\n\n",LOG_STREAM);
-    fputs(ANSI_UNDERLINE"ZIPsFS options:"ANSI_RESET"\n\n\
+  fputs(ANSI_UNDERLINE"ZIPsFS options:"ANSI_RESET"\n\n\
       -h Print usage.\n\
       -q quiet, no debug messages to stdout\n\
          Without the option -f (foreground) all logs are suppressed anyway.\n\
       -c [",LOG_STREAM);
   //  for(char **s=WHEN_MEMCACHE_S;*s;s++){if (s!=WHEN_MEMCACHE_S) putchar('|');fputs(*s,LOG_STREAM);}
   for(int i=0;WHEN_MEMCACHE_S[i];i++){ if (i) putchar('|');fputs(WHEN_MEMCACHE_S[i],LOG_STREAM);}
-    fputs("]    When to read zip entries into RAM\n\
+  fputs("]    When to read zip entries into RAM\n\
          seek: When the data is not read continuously\n\
          rule: According to rules based on the file name encoded in configuration.h\n\
          The default is when backward seeking would be requires otherwise\n\
@@ -391,7 +560,7 @@ Options and arguments before the colon are interpreted by ZIPsFS.  Those after t
       -l Limit memory usage for caching ZIP entries.\n\
          Without caching, moving read positions backwards for an non-seek-able ZIP-stream would require closing, reopening and skipping.\n\
          To avoid this, the limit is multiplied with factor 1.5 in such cases.\n\n",LOG_STREAM);
-    fputs(ANSI_UNDERLINE"Fuse options:"ANSI_RESET"These options are given after a colon.\n\n\
+  fputs(ANSI_UNDERLINE"Fuse options:"ANSI_RESET"These options are given after a colon.\n\n\
  -d Debug information\n\
  -f File system should not detach from the controlling terminal and run in the foreground.\n\
  -s Single threaded mode. Maybe tried in case the default mode does not work properly.\n\

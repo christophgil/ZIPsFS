@@ -33,6 +33,14 @@ All others are read only.
 
 There are several caches to improve performance. For clarifications and distinction,
 functions and variables are prefixed <I>memcache_</I>, <I>dircache_<I> and <I>statcache_</I>.
+Caches can be deactivated for debugging by setting the <I>IS_....</I> variables to zero.
+
+ - <I>IS_MEMCACHE_PUT /_GET</I>: The content of ZIP entries is hold in RAM. This is important those that are not read sequentially. See  config_store_zipentry_in_memcache() and the CLI parameter <I>-c</I>.
+ - <I>IS_DIRCACHE_PUT /_GET<I>: The table of content of ZIP files is stored. The key is the filename and the mtime attribute.
+n all file tree roots need to be probed. This can be cached config_zipentry_to_zipfile().
+ - <I>IS_STAT_CACHE</I>: See config_file_attribute_valid_seconds(). This is a cache for file attributes for file path.
+ - <I>IS_STATCACHE_IN_FHDATA</I>: This accelerates Bruker MS software. While a tdf and tdf_bin file is open, lots of file system requests for related files occur. The data of the open file pointer has a slot for those caches. The cached data disappears after the tdf or tdf_bin file is closed.
+ - <I>IS_ZIPINLINE_CACHE</I>: ZIPsFS can inline the content of ZIP files in file listings. See config_zipentry_to_zipfile() and config_zipentries_instead_of_zipfile(). Given a virtual path, different ZIP paths i
 
 ## Memcache
 

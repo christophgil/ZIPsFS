@@ -25,15 +25,8 @@
 ////////////
 // Retur0n 64-bit FNV-1a hash for key (NUL-terminated). See  https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
 // https://softwareengineering.stackexchange.com/questions/49550/which-hashing-algorithm-is-best-for-uniqueness-and-speed
-typedef int hthash;
-static uint64_t hash64(const char* key, const size_t len){
-  uint64_t hash=14695981039346656037UL;
-  for(int i=len;--i>=0;){
-    hash^=(uint64_t)(unsigned char)(key[i]);
-    hash*=1099511628211UL;
-  }
-  return hash;
-}
+typedef uint32_t ht_hash_t;
+#define HT_HASH_MAX UINT32_MAX
 static uint32_t hash32(const char* key, const uint32_t len){
   uint32_t hash=2166136261U;
   for(int i=len;--i>=0;){
@@ -42,15 +35,25 @@ static uint32_t hash32(const char* key, const uint32_t len){
   }
   return hash;
 }
+/*
+static uint64_t hash64(const char* key, const size_t len){
+  uint64_t hash64=14695981039346656037UL;
+  for(int i=len;--i>=0;){
+    hash64^=(uint64_t)(unsigned char)(key[i]);
+    hash64*=1099511628211UL;
+  }
+  return hash64;
+}
 static int java_hashCode(const char *str,const size_t len){
-  int hash=0;
-  for(int i=0;i<len; i++) hash=31*hash+str[i];
-  return hash;
+  int hashj=0;
+  for(int i=0;i<len; i++) hashj=31*hashj+str[i];
+  return hashj;
+}
+*/
+static ht_hash_t hash_value_strg(const char* key){
+  return !key?0:hash32(key,strlen(key));
 }
 
-static uint64_t hash_value_strg(const char* key){
-  return !key?0:hash64(key,strlen(key));
-}
 /////////////////////////////////////////////////////////
 
 #define _STACK_DATA (ULIMIT_S*8)
@@ -88,8 +91,10 @@ static struct mstore *mstore_init(struct mstore *m,const char *dir,size_t size_a
 ////////////////////////////////////////
 #define _mstore_strerror2(txt1,txt2)  fprintf(stderr,"\x1B[31mError:\x1B[31m %s %s %s %s\n",__func__,txt1,txt2,strerror(errno))
 #define _mstore_strerror(txt1)  _mstore_strerror2(txt1,"")
+
 static int _mstoreOpenFile(struct mstore *m,uint32_t segment,const size_t adim){
   char path[PATH_MAX];
+  assert(m!=NULL);
   sprintf(path,"%s/%u",m->files,segment);
   unlink(path);
   const int fd=open(path,O_RDWR|O_CREAT|O_TRUNC,0x0777);
@@ -166,6 +171,9 @@ enum _mstore_operation{_mstore_destroy,_mstore_usage,_mstore_clear,_mstore_conta
 static size_t _mstore_common(struct mstore *m,int opt,const char *pointer){
   size_t sum=0;
   for(int segment=m->capacity;--segment>=0;){
+
+
+
     char *d=D;
     if (d){
       switch(opt){
@@ -222,15 +230,7 @@ static bool mstore_contains(struct mstore *m, const char *pointer){
 
 static const char *mstore_addstr(struct mstore *m, const char *str,size_t len){
   if (!str) return NULL;
-
-
-
   if (!*str) return "";
-
-
-
-
-
   if (!len) len=strlen(str);
   char *s=mstore_malloc(m,len+1,1);
   assert(s!=NULL);
@@ -257,7 +257,7 @@ static void cache_by_hash_clear(struct cache_by_hash *c){
 }
 #define MSTORE_ADD_REUSE_LOG (1LU<<62)
 #define MSTORE_ADD_REUSE_FLAGS (1LU<<62)
-static const void *mstore_add_reuse(struct mstore *m, const void *str, size_t len,const uint64_t hash,struct cache_by_hash  *byhash){
+static const void *mstore_add_reuse(struct mstore *m, const void *str, size_t len,const ht_hash_t hash,struct cache_by_hash  *byhash){
   if (!str) return NULL;
   const bool log=(len&MSTORE_ADD_REUSE_LOG)!=0;
   len&=~MSTORE_ADD_REUSE_FLAGS;
@@ -282,8 +282,6 @@ static const void *mstore_add_reuse(struct mstore *m, const void *str, size_t le
   byhash->len[i]=len;
   return byhash->str[i]=(char*)mstore_add(m,str,len,byhash->align);
 }
-
-
 
 #if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__==0
 //#include "cg_utils.c"

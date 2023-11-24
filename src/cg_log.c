@@ -45,7 +45,7 @@
 #define LOG_STREAM stdout
 #endif
 #define log_struct(st,field,format)   printf("    " #field "=" #format "\n",st->field)
-#include "cg_ht_v5.c"
+#include "cg_ht_v7.c"
 
 ////////////
 /// Time ///
@@ -198,12 +198,6 @@ static void _log_mthd_orig(const char *s,int count){
 #define log_mthd_invoke() static int __count=0;_log_mthd_invoke(__func__,++__count)
 #define log_mthd_orig() static int __count_orig=0;_log_mthd_orig(__func__,++__count_orig)
 #define log_abort(...)   log_msg(ANSI_RED"\n cg_log.c Abort %s() ",__func__),log_msg(__VA_ARGS__),log_msg("ANSI_RESET\n"),abort();
-#if 0
-#define log_debug_abort(...)   log_abort(__VA_ARGS__)
-#else
-#define log_debug_abort(...)   log_error(__VA_ARGS__)
-#endif
-
 
 /*********************************************************************************/
 /* *** stat *** */

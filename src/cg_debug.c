@@ -61,7 +61,7 @@ static bool file_starts_year_ends_dot_d(const char *p){
 #define report_failure_for_tdf(...) _report_failure_for_tdf(__func__,__VA_ARGS__)
 static bool _report_failure_for_tdf(const char *mthd, int res, const char *path){
   if (res && tdf_or_tdf_bin(path)){
-    log_debug_abort("xmp_getattr res=%d  path=%s",res,path);
+    log_error("xmp_getattr res=%d  path=%s",res,path);
     return true;
   }
   return false;
@@ -73,14 +73,13 @@ static bool _report_failure_for_tdf(const char *mthd, int res, const char *path)
 
 static void assert_dir(const char *p, const struct stat *st){
   if (!st) return;
-  //  log("st=%s  %p\n",p, st);
   if(!S_ISDIR(st->st_mode)){
     log_error("assert_dir  stat S_ISDIR %s",p);
     log_file_stat("",st);
     print_stacktrace(0);
   }
-  bool r_ok=access_from_stat(st,R_OK);
-  bool x_ok=access_from_stat(st,X_OK);
+  const bool r_ok=access_from_stat(st,R_OK);
+  const bool x_ok=access_from_stat(st,X_OK);
   if(!r_ok||!x_ok){
     log_error("access_from_stat %s r=%s x=%s ",p,yes_no(r_ok),yes_no(x_ok));
     log_file_stat("",st);

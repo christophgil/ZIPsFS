@@ -30,6 +30,15 @@
 #define NAME_LINE(base) CONCAT(base, __LINE__)
 #define FREE2(a) { void *NAME_LINE(tmp)=(void*)a; a=NULL;free(NAME_LINE(tmp));}
 
+#define _IF1_IS_1(...) __VA_ARGS__
+#define _IF1_IS_0(...)
+#define _IF0_IS_0(...) __VA_ARGS__
+#define _IF0_IS_1(...)
+#define IF1(zeroortwo,...) CONCAT(_IF1_IS_,zeroortwo)(__VA_ARGS__)
+#define IF0(zeroortwo,...) CONCAT(_IF0_IS_,zeroortwo)(__VA_ARGS__)
+
+
+
 /*********************************************************************************/
 /* *** String *** */
 static int empty_dot_dotdot(const char *s){
@@ -46,9 +55,10 @@ static uint32_t my_strlen(const char *s){
 }
 static const char* snull(const char *s){ return s?s:"Null";}
 static inline char *yes_no(int i){ return i?"Yes":"No";}
-
-#define ENDSWITH(s,slen,ending)  ((slen>=((int)sizeof(ending)-1) && (!memcmp(s+slen-((int)sizeof(ending)-1),ending,(int)sizeof(ending)))))
-#define ENDSWITHI(s,slen,ending) ((slen>=((int)sizeof(ending)-1) && (!strcasecmp(s+slen-((int)sizeof(ending)-1),ending))))
+#define LASTCHAR(x) x[sizeof(x)-2]
+#define STRLEN(ending) ((int)sizeof(ending)-1)
+#define ENDSWITH(s,slen,ending)  ((slen>=STRLEN(ending)) && s[slen-1]==LASTCHAR(ending) && (!memcmp(s+slen-STRLEN(ending),ending,STRLEN(ending))))
+#define ENDSWITHI(s,slen,ending) ((slen>=STRLEN(ending)) && (s[slen-1]|32)==(32|LASTCHAR(ending)) && (!strcasecmp(s+slen-STRLEN(ending),ending)))
 
 static bool endsWith(const char* s,const char* e){
   if (!s || !e) return false;

@@ -1,38 +1,3 @@
-////////////////////////////////////////////////////////////////////////////////////
-/// The following optional optimazations can be deactivated with 0 for debugging ///
-////////////////////////////////////////////////////////////////////////////////////
-#define IS_DIRCACHE_PUT 1
-#define IS_DIRCACHE_GET 1
-
-#define IS_DIRCACHE_OPTIMIZE_NAMES 1
-#define IS_DIRCACHE_OPTIMIZE_NAMES_RESTORE 1
-
-#define IS_MEMCACHE_PUT 1
-#define IS_MEMCACHE_GET 1
-
-#define IS_STATCACHE_IN_FHDATA 1
-#define IS_ZIPINLINE_CACHE 1
-#define IS_STAT_CACHE 1
-/* --- */
-
-
-////////////
-/// Size ///
-////////////
-#define LOG2_ROOTS 5  // How many file systems are combined
-#define DIRECTORY_CACHE_SIZE (1L<<28) // Size of file to cache directory listings
-#define DIRECTORY_CACHE_SEGMENTS 4 // Number of files to cache directory listings. If Exceeded, the directory cache is cleared and filled again.
-#define MEMCACHE_READ_BYTES_NUM 16*1024*1024 // When storing zip entries in RAM, number of bytes read in one go
-////////////
-/// Time ///
-////////////
-#define STATQUEUE_TIMEOUT_SECONDS 3
-#define ROOT_OBSERVE_EVERY_SECONDS 0.3 // Check availability of remote roots to prevent blocking.
-#define ROOT_OBSERVE_TIMEOUT_SECONDS 30 // Skip non-responding
-#define UNBLOCK_AFTER_SEC_THREAD_STATQUEUE 12
-#define UNBLOCK_AFTER_SEC_THREAD_MEMCACHE 600
-#define UNBLOCK_AFTER_SEC_THREAD_DIRCACHE 600
-
 ////////////////////////
 /// Helper functions ///
 ////////////////////////
@@ -110,15 +75,21 @@ static int config_zipentry_to_zipfile(const int approach,const char *path, char 
     }
   }
   return 0;
-  #undef S
+#undef S
 #undef C
 #undef A
 }
 
+#if IS_STAT_CACHE
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// keep_cache:1;  Can be filled in by open.
+/// It signals the kernel that any currently cached file data (ie., data that the filesystem provided the last time the file was open) need not be invalidated.
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static uint32_t config_file_attribute_valid_seconds(const bool isReadOnly, const char *path,const int path_l){
   if (isReadOnly && endsWithZip(path,path_l)  && (strstr(path,"/fularchiv01")||strstr(path,"/CHA-CHA-RALSER-RAW"))) return UINT32_MAX;
   return 0;
 }
+#endif //IS_STAT_CACHE
 //S_ISREG(st->st_mode) && !(st->st_mode&( S_IWUSR| S_IWGRP |S_IWOTH))
 static void config_zipentry_to_zipfile_test(){
   if (true) return; /* Remove to run tests */
@@ -182,13 +153,14 @@ static bool config_also_show_zipfile_in_listing(const char *path){ /* Not only t
 /// Improving performance by refusing those file names                         //
 /////////////////////////////////////////////////////////////////////////////////
 static bool config_not_report_stat_error(const char *path ){
-  if (!path)return false;
+  if (path){
   const int l=strlen(path);
 #define I(s) ENDSWITH(path,l,#s)||
   if (I(/analysis.tdf-wal)  I(/analysis.tdf-journal)   I(/.ciopfs)  I(.quant)  I(/autorun.inf)  I(/.xdg-volume-info) I(/.Trash)
       !strncmp(path,"/ZIPsFS_",8)
       ) return true;
 #undef I
+  }
   return false;
 }
 static bool _is_tdf_or_tdf_bin(const char *path){
@@ -201,11 +173,12 @@ static bool _is_tdf_or_tdf_bin(const char *path){
 /// This is active when started with option      ///
 ///      -c rule                                 ///
 ////////////////////////////////////////////////////
+#if IS_MEMCACHE
 static bool config_store_zipentry_in_memcache(long filesize,const char *path,bool is_compressed){
   if (_is_tdf_or_tdf_bin(path)) return true;
   return false;
 }
-
+#endif //IS_MEMCACHE
 static bool configuration_evict_from_filecache(const char *realpath,const char *zipentryOrNull){
   if (_is_tdf_or_tdf_bin(zipentryOrNull) ||
       _is_tdf_or_tdf_bin(realpath)) return true;
@@ -236,7 +209,7 @@ static bool config_keep_file_attribute_in_cache(const char *path){
 ////////////////////////////////////////////////////
 static bool config_zipentry_filter(const char *parent, const char *name){
   return true;
-  if (ENDSWITH(parent,strlen(parent),".d.Zip")){
+  if (parent && ENDSWITH(parent,strlen(parent),".d.Zip")){
     const int slash=last_slash(parent);
     if (slash>0 && !strncmp(parent+slash,"/202",4) && (strstr(parent,"_PRO1_")||strstr(parent,"_PRO1_")||strstr(parent,"_PRO1_"))){
       return _is_tdf_or_tdf_bin(name);
@@ -270,6 +243,7 @@ static bool config_not_overwrite(const char *path){
 /// What about file directories, should they be cached?  ///
 /// Maybe remote folders that have not changed recently  ///
 ////////////////////////////////////////////////////////////
+#if IS_DIRCACHE
 static bool config_cache_directory(const char *path, bool isRemote, const struct timespec mtime){
   if (isRemote){
     struct timeval tv={0};
@@ -278,3 +252,45 @@ static bool config_cache_directory(const char *path, bool isRemote, const struct
   }
   return false;
 }
+#endif //IS_DIRCACHE
+
+////////////////////////////////////////////////////////////////////
+/// Register frequent file extensions to improve performance.    ///
+/// They do not need to start with dot.                          ///
+////////////////////////////////////////////////////////////////////
+const int _FILE_EXT_FROM=__COUNTER__;
+static char *some_file_path_extensions(const char *path, int len, int *return_index){
+  assert(path[len]==0);
+#define C(a) if (ENDSWITH(path,len,#a)){ *return_index=__COUNTER__-_FILE_EXT_FROM; return #a;}
+  switch(path[len-1]){
+  case 'a': C(.timeseries.data);break;
+  case 'd': C(.d);break;
+  case 'f': C(.wiff);C(.tdf);C(desktop.inf);C(Desktop.inf);break;
+  case 'l': C(.tdf-journal); C(.tdf-wal);break;
+  case 'n': C(.wiff.scan);C(.tdf_bin);break;
+  case 't': C(.txt);break;
+  case 'w': C(.raw);break;
+  case 'x': C(.rawIdx);break;
+  }
+#undef C
+  return NULL;
+}
+const int _FILE_EXT_TO=__COUNTER__;
+
+////////////////////////////////////////////////////////////////////////
+/// Bruker software tests existence of certain files thousands of times.
+////////////////////////////////////////////////////////////////////////
+
+#if DO_REMEMBER_NOT_EXISTS
+static bool do_remember_not_exists(const char *path){
+  const int len=strlen(path);
+  if (!len) return false;
+#define C(x) ENDSWITH(path,len,#x)
+  if (C(.tdf-journal) || C(.tdf-wal) || C(/.ciopfs)){
+#undef C
+    const char *pro=strstr(path,"/PRO");
+    return (pro && '0'<=pro[4] && pro[4]<='9' && pro[5]=='/');
+  }
+  return false;
+}
+#endif //DO_REMEMBER_NOT_EXISTS
