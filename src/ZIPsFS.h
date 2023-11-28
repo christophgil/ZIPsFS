@@ -54,6 +54,7 @@ static int xmp_access(const char *path, int mask);
 static int xmp_readlink(const char *path, char *buf, size_t size);
 static int xmp_unlink(const char *path);
 static int xmp_rmdir(const char *path);
+static int xmp_open(const char *path, struct fuse_file_info *fi);
 static int xmp_truncate(const char *path, off_t size,struct fuse_file_info *fi);
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi,enum fuse_readdir_flags flags);
 static int xmp_mkdir(const char *create_path, mode_t mode);

@@ -110,12 +110,16 @@ static void _log_common(const char *fn,int line,enum Logs t,const char *format,.
   case Log_failed:            log_msg(ANSI_FG_RED" $$ %d Failed "ANSI_RESET,getpid());break;
   case Log_error:             log_msg(ANSI_FG_RED" Error "ANSI_RESET);break;
   case Log_succes:            log_strg(ANSI_FG_GREEN" Success "ANSI_RESET);break;
-  case Log_debug_now:         log_msg(ANSI_FG_MAGENTA" Debug "ANSI_RESET" ");break;
+  case Log_debug_now:         log_msg("\n"ANSI_FG_MAGENTA" Debug "ANSI_RESET" ");break;
   case Log_cache:             log_msg(ANSI_MAGENTA" $$ %d CACHE"ANSI_RESET" ",getpid());break;
   case Log_warne:
   case Log_warn:              log_msg(ANSI_FG_RED" $$ %d Warn "ANSI_RESET,getpid());break;
       default:;
   }
+
+
+
+
   log_argptr();
   const int e=errno;
   if (e){

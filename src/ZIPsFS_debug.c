@@ -114,9 +114,6 @@ static void _debug_nanosec(const char *msg,const int i,const char *path,struct t
 //////////////////////////////////
 /// Trigger by magic file name ///
 //////////////////////////////////
-#define FILE_DEBUG_KILL       "/ZIPsFS_KILL_878546a9e4d4b2f375a1f72b8c913a01"
-#define FILE_DEBUG_BLOCK      "/ZIPsFS_BLOCK_878546a9e4d4b2f375a1f72b8c913a01"
-#define FILE_DEBUG_CANCEL      "/ZIPsFS_CANCEL_878546a9e4d4b2f375a1f72b8c913a01"
 
 
 
@@ -157,3 +154,8 @@ static void debug_trigger_files(const char *path){
   }
 }
 static bool debug_fhdata(const struct fhdata *d){ return d && !d->n_read && tdf_or_tdf_bin(d->path);}
+
+
+ static bool endsWithDotD(const char *path){
+return path &&  ENDSWITH(path,strlen(path),".d");
+ }

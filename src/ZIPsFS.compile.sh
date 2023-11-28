@@ -7,15 +7,8 @@
 cat ZIPsFS.c ZIPsFS_cache.c  ZIPsFS_debug.c  |     sed -n 's|^\(static .*) *\){$|\1;|p'  > ZIPsFS.h
 
 
-for script in *.bash;do
-    {
-        echo -n '"'
-        sed -e 's|$|\\n\\|1' $script
-        echo -n '"'
-    } >$script.inc
-done
 
-#read -p aaaaaaaaaa
+
 
 dir=$PWD
 cd ~ # Otherwise the logs contain relative paths

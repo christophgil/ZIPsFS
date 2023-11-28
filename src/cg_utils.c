@@ -51,7 +51,7 @@ static char *my_strncpy(char *dst,const char *src, int n){
 }
 #define SNPRINTF(dest,max,...)   (max<=snprintf(dest,max,__VA_ARGS__) && (log_error("Exceed snprintf "),true))
 static uint32_t my_strlen(const char *s){
-  return !s?0:strnlen(s,MAX_PATHLEN);
+  return !s?0:strlen(s);
 }
 static const char* snull(const char *s){ return s?s:"Null";}
 static inline char *yes_no(int i){ return i?"Yes":"No";}

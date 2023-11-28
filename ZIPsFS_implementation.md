@@ -31,42 +31,21 @@ All others are read only.
 
 # Caches
 
-There are several caches to improve performance. For clarifications and distinction,
-functions and variables are prefixed <I>memcache_</I>, <I>dircache_<I> and <I>statcache_</I>.
-Caches can be deactivated for debugging by setting the <I>IS_....</I> variables to zero.
 
- - <I>IS_MEMCACHE_PUT /_GET</I>: The content of ZIP entries is hold in RAM. This is important those that are not read sequentially. See  config_store_zipentry_in_memcache() and the CLI parameter <I>-c</I>.
- - <I>IS_DIRCACHE_PUT /_GET<I>: The table of content of ZIP files is stored. The key is the filename and the mtime attribute.
-n all file tree roots need to be probed. This can be cached config_zipentry_to_zipfile().
- - <I>IS_STAT_CACHE</I>: See config_file_attribute_valid_seconds(). This is a cache for file attributes for file path.
- - <I>IS_STATCACHE_IN_FHDATA</I>: This accelerates Bruker MS software. While a tdf and tdf_bin file is open, lots of file system requests for related files occur. The data of the open file pointer has a slot for those caches. The cached data disappears after the tdf or tdf_bin file is closed.
- - <I>IS_ZIPINLINE_CACHE</I>: ZIPsFS can inline the content of ZIP files in file listings. See config_zipentry_to_zipfile() and config_zipentries_instead_of_zipfile(). Given a virtual path, different ZIP paths i
+## File attribute and file content caches in ZIPsFS
 
-## Memcache
+There are several caches for file attributes and file contents to improve performance.  They can be
+deactivate using conditional compilation. The respective switches and detailed description are found
+in <I>ZIPsFS_configuration.h</I>. Searching for the names of the switches allows to find the places
+of implementation in the source code. Code concerning caches are bundled in <I>ZIPsFS_cache.c</I>
 
-This cache stores the file content of ZIP files in RAM. Depending on the size, memory is reserved either with <I>malloc()</I> or with <I>mmap()</I>.
-The memory address is kept int <I>struct fhdata</I>. When several threads are accessing the same file, then
-only one instance of <I>struct fhdata</I> has a cache. It is used by all other instances with the same file path.
-Upon close, such <I>struct fhdata</I> instance is not deleted when there are still instances with the same path. Instead, it is marked to be deleted later.
+The caches are necessary because
 
-## Dircache
-
-The table of content (toc) of ZIP files is stored in memory mapped files. The data structure is <I>struct mstore</I>.
-We created our own  storage  <I>struct mstore</I>. It is basically an array of memory mapped files.
-
-A cached toc is valid until the last-modified attribute changes.
-
-We reduce memory requirement of tocs as follows:
-Zip-entries where the ZIP-file name is part of the name (after removing all trailing dot-suffix) are abbreviated using a placeholder for the name..
-After this simplification,  many of our ZIP files have identical tocs. Consequently only reference to a previously stored toc is required.
-
-The dircache has a maximum capacity given in ZIPsFS_configuration.c. If exceeded, the entire cache is cleared and filling starts again.
-
-## statcache
-
-When loading Brukertimstof mass spectrometry files with the vendor DLL,
-thousands and millions of redundant requests to the file system are issued.
-Instances of  <I>struct fhdata</I> can hold a record of <I>struct stat</I> for all sub-paths during its life span.
+ - Some mass spectrometry software reads files not sequentially but chaotically.
+ - The same software excerts thousands and millions of redundand file requests
+ - Beside displaying ZIP files as subdirectories containing and the ZIP entries as files in those folders, there is an option for
+   displaying all entries of all ZIP files  flat in one directory.
+   To list this directory sufficiently fast requires a file entry cache.
 
 ## The file cache of the OS
 After closing a file or disposing the memcache of a ZIP entry, a call to  <I>posix_fadvise(fd,0,0,POSIX_FADV_DONTNEED);</I> may remove the file from the

@@ -92,7 +92,7 @@ static bool dircache_directory_from_cache(struct directory *dir,const struct tim
   if (s){
     if (!timespec_equals(s->mtim,mtim)){/* Cached data not valid any more. */
       ht_set(&dir->root->dircache_ht,dir->dir_realpath,0,0,NULL);
-         log_debug_now("diff s-mtime %ld,%ld  %ld,%ld\n",s->mtim.tv_sec,s->mtim.tv_nsec, mtim.tv_sec,mtim.tv_nsec);
+      log_debug_now("diff s-mtime %ld,%ld  %ld,%ld\n",s->mtim.tv_sec,s->mtim.tv_nsec, mtim.tv_sec,mtim.tv_nsec);
     }else{
       dir->core=*s;
       dir->dir_flags=(dir->dir_flags&~DIRECTORY_IS_HEAP)|DIRECTORY_IS_DIRCACHE;
@@ -120,8 +120,11 @@ static bool stat_for_virtual_path(const char *path, struct stat *stbuf, struct z
 #define C   (d->statcache_for_subdirs_of_path)
 #define L   (d->statcache_for_subdirs_of_path_l)
 #define D() struct fhdata* d=fhdata_by_subpath(path); if (d && d->path && (d->zpath.flags&ZP_ZIP))
+  // bool debug=endsWithDotD(path);
   LOCK(mutex_fhdata,
+
        D(){
+         //          if (debug) log_debug_now("path=%s D() %p \n",path,fhdata_by_subpath(path));
          if (C){
            ASSERT(slashes+1<L);
            if (C[slashes+1].st_ino){
@@ -171,20 +174,24 @@ static struct fhdata *fhdata_by_subpath(const char *path){
   if (*path=='/' && !path[1]) return NULL;
   const int path_l=my_strlen(path);
   struct fhdata *d2=NULL;
-  //const bool debug=!strcmp(path,"/PRO1"); false;//ENDSWITH(path,strlen(path),".d");
+  //const bool debug=endsWithDotD(path);
+  const bool debug=false;
   RLOOP(need_statcache,2){ /* Preferably to one with a cache */
     foreach_fhdata_path_not_null(d){
       if (!need_statcache || d->memcache){
         const int vp_l=d->zpath.virtualpath_l;
         const char *vp=d->zpath.virtualpath;
-        //if (debug) log_debug_now("vp=%s ep_l=%d\n",vp,d->zpath.entry_path_l);
-        if (vp_l-d->zpath.entry_path_l<path_l && path_l<=vp_l && vp &&
+        //if (debug) log_debug_now("vp=%s ep_l=%d  vp_l-d->zpath.entry_path_l=%d  path_l=%d\n",vp,d->zpath.entry_path_l,vp_l-d->zpath.entry_path_l,path_l);
+        if (vp_l-d->zpath.entry_path_l<=path_l+1 && path_l<=vp_l && vp &&
             (path_l==vp_l||vp[path_l]=='/') && !strncmp(path,vp,path_l)){
-            if ((d2=d)->statcache_for_subdirs_of_path) return d; /* Preferably one with statcache_for_subdirs_of_path */
+          if ((d2=d)->statcache_for_subdirs_of_path){
+            if (debug) log_debug_now("fhdata_by_subpath found  %s \n",path);
+            return d; /* Preferably one with statcache_for_subdirs_of_path */
           }
         }
       }
     }
+  }
   return d2;
 }
 
@@ -278,6 +285,7 @@ static int memcache_store_try(struct fhdata *d){
     warning(WARN_MEMCACHE|WARN_FLAG_MAYBE_EXIT,rp,"memcache_zip_entry: Failed zip_open d=%p",d);
   }else{
     zip_file_t *zf=zip_fopen(za,d->zpath.entry_path,ZIP_RDONLY);
+    LOCK(mutex_fhdata,fhdata_counter_inc(d,zf?ZIP_OPEN_SUCCESS:ZIP_OPEN_FAIL));
     if (!zf){
       warning(WARN_MEMCACHE|WARN_FLAG_MAYBE_EXIT,rp,"memcache_zip_entry: Failed zip_fopen d=%p",d);
     }else{

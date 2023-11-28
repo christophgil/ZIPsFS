@@ -80,11 +80,12 @@ static int config_zipentry_to_zipfile(const int approach,const char *path, char 
 #undef A
 }
 
-#if IS_STAT_CACHE
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// keep_cache:1;  Can be filled in by open.
 /// It signals the kernel that any currently cached file data (ie., data that the filesystem provided the last time the file was open) need not be invalidated.
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#if IS_STAT_CACHE
 static uint32_t config_file_attribute_valid_seconds(const bool isReadOnly, const char *path,const int path_l){
   if (isReadOnly && endsWithZip(path,path_l)  && (strstr(path,"/fularchiv01")||strstr(path,"/CHA-CHA-RALSER-RAW"))) return UINT32_MAX;
   return 0;

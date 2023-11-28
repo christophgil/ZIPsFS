@@ -14,8 +14,9 @@ static void init_count_getattr(){
 static void inc_count_getattr(const char *path,enum enum_count_getattr field){
   init_count_getattr();
   if (path && ht_count_getattr.length<1024){
-    const char *ext=strrchr(path+last_slash(path)+1,'.');
-    if (ext && ext[1]){
+    char *ext=strrchr(path+last_slash(path)+1,'.');
+    if (!ext || !*ext) ext="-No extension-";
+{
       struct ht_entry *e=ht_get_entry(&ht_count_getattr,ext,0,0,true);
       assert(e!=NULL);
       assert(e->key!=NULL);
@@ -111,20 +112,20 @@ static void log_fh(char *title,long fh){
   path_for_fd(title,p,fh);
   log_msg("%s  fh: %ld %s \n",title?title:"", fh,p);
 }
-static int _size_info=256*1024;
-static  char *_info=NULL;
+static int _info_capacity=256*1024, _info_l=0, _info_count_open=0;
+static char *_info=NULL;
 #ifdef __cppcheck__
 #define PRINTINFO(...)   printf(__VA_ARGS__)
 #else
 #define PRINTINFO(...)   n=printinfo(n,__VA_ARGS__)
 #endif
 static int printinfo(int n, const char *format,...){
-  if (n<_size_info && n>=0){
+  if (n<_info_capacity && n>=0){
     va_list argptr;
     va_start(argptr,format);
-    //fprintf(stderr,"printinfo: _size_info=%d n=%d _info=%p \n",_size_info,n,_info);
+    //fprintf(stderr,"printinfo: _info_capacity=%d n=%d _info=%p \n",_info_capacity,n,_info);
     //vprintf(format,argptr);
-    n+=vsnprintf(_info+n,_size_info-n,format,argptr);
+    n+=vsnprintf(_info+n,_info_capacity-n,format,argptr);
     va_end(argptr);
   }
   return n;
@@ -260,7 +261,7 @@ static int log_print_roots(int n){
   return n;
 }
 static int repeat_chars_info(int n,char c, int i){
-  if (i>0 && n+i<_size_info){
+  if (i>0 && n+i<_info_capacity){
     memset(_info+n,c,i);
     n+=i;
   }
