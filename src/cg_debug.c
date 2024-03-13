@@ -1,15 +1,7 @@
 /*  Copyright (C) 2023   christoph Gille   This program can be distributed under the terms of the GNU GPLv3. */
+#define _GNU_SOURCE
 #ifndef _cg_debug_dot_c
 #define _cg_debug_dot_c
-#define _GNU_SOURCE
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <assert.h>
-#include <stdbool.h>
-#include <errno.h>
-#include <sys/time.h>
-#include "cg_log.c"
 #include "cg_utils.c"
 #include "cg_stacktrace.c"
 #include <sys/resource.h>
@@ -32,9 +24,9 @@ static void provoke_idx_out_of_bounds(){
 }
 
 /////////////////////////////////
-/// Stacktrace on error/exit  ///
+/// Stacktrace on error/ EXIT  ///
 /////////////////////////////////
-#define ASSERT(...) (assert(__VA_ARGS__))
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 static void enable_core_dumps(){
@@ -46,22 +38,23 @@ static void enable_core_dumps(){
 /// recognize certain file names ///
 ////////////////////////////////////
 static bool tdf_or_tdf_bin(const char *p){
-  return endsWith(p,".tdf") || endsWith(p,".tdf_bin");
+  const int p_l=cg_strlen(p);
+  return cg_endsWith(p,p_l,".tdf",4) || cg_endsWith(p,p_l,".tdf_bin",8);
 }
 static bool filename_starts_year(const char *p,int l){
   if (l<20) return false;
-  const int slash=last_slash(p);
+  const int slash=cg_last_slash(p);
   return slash>=0 && !strncmp(p+slash,"/202",4);
 }
 static bool file_starts_year_ends_dot_d(const char *p){
-  const int l=my_strlen(p);
+  const int l=cg_strlen(p);
   if (l<20 || p[l-1]!='d' || p[l-2]!='.') return false;
   return filename_starts_year(p,l);
 }
-#define report_failure_for_tdf(...) _report_failure_for_tdf(__func__,__VA_ARGS__)
-static bool _report_failure_for_tdf(const char *mthd, int res, const char *path){
-  if (res && tdf_or_tdf_bin(path)){
-    log_error("xmp_getattr res=%d  path=%s",res,path);
+#define report_failure_for_tdf(...) _report_failure_for_tdf(__func__,__LINE__,__VA_ARGS__)
+static bool _report_failure_for_tdf(const char *mthd, int line, const char *path){
+  if (tdf_or_tdf_bin(path)){
+    log_error("%s  %s:%d path=%s",__func__,mthd,line,path);
     return true;
   }
   return false;
@@ -75,21 +68,20 @@ static void assert_dir(const char *p, const struct stat *st){
   if (!st) return;
   if(!S_ISDIR(st->st_mode)){
     log_error("assert_dir  stat S_ISDIR %s",p);
-    log_file_stat("",st);
-    print_stacktrace(0);
+    cg_print_stacktrace(0);
   }
-  const bool r_ok=access_from_stat(st,R_OK);
-  const bool x_ok=access_from_stat(st,X_OK);
+  const bool r_ok=cg_access_from_stat(st,R_OK);
+  const bool x_ok=cg_access_from_stat(st,X_OK);
   if(!r_ok||!x_ok){
     log_error("access_from_stat %s r=%s x=%s ",p,yes_no(r_ok),yes_no(x_ok));
-    log_file_stat("",st);
+    cg_log_file_stat("",st);
   }
 }
 static void assert_r_ok(const char *p, const struct stat *st){
-  if(!access_from_stat(st,R_OK)){
+  if(!cg_access_from_stat(st,R_OK)){
     log_error("assert_r_ok  %s  ",p);
-    log_file_stat("",st);
-    print_stacktrace(0);
+    cg_log_file_stat("",st);
+    cg_print_stacktrace(0);
   }
 }
 

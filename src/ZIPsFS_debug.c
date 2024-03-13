@@ -1,24 +1,84 @@
+/////////////////////////////////////////////////////////////////
+/// COMPILE_MAIN=ZIPsFS                                     ///
+/// Debugging ZIPsFS                                          ///
+/////////////////////////////////////////////////////////////////
+
+static int countFhdataWithMemcache(const char *path, int len,int h){
+  if (!len) len=strlen(path);
+  if (!h) h=hash32(path,len);
+  int count=0;
+
+  IF1(WITH_MEMCACHE,foreach_fhdata(id,d)     if (D_VP_HASH(d)==h && d->memcache2!=NULL && !strcmp(path,D_VP(d))) count++);
+  return count;
+}
+
+#define fhdataWithMemcachePrint(...) _fhdataWithMemcachePrint(__func__,__LINE__,__VA_ARGS__)
+static void _fhdataWithMemcachePrint(const char *func,int line,const char *path, int len,int h){
+#if WITH_MEMCACHE
+  if (!len) len=strlen(path);
+  if (!h) h=hash32(path,len);
+  int count=0;
+  foreach_fhdata(id,d){
+    if (D_VP_HASH(d)==h && (d->memcache2||d->memcache_status) && !strcmp(path,D_VP(d))){
+      log_msg("%s:%d fhdataWithMemcachePrint: %d %s  d->memcache_status: %s memcache_l: %zu\n",func,line,id,path,MEMCACHE_STATUS_S[d->memcache_status],d->memcache_l);
+    }
+  }
+#endif //WITH_MEMCACHE
+}
+
+
+
+static bool debugSpecificPath(const char *path, int len){
+  if (!path) return false;
+  if (!len) len=strlen(path);
+  if (ENDSWITH(path,len,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d/analysis.tdf")||
+      ENDSWITH(path,len,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d/analysis.tdf_bin")){
+    const int n=countFhdataWithMemcache(path,len,0);
+    if (n>1){
+      log_error("path=%s   countFhdataWithMemcache=%d\n",path,n);
+      fhdataWithMemcachePrint(path,len,0);
+    }
+    return true;
+  }
+  return false;
+}
+
+
 ////////////////////////
 /// Check File names ///
 ////////////////////////
-
+#define assert_validchars(t,s,len,msg) _assert_validchars(t,s,len,msg,__func__)
 static void _assert_validchars(enum validchars t,const char *s,int len,const char *msg,const char *fn){
   static bool initialized;
-  if (!initialized) initialized=validchars(VALIDCHARS_PATH)[PLACEHOLDER_NAME]=validchars(VALIDCHARS_FILE)[PLACEHOLDER_NAME]=true;
-  const int pos=find_invalidchar(t,s,len);
+  if (!initialized) initialized=cg_validchars(VALIDCHARS_PATH)[PLACEHOLDER_NAME]=cg_validchars(VALIDCHARS_FILE)[PLACEHOLDER_NAME]=true;
+  const int pos=cg_find_invalidchar(t,s,len);
   if (pos>=0){
     LOCK_NCANCEL(mutex_validchars,
                  static struct ht ht={0};
-                 if (!ht.capacity) ht_init(&ht,HT_FLAG_INTKEY|12);
-                 if (!ht_set_int(&ht,hash32(s,len),len,"X")) warning(WARN_CHARS|WARN_FLAG_ONCE_PER_PATH,s,ANSI_FG_BLUE"%s()"ANSI_RESET" %s: position: %d",fn,msg?msg:"",pos));
+                 if (!ht.capacity) ht_set_mutex(mutex_validchars,ht_init(&ht,HT_FLAG_NUMKEY|12));
+                 if (!ht_numkey_set(&ht,hash32(s,len),len,"X")) warning(WARN_CHARS|WARN_FLAG_ONCE_PER_PATH,s,ANSI_FG_BLUE"%s()"ANSI_RESET" %s: position: %d",fn,msg?msg:"",pos));
   }
 }
 #define  assert_validchars_direntries(t,dir) _assert_validchars_direntries(t,dir,__func__)
 static void _assert_validchars_direntries(enum validchars t,const struct directory *dir,const char *fn){
   if (dir){
+    bool ok=true;
     RLOOP(i,dir->core.files_l){
       const char *s=dir->core.fname[i];
-      _assert_validchars(VALIDCHARS_PATH,s,my_strlen(s),dir->dir_realpath,fn);
+      if (!s){ ok=false; continue;}
+      _assert_validchars(VALIDCHARS_PATH,s,cg_strlen(s),dir->dir_realpath,fn);
+    }
+  }
+}
+
+#define debug_directory_print(dir) _debug_directory_print(dir,__func__,__LINE__);
+static void _debug_directory_print(const struct directory *dir,const char *fn,const int line){
+  if (dir){
+    const struct directory_core *d=&dir->core;
+    log_msg(ANSI_INVERSE"%s():%d Directory rp: %s files_l: %d\n"ANSI_RESET,fn,line,dir->dir_realpath, d->files_l);
+    RLOOP(i,d->files_l){
+      const char *s=d->fname[i];
+      log_msg(" (%d) '%s'\n",i,snull(s));
     }
   }
 }
@@ -26,70 +86,34 @@ static void _assert_validchars_direntries(enum validchars t,const struct directo
 ////////////////////////////
 /// File name extension ///
 //////////////////////////
-
 #if 0
-    const char *ss[]={"/mypath/subdir/file.txt", "file_no_path.txt", "/mypath/subdir/file_no_ext","","file.wiff.scan","file.wiff", "file.extension_is_too_long",NULL};
-    const uint64_t wiff=(uint64_t)".wiff";
-    for(int i=0; ss[i];i++){
-      LOCK(mutex_fhdata,
-           const char *e=fileExtension(ss[i],my_strlen(ss[i]));
-           printf("Testing  fileExtension()%40s %10s   is .wiff: %s\n",ss[i],e,yes_no(((uint64_t)e)==wiff));
-           );
-    }
-    exit(0);
+const char *ss[]={"/mypath/subdir/file.txt", "file_no_path.txt", "/mypath/subdir/file_no_ext","","file.wiff.scan","file.wiff", "file.extension_is_too_long",NULL};
+const uint64_t wiff=(uint64_t)".wiff";
+for(int i=0; ss[i];i++){
+  LOCK(mutex_fhdata,
+       const char *e=fileExtension(ss[i],cg_strlen(ss[i]));
+       fprintf(stderr,"Testing  fileExtension()%40s %10s   is .wiff: %s\n",ss[i],e,yes_no(((uint64_t)e)==wiff));
+       );
+ }
+EXIT(0);
 #endif //0
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-///////////////
-/// pthread ///
-///////////////
-#define ASSERT_LOCKED_FHDATA() assert_locked(mutex_fhdata)
-#if DO_ASSERT_LOCK
-/* Count recursive locks with (_mutex+mutex). Maybe inc or dec. */
-static int mutex_count(int mutex,int inc){
-  int8_t *locked=pthread_getspecific(_pthread_key);
-  if (!locked){
-    const int R=(ROOTS*THREADS_PER_ROOT+99);
-    static int i=0;
-    static int8_t all_locked[R][mutex_roots+ROOTS];
-    pthread_mutex_lock(_mutex+mutex_idx);i++;pthread_mutex_unlock(_mutex+mutex_idx);
-    ASSERT(i<R);
-    pthread_setspecific(_pthread_key,locked=all_locked[i]);
-    ASSERT(locked!=NULL);
-  }
-#undef R
-  //log_debug_now("mutex_count %s %d \n",MUTEX_S[mutex],locked[mutex]);
-  if (inc>0) ASSERT(locked[mutex]++<127);
-  if (inc<0) ASSERT(locked[mutex]-->=0);
-  return locked[mutex];
-}
-#define assert_locked(mutex)        assert(_assert_locked(mutex,true,false));
-#define assert_not_locked(mutex)    assert(_assert_locked(mutex,false,false));
-static bool _assert_locked(int mutex,bool yesno,bool log){
-  const int count=mutex_count(mutex,0), ok=(yesno==(count>0));
-  //if (log || !ok) log_debug_now("_assert_locked %s  %s: %d\n",yes_no(yesno),MUTEX_S[mutex],count);
-  return ok;
-}
-#else
-#define mutex_count(mutex,inc);
-#define assert_locked(mutex)
-#define assert_not_locked(mutex)
-#endif
 /////////////////////////////////////////////////////////////
 
 #if 0
 static void directory_debug_filenames(const char *func,const char *msg,const struct directory_core *d){
-  if (!d->fname){ log_error("%s %s %s: d->fname is NULL\n",__func__,func,msg);exit(9);}
+  if (!d->fname){ log_error("%s %s %s: d->fname is NULL\n",__func__,func,msg);EXIT(9);}
   const bool print=(strchr(msg,'/')!=NULL);
-  if (print) printf("\n"ANSI_INVERSE"%s Directory %s   files_l=%d\n"ANSI_RESET,func,msg,d->files_l);
-  FOR(0,i,d->files_l){
+  if (print) fprintf(stderr,"\n"ANSI_INVERSE"%s Directory %s   files_l=%d\n"ANSI_RESET,func,msg,d->files_l);
+  FOR(i,0,d->files_l){
     const char *n=d->fname[i];
-    if (!n){ printf("%s %s: d->fname[%d] is NULL\n",__func__,func,i);exit(9);}
+    if (!n){ fprintf(stderr,"%s %s: d->fname[%d] is NULL\n",__func__,func,i);EXIT(9);}
     const int len=strnlen(n,MAX_PATHLEN);
-    if (len>=MAX_PATHLEN){ log_error("%s %s %s: strnlen d->fname[%d] is %d\n",__func__,func,msg,i,len);exit(9);}
+    if (len>=MAX_PATHLEN){ log_error("%s %s %s: strnlen d->fname[%d] is %d\n",__func__,func,msg,i,len);EXIT(9);}
     const char *s=Nth0(d->fname,i);
-    if (print) printf(" (%d)\t%"PRIu64"\t%'zu\t%s\t%p\t%lu\n",i,Nth0(d->finode,i), Nth0(d->fsize,i),s,s,hash_value_strg(s));
+    if (print) fprintf(stderr," (%d)\t%"PRIu64"\t%'zu\t%s\t%p\t%lu\n",i,Nth0(d->finode,i), Nth0(d->fsize,i),s,s,hash_value_strg(s));
   }
 }
 #endif
@@ -102,9 +126,10 @@ static bool debug_path(const char *vp){
                                   //"20230116_Z1_ZW_001_30-0061_poolmix_2ug_ZenoSWATH_T600_V4000_rep01"
                                   "20230116_Z1_ZW_001_30-0061_poolmix_2ug_ZenoSWATH_T600_V4000_rep02"
                                   );
-static void _debug_nanosec(const char *msg,const int i,const char *path,struct timespec *t){
-  if (!t->tv_nsec){
-    log_debug_now("%s #%d path: %s\n",msg,i,path);
+  static void _debug_nanosec(const char *msg,const int i,const char *path,struct timespec *t){
+    if (!t->tv_nsec){
+      log_verbose("%s #%d path: %s\n",msg,i,path);
+    }
   }
 }
 #define DEBUG_NANOSEC(i,path,t) _debug_nanosec(__func__,i,path,t)
@@ -117,45 +142,80 @@ static void _debug_nanosec(const char *msg,const int i,const char *path,struct t
 
 
 
-static void debug_trigger_files(const char *path){
-  {
-    const int t=
-      (!strcmp(path,FILE_DEBUG_BLOCK"_S"))?PTHREAD_STATQUEUE:
-      (!strcmp(path,FILE_DEBUG_BLOCK"_M"))?PTHREAD_MEMCACHE:
-      (!strcmp(path,FILE_DEBUG_BLOCK"_D"))?PTHREAD_DIRCACHE:
-      -1;
-    if (t>=0){
-      warning(WARN_DEBUG,path,"Triggered blocking of threads %s",PTHREAD_S[t]);
-      foreach_root(i,r) r->debug_pretend_blocked[t]=true;
-    }
-  }
-  {
-    const int t=
-      (!strcmp(path,FILE_DEBUG_CANCEL"_S"))?PTHREAD_STATQUEUE:
-      (!strcmp(path,FILE_DEBUG_CANCEL"_M"))?PTHREAD_MEMCACHE:
-      (!strcmp(path,FILE_DEBUG_CANCEL"_D"))?PTHREAD_DIRCACHE:
-      -1;
-    if(t>=0){
-      warning(WARN_DEBUG,path,"Triggered canceling of threads %s",PTHREAD_S[t]);
-      foreach_root(i,r) pthread_cancel(r->pthread[t]);
-    }
-  }
-  if (!strcmp(path,FILE_DEBUG_KILL)){
-    warning(WARN_MISC,path,"Triggered exit of ZIPsFS");
-    while(_fhdata_n){
-      log_msg("Waiting for _fhdata_n  %d to be zero\n",_fhdata_n);
-      usleep(300);
-    }
-    foreach_root(i,r){
-      mstore_clear(&r->dircache);
-      ht_destroy(&r->dircache_ht);
-    }
-    exit(0);
+static bool debug_fhdata(const struct fhdata *d){
+  return d && !d->n_read && tdf_or_tdf_bin(D_VP(d));
+}
+static void debug_fhdata_listall(){
+  log_msg(ANSI_INVERSE"%s"ANSI_RESET"\n",__func__);
+  foreach_fhdata(id,d){
+    log_msg("d %p path: %s fh: %lu\n",d,D_VP(d),d->fh);
   }
 }
-static bool debug_fhdata(const struct fhdata *d){ return d && !d->n_read && tdf_or_tdf_bin(d->path);}
 
 
- static bool endsWithDotD(const char *path){
-return path &&  ENDSWITH(path,strlen(path),".d");
- }
+
+
+
+/*
+  WITH_DIRCACHE leads to errors  ls: cannot access '/home/cgille/tmp/ZIPsFS/mnt/Z1/Data/30-0089/20231124_Z1_LRS_079_30-0089_AHSG_5k2kV_300C_OxoScan_rep02.raw
+  .
+  Clearing the cache resolves.
+*/
+#define DEBUG_DIRCACHE_COMPARE_CACHED 0 /*TO_HEADER*/
+#if DEBUG_DIRCACHE_COMPARE_CACHED
+#define dde_print(f,...) fprintf(stderr,ANSI_YELLOW"DDE "ANSI_RESET f,__VA_ARGS__)
+static void debug_compare_directory_a_b(struct directory *A,struct directory *B){
+  bool diff=false;
+#define print_realpath() dde_print("dir_realpath  '%s'  '%s'\n",A->dir_realpath,B->dir_realpath)
+  if (A->dir_realpath && B->dir_realpath &&  strcmp(A->dir_realpath,B->dir_realpath)){
+    print_realpath();
+    diff=true;
+  }
+  struct directory_core a=A->core,b=B->core;
+  if (a.files_l!=b.files_l){
+    dde_print("files_l  %d  %d\n",a.files_l,b.files_l);
+    diff=true;
+  }else{
+    FOR(i,0,b.files_l){
+      if (strcmp(a.fname[i],b.fname[i])){
+        dde_print("fname[%d]  %s %s\n",i,a.fname[i],b.fname[i]);
+        diff=true;
+      }
+#define D(f,F) if (a.f && a.f[i]!=b.f[i]) { dde_print(#f " [%d]  " F " " F " \n",i,a.f[i],b.f[i]); diff=true;}
+      D(fsize,"%zu"); D(finode,"%lu"); D(fmtime,"%lu"); D(fcrc,"%u"); D(fflags,"%d");
+#undef D
+    }
+  }
+  if (diff){
+    print_realpath();
+    exit_ZIPsFS(1);
+  } //else dde_print(GREEN_SUCCESS"%s\n",B->dir_realpath);
+}
+static void debug_dircache_compare_cached(struct directory *mydir,const struct stat *rp_stat){
+  int dde_result;
+  struct directory dde_dir={0};
+  directory_init(DIRECTORY_IS_ZIPARCHIVE,&dde_dir,mydir->dir_realpath,mydir->root);
+  LOCK_NCANCEL(mutex_dircache, dde_result=dircache_directory_from_cache(&dde_dir,rp_stat->st_mtim)?1:0);
+  if (dde_result==1) debug_compare_directory_a_b(&dde_dir,mydir);
+}
+#endif //DEBUG_DIRCACHE_COMPARE_CACHED
+
+
+
+#define DEBUG_TRACK_FALSE_GETATTR_ERRORS 0
+#if DEBUG_TRACK_FALSE_GETATTR_ERRORS
+static void debug_track_false_getattr_errors(const char *vp,const int vp_l){
+  if ((ENDSWITH(vp,vp_l,".SSMetaData") || ENDSWITH(vp,vp_l,".raw")  )){
+    log_debug_now("vp=%s",vp);
+
+    NEW_ZIPPATH(vp);
+    zpath->flags|=ZP_VERBOSE2;
+    const bool found=find_realpath_any_root(0,zpath,NULL);
+    log_zpath("",zpath);
+    exit_ZIPsFS(0);
+    usleep(1000*500);
+  }
+}
+#endif //DEBUG_TRACK_FALSE_GETATTR_ERRORS
+
+///////////////////////////////////////////////////////////////////

@@ -1,22 +1,38 @@
-////////////////////////
-/// Helper functions ///
-////////////////////////
-static bool is_zip(const char *s){
+/////////////////////////////////////////////////////
+/// COMPILE_MAIN=ZIPsFS                          ///
+/// This file is for customizations by the user  ///
+/// The functions start with prefix  "config_"   ///
+////////////////////////////////////////////////////
+
+
+///////////////////////////////
+/// Local helper functions  ///
+///////////////////////////////
+
+static bool _is_zip(const char *s){
   return *s=='.' && (s[1]|32)=='z' && (s[2]|32)=='i' && (s[3]|32)=='p';
 }
-static bool is_Zip(const char *s){
+static bool _is_Zip(const char *s){
   return *s=='.' && s[1]=='Z' && s[2]=='i' && s[3]=='p';
 }
-
+static bool _is_tdf_or_tdf_bin(const char *path){
+  if (!path || !*path) return false;
+  const int slash=cg_last_slash(path);
+  return !strcmp(path+slash+1,"analysis.tdf") || !strcmp(path+slash+1,"analysis.tdf_bin");
+}
 ////////////////////////////////////////////////////////////////////////////////////////////////
-/// Forming zip file path from virtual path by removing terminal characters and adding a string.
+/// Forming zip file path from virtual path by removing terminal characters and appending a string.
 /// Parameters: b and e  - beginning and ending of the virtual file name.
 /// return if not match: INT_MAX
 /// return on success: Amount of bytes to be deleted from the end e of the path.
 ///               append: String that needs to be added.
+/// Here:   Virtual folders ending with
+///            - .zip.Content originate
+///            - .d
+///
 //////////////////////////////////////////////////////////////
-static const int config_virtualpath_is_zipfile(const char *b, const char *e,char *append[]){
-  if (e-b>12 && is_zip(e-12)  && !memcmp(e-8,".Content",8)) return -8;
+static const int config_virtual_dirpath_to_zipfile(const char *b, const char *e,char *append[]){
+  if (e-b>12 && _is_zip(e-12)  && !memcmp(e-8,EXT_CONTENT,8)) return -8;
   if (e[-2]=='.' && (e[-1]|32)=='d') {
     *append=".Zip";
     return 0;
@@ -38,19 +54,18 @@ static const int config_virtualpath_is_zipfile(const char *b, const char *e,char
 ///   no match: 0
 ///   On match return the length of the substring that together with suffix forms the zip file.
 ///
-/// See: config_zipentries_instead_of_zipfile()
-///      config_zipentry_to_zipfile_test()
+/// See: config_skip_zipfile_show_zipentries_instead()
+///      config_containing_zipfile_of_virtual_file_test()
 ////////////////////////////////////////////////////
-static int config_zipentry_to_zipfile(const int approach,const char *path, char *suffix[]){
-  //log_debug_now("config_zipentry_to_zipfile  path=%s\n",path);
-  const int path_l=strlen(path);
+#if WITH_ZIPINLINE
+static int config_containing_zipfile_of_virtual_file(const int approach,const char *path,const int path_l,char *suffix[]){
+#define A(x,c) ((d=sizeof(#x)-1),(e[-d]==c && !strcmp(e-d,#x)))
+#define C(x) A(x,'.')
+#define S(x) if (suffix)*suffix=x;return path_l-d
   if (path_l>20){
     const char *e=path+path_l;
     int d=0;
     if (suffix) *suffix=NULL;
-#define A(x,c) ((d=sizeof(#x)-1),(e[-d]==c && !strcmp(e-d,#x)))
-#define C(x) A(x,'.')
-#define S(x) if (suffix)*suffix=x;return path_l-d
     if (C(.wiff) || C(.wiff2) || C(.wiff.scan)){
       switch(approach){
       case 0: S(".wiff.Zip");
@@ -79,21 +94,8 @@ static int config_zipentry_to_zipfile(const int approach,const char *path, char 
 #undef C
 #undef A
 }
-
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/// keep_cache:1;  Can be filled in by open.
-/// It signals the kernel that any currently cached file data (ie., data that the filesystem provided the last time the file was open) need not be invalidated.
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#if IS_STAT_CACHE
-static uint32_t config_file_attribute_valid_seconds(const bool isReadOnly, const char *path,const int path_l){
-  if (isReadOnly && endsWithZip(path,path_l)  && (strstr(path,"/fularchiv01")||strstr(path,"/CHA-CHA-RALSER-RAW"))) return UINT32_MAX;
-  return 0;
-}
-#endif //IS_STAT_CACHE
-//S_ISREG(st->st_mode) && !(st->st_mode&( S_IWUSR| S_IWGRP |S_IWOTH))
-static void config_zipentry_to_zipfile_test(){
-  if (true) return; /* Remove to run tests */
+static void config_containing_zipfile_of_virtual_file_test(){
+    if (true) return; /* Remove to run tests */
   char *ff[]={
     "20230310_aaaaaaaaaaa.wiff",
     "20230310_aaaaaaaaaaa.wiff.scan",
@@ -103,139 +105,122 @@ static void config_zipentry_to_zipfile_test(){
     NULL};
   char str[99];
   for(char **f=ff;*f;f++){
-    printf("\n\x1B[7m%s\x1B[0m\n",*f);
+    const int f_l=strlen(*f);
+    fprintf(stderr,"\n\x1B[7m%s\x1B[0m\n",*f);
     char *suffix;
-    for(int len,i=0;(len=config_zipentry_to_zipfile(i,*f, &suffix))!=0;i++){
+    for(int len,i=0;(len=config_containing_zipfile_of_virtual_file(i,*f,f_l, &suffix))!=0;i++){
       strcpy(str,*f);
       strcpy(str+len,suffix);
-      printf("%d  approach=%d %s\n",i,len,str);
+      fprintf(stderr,"%d  approach=%d %s\n",i,len,str);
     }
   }
-  exit(0);
+  fprintf(stderr,"Going to EXIT from "__FILE__":%d\n",__LINE__);
+  EXIT(0);
 }
+#endif //WITH_ZIPINLINE
 
-
-
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// keep_cache:1;  Can be filled in by open.
+/// It signals the kernel that any currently cached file data (ie., data that the filesystem provided the last time the file was open) need not be invalidated.
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#if WITH_STAT_CACHE
+static uint32_t config_file_attribute_valid_seconds(const bool isReadOnly, const char *path,const int path_l){
+  if (isReadOnly && cg_endsWithZip(path,path_l)  && (strstr(path,"/fularchiv01")||strstr(path,"/CHA-CHA-RALSER-RAW"))) return UINT32_MAX;
+  return 0;
+}
+#endif //WITH_STAT_CACHE
 /////////////////////////////////////////////
-/// Convert a real path to a virtual path ///
+/// A ZIP file is shown as a folder.
+/// Convert the ZIP filename to a virtual folder name
 /////////////////////////////////////////////
-static char *config_zipfilename_real_to_virtual(char *new_name,const char *n){
-  const int len=strlen(n);
-  strcpy(new_name,n);
-  const char *e=n+len;
-  if (len>4 && is_zip(e-4)){
-    if(len>9 && !strcmp(n+len-6,".d.Zip")){
-      new_name[len-4]=0;
+static char *config_zipfilename_to_virtual_dirname(char *dirname,const char *zipfile,const int zipfile_l){
+  strcpy(dirname,zipfile);
+  const char *e=zipfile+zipfile_l;
+  if (zipfile_l>4 && _is_zip(e-4)){
+    if(zipfile_l>9 && !strcmp(zipfile+zipfile_l-6,".d.Zip")){
+      dirname[zipfile_l-4]=0;
     }else{
-      strcat(new_name,".Content");
+      strcat(dirname,EXT_CONTENT);
     }
   }
-  return new_name;
+  return dirname;
 }
-static const char *WITHOUT_PARENT[]={".wiff.Zip",".wiff2.Zip",".rawIdx.Zip",".raw.Zip",NULL};
-static int WITHOUT_PARENT_LEN[10];
-static bool config_zipentries_instead_of_zipfile(const char *realpath){
-  const int len=strlen(realpath);
-  const char *e=realpath+len;
-  if(len>20 && is_Zip(e-4)){
+#if WITH_ZIPINLINE
+static bool config_skip_zipfile_show_zipentries_instead(const char *zipfile,const int zipfile_l){
+  static const char *WITHOUT_PARENT[]={".wiff.Zip",".wiff2.Zip",".rawIdx.Zip",".raw.Zip",NULL};
+  static int WITHOUT_PARENT_LEN[10];
+  if(zipfile_l>20 && _is_Zip(zipfile+zipfile_l-4)){
+    if (!WITHOUT_PARENT_LEN[0]){
+      for(int i=0;WITHOUT_PARENT[i];i++) WITHOUT_PARENT_LEN[i]=strlen(WITHOUT_PARENT[i]);
+    }
     for(int i=0;WITHOUT_PARENT[i];i++){
-      if (!WITHOUT_PARENT_LEN[i])  WITHOUT_PARENT_LEN[i]=strlen(WITHOUT_PARENT[i]);
-      if (!strcmp(e-WITHOUT_PARENT_LEN[i],WITHOUT_PARENT[i])) return true;
+      if (!strcmp(zipfile+zipfile_l-WITHOUT_PARENT_LEN[i],WITHOUT_PARENT[i])) return true;
     }
   }
   return false;
 }
-static bool config_also_show_zipfile_in_listing(const char *path){ /* Not only the content of the zip file but also the zip file itself. */
-  const int len=strlen(path);
-  return len>5 && is_zip(path+len -4) && !is_Zip(path+len-4);
+static bool config_also_show_zipfile_in_listing(const char *zipfile,const int zipfile_l){ /* Not only the content of the zip file but also the zip file itself. */
+  return zipfile_l>5 && _is_zip(zipfile+zipfile_l-4) && !_is_Zip(zipfile+zipfile_l-4);
 }
+#endif //WITH_ZIPINLINE
 /////////////////////////////////////////////////////////////////////////////////
 /// With the bruker dll, two non existing files are requested extremely often. //
 /// Improving performance by refusing those file names                         //
 /////////////////////////////////////////////////////////////////////////////////
-static bool config_not_report_stat_error(const char *path ){
-  if (path){
-  const int l=strlen(path);
-#define I(s) ENDSWITH(path,l,#s)||
-  if (I(/analysis.tdf-wal)  I(/analysis.tdf-journal)   I(/.ciopfs)  I(.quant)  I(/autorun.inf)  I(/.xdg-volume-info) I(/.Trash)
-      !strncmp(path,"/ZIPsFS_",8)
-      ) return true;
+static bool config_not_report_stat_error(const char *path,const int path_l){
+#define I(s) ENDSWITH(path,path_l,#s)||
+  return I(/analysis.tdf-wal)  I(/analysis.tdf-journal)   I(/.ciopfs)  I(.quant)  I(/autorun.inf)  I(/.xdg-volume-info) I(/.Trash) !strncmp(path,"/ZIPsFS_",8);
 #undef I
-  }
-  return false;
-}
-static bool _is_tdf_or_tdf_bin(const char *path){
-  if (!path || !*path)return false;
-  const int slash=last_slash(path);
-  return !strcmp(path+slash+1,"analysis.tdf") || !strcmp(path+slash+1,"analysis.tdf_bin");
 }
 ////////////////////////////////////////////////////
 /// Rules which zip entries are cached into RAM  ///
 /// This is active when started with option      ///
 ///      -c rule                                 ///
 ////////////////////////////////////////////////////
-#if IS_MEMCACHE
-static bool config_store_zipentry_in_memcache(long filesize,const char *path,bool is_compressed){
-  if (_is_tdf_or_tdf_bin(path)) return true;
-  return false;
+#if WITH_MEMCACHE
+static bool config_advise_cache_zipentry_in_ram(long filesize,const char *path,const int path_l,bool is_compressed){
+  return _is_tdf_or_tdf_bin(path);
 }
-#endif //IS_MEMCACHE
-static bool configuration_evict_from_filecache(const char *realpath,const char *zipentryOrNull){
-  if (_is_tdf_or_tdf_bin(zipentryOrNull) ||
-      _is_tdf_or_tdf_bin(realpath)) return true;
-  return false;
+#endif //WITH_MEMCACHE
+static bool config_advise_evict_from_filecache(const char *realpath,const int realpath_l, const char *zipentryOrNull, const int zipentry_l){
+  return _is_tdf_or_tdf_bin(zipentryOrNull) || _is_tdf_or_tdf_bin(realpath);
 }
-/////////////////////////////////////////////////////////////////////////
-/// Windows will read the beginning of exe files to get the icon      ///
-/// With the rule  -c always, all .exe files would be loaded into RAM ///
-/// when a file listing is displayed in File Explorerer               ///
-/////////////////////////////////////////////////////////////////////////
-static bool config_not_memcache_zip_entry(const char *path){
-  const int len=!path?0:strlen(path);
-  const char *e=path+len;
-  return len>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e';  /* if endsWithIgnoreCase .exe  */
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Lots of stupid redundand FS requests while tdf and tdf_bin files are read.                              ///
+/// We create a temporary cache for storing file attributes and associate this cache to the file descriptor ///
+/// When the file is closed, the cache is disposed.                                                         ///
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#if WITH_TRANSIENT_ZIPENTRY_CACHES
+static bool config_advise_transient_cache_for_zipentries(const char *path, const int path_l){
+  return _is_tdf_or_tdf_bin(path);
 }
-//////////////////////////////////////////////////////////////
-/// This activates  fuse_file_info->keep_cache  upon open ////
-//////////////////////////////////////////////////////////////
-static bool config_keep_file_attribute_in_cache(const char *path){
-  if (!_is_tdf_or_tdf_bin(path)) return false;
-  const int slash=last_slash(path);
-  return slash>0 && !strncmp(path+slash,"/202",4);
+#endif //WITH_TRANSIENT_ZIPENTRY_CACHES
+/////////////////////////////////////////////////////////////////////////////////////////
+/// Windows will read the beginning of exe files to get the icon                      ///
+/// With the rule  -c always, all .exe files would be loaded into RAM                 ///
+/// when a file listing is displayed in File Explorerer.                              ///
+/// Add here exceptions in case of MEMCACHE_ALWAYS selected with CLI Option -c ALWAYS ///
+/////////////////////////////////////////////////////////////////////////////////////////
+static bool config_advise_not_cache_zipentry_in_ram(const char *path, const int path_l){
+  const char *e=path+path_l;
+  return path_l>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e';
 }
 
-/////////////////////////////////////////////////////
-/// For a certain software we use it is important ///
-/// only certain files in a ZIP are visible       ///
-////////////////////////////////////////////////////
-static bool config_zipentry_filter(const char *parent, const char *name){
-  return true;
-  if (parent && ENDSWITH(parent,strlen(parent),".d.Zip")){
-    const int slash=last_slash(parent);
-    if (slash>0 && !strncmp(parent+slash,"/202",4) && (strstr(parent,"_PRO1_")||strstr(parent,"_PRO1_")||strstr(parent,"_PRO1_"))){
-      return _is_tdf_or_tdf_bin(name);
-    }
-  }
-  return true;
-}
 ////////////////////////////////////////////////////////////
 /// Certain files may be hidden in file listings         ///
 ////////////////////////////////////////////////////////////
-static bool config_filter_files_in_listing(const char *parent, const char *name){
-  const int l=my_strlen(name);
-#define C(x) ENDSWITH(name,l,#x)
-  if (l>12 && C(.md5) && (C(.Zip.md5) || C(.wiff.md5) || C(.wiff.scan.md5) || C(.raw.md5) || C(.rawIdx.md5))) return false;
+static bool config_do_not_list_file(const char *parent, const char *filename,const int filename_l){
+#define C(x) ENDSWITH(filename,filename_l,#x)
+  return filename_l>12 && C(.md5) && (C(.Zip.md5) || C(.wiff.md5) || C(.wiff.scan.md5) || C(.raw.md5) || C(.rawIdx.md5));
 #undef C
-  return true;
 }
 ////////////////////////////////////////////////////////////
 /// Normally, one could replace a file by a new version  ///
 /// The new file is stored in the first root.            ///
 /// Certain files may be protected from beeing changed.  ///
 ////////////////////////////////////////////////////////////
-static bool config_not_overwrite(const char *path){
-  const int l=strlen(path);
-#define C(a) ENDSWITH(path,l,#a)
+static bool config_not_overwrite(const char *path,const int path_l){
+#define C(a) ENDSWITH(path,path_l,#a)
   return C(.tdf)||C(.tdf_bin)||C(.wiff)||C(.wiff2)||C(.wiff.scan)||C(.raw)||C(.rawIdx);
 #undef C
 }
@@ -244,26 +229,26 @@ static bool config_not_overwrite(const char *path){
 /// What about file directories, should they be cached?  ///
 /// Maybe remote folders that have not changed recently  ///
 ////////////////////////////////////////////////////////////
-#if IS_DIRCACHE
-static bool config_cache_directory(const char *path, bool isRemote, const struct timespec mtime){
+#if WITH_DIRCACHE
+static bool config_advise_cache_directory_listing(const char *path,const int path_l,const bool isRemote,const bool isZipArchive, const struct timespec mtime){
+  if (isZipArchive) return true;
   if (isRemote){
     struct timeval tv={0};
     gettimeofday(&tv,NULL);
-    return (tv.tv_sec-mtime.tv_sec)<60*60;
+    return (tv.tv_sec-mtime.tv_sec)>60*60;
   }
   return false;
 }
-#endif //IS_DIRCACHE
+#endif //WITH_DIRCACHE
 
 ////////////////////////////////////////////////////////////////////
 /// Register frequent file extensions to improve performance.    ///
 /// They do not need to start with dot.                          ///
 ////////////////////////////////////////////////////////////////////
-const int _FILE_EXT_FROM=__COUNTER__;
-static char *some_file_path_extensions(const char *path, int len, int *return_index){
-  assert(path[len]==0);
-#define C(a) if (ENDSWITH(path,len,#a)){ *return_index=__COUNTER__-_FILE_EXT_FROM; return #a;}
-  switch(path[len-1]){
+static const int _FILE_EXT_FROM=__COUNTER__;
+static char *config_some_file_path_extensions(const char *path, int path_l, int *return_index){
+#define C(a) if (ENDSWITH(path,path_l,#a)){ *return_index=__COUNTER__-_FILE_EXT_FROM; return #a;}
+  switch(path[path_l-1]){
   case 'a': C(.timeseries.data);break;
   case 'd': C(.d);break;
   case 'f': C(.wiff);C(.tdf);C(desktop.inf);C(Desktop.inf);break;
@@ -277,21 +262,19 @@ static char *some_file_path_extensions(const char *path, int len, int *return_in
   return NULL;
 }
 const int _FILE_EXT_TO=__COUNTER__;
-
-////////////////////////////////////////////////////////////////////////
-/// Bruker software tests existence of certain files thousands of times.
-////////////////////////////////////////////////////////////////////////
-
-#if DO_REMEMBER_NOT_EXISTS
-static bool do_remember_not_exists(const char *path){
-  const int len=strlen(path);
-  if (!len) return false;
-#define C(x) ENDSWITH(path,len,#x)
-  if (C(.tdf-journal) || C(.tdf-wal) || C(/.ciopfs)){
-#undef C
-    const char *pro=strstr(path,"/PRO");
-    return (pro && '0'<=pro[4] && pro[4]<='9' && pro[5]=='/');
-  }
-  return false;
+////////////////////////////////////////////////////////////////////
+/// Restrict search for certain files to improve performance.    ///
+////////////////////////////////////////////////////////////////////
+static long config_search_file_which_roots(const char *virtualpath,const int virtualpath_l,const bool path_starts_with_autogen){
+#if WITH_AUTOGEN
+  if (path_starts_with_autogen && _config_ends_like_a_generated_file(virtualpath,virtualpath_l)) return 1;
+#endif //WITH_AUTOGEN
+  return 0xFFFFffffFFFFffffL;
 }
-#endif //DO_REMEMBER_NOT_EXISTS
+static long config_num_retries_getattr(const char *path, const int path_l,int *sleep_milliseconds){
+  if (_is_tdf_or_tdf_bin(path)){
+    *sleep_milliseconds=1000;
+    return 3;
+  }
+  return 1;
+}

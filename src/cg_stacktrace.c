@@ -9,14 +9,7 @@
 #include <string.h>
 #include <err.h>
 #include <stdbool.h>
-#define ANSI_FG_BLUE "\x1B[34;1m"
-#define ANSI_FG_RED "\x1B[31m"
-#define ANSI_RED "\x1B[41m"
-#define ANSI_INVERSE "\x1B[7m"
-
-#define ANSI_RESET "\x1B[0m"
-#define DIE(format,...)   { print_stacktrace(0); fprintf(_stckOut,format,__VA_ARGS__); fprintf(_stckOut,ANSI_RED" (in %s at %s:%i)"ANSI_RESET"\n",__func__,__FILE__,__LINE__),exit(EXIT_FAILURE);}
-#define DIE0(msg) DIE(ANSI_FG_RED"%s"ANSI_RESET,msg)
+#include "cg_utils.h"
 #define MAX_BACKTRACE_LINES 64
 static char* _thisPrg;
 static FILE *_stckOut;
@@ -27,7 +20,7 @@ static FILE *_stckOut;
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/prctl.h>
-static void print_stacktrace_using_debugger(){
+static void cg_print_stacktrace_using_debugger(){
   return;
   fputs(ANSI_INVERSE"print_trace_using_debugger"ANSI_RESET"\n",stderr);
   char pid_buf[30];
@@ -47,6 +40,7 @@ static void print_stacktrace_using_debugger(){
 }
 #endif
 ////////////////////////////////////////////////////////////////////////
+  /*  See  addr2line_cmd=%s\n",addr2line_cmd);*/
 static bool addr2line(const char *program_name, const void *addr, int lineNb){
   char addr2line_cmd[512]={0},line1[1035]={0}, line2[1035]={0};
 #ifdef __APPLE__
@@ -72,25 +66,26 @@ static bool addr2line(const char *program_name, const void *addr, int lineNb){
   return ok;
 }
 
-static void print_stacktrace(int calledFromSigInt){
+static void cg_print_stacktrace(int calledFromSigInt){
   void* buffer[MAX_BACKTRACE_LINES];
   const int nptrs=backtrace(buffer,MAX_BACKTRACE_LINES);
    char **strings=backtrace_symbols(buffer,nptrs);
   if(!strings){
     perror("backtrace_symbols");
-    exit(EXIT_FAILURE);
+    EXIT(EXIT_FAILURE);
   }
   for(int i=calledFromSigInt?2:1; i<(nptrs-2); ++i){
-    if(!addr2line(_thisPrg, buffer[i], nptrs-2-i-1)){
-      fprintf(_stckOut, "[%i] %s\n", nptrs-2-i-1, strings[i]);
+    if (!addr2line(_thisPrg, buffer[i], nptrs-2-i-1)){
+      //fprintf(stderr, "DEBUG_NOW !addr2line %s %d \n",_thisPrg, nptrs-2-i-1);
+      fprintf(_stckOut, " [%i] %s\n", nptrs-2-i-1, strings[i]);
     }
   }
   free(strings);
 }
 static void my_signal_handler(int sig){
   signal(sig,SIG_DFL);
-  print_stacktrace(1);
-  fprintf(_stckOut,"Caught signal %s\n",strsignal(sig));
+  fprintf(_stckOut,"\x1B[41mCaught signal %s\x1B[0m\n",strsignal(sig));
+  cg_print_stacktrace(0);
   _Exit(EXIT_FAILURE);
 }
 static void set_signal_handler(sig_t handler,uint64_t signals){
@@ -112,7 +107,7 @@ static void init_sighandler(char* main_argv_0, uint64_t signals,FILE *out){
 //////////////////////////////////////////////////////////////////////////////////////////
 #if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__==0
 static void function_a(){
-  //print_stacktrace(1);
+  //cg_print_stacktrace(1);
   //DIE0("Hello");
   #include <assert.h>
   assert(1==2);

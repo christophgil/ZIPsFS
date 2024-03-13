@@ -340,9 +340,10 @@ ZIPsFS has been developed to solve the following  problems:
            └── 20230402_hsapiens_Sample_099.wiff.scan
  </PRE>
  </DIV>
-
  <DIV style="clear:both;"></DIV>
-
 </SPAN>
 
+# LIMITATIONS
 
+Limitations exist for length of file paths.
+Respective constants in ZIPsFS_configuration.h can be increased.

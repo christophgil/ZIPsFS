@@ -1,86 +1,128 @@
+///////////////////////////////////
+/// COMPILE_MAIN=ZIPsFS        ///
+/// Customizations by the user  ///
+///////////////////////////////////
+
+/////////////////////////////////
+/// Limitations of pathlength ///
+/////////////////////////////////
+#define ZPATH_STRGS 1024
+/* cg_utils.c defines   MAX_PATHLEN */
 /////////////////
 /// Debugging ///
 /////////////////
-#define DO_ASSERT_LOCK 0
+#define WITH_ASSERT_LOCK 0
+#define WITH_PTHREAD_LOCK 1 /*  Should always be true. Only if suspect deadlock set to 0 */
+#define ASSERT(...) (assert(__VA_ARGS__))  // Optional assertion
 
 
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// With the following switches, optional features like caches can be (de)activated. Active: 1 Incactive: 0
+/// Tey helped to identify the source of problems during software development.
+/// They also help to identify non-essential optional parts in the source code.
+/// To improve readablility, deactivated code can be grayed out in the IDE.
+/// See hide-ifdef-mode of EMACS.
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/////////////////////////////////////////////////////////////////////////////////////
-/// The following optional caches can be deactivated. Active: 1 Incactive: 0.     ///
-/// This may help to identify program errors.
-/// These caches improve the performance of ZIPsFS.                               ///
-/////////////////////////////////////////////////////////////////////////////////////
-
-#define IS_DIRCACHE 1
-// The table of content of ZIP files is stored. The key is the filename and the mtime attribute.
-// The table of content (toc) of ZIP files is stored in memory mapped files. The data structure is struct mstore.
-// We created our own  storage  struct mstore. It is basically an array of memory mapped files.
-// A cached toc is valid until the last-modified attribute changes.
-// We reduce memory requirement of tocs as follows:
-// Zip-entries where the ZIP-file name is part of the name (after removing all trailing dot-suffix) are abbreviated using a placeholder for the name..
-// After this simplification,  many of our ZIP files have identical tocs. Consequently only reference to a previously stored toc is required.
-// The dircache has a maximum capacity given in ZIPsFS_configuration.c. If exceeded, the entire cache is cleared and filling starts again.
+#define DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT 0
+// The caches of file attributes  grow  during run-time.
+// The cache is a bundle of memory mapped files in ~/.ZIPsFS/. See cg_mstore*.c. The OS can use  disk space to save RAM.
+// Eventually, the caches get cleared when the size exceeds the limit given by  DIRECTORY_CACHE_SIZE and  DIRECTORY_CACHE_SEGMENTS.
+// Currently, DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT is off as cache clearing is not yet fully tested.
 
 
-#define IS_DIRCACHE_OPTIMIZE_NAMES 1
-// When the ZIP file base name is part of the ZIP entry names, it is replaced by a specific
-// symbol denoted here as * asterisk. Consider for example a Zipfile say my_record.Zip containing my_record.wiff and
-// my_record.rawIdx and my_record.raw.  Substitution of the ZIP file name "my_record" by "*" results in  *.wiff and *.rawIdx and *.raw.
-// This file list can be stored much more efficiently. Since many  ZIP files will have the same list
-// of entries after  substitution,  only one instance of the entry list needs to be stored and can be referenced multiple times.
+#define WITH_DIRCACHE 1
+// This activates sorage of the ZIP file index and the file listing of rarely changing file directories in a cache.
+// The cache key is the filepath of the ZIP file or directory  plus the last-modified file  attribute.
+
+#define WITH_DIRCACHE_OPTIMIZE_NAMES 1
+// When the  base name of the ZIP file  is part of  ZIP entry names, storage space can be saved.
+// The base name is replaced by a specific symbol denoted here as "*" asterisk. Consider for example a Zipfile my_record_1234.Zip containing my_record_1234.wiff and
+// my_record_1234.rawIdx and my_record_1234.raw.  Substitution of the ZIP file name "my_record_1234" by "*" results in  *.wiff and *.rawIdx and *.raw.
+// After substitution, the file list will be shared by many ZIP files which allows efficient storing in the cache.
+
+#define WITH_MEMCACHE 1
+#define NUM_MEMCACHE_STORE_RETRY 2
+// With WITH_MEMCACHE, the file content of selected ZIP entries is hold in RAM while the respective file handle exists.
+// This facilitates non-sequential file reading.
+// See man fseek
+// The virtual file paths are selected with the function config_advise_cache_zipentry_in_ram(). Also see CLI parameter -c.
+// Depending on the size, memory is reserved either with malloc() or with mmap().
+// The memory address is kept int struct fhdata as long as the file is open.
+// When several threads are accessing the same file, then only one instance of struct fhdata has a reference to the RAM area with the file content.
+// This cache is used by all other instances of struct fhdata with the same file path.
+// Upon close, such struct fhdata instance is kept alive as long as  there are still instances with the same path. Instead, it is marked for  deletion at a later time.
 
 
 
-#define IS_MEMCACHE 1
-// The content of ZIP entries is hold in RAM. This is important those that are not read sequentially.
-// See the CLI parameter -c.
-// This cache stores the file content of ZIP files in RAM. Depending on the size, memory is reserved either with malloc() or with mmap().
-// The memory address is kept int struct fhdata. When several threads are accessing the same file, then
-// only one instance of struct fhdata has a cache. It is used by all other instances with the same file path.
-// Upon close, such struct fhdata instance is not deleted when there are still instances with the same path. Instead, it is marked to be deleted later.
-
-
-#define IS_STATCACHE_IN_FHDATA 1
+#define WITH_TRANSIENT_ZIPENTRY_CACHES 1
 // This accelerates Bruker MS software. tdf and tdf_bin files are stored as .Zip files.
-// While a tdf and tdf_bin file is open, thousands of file system requests for related files occur.
-// The data associated to the open file pointer has a slot for those caches.
-// This cache data is freed automatically when the tdf or tdf_bin file is closed.
+// While a tdf and tdf_bin file is open, thousands of redundant file system requests  occur.
+// For each open tdf and tdf_bin file, a cache is temporarily created for these  redundant requests.
+// Upon file close, these caches are disposed.
 
-#define IS_ZIPINLINE_CACHE 1
+#define WITH_ZIPINLINE 1
+#define WITH_ZIPINLINE_CACHE 1
 // Normally, ZIP files are shown as folders with ZIP entries being the contained files.
-// However for mass spectrometry data of the company Sciex and ThermoFisher, this would the resemble the native arrangement of files.
-// Instead, the entries of all ZIP files in the folder need to be displayed in the virtual file  folder.
-// See config_zipentry_to_zipfile() and config_zipentries_instead_of_zipfile().
-// Since the files in the virtual path originate from multiple ZIP entries, the TOC of all these ZIP files are read and
-// stored in the cache. When the file listing is requested a second time, it is displayed much faster.
+// This is consistent for Bruker and Agilent mass spectrometry files.
+// However,  Sciex and ThermoFisher are organized differently.
+// The file bundle of MS records are not organized in folders.
+// The files of one MS record share the constant  base name and have different file extensions.
+// In case of ThermoFisher, there is only one file.
+// Files from different records are displayed flat in the respective project directory.
+// With WITH_ZIPINLINE activated, this flat directory structure can be generated from archived ZIP files.
+// The entries of the respective ZIP files are inlined directly into the file listing without a containing folder.
+// See config_containing_zipfile_of_virtual_file() and config_skip_zipfile_show_zipentries_instead().
 
 
-#define IS_STAT_CACHE 1
-// This is a cache for file attributes for file path.
-// When loading Brukertimstof mass spectrometry files with the vendor DLL,
-// thousands and millions of redundant requests to the file system occur.
+
+#define WITH_STAT_CACHE 1
+// Activate a cache for file attributes of files and ZIP entries.
 
 
-#define DO_REMEMBER_NOT_EXISTS 1
-/* --- */
 
 ////////////
 /// Size ///
 ////////////
-#define LOG2_ROOTS 5  // How many file systems are combined
-#define DIRECTORY_CACHE_SIZE (1L<<28) // Size of file to cache directory listings
-#define DIRECTORY_CACHE_SEGMENTS 4 // Number of files to cache directory listings. If Exceeded, the directory cache is cleared and filled again.
-//#define DIRECTORY_CACHE_SIZE (1L<<16)
-//#define DIRECTORY_CACHE_SEGMENTS 1
+#define LOG2_ROOTS 3  // How many file systems are combined. Less is better because then constructed inodes is more efficient.
+#define DIRECTORY_CACHE_SIZE (1L<<28) // Size of file of one cache segment for  directory listings file names and attributes.
+#if DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
+#define DIRECTORY_CACHE_SEGMENTS 4 // Number of segments. If Exceeded, the directory cache is cleared and filled again.
+#endif
+#define MEMCACHE_READ_BYTES_NUM (16*1024*1024) // When storing zip entries in RAM, number of bytes read in one go
+#define SIZE_CUTOFF_MMAP_vs_MALLOC 100000
 
-#define MEMCACHE_READ_BYTES_NUM 16*1024*1024 // When storing zip entries in RAM, number of bytes read in one go
+
+/////////////////////////////////////
+/// Periodic probing remote roots ///
+/////////////////////////////////////
+
+#define ROOT_WARN_STATFS_TOOK_LONG_SECONDS 3 /* Remote roots are probed periodically using statfs() */
+#define ROOT_LAST_RESPONSE_MUST_BE_WITHIN_SECONDS 6 /* Roots which have rosponded within the last n seconds are used. */
+#define ROOT_SKIP_UNLESS_RESPONDED_WITHIN_SECONDS 100 // Not responded within n seconds - skip this root
+
 ////////////
 /// Time ///
 ////////////
-#define STATQUEUE_TIMEOUT_SECONDS 3
-#define ROOT_OBSERVE_EVERY_SECONDS 0.3 // Check availability of remote roots to prevent blocking.
-#define ROOT_OBSERVE_TIMEOUT_SECONDS 30 // Skip non-responding
-#define UNBLOCK_AFTER_SEC_THREAD_STATQUEUE 12
-#define UNBLOCK_AFTER_SEC_THREAD_MEMCACHE 600
-#define UNBLOCK_AFTER_SEC_THREAD_DIRCACHE 600
+#define STATQUEUE_TIMEOUT_SECONDS 10 // Give up waiting for stat() result
+#define STATQUEUE_SLEEP_USECONDS 200 // Sleep microseconds after checking queue again
+#define ROOT_OBSERVE_EVERY_MSECONDS_RESPONDING 1000 // Check availability of remote roots to prevent blocking.
+#define WITH_STAT_SEPARATE_THREADS 1 /* Recommended value is 1. Then  stat() is called in another thread to avoid blocking */
+
+
+/* File operations are performed within infininty loops to avoid blocking of the user threads. The infininty loops  might get blocked by a non-returning call to the file API */
+#define UNBLOCK_AFTER_SECONDS_THREAD_DIRCACHE 100
+#define UNBLOCK_AFTER_SECONDS_THREAD_STATQUEUE 20
+#define UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE 300
+#define UNBLOCK_AFTER_SECONDS_THREAD_RESPONDING 20
+
+///////////////////////////////////
+/// Dynamically generated files ///
+///////////////////////////////////
+
+#define WITH_AUTOGEN 1
+#if WITH_AUTOGEN
+#define AUTOGEN_DELETE_FILES_AFTER_DAYS "3"
+#define AUTOGEN_MAX_DEPENDENCIES 5 /*  Dynamically generated file can depend on n input files.  Prevents runaway loop */
+#endif
