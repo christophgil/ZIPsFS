@@ -6,11 +6,12 @@ AC_INIT([ZIPsFS], [2023-08-01], [christophgil@gmail.com])
 AM_INIT_AUTOMAKE
 AC_PROG_CC
 
+
 AC_CONFIG_SRCDIR([src/ZIPsFS.c])
 AC_CONFIG_HEADERS([src/config.h])
 
 AC_CONFIG_FILES([src/Makefile])
-
+AC_SEARCH_LIBS([sqrt], [m])
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h  fcntl.h limits.h sys/statvfs.h unistd.h  fuse.h zip.h])
@@ -18,6 +19,7 @@ AC_CHECK_HEADERS([stdlib.h string.h  fcntl.h limits.h sys/statvfs.h unistd.h  fu
 # Check for FUSE development environment
 PKG_CHECK_MODULES(FUSE,fuse3)
 PKG_CHECK_MODULES(LIBZIP,libzip)
+
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_UID_T

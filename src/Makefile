@@ -192,7 +192,7 @@ INSTALL_SCRIPT = ${INSTALL}
 INSTALL_STRIP_PROGRAM = $(install_sh) -c -s
 LDFLAGS = 
 LIBOBJS = 
-LIBS = 
+LIBS = -lm 
 LIBZIP_CFLAGS = -I/usr/local/include
 LIBZIP_LIBS = -L/usr/local/lib -lzip
 LTLIBOBJS = 
@@ -593,6 +593,7 @@ uninstall-am: uninstall-binPROGRAMS
 
 .PRECIOUS: Makefile
 
+# AM_LDFLAGS = 
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

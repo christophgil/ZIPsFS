@@ -22,35 +22,40 @@ ZIPsFS \-l 2GB \[ti]/tmp/ZIPsFS/writable \[ti]/local/file/tree
 .SH DESCRIPTION
 .SS Summary
 .PP
-ZIPsFS combines multiple file structures into one, resulting in single
+ZIPsFS combines multiple file structures into one, resulting in a single
 directory structure that contains underlying files and sub\-directories
 from the given sources.
-Created or modified files are stored in the first file structure.
-The other file sources are only read and never modified.
+Created or modified files are stored in the first file location.
+The other file sources are read\-only and files will never be modified.
 ZIPsFS expands ZIP files as folders.
-The folder name is formed from the ZIP file name by appending
+Normally, the folder name is formed from the ZIP file name by appending
 \[lq].Contents/\[rq].
-This can be changed by the user with rules based on file name patterns.
-It is also possible to get the content of the zip file online directly
-into the containing folder without a parent folder.
+This can be changed by the administrator with rules based on file name
+patterns.
+It is also possible to inline the files in the ZIP files into the file
+listing without the containing folder.
 .SS Configuration
 .PP
 The default behavior can be modified with rules based on file names in
-\f[I]configuration.c\f[R].
-For changes to take effect, re\-compilation is necessary.
+\f[I]ZIPsFS_configuration.h\f[R] and \f[I]ZIPsFS_configuration.c\f[R].
+For changes to take effect, re\-compilation and restart is necessary.
+Using the \f[I]\-s symlink\f[R] option, the configuration can be changed
+in production.
 .SS Union / overlay file system
 .PP
-All files in the file trees (in the example four) can be accessed via
-the mount point (in the example \f[I]~/tmp/ZIPsFS/mnt\f[R]). When files
-are created or modified, they will be stored in the first file tree (in
-the example \f[I]~/tmp/ZIPsFS/writable\f[R]).
+ZIPsFS is a union or overlay file system because several file locations
+are combined to one.
+All files in the source file trees (in the example four) can be accessed
+via the mount point (in the example \f[I]~/tmp/ZIPsFS/mnt\f[R]). When
+files are created or modified, they will be stored in the first file
+tree (in the example \f[I]~/tmp/ZIPsFS/writable\f[R]).
 If files exist in two locations, the left most root takes precedence.
 .SS Unreliable roots
 .PP
-Source file structures may come from remote sites and it may happen that
-a file structure is temporarily not available and file API functions may
-block.
-In such case, ZIPsFS should continue to operate with the remaining file
+When source file structures are stored remotely, there is increased risk
+that they may become temporarily unavailable.
+Overlay file systems typically freeze when calls to the file API block.
+Conversely, ZIPsFS should continue to operate with the remaining file
 roots.
 This is implemented as follows: Paths starting with double slash (in the
 example \f[I]//computer1/pub\f[R]) are regarded as remote paths and
@@ -59,10 +64,8 @@ ZIPsFS will periodically check file systems starting with a double
 slash.
 If the last responds was too long ago then the respective file system is
 skipped.
-Furthermore the stat() function to obtain the attributes of a file are
-performed in other threads.
-A request for stat() is queued and the result is waited for.
-If the result does not come in a given time the error code is returned.
+Furthermore the stat() function to obtain the attributes for a file are
+queued to be performed in extra threads.
 .SS Modified and created files
 .PP
 New files are created in the first file tree, while the following file
@@ -73,10 +76,10 @@ files can be created and the virtual file system is read\-only.
 .PP
 ZIPsFS can read certain ZIP entries entirely into RAM and provide the
 data from the RAM copy at higher speed.
-This may improve performance in particular for compressed ZIP entries
-that are read from varying positions in the file, so\-called file seek.
-Which ZIP entries are copied into RAM is controlled by rules based on
-file names and compression in \f[I]configuration.c\f[R].
+This may improve performance for compressed ZIP entries that are read
+from varying positions in the file, so\-called file file\-seek.
+The file entries are selected by rules based on file names and
+compression in \f[I]ZIPsFS_configuration.c\f[R].
 .PP
 In addition, compressed ZIP entries are cached in RAM if the reading
 position ever jumps backward.
@@ -87,16 +90,14 @@ the ZIP RAM cache is specified.
 .PP
 Running ZIPsFS in the foreground with the option \f[I]\-f\f[R], allows
 to observe logs continuously at the console.
-Running it in a terminal multiplexer like \f[I]tmux\f[R] has the
-advantage that the session is persistent and continues even when the
-windowing system or the terminal emulator terminate.
-A log file is written in \f[B]\[ti]/.ZIPsFS/\f[R] and is also accessible
-from the root of the virtual file system.
-An HTML file with status information is found in the root of the file
-system.
+It is recommended to run it in a terminal multiplexer like
+\f[I]tmux\f[R].
+Log files are in \f[B]\[ti]/.ZIPsFS/\f[R] written.
+An HTML file with status information is found in and are also accessible
+from Mount\-point/ZIPsFS/.
 .SS ZIP files
 .PP
-Let \f[I]file.zip\f[R] be a ZIP file in any of the roots.
+Let \f[I]file.zip\f[R] be a ZIP file in any of the root file systems.
 It will appear in the virtual file system together with a folder
 \f[I]file.zip.Content\f[R].
 Special rules based on file name patterns can be defined whether the
@@ -105,7 +106,15 @@ listing.
 Normally, the folder name is formed by appending
 \[lq]\f[I].Content\f[R]\[rq] to the zip file name.
 Conversely, complex rules can be implemented in
-\f[B]configuration.c\f[R].
+\f[I]ZIPsFS_configuration.c\f[R].
+.SS Autogeneration of files
+.PP
+ZIPsFS can list files which do not yet exist, however, will be generated
+when used.
+The typical use\-case are file conversions such as thumb images.
+With the current setting, Mascot mass spectrometry files and msML files
+are offered.
+Auto\-generated files are found in \f[I]Mount\-point/ZIPsFS/a/\f[R].
 .SS ZIPsFS Options
 .TP
 .B \-h
@@ -173,8 +182,10 @@ This allows to restart ZIPsFS without affecting running programs.
 Programs refer to the symlink rather than the real mount\-point.
 Consider a ZIPsFS instance which needs to be replaced by a newer one.
 The newer one is started with a different mount point.
-For some time both instances work simultaneously and the old instance
-can be deleted after some time.
+For some time both instances work simultaneously.
+Once no software is reading files from the old instance, the old
+instance can be terminated.
+.PP
 After initialization a symlink to the new mount point is created and
 programs start to use the new instance.
 .SS FUSE Options
@@ -191,7 +202,8 @@ related bugs.
 \f[I]\-o allow_other\f[R] Other users can read the files
 .SH FILES
 .IP \[bu] 2
-configuration.c: Customizable rules.
+ZIPsFS_configuration.h and ZIPsFS_configuration.c and
+ZIPsFS_configuration_autogen.c: Customizable rules.
 Modification requires recompilation.
 .IP \[bu] 2
 \[ti]/.ZIPsFS: Contains the log file and cache
@@ -225,3 +237,5 @@ https://bitbucket.org/agalanin/fuse\-zip/src
 https://github.com/google/mount\-zip
 .IP \[bu] 2
 https://github.com/cybernoid/archivemount
+.IP \[bu] 2
+https://github.com/mxmlnkn/ratarmount

@@ -15,7 +15,7 @@ First install the required libraries. The command for Ubuntu Linux:
 
 ## OPTIONAL: AUTOCONF
 
-The following will Re-generating the file ./configure from Makefile.am
+The following will Re-generating the file ./configure from configure.ac and Makefile.am
 This is usually not necessary.
 
     aclocal
@@ -25,6 +25,7 @@ This is usually not necessary.
 ## CREATE MAKEFILE
 
     cd ZIPsFS
+    #  autoreconf -vif # Usually not required
     ./configure
 
 ## RUNNING MAKE

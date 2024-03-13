@@ -72,7 +72,7 @@ static const char *PTHREAD_S[]={A6()NULL};
 #undef A2
 #undef A3
 
-//#define PLACEHOLDER_NAME '*'
+//#define PLACEHOLDER_NAME '*' // Better for debugging
 #define PLACEHOLDER_NAME 0x07
 
 #define SIZE_CUTOFF_MMAP_vs_MALLOC 100000
