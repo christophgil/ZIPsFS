@@ -180,6 +180,11 @@ Written in GNU-C.
   - MacOS: Would require minor adaptations.
 
 
+LIMITATIONS
+===========
+
+Hardlinks are not implemented, while symlinks work.
+
 BUGS
 ====
 

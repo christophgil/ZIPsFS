@@ -39,10 +39,10 @@ static MAYBE_INLINE int cg_mutex_count(int mutex,int inc){
 #define LOCK_NCANCEL(mutex,code) pthread_setcancelstate(PTHREAD_CANCEL_DISABLE,&_oldstate_not_needed);lock(mutex);code;unlock(mutex);pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&_oldstate_not_needed);
 
 #define LOCK(mutex,code) lock(mutex);code;unlock(mutex)
-static long _log_count_lock=0;
+static long _log_count_pthread_lock=0;
 static MAYBE_INLINE void lock(int mutex){
   IF0(WITH_PTHREAD_LOCK,return);
-  _log_count_lock++;
+  _log_count_pthread_lock++;
   pthread_mutex_lock(_mutex+mutex);
   IF1(WITH_ASSERT_LOCK,cg_mutex_count(mutex,1));
 }

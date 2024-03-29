@@ -52,6 +52,8 @@ struct ht_entry{
 #define _HT_LDDIM 4
 #define _STACK_HT_ENTRY ULIMIT_S
 struct ht{
+  const char *name;
+ int id;
   uint32_t flags,capacity,length;
   struct ht_entry* entries,_stack_ht_entry[_STACK_HT_ENTRY];
   struct mstore keystore_buf, *keystore, *value_store;
@@ -67,17 +69,24 @@ CG_THREAD_METHODS_HT(ht);
    The keystore stores the files efficiently to reduce number of mallog
    This should be used if entries in the hashtable are not going to be removed
 *****************************************************************************/
-#define ht_init_for_internalize(ht,flags_log2initalCapacity,mstore_dim)   _ht_init_with_keystore(ht,flags_log2initalCapacity|HT_FLAG_KEYS_ARE_STORED_EXTERN,NULL,mstore_dim)
-#define ht_init_with_keystore_dim(ht,flags_log2initalCapacity,mstore_dim) _ht_init_with_keystore(ht,flags_log2initalCapacity,NULL,mstore_dim)
-#define ht_init_with_keystore(ht,flags_log2initalCapacity,m)              _ht_init_with_keystore(ht,flags_log2initalCapacity,m,0)
-#define ht_init(ht,flags_log2initalCapacity)                              _ht_init_with_keystore(ht,flags_log2initalCapacity,NULL,0)
-static struct ht *_ht_init_with_keystore(struct ht *ht,uint32_t flags_log2initalCapacity, struct mstore *m, uint32_t mstore_dim){
+#define ht_init_interner(ht,flags_log2initalCapacity,mstore_dim)   _ht_init_with_keystore(ht,NULL,0,flags_log2initalCapacity|HT_FLAG_KEYS_ARE_STORED_EXTERN,NULL,mstore_dim)
+#define ht_init_interner_file(ht,name,instance,flags_log2initalCapacity,mstore_dim)   _ht_init_with_keystore(ht,name,instance,flags_log2initalCapacity|HT_FLAG_KEYS_ARE_STORED_EXTERN,NULL,mstore_dim|MSTORE_OPT_MMAP_WITH_FILE)
+#define ht_init_with_keystore_dim(ht,flags_log2initalCapacity,mstore_dim) _ht_init_with_keystore(ht,NULL,0,flags_log2initalCapacity,NULL,mstore_dim)
+#define ht_init_with_keystore_file(ht,name,instance,flags_log2initalCapacity,mstore_dim) _ht_init_with_keystore(ht,name,instance,flags_log2initalCapacity,NULL,mstore_dim|MSTORE_OPT_MMAP_WITH_FILE)
+#define ht_init_with_keystore(ht,flags_log2initalCapacity,m)              _ht_init_with_keystore(ht,NULL,0,flags_log2initalCapacity,m,0)
+#define ht_init(ht,flags_log2initalCapacity)                              _ht_init_with_keystore(ht,NULL,0,flags_log2initalCapacity,NULL,0)
+static struct ht *_ht_init_with_keystore(struct ht *ht,const char *name,  int id,uint32_t flags_log2initalCapacity, struct mstore *m, uint32_t mstore_dim){
   memset(ht,0,sizeof(struct ht));
   if (m){
     ht->keystore=m;
+    if (!name) name=m->name;
+    if (!id) id=m->id;
   }else if(mstore_dim){
-    mstore_init(ht->keystore=&ht->keystore_buf,mstore_dim);
+    if (mstore_dim&MSTORE_OPT_MMAP_WITH_FILE) assert(name!=NULL); /* Needed for file */
+    _mstore_init(ht->keystore=&ht->keystore_buf,name,id,mstore_dim);
   }
+  ht->name=name;
+  ht->id=id;
   ht->flags=(flags_log2initalCapacity&0xFF000000);
 #define C ht->capacity
   if ((C=(flags_log2initalCapacity&0xff)?(1<<(flags_log2initalCapacity&0xff)):0)>_STACK_HT_ENTRY/2){
@@ -181,7 +190,6 @@ static void *ht_set_common(struct ht *ht,const char* key,uint64_t keylen_hash, c
   let_e_get_entry(ht,key,keylen_hash);
   if (!e->key && !e->keylen_hash){ /* Didn't find key, allocate+copy if needed, then insert it. */
     if (key && !(ht->flags&(HT_FLAG_KEYS_ARE_STORED_EXTERN|HT_FLAG_NUMKEY))){
-      //      if (!(key=ht->keystore?mstore_addstr(ht->keystore,key,keylen_hash>>HT_KEYLEN_SHIFT):strdup(key))){
       if (!(key=_newKey(ht,key,keylen_hash))){
         log_error("ht.c: Store key with %s\n",ht->keystore?"keystore":"strdup");
         return NULL;
@@ -194,7 +202,6 @@ static void *ht_set_common(struct ht *ht,const char* key,uint64_t keylen_hash, c
   void *old=e->value;
   e->value=(void*)value;
   return old;
-  return "";
 }
 static void *ht_set(struct ht *ht,const char* key,const ht_keylen_t key_l,ht_hash_t hash, const void* value){
   _HT_HASH();
@@ -260,9 +267,11 @@ static void ht_clear(struct ht *ht){
 mstore_clear(ht->keystore);
   }
 }
-/* memoryalign is  [ 1,2,4,8] or 0 forString*/
-#define ht_internalize_string(ht,key,key_l,hash) ht_internalize(ht,key,key_l,hash,HT_MEMALIGN_FOR_STRG)
-const void *ht_internalize(struct ht *ht,const void *bytes,const size_t bytes_l,ht_hash_t hash,const int memoryalign){
+/* memoryalign is  [ 1,2,4,8] or 0 forString
+See https://docs.rs/string-interner/latest/string_interner/
+https://en.wikipedia.org/wiki/String_interning
+ */
+const void *ht_intern(struct ht *ht,const void *bytes,const size_t bytes_l,ht_hash_t hash,const int memoryalign){
   assert(ht->keystore!=NULL);
   if (!bytes || mstore_contains(ht->keystore,bytes)) return bytes;
   if (memoryalign==HT_MEMALIGN_FOR_STRG && !*(char*)bytes) return "";
@@ -271,7 +280,7 @@ const void *ht_internalize(struct ht *ht,const void *bytes,const size_t bytes_l,
   if (!e->value){
     e->key=e->value=(void*)(memoryalign==HT_MEMALIGN_FOR_STRG?mstore_addstr(ht->keystore,bytes,bytes_l): mstore_add(ht->keystore,bytes,bytes_l,memoryalign));
     //log_debug(ANSI_MAGENTA"ht_internalize mstore_add %ld " ANSI_RESET " bytes: %p mstore_contains:%d\n",bytes_l,bytes,mstore_contains(ht->keystore,e->key));
-    //    ASSERT(e->value==ht_internalize(ht,e->value,bytes_l,0,memoryalign));
+    //    ASSERT(e->value==ht_intern(ht,e->value,bytes_l,0,memoryalign));
   }//else log_debug(ANSI_GREEN"ht_internalize %ld "ANSI_RESET,bytes_l);
 
   return e->value;
@@ -299,7 +308,7 @@ static void *ht_sset(struct ht *ht,const char* key, const void* value){
 
 
 const void *ht_sinternalize(struct ht *ht,const char *key){
-  return !key?NULL:ht_internalize(ht,key,strlen(key),0,HT_MEMALIGN_FOR_STRG);
+  return !key?NULL:ht_intern(ht,key,strlen(key),0,HT_MEMALIGN_FOR_STRG);
 }
 
 
@@ -369,9 +378,7 @@ static void test_int_keys(int argc, char *argv[]){
 static void test_internalize(int argc, char *argv[]){
   mstore_set_base_path("~/tmp/cache/test_internalize");
   struct ht ht;
-  // struct mstore m={0};mstore_init(&m,4096);ht_init_with_keystore(&ht,HT_FLAG_KEYS_ARE_STORED_EXTERN|2,&m);
-
-  ht_init_for_internalize(&ht,8,4096|MSTORE_OPT_MMAP_WITH_FILE);
+  ht_init_interner_file(&ht,"test_internalize",0,8,4096);
   FOR(i,0,argc){
     const char *s=argv[i];
     assert(ht_sinternalize(&ht,s)==ht_sinternalize(&ht,s));
@@ -387,7 +394,7 @@ static void test_internalize(int argc, char *argv[]){
 }
 
 
-static void test_internalize_num(int argc, char *argv[]){
+static void test_intern_num(int argc, char *argv[]){
   struct ht ht;
   struct mstore m={0};
   mstore_init(&m,4096);
@@ -399,17 +406,17 @@ static void test_internalize_num(int argc, char *argv[]){
   const int data_l=10*sizeof(int);
   const int SINT=sizeof(int);
   bool verbose=false;
-  FOR(i,0,N) intern[i]=(int*)ht_internalize(&ht,data[i],data_l,0,SINT);
+  FOR(i,0,N) intern[i]=(int*)ht_intern(&ht,data[i],data_l,0,SINT);
   int count_ok=0;
   FOR(i,0,N){
     bool  ok;
-    ok=(intern[i]==(int*)ht_internalize(&ht,intern[i],data_l,0,SINT));
+    ok=(intern[i]==(int*)ht_intern(&ht,intern[i],data_l,0,SINT));
 
     //      assert(hash32(intern[i],10*SINT)==hash32(data[i]));;
 
     assert(ok); if (verbose) log_verbose("ok2 %d ",ok);
 
-    ok=(intern[i]==(int*)ht_internalize(&ht,data[i],data_l,0,SINT));
+    ok=(intern[i]==(int*)ht_intern(&ht,data[i],data_l,0,SINT));
     assert(ok); if (verbose) log_verbose("ok1 %d ",ok);
     ok=(intern[i]==(int*)ht_get(&ht,(char*)intern[i],data_l,0));
     assert(ok); if (verbose) log_verbose("ok3 %d ",ok);
@@ -425,13 +432,15 @@ static void test_internalize_num(int argc, char *argv[]){
 
 static void test_use_as_set(int argc, char *argv[]){
   struct ht ht;
-  ht_init_with_keystore_dim(&ht,HT_FLAG_KEYS_ARE_STORED_EXTERN|8,4096);
-  fprintf(stderr,"\x1B[1m\x1B[4mj'ti\ts\told\n"ANSI_RESET);
+  ht_init(&ht,HT_FLAG_KEYS_ARE_STORED_EXTERN|8);
+  fprintf(stderr,"\x1B[1m\x1B[4m");
+  fprintf(stderr,"j\ti\told\ts\tSize\n"ANSI_RESET);
   FOR(j,0,5){
-    for(int i=1;i<argc && i<999;i++){
-      char *s=argv[i], *old=ht_set(&ht,s,0,0,"X");
-      fprintf(stderr,"%d\t%d\t%s\t%s\n",j,i,old,s);
+    FOR(i,1,argc){
+      char *s=argv[i], *old=ht_sset(&ht,s,"x");
+      fprintf(stderr,"%d\t%d\t%s\t%s\t%u\n",j,i,s,old,ht.length);
     }
+    fputc('\n',stderr);
   }
 }
 static void test_unique(int argc, char *argv[]){
@@ -470,7 +479,7 @@ static void test_mstore2(int argc,char *argv[]){
         {
           char line_on_stack[line_l+1];
           strcpy(line_on_stack,line);
-          key=(char*)ht_internalize(&ht_int,line_on_stack,line_l,0,HT_MEMALIGN_FOR_STRG);
+          key=(char*)ht_intern(&ht_int,line_on_stack,line_l,0,HT_MEMALIGN_FOR_STRG);
         }/* From here line_on_stack invalid */
         //fputs("5)",stderr);
         const int key_l=strlen(key);
@@ -495,36 +504,36 @@ static void test_mstore2(int argc,char *argv[]){
   ht_destroy(&ht_int);
 }
 
-static void test_internalize_substring(int argc,char *argv[]){
+static void test_intern_substring(int argc,char *argv[]){
   struct ht ht;
   ht_init_with_keystore_dim(&ht,HT_FLAG_KEYS_ARE_STORED_EXTERN|8,4096);
 
-  const char *internalized=ht_internalize(&ht,"hello world",5,0,HT_MEMALIGN_FOR_STRG);
+  const char *internalized=ht_intern(&ht,"abc",5,0,HT_MEMALIGN_FOR_STRG);
   printf("internalized=%s\n",internalized);
 }
 int main(int argc,char *argv[]){
   if (0){
   struct ht ht={0};
-  ht_init_for_internalize(&ht,8,4096);
+  ht_init_interner(&ht,8,4096);
 
   const char *key=ht_sinternalize(&ht,"key");
   printf("key: %s contains:%d\n",key,mstore_contains(ht.keystore,key));
   return 1;
   }
 
-  switch(3){
+  switch(5){
   case 0:
     fprintf(stderr,"ht_entry %zu bytes\n",sizeof(struct ht_entry));
     assert(false);break;
   case 1: test_int_keys(argc,argv);break; /* 30 */
   case 2: test_ht_1(argc,argv);break; /* $(seq 30) */
   case 3: test_internalize(argc,argv);break; /* $(seq 30) */
-  case 4: test_internalize_num(argc,argv);break; /* 100 */
+  case 4: test_intern_num(argc,argv);break; /* 100 */
   case 5: test_use_as_set(argc,argv);break; /* $(seq 30) */
     //  case 5: test_iteration(argc,argv);break; /* {1,2,3,4}{a,b,c,d}{x,y,z}  */
   case 7: test_unique(argc,argv);break; /* a a a a b b b c c  */
   case 8: test_mstore2(argc,argv); break; /*  f=~/tmp/lines.txt ; seq 100 > $f; cg_ht_v7 $f */
-  case 9: test_internalize_substring(argc,argv); break;
+  case 9: test_intern_substring(argc,argv); break;
   }
 }
 #endif

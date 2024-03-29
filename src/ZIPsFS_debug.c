@@ -209,7 +209,7 @@ static void debug_track_false_getattr_errors(const char *vp,const int vp_l){
     log_debug_now("vp=%s",vp);
 
     NEW_ZIPPATH(vp);
-    zpath->flags|=ZP_VERBOSE2;
+    //zpath->flags|=ZP_VERBOSE2;
     const bool found=find_realpath_any_root(0,zpath,NULL);
     log_zpath("",zpath);
     exit_ZIPsFS(0);

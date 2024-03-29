@@ -129,6 +129,8 @@ M(MAX,long)
 #define log_errno0(msg) log_errno("%s",msg)
 
 #define DIE0(msg) DIE("%s",msg)
+#define DIE_DEBUG_NOW(...) DIE(__VA_ARGS__)
+#define DIE_DEBUG_NOW0(...) DIE0(__VA_ARGS__)
 
 #define ULIMIT_S  8192  // Stacksize [kB]  Output of  ulimit -s  The maximum stack size currently  8192 KB on Linux. Check with ulimit -s*/
 

@@ -63,10 +63,10 @@ static bool fhdata_check_crc32(struct fhdata *d){
 
 #define MEMCACHE_READ_ERROR 1
 static int memcache_store_try(struct fhdata *d){
-#define A() ASSERT(d->memcache_status==memcache_reading);/*This keeps d alive*/ assert(D_VP(d)!=NULL); assert(d->zpath.root!=NULL)
+#define A() /*ASSERT(d->memcache_status==memcache_reading);*/ LOCK(mutex_fhdata,ASSERT(!fhdata_can_destroy(d)));  assert(D_VP(d)!=NULL); assert(d->zpath.root!=NULL)
   bool verbose=false;
-  if (verbose) log_entered_function("%s\n",D_VP(d));
-  assert(d->is_xmp_read>0);A();
+  if (verbose)  log_entered_function("%s\n",D_VP(d));
+  A();
   int ret=0;
   const int64_t st_size=d->zpath.stat_vp.st_size;
   d->memcache_already_current=0;
@@ -79,7 +79,7 @@ static int memcache_store_try(struct fhdata *d){
     warning(WARN_MEMCACHE|WARN_FLAG_ERRNO|WARN_FLAG_ERROR,rp,"memcache_zip_entry: Failed zip_open d=%p",d);
   }else{
     zip_file_t *zf=zip_fopen(za,D_EP(d),ZIP_RDONLY);
-    LOCK(mutex_fhdata,fhdata_counter_inc(d,zf?ZIP_OPEN_SUCCESS:ZIP_OPEN_FAIL));
+    fhdata_counter_inc(d,zf?ZIP_OPEN_SUCCESS:ZIP_OPEN_FAIL);
     if (!zf){
       warning(WARN_MEMCACHE|WARN_FLAG_MAYBE_EXIT,rp,"memcache_zip_entry: Failed zip_fopen d=%p",d);
     }else{
@@ -87,13 +87,16 @@ static int memcache_store_try(struct fhdata *d){
 #define RETRY_ZIP_FREAD 3
 #define N() MIN_long(MEMCACHE_READ_BYTES_NUM,st_size-d->memcache_already_current)
       for(zip_int64_t n;N()>0;){
-        if (d->flags&FHDATA_FLAGS_DESTROY_LATER){ LOCK(mutex_fhdata, if (fhdata_can_destroy(d)) d->flags|=FHDATA_FLAGS_INTERRUPTED); fhdata_counter_inc(d,COUNT_MEMCACHE_INTERRUPT);}
+        if (d->flags&FHDATA_FLAGS_DESTROY_LATER){
+          LOCK(mutex_fhdata, if (fhdata_can_destroy(d)) d->flags|=FHDATA_FLAGS_INTERRUPTED);
+          fhdata_counter_inc(d,COUNT_MEMCACHE_INTERRUPT);
+        }
         if (d->flags&FHDATA_FLAGS_INTERRUPTED) break;
         FOR(retry,0,RETRY_ZIP_FREAD){
           if ((n=zip_fread(zf,d->memcache2->segment[0]+d->memcache_already_current,N()))>0){
             if (retry){
               warning(WARN_RETRY,path,"zip_fread succeeded retry: %d/%d  n=%ld",retry,RETRY_ZIP_FREAD-1,n);
-              LOCK(mutex_fhdata,fhdata_counter_inc(d,COUNT_RETRY_ZIP_FREAD));
+              fhdata_counter_inc(d,COUNT_RETRY_ZIP_FREAD);
             }
             break;
           }
@@ -105,11 +108,13 @@ static int memcache_store_try(struct fhdata *d){
       if (d->memcache_already_current==st_size){ /* Completely read */
         //assert(ret!=MEMCACHE_READ_ERROR);
         if (fhdata_check_crc32(d)){
-          LOCK(mutex_fhdata, A();d->memcache_took_mseconds=currentTimeMillis()-start;fhdata_counter_inc(d,ZIP_READ_CACHE_CRC32_SUCCESS); fhdata_set_memcache_status(d,memcache_done));
+          fhdata_counter_inc(d,ZIP_READ_CACHE_CRC32_SUCCESS);
+          LOCK(mutex_fhdata, A();d->memcache_took_mseconds=currentTimeMillis()-start;fhdata_set_memcache_status(d,memcache_done));
           //log_succes("memcache_done  d= %p %s %p  st_size=%zu  in %'ld mseconds\n",d,path,d->memcache,d->memcache_already_current,d->memcache_took_mseconds);
           if (verbose) log_exited_function("%s  d->memcache_already_current==st_size  crc32 OK\n",D_RP(d));
         }else{
-          LOCK(mutex_fhdata,A();fhdata_counter_inc(d,ZIP_READ_CACHE_CRC32_FAIL);fhdata_set_memcache_status(d,d->memcache_already_current=d->memcache_already=0));
+          LOCK(mutex_fhdata,A();fhdata_set_memcache_status(d,d->memcache_already_current=d->memcache_already=0));
+          fhdata_counter_inc(d,ZIP_READ_CACHE_CRC32_FAIL);
           if (verbose) log_exited_function("%s  d->memcache_already_current==st_size  crc32 wrong\n",D_RP(d));
         }
       }else{
@@ -130,44 +135,41 @@ static int memcache_store_try(struct fhdata *d){
 static void memcache_store(struct fhdata *d){
   if (!d) return;
   cg_thread_assert_not_locked(mutex_fhdata);
-  assert(d->memcache_status==memcache_reading);
-  LOCK(mutex_fhdata,assert(!fhdata_can_destroy(d)));
   FOR(retry,0,NUM_MEMCACHE_STORE_RETRY){
     const int ret=memcache_store_try(d);
     if (retry && !ret && d->memcache_already==d->zpath.stat_vp.st_size){
       warning(WARN_RETRY,D_VP(d),"memcache_store succeeded on retry %d",retry);
-      LOCK(mutex_fhdata,fhdata_counter_inc(d,COUNT_RETRY_MEMCACHE));
+      fhdata_counter_inc(d,COUNT_RETRY_MEMCACHE);
     }
     if ((d->flags&FHDATA_FLAGS_INTERRUPTED) || ret!=MEMCACHE_READ_ERROR) break;
+    log_debug_now("retry  %s",D_VP(d));
     usleep(1000*1000);
   }
   maybe_evict_from_filecache(0,D_RP(d),D_RP_L(d),D_VP(d),D_VP_L(d));
 }
 
 static void *infloop_memcache(void *arg){
-#define D(x) LOCK(mutex_fhdata,r->memcache_d=x)
   struct rootdata *r=arg;
   pthread_cleanup_push(infloop_memcache_start,r);
   LOCK_NCANCEL(mutex_fhdata,if (r->memcache_d) r->memcache_d->flags|=FHDATA_FLAGS_INTERRUPTED);
   while(true){
     if (!wait_for_root_timeout(r)) continue;
-    D(NULL);
     LOCK(mutex_fhdata,
+         r->memcache_d=NULL;
          foreach_fhdata_also_emty(id,d){
-               observe_thread(r,PTHREAD_MEMCACHE);
+           observe_thread(r,PTHREAD_MEMCACHE);
            if (memcache_is_queued(d)){
-             D(d);
-             fhdata_set_memcache_status(d,memcache_reading);break;
+             LOCK(mutex_fhdata,r->memcache_d=d;fhdata_set_memcache_status(d,memcache_reading));
+             break;
            }
            /* d is protected from being destroyed if  memcache_reading */
          });
     if (r->memcache_d) memcache_store(r->memcache_d);
-    D(NULL);
+    LOCK(mutex_fhdata,r->memcache_d=NULL);
     observe_thread(r,PTHREAD_MEMCACHE);
     usleep(10000);
   }
   pthread_cleanup_pop(0);
-#undef D
 }
 
 static bool memcache_is_advised(const struct fhdata *d){

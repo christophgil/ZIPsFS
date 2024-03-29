@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <stdatomic.h>
+//#include <stdatomic.h>
 #include <sys/mman.h>
 #include <fcntl.h> /* open .. */
 #include <errno.h>
@@ -55,7 +55,7 @@ static ht_hash_t hash_value_strg(const char* key){
 #define _MSTORE_BYTES_OF_FIRST_BLOCK (ULIMIT_S*8)
 #define NEXT_MULTIPLE(x,word) ((x+(word-1))&~(word-1))   /* NEXT_MULTIPLE(13,4) -> 16*/
 #define MSTORE_OPT_MALLOC (1U<<30)
-#define MSTORE_OPT_MMAP_WITH_FILE (1U<<29)
+#define MSTORE_OPT_MMAP_WITH_FILE (1U<<29)  /* Default is anonymous mmap */
 #define _MSTORE_MASK_OPTS (MSTORE_OPT_MALLOC|MSTORE_OPT_MMAP_WITH_FILE)
 #define _MSTORE_FREE_DATA(m)  if (m->data!=m->pointers_data_on_stack) free(m->data)
 #define BLOCK_OFFSET_NEXT_FREE(d) ((off_t*)d)[0]
@@ -66,6 +66,7 @@ struct mstore{
   //char _data_of_first_block_on_stack[ULIMIT_S*8];
   char _data_of_first_block_on_stack[_MSTORE_LEADING+_MSTORE_BYTES_OF_FIRST_BLOCK];
   char **data;
+  const char *name;
   int id;
   off_t bytes_per_block;
   uint32_t opt,blockPreviouslyFilled,capacity;
@@ -127,13 +128,17 @@ static const char *mstore_set_base_path(const char *f){
 //   dir: Path of existing folder where the mmap files will be written. //
 //   dim: Size of the mmap files.  Will be rounded to next n*4096       //
 //////////////////////////////////////////////////////////////////////////
-static struct mstore *mstore_init(struct mstore *m,const int size_and_opt){
+#define mstore_init_file(m,name,instance,size_and_opt) _mstore_init(m,name,instance,size_and_opt|MSTORE_OPT_MMAP_WITH_FILE)
+#define mstore_init(m,size_and_opt) _mstore_init(m,NULL,0,size_and_opt)
+static struct mstore *_mstore_init(struct mstore *m,const char *name, const int instance,const int size_and_opt){
   memset(m,0,sizeof(struct mstore));
   m->data=m->pointers_data_on_stack;
+    m->id=instance;
+    m->name=name;
   if (size_and_opt&MSTORE_OPT_MMAP_WITH_FILE){
-    static atomic_int count;
-    m->id=atomic_fetch_add(&count,1);
+    //static atomic_int count;    m->id=atomic_fetch_add(&count,1);
     assert(0==(size_and_opt&MSTORE_OPT_MALLOC));
+    assert(name!=NULL);
   }
   m->bytes_per_block=MAX_int(16,size_and_opt&~_MSTORE_MASK_OPTS);
   m->opt=size_and_opt&_MSTORE_MASK_OPTS;
@@ -145,7 +150,7 @@ static struct mstore *mstore_init(struct mstore *m,const int size_and_opt){
 ////////////////////////////////////////
 static int _mstore_openfile(struct mstore *m,uint32_t block,const off_t adim){
   char path[PATH_MAX];
-  snprintf(path,PATH_MAX-1,"%s/%02d_%03u.cache",mstore_set_base_path(NULL),m->id,block);
+  snprintf(path,PATH_MAX-1,"%s/%s_%02d_%03u.cache",mstore_set_base_path(NULL),m->name,m->id,block);
   log_entered_function("path: %s",path);
   const int fd=open(path,O_RDWR|O_CREAT|O_TRUNC,0640);
   if (fd<2) DIE("open failed: %s fd: %d\n",path,fd);
@@ -198,7 +203,6 @@ static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align){
       BLOCK_OFFSET_NEXT_FREE(d)=begin+bytes;
       if (verbose) log_debug("begin: %ld bytes: %ld  BLOCK_CAPACITY: %ld\n",begin,bytes,BLOCK_CAPACITY(d));
       m->blockPreviouslyFilled=block;
-      assert(mstore_contains(m,d+begin)); /* DEBUG_NOW */
       return d+begin;
     }
   }/*Loop block*/
@@ -231,10 +235,10 @@ struct mytest{
   bool b;
 };
 static void test_mstore1(int argc,char *argv[]){
-  const char *dir="/home/cgille/tmp/test/mstore_mstore1";
+  const char *dir="/home/cgille/tmp/test";
   //cg_recursive_mkdir(dir);
   struct mstore m={0};
-  mstore_init(&m,20);
+  mstore_init(&m,"test_mstore1",0,20);
   char *tt[99999];
   const int method=atoi(argv[1]);
   printf("method=%d\n",method);
@@ -267,7 +271,7 @@ static void test_mstore1(int argc,char *argv[]){
 
 static void test_mstore2(int argc, char *argv[]){
   struct mstore ms;
-  mstore_init(&ms,256|MSTORE_OPT_MALLOC);
+  mstore_init(&ms,"test_mstore2",0,256|MSTORE_OPT_MALLOC);
   const int N=atoi(argv[1]);
   int data[N][10];
   int *intern[N];

@@ -74,7 +74,7 @@ static counter_rootdata_t *filetypedata_for_ext(const char *path,struct rootdata
   return d?d:&r->filetypedata_dummy;
 }
 static void _rootdata_counter_inc(counter_rootdata_t *c, enum enum_counter_rootdata f){
-  if (c->counts[f]<UINT32_MAX) c->counts[f]++;
+  if (c->counts[f]<UINT32_MAX) atomic_fetch_add(c->counts+f,1);
 }
 static void fhdata_counter_inc( struct fhdata* d, enum enum_counter_rootdata f){
   if (d->zpath.root>=0){
@@ -135,11 +135,11 @@ static bool isKnownExt(const char *path, int len){
   return config_some_file_path_extensions(path,len?len:strlen(path),&index_not_needed);
 }
 
-static int log_print_filetypedata_row0(const char *ext,int n){
+static int counts_by_filetype_row0(const char *ext,int n){
   if (ext) PRINTINFO("<TR>"TD("%c")sTDlb(),isKnownExt(ext,0)?'+':' ',ext);
   return n;
 }
-static int log_print_filetypedata_r(int n,struct rootdata *r, int *count_explain){
+static int counts_by_filetype_r(int n,struct rootdata *r, int *count_explain){
   ASSERT_LOCKED_FHDATA();
   struct ht_entry *ee=r->ht_filetypedata.entries;
   int count=0;
@@ -149,7 +149,7 @@ static int log_print_filetypedata_r(int n,struct rootdata *r, int *count_explain
       counter_rootdata_t *d=ee[i].value;
       if (!d) continue;
       if(!pass){
-#define C(significance,x) (((long)d->counts[x])<<significance)
+#define C(significance,x) (((long)atomic_load(d->counts+x))<<significance)
         d->rank=
           C(00,ZIP_OPEN_SUCCESS)+C(10,ZIP_OPEN_FAIL)+
           C(00,ZIP_READ_NOCACHE_SUCCESS)+C(00,ZIP_READ_NOCACHE_FAIL)+C(00,ZIP_READ_NOCACHE_ZERO)+
@@ -180,15 +180,15 @@ static int log_print_filetypedata_r(int n,struct rootdata *r, int *count_explain
 <LI>Cumul wait: Threads reading file data need to wait until the cache is filled to the respective position. This is the cumulative waiting time in seconds.<LI>\
 </UL>\n");
         PRINTINFO("<TABLE border=\"1\">\n<THEAD><TR>"TH("")TH("Ext")THcolspan(2,"ZIP open") THcolspan(5,"ZIP read no-cache") THcolspan(6,"ZIP read cache") THcolspan(3,"Success when tried again")"</TR>\n\
-<TR>"TH("")TH("")  TH("ZIP open &check;")THfail()  TH("Read &check;")THfail()TH("Read 0 bytes") TH("Seek &check;")THfail()  TH("Read &check;")THfail() TH("Checksum match")TH("~ mismatch")TH("Num interrupt")TH("Cumul wait")  TH("stat()")TH("Cache entry")TH("zip_fread()") "</TR></THEAD>\n");
+<TR>"TH("")TH("")  TH("ZIP open &check;")THfail()  TH("Read &check;")THfail()TH("Read 0 bytes") TH("Seek &check;")THfail()  TH("Read &check;")THfail() TH("Checksum match")TH("~ mismatch")TH("Num interrupt")TH("Cumul wait")  TH("lstat()")TH("Cache entry")TH("zip_fread()") "</TR></THEAD>\n");
       }
-#define C(field) x->counts[field]
-#define SF(field) x->counts[field##_SUCCESS],x->counts[field##_FAIL]
-      n=log_print_filetypedata_row0(x->ext,n);
+#define C(field) atomic_load(x->counts+field)
+#define SF(field) x->counts[field##_SUCCESS],atomic_load(x->counts+field##_FAIL)
+      n=counts_by_filetype_row0(x->ext,n);
       PRINTINFO(uTD()uTDfail() uTD()uTDfail()uTD()uTD()uTDfail() uTD()uTDfail()uTD()uTDfail()uTD()TD("%.2f") uTD()uTD()uTD()"</TR>\n",
                 SF(ZIP_OPEN),
                 SF(ZIP_READ_NOCACHE),C(ZIP_READ_NOCACHE_ZERO),SF(ZIP_READ_NOCACHE_SEEK),
-                SF(ZIP_READ_CACHE),SF(ZIP_READ_CACHE_CRC32),x->counts[COUNT_MEMCACHE_INTERRUPT],((float)x->wait)/CLOCKS_PER_SEC,
+                SF(ZIP_READ_CACHE),SF(ZIP_READ_CACHE_CRC32),C(COUNT_MEMCACHE_INTERRUPT),((float)x->wait)/CLOCKS_PER_SEC,
                 C(COUNT_RETRY_STAT),C(COUNT_RETRY_MEMCACHE), C(COUNT_RETRY_ZIP_FREAD));
       //      ZIP_READ_NOCACHE_SUCCESS
 #undef C
@@ -207,10 +207,10 @@ static long counter_getattr_rank(struct ht_entry *e){
     vv[COUNTER_STAT_SUCCESS]+vv[COUNTER_OPENDIR_SUCCESS]+
     (isKnownExt(e->key,e->keylen_hash>>HT_KEYLEN_SHIFT)?(1L<<30):0);
 }
-static int log_print_filetypedata(int n){
+static int counts_by_filetype(int n){
   const int c=ht_count_getattr.capacity;
   int count_explain=0;
-  foreach_root(ir,r) n=log_print_filetypedata_r(n,r,&count_explain);
+  foreach_root(ir,r) n=counts_by_filetype_r(n,r,&count_explain);
   int count=0;
   bool done[c];
   memset(done,0,sizeof(done));
@@ -222,10 +222,10 @@ static int log_print_filetypedata(int n){
     if (!x || !x->value) break;
     if (!count++){
 #define SF(counter) TH(#counter"() &check;")THfail()
-      PRINTINFO("<H1>Count calls to getattr() and stat() per file type</H1>\n\
+      PRINTINFO("Count calls to getattr() and lstat() per file type:\n\
 <B>Columns explained:</B><OL>\n\
 <LI>getattr(), readdir(): Number of successful and failed calls to the FUSE call-back function.</LI>\n\
-<LI>stat(): Number of successful and failed calls to the C function. The goal of the cache is to reduce the number of these calls.</LI></OL>\n\
+<LI>lstat(): Number of successful and failed calls to the C function. The goal of the cache is to reduce the number of these calls.</LI></OL>\n\
 <TABLE border=\"1\">\n<THEAD>\n\
 <TR>"TH("")TH("Ext")THcolspan(4,"Count call to FUSE call-back")THcolspan(6,"Count calls to C-libraries")"</TR>\n\
 <TR>"TH("")TH("")SF(getattr)SF(readdir)SF(access)SF(stat)SF(opendir)"</TR>\n</THEAD>\n");
@@ -233,7 +233,7 @@ static int log_print_filetypedata(int n){
     }
     done[x-ht_count_getattr.entries]=true;
     const int *vv=x->value;
-    n=log_print_filetypedata_row0(x->key,n);
+    n=counts_by_filetype_row0(x->key,n);
 #define C(counter) vv[COUNTER_##counter##_SUCCESS],vv[COUNTER_##counter##_FAIL]
     PRINTINFO(dTD()dTDfail() dTD()dTDfail() dTD()dTDfail() dTD()dTDfail() dTD()dTDfail()"</TR>\n",C(GETATTR),C(READDIR),C(ACCESS),C(STAT),C(OPENDIR));
 #undef C
@@ -286,9 +286,6 @@ static int print_bar(int n,float rel){
 //////////////////
 #ifdef __linux__
 static int print_proc_status(int n,char *filter,int *val){
-
-
-  PRINTINFO("Current CPU usage user: %.2f system: %.2f    Also try top -p %d\n",_ucpu_usage,_scpu_usage,getpid());
   PRINTINFO("<B>/proc/%ld/status</B>\n<PRE>\n", (long)getpid());
   char buffer[1024]="";
   FILE* file=fopen("/proc/self/status","r");
@@ -309,8 +306,9 @@ static void log_virtual_memory_size(){
   int val;print_proc_status(-1,"VmSize:",&val);
   log_msg("Virtual memory size: %'d kB\n",val);
 }
+
 static int log_print_open_files(int n, int *fd_count){
-  PRINTINFO("<H1>All OS-level file handles</H1>\n(Should be almost empty if idle).<BR>");
+  PRINTINFO("<H1>All OS-level file handles</H1>\n(Should be almost empty if idle. FILE CONNECTIONS MAX: %d).<BR>",FILE_CONNECTIONS_MAX);
   static char path[256];
   struct dirent *dp;
   DIR *dir=opendir("/proc/self/fd/");
@@ -322,7 +320,7 @@ static int log_print_open_files(int n, int *fd_count){
     snprintf(proc_path,PATH_MAX,"/proc/self/fd/%s",dp->d_name);
     const int l=readlink(proc_path,path,255);path[MAX(l,0)]=0;
     if (cg_endsWith(path,0,SPECIAL_FILES[SFILE_LOG_WARNINGS],0)||!strncmp(path,"/dev/",5)|| !strncmp(path,"/proc/",6) || !strncmp(path,"pipe:",5)) continue;
-    PRINTINFO("<LI>%s -- %s</LI>\n",proc_path,path);
+    PRINTINFO("<LI>%47s %s</LI>\n",proc_path,path);
   }
   closedir(dir);
   PRINTINFO("</OL>\n");
@@ -362,20 +360,11 @@ static int print_maps(int n){
   return n;
 }
 
-static int log_print_memory_details(int n){
-  PRINTINFO("<H1>Memory - details</H1>\n<PRE>");
-  {
-    struct rlimit rl={0};
-    getrlimit(RLIMIT_AS,&rl);
-    if (rl.rlim_cur!=-1) PRINTINFO("Rlim soft: %'lx MB   hard: %'lx MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
-  }
-  PRINTINFO("uordblks: %'d bytes (Total allocated heap space)\n",mallinfo().uordblks);
-  //    PRINTINFO("Memory for storing directories=%'ld kB\n",mmapstore_used(_db_readdir)<<10);
+static int log_print_CPU(int n){
+  PRINTINFO("<H1>CPU</H1>\n<PRE>");
+    PRINTINFO("Current CPU usage user: %.2f system: %.2f    Also try top -p %d\n",_ucpu_usage,_scpu_usage,getpid());
   PRINTINFO("</PRE>\n");
   //n=print_maps(n);
-  {
-    int val; n=print_proc_status(n,"VmRSS:|VmHWM:|VmSize:|VmPeak:",&val);
-  }
 
   return n;
 }
@@ -383,47 +372,56 @@ static int log_print_memory_details(int n){
 #define print_proc_status(...) 1
 #define log_virtual_memory_size(...) 1
 #define log_print_open_files(...) 1
-#define log_print_memory_details(...) 1
+#define log_print_CPU(...) 1
 #define print_maps(...) 1
 #endif
 ////////////////////////////////////////////////////////////////////
 
 static int log_print_memory(int n){
-  PRINTINFO("<H1>Virtual file handles (struct fhdata)</H1>\n<PRE>");
+  PRINTINFO("<H1>Virtual memory</H1>\n<PRE>");
   {
     const uint64_t current=textbuffer_memusage_get(0)+textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP);
     const uint64_t peak=textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_PEAK)+textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_PEAK);
-    n=print_bar(n,current/(float)_memcache_maxbytes);  PRINTINFO("<BR>Current usage %'ld MB of %'ld MB \n",current>>20,_memcache_maxbytes>>20);
-    n=print_bar(n,peak/(float)_memcache_maxbytes);  PRINTINFO("<BR>Peak usage    %'ld MB of %'ld MB  \n",peak>>20,_memcache_maxbytes>>20);
+    PRINTINFO("\nstruct textbuffer\n");
+    PRINTINFO(" - Current MMAP usage %'ld MB of %'ld MB\n",current>>20,_memcache_maxbytes>>20); //n=print_bar(n,current/(float)_memcache_maxbytes);
+    PRINTINFO(" - Peak MMAP usage    %'ld MB of %'ld MB\n",peak>>20,_memcache_maxbytes>>20);   //n=print_bar(n,peak/(float)_memcache_maxbytes);
   }
   {
 #ifdef __linux__
     struct rlimit rl={0}; getrlimit(RLIMIT_AS,&rl);
     const bool rlset=rl.rlim_cur!=-1;
     int val=-1;print_proc_status(-1,"VmSize:",&val);
-    if(rlset)  n=print_bar(n,val*1024/(.01+rl.rlim_cur));
+    //if(rlset)  n=print_bar(n,val*1024/(.01+rl.rlim_cur));
     PRINTINFO("Virt memory %'d MB",val>>10);
     if(rlset) PRINTINFO(" / rlimit %zu MB<BR>\n",rl.rlim_cur>>20);
 #endif
   }
+  PRINTINFO("uordblks: %'d bytes (Total allocated heap space)\n",mallinfo().uordblks);
+    {
+    int val; n=print_proc_status(n,"VmRSS:|VmHWM:|VmSize:|VmPeak:",&val);
+  }
+  {
+    struct rlimit rl={0};
+    getrlimit(RLIMIT_AS,&rl);
+    if (rl.rlim_cur!=-1) PRINTINFO("Rlim soft: %'lx MB   hard: %'lx MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
+  }
+
   PRINTINFO("</PRE>\n");
-  PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",  IF1(WITH_MEMCACHE,WHEN_MEMCACHE_S[_memcache_policy])IF0(WITH_MEMCACHE,"!WITH_MEMCACHE"));
   PRINTINFO("Number of calls to mmap: %'d to munmap: %'d<BR>\n",textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_FREE));
   PRINTINFO("Number of calls to malloc: %'d to free: %'d<BR>\n",textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_FREE));
   return n;
 }
 
 
-static long _count_readzip_memcache=0,_count_readzip_memcache_because_seek_bwd=0,_log_read_max_size=0,_count_SeqInode=0, _count_stat_cache_from_fhdata=0;
+static long _count_readzip_memcache=0,_count_readzip_memcache_because_seek_bwd=0,_log_read_max_size=0,_count_SeqInode=0;
 static int log_print_statistics_of_read(int n){
-  PRINTINFO("<H1>Count events related to cache</H1>\n<TABLE border=\"1\"><THEAD><TR>"TH("Event")TH("Count")"</TR></THEAD>\n");
+  PRINTINFO("Count events related to cache:\n<TABLE border=\"1\"><THEAD><TR>"TH("Event")TH("Count")"</TR></THEAD>\n");
 #define TABLEROW(a) { const char *us=strchr(#a,'_'); PRINTINFO("<TR>"sTDlb()lTD()"</TR>\n",us?us+1:"Null",a);}
   TABLEROW(_count_readzip_memcache);
   TABLEROW(_count_readzip_memcache_because_seek_bwd);
-  TABLEROW(_count_stat_cache_from_fhdata);
   TABLEROW(_count_stat_from_cache);
   TABLEROW(_log_read_max_size);
-  TABLEROW(_log_count_lock);// 30 ns per lock
+  TABLEROW(_log_count_pthread_lock);// 30 ns per lock
   PRINTINFO("</TABLE>");
 
 #undef TABLEROW
@@ -435,7 +433,7 @@ static size_t _kilo(size_t x){
 }
 static int print_fhdata(int n,const char *title){
   if (n<0) log_verbose("print_fhdata %s\n",snull(title));
-  else PRINTINFO("<H1>Data associated to file descriptors</H1>\n");
+  else PRINTINFO("<H1>Data associated to file descriptors (struct fhdata)</H1>\n");
   if (!_fhdata_n){
     if (n<0) log_strg("_fhdata_n is 0\n");
     else PRINTINFO("The cache is empty which is good. It means that no entry is locked or leaked.<BR>\n");
@@ -486,12 +484,14 @@ TD {text-align:right;}\n\
   n=log_print_fuse_argv(n);
   n=log_print_open_files(n,NULL);
   n=log_print_memory(n);
+  n=log_print_CPU(n);
   LOCK(mutex_fhdata,n=print_fhdata(n,""));
-  n=log_print_memory_details(n);
   PRINTINFO("<H1>Inodes</H1>\nCreated sequentially: %'ld\n",_count_SeqInode);
+  PRINTINFO("<H1>Cache</H1>");
+    PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",  IF1(WITH_MEMCACHE,WHEN_MEMCACHE_S[_memcache_policy])IF0(WITH_MEMCACHE,"!WITH_MEMCACHE"));
   n=log_print_statistics_of_read(n);
   //  PRINTINFO("_cumul_time_store=%lf\n<BR>",((double)_cumul_time_store)/CLOCKS_PER_SEC);
-  LOCK(mutex_fhdata,n=log_print_filetypedata(n));
+  LOCK(mutex_fhdata,n=counts_by_filetype(n));
   PRINTINFO("</BODY>\n</HTML>\n\0\0\0");
   return n;
 }
@@ -529,7 +529,7 @@ static void _log_zpath(const char *fn,const int line,const char *msg, struct zip
   log_msg("    %p    RP="ANSI_FG_BLUE"'%s' "ANSI_RESET,RP(), snull(RP())); cg_log_file_stat("",&zpath->stat_rp);
   log_msg("    %p  root="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,zpath->root,rootpath(zpath->root));
 #define C(f) ((zpath->flags&f)?#f:"")
-  log_msg("       flags="ANSI_FG_BLUE"%s %s %s %s\n"ANSI_RESET,C(ZP_ZIP),C(ZP_DOES_NOT_EXIST),C(ZP_IS_COMPRESSED),C(ZP_VERBOSE));
+  log_msg("       flags="ANSI_FG_BLUE"%s %s %s %s %s %s %s\n"ANSI_RESET,C(ZP_ZIP),C(ZP_DOES_NOT_EXIST),C(ZP_IS_COMPRESSED),C(ZP_VERBOSE),C(ZP_STARTS_AUTOGEN),C(ZP_TRANSIENT_CACHE_ASSUME_IS_ZIPENTRY),C(ZP_TRANSIENT_CACHE_ASSUME_IS_ZIPENTRY));
   #undef C
 }
 #define log_zpath(...) _log_zpath(__func__,__LINE__,__VA_ARGS__) /*TO_HEADER*/

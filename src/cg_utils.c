@@ -331,7 +331,7 @@ static void _cg_log_file_stat(const char *fn,const char * name,const struct stat
 #if defined SHIFT_INODE_ROOT
   if (s->st_ino>(1L<<SHIFT_INODE_ROOT)) color=ANSI_FG_MAGENTA;
 #endif
-  fprintf(stderr,"%s() %s  size=%ld blksize=%ld blocks=%ld links=%lu inode=%s%lu"ANSI_RESET" dir=%s uid=%u gid=%u ",fn,name,s->st_size,s->st_blksize,s->st_blocks,   s->st_nlink,color,s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
+  fprintf(stderr,"%s() %s  size=%ld blksize=%ld blocks=%ld links=%u inode=%s%lu"ANSI_RESET" dir=%s uid=%u gid=%u ",fn,name,s->st_size,s->st_blksize,s->st_blocks,  (uint32_t) s->st_nlink,color,s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
   //st_blksize st_blocks f_bsize
   cg_log_file_mode(s->st_mode);
   fputc('\n',stderr);
@@ -524,9 +524,9 @@ static bool cg_is_member_of_group_docker(){
 ///////////////////
 ///  process    ///
 ///////////////////
-static bool cg_log_exec_fd(int fd, char *env[], char *cmd[]){
+static bool cg_log_exec_fd(const int fd,  char * const env[],  char * const cmd[]){
   RLOOP(j,2){
-    char **s=(j?env:cmd);
+    char **s=(char**)(j?env:cmd);
     if (s){
       cg_fd_write_str(fd,j?"ENVIRONMENT VARIABLES:\n":"COMMAND-LINE:\n");
       while(*s){
@@ -587,8 +587,9 @@ static int cg_waitpid_logtofile_return_exitcode(int pid,const char *err){
   if (f) fclose(f);
   return WIFEXITED(status)?WEXITSTATUS(status):INT_MIN;
 }
+
 // #pragma GCC diagnostic ignored "-Wunused-variable" //__attribute__((unused));
-static void cg_exec(char *env[],char *cmd[],const int fd_out,const int fd_err){
+static void cg_exec(char * const env[],char *cmd[],const int fd_out,const int fd_err){
   if(fd_out>0) dup2(fd_out,STDOUT_FILENO);
   if(fd_err>0) dup2(fd_err,STDERR_FILENO);
   if(fd_out>0) close(fd_out);

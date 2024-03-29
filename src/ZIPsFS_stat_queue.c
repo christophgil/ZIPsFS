@@ -14,15 +14,14 @@ static struct statqueue_entry *statqueue_add(const bool verbose,struct stat *stb
   cg_thread_assert_locked(mutex_statqueue); ASSERT(rp_l<MAX_PATHLEN);
   struct statqueue_entry *unused=NULL;
   foreach_statqueue_entry(i,q){
-    if (q->status==STATQUEUE_QUEUED && E(q)){ q->refcount++;return q;} /* Use entry same path */
-    if (q->refcount<=0){  assert(!q->refcount); unused=q; break; } /* Free slot */
+    if (q->status==STATQUEUE_QUEUED && E(q)) return q; /* Use entry same path */
+    if (q->refcount<=0){ unused=q; break; } /* Free slot */
   }
-  q=unused;
-  if (q){
+  if ((q=unused)){
+    ASSERT(q->refcount>=0);
     memcpy(q->rp,rp,rp_l);
     q->rp[q->rp_l=rp_l]=0;
     q->rp_hash=hash;
-    q->refcount=1;
     q->status=STATQUEUE_QUEUED;
     q->flags=verbose?STATQUEUE_FLAGS_VERBOSE:0;
   }
@@ -33,7 +32,7 @@ static struct statqueue_entry *statqueue_add(const bool verbose,struct stat *stb
 static int _stat_queue1(const bool verbose,const char *rp, const int rp_l,const ht_hash_t hash,struct stat *stbuf,struct rootdata *r){
   struct statqueue_entry *q=NULL,*u=NULL;
   for(int j=0;;j++){
-    LOCK(mutex_statqueue, q=statqueue_add(verbose,stbuf,rp,rp_l,hash,r));
+    LOCK(mutex_statqueue, q=statqueue_add(verbose,stbuf,rp,rp_l,hash,r); if (q) q->refcount++);
     if (q) break;
     usleep(STATQUEUE_SLEEP_USECONDS);
     if (is_square_number(j))  warning(WARN_STAT,rp,"No free slot in queue %d",j);
@@ -51,7 +50,8 @@ static int _stat_queue1(const bool verbose,const char *rp, const int rp_l,const 
          *stbuf=u->stat;
          ok=(STATQUEUE_OK==u->status)?1:-1;
        }
-       q->refcount--);
+       q->refcount--;
+       ASSERT(q->refcount>=0));
   if (verbose) log_verbose(" %s %s ok: %d",rootpath(r),rp,ok);
   return ok;
 }
@@ -62,7 +62,7 @@ static bool stat_queue(const bool verbose,const char *rp, const int rp_l,const h
     if (ok){
       if (try){
         warning(WARN_RETRY,rp,"stat_queue succeeded on attempt %d\n",try);
-        LOCK(mutex_fhdata,rootdata_counter_inc(rp,COUNT_RETRY_STAT,r));
+        rootdata_counter_inc(rp,COUNT_RETRY_STAT,r);
       }
       return ok==1;
     }
