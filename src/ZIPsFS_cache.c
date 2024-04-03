@@ -145,19 +145,7 @@ static void dircache_directory_to_cache(const struct directory *dir){
 
   const ht_hash_t rp_hash=hash32(dir->dir_realpath,dir->dir_realpath_l);
   const char *rp=ht_intern(&_root->dircache_ht_fname,dir->dir_realpath,dir->dir_realpath_l,rp_hash,HT_MEMALIGN_FOR_STRG); /* The real path of the zip file */
-  //log_debug_now("rp:%s  d: %p ht: %p",rp,d,&r->dircache_ht);
   ht_set(&r->dircache_ht,rp,dir->dir_realpath_l,rp_hash,d);
-  //assert(ht_get(&r->dircache_ht,rp,dir->dir_realpath_l,rp_hash)==d);
-  //assert(!rp[dir->dir_realpath_l]);
-
-  /* if (DEBUG_NOW==DEBUG_NOW){ */
-  /*   RLOOP(i,src.files_l){ */
-  /*     const char *n=d->fname[i]; */
-  /*     if (!ENDSWITH(n,strlen(n),"analysis.tdf")) continue; */
-  /*     log_debug_now(ANSI_FG_BLUE" dir->dir_realpath=%s  len=%ld "ANSI_RESET,rp,d->fsize[i]); */
-  /*   } */
-  /* } */
-
 #if WITH_ZIPINLINE_CACHE
   if (dir->dir_flags&DIRECTORY_IS_ZIPARCHIVE){
     static char u[PATH_MAX+1], vp_entry[PATH_MAX+1];
@@ -176,8 +164,10 @@ static bool dircache_directory_from_cache(struct directory *dir,const struct tim
   cg_thread_assert_locked(mutex_dircache);
   struct ht_entry *e=ht_get_entry(&dir->root->dircache_ht,dir->dir_realpath,dir->dir_realpath_l,0,false);
   struct directory_core *s=e?e->value:NULL;
-  //log_entered_function(ANSI_FG_MAGENTA"%s %d/%lu  e: %p  s: %p ht: %p"ANSI_RESET,dir->dir_realpath,dir->dir_realpath_l, strlen(dir->dir_realpath),e,s,&dir->root->dircache_ht);
+  //log_entered_function(ANSI_FG_MAGENTA"%s %d/%lu  e: %p  s: %p ht: %p root:%d"ANSI_RESET,dir->dir_realpath,dir->dir_realpath_l, strlen(dir->dir_realpath),e,s,&dir->root->dircache_ht,rootindex(dir->root));
   if (s){
+    assert(mtim.tv_sec!=0);
+        assert(s->mtim.tv_sec!=0);
     if (!CG_TIMESPEC_EQ(s->mtim,mtim)){/* Cached data not valid any more. */
       log_debug_now0("Not valid any more");
       e->value=NULL;
@@ -188,6 +178,7 @@ static bool dircache_directory_from_cache(struct directory *dir,const struct tim
       return true;
     }
   }
+  //log_debug_now("dir_realpath: %s   s: %p",dir->dir_realpath,s);
   return false;
 }
 #endif //WITH_DIRCACHE
@@ -218,15 +209,12 @@ static struct ht* transient_cache_get_ht(struct fhdata *d){
    If no zpath entry  found, one is created and associated to the cache of one of the fhdata instances.
    The cache lives as long as the fhdata object.
    This function is not searching for realpath of path. It is just retrieving or creating struct zippath.
- //  zipentry_cache_get_or_create_zpath_for_virtualpath
+ //  old: zipentry_cache_get_or_create_zpath_for_virtualpath DEBUG_NOW
 */
-// BETTER_NAME  transient_cache__
-static struct zippath *transient_cache_get_or_create_zpath(bool verbose,const char *path,const int path_l){
+static struct zippath *transient_cache_get_or_create_zpath(const char *path,const int path_l){
   ASSERT_LOCKED_FHDATA();
-  //verbose=verbose && cg_endsWithDotD(path,path_l);
   const ht_hash_t hash=hash32(path,path_l);
   if (*path) assert(path_l>0);
-  //if (verbose) log_entered_function("path: %s hash:%u path_l=%d\n",path,hash,path_l);
   foreach_fhdata(id,d) if (d->flags&FHDATA_FLAGS_WITH_TRANSIENT_ZIPENTRY_CACHES){
     const char *vp=D_VP(d);
     if (!vp || !*vp || !d->zpath.stat_rp.st_ino) continue;
@@ -234,24 +222,21 @@ static struct zippath *transient_cache_get_or_create_zpath(bool verbose,const ch
     const bool maybe_same_zip=cg_path_equals_or_is_parent(vp,D_VP_L(d)-D_EP_L(d)-1,path,path_l); /* (VP_L-EP_L) is the part of vp that specifies the ZIP file */
     const bool or_path_is_parent_dir=!maybe_same_zip && D_VP_L(d)>0 && cg_path_equals_or_is_parent(path,path_l,vp,D_VP_L(d));
     if (maybe_same_zip || or_path_is_parent_dir){
-      //if (verbose) log_verbose("path: %s vp=%s\n",path,vp);
       struct ht *ht=transient_cache_get_ht(d);
       struct ht_entry *e=ht_numkey_get_entry(ht,hash,path_l);
       struct zippath *zpath=e->value;
       if (zpath && strcmp(path,VP())){ zpath=NULL; warning(WARN_DIRCACHE,path,"Rare case of hash_collision");}
-      if (zpath && (zpath->realpath||(zpath->flags&ZP_DOES_NOT_EXIST))){
-        //if (verbose) log_verbose0("OK\n");
+      if (zpath && (zpath->realpath|| maybe_same_zip&&(zpath->flags&ZP_DOES_NOT_EXIST))){
+        //log_debug_now("%s  path: %s   d->path: %s\n"ANSI_RESET,(zpath->flags&ZP_DOES_NOT_EXIST)?ANSI_FG_RED:ANSI_FG_GREEN,path,vp);
       }else{
         HT_ENTRY_SET_NUMKEY(e,hash,path_l);
         if (!zpath) zpath=e->value=mstore_malloc(ht->value_store,SIZEOF_ZIPPATH,8);
         zpath_init(zpath,path);
         zpath->flags|=(maybe_same_zip?ZP_TRANSIENT_CACHE_ASSUME_IS_ZIPENTRY:ZP_TRANSIENT_CACHE_IS_PARENT_OF_ZIP);
-        //if (verbose) log_verbose("zpath_init zpath %p\n",zpath);
       }
       return zpath;
     }
   }
-  //if (verbose) log_verbose0("return NULL;\n");
   return NULL;
 }
 #endif //WITH_TRANSIENT_ZIPENTRY_CACHES

@@ -92,6 +92,14 @@ static bool cg_endsWith(const char* s,int s_l,const char* e,int e_l){
   if (!e_l) e_l=strlen(e);
   return e_l<=s_l && 0==memcmp(s+s_l-e_l,e,e_l);
 }
+
+static bool cg_startsWith(const char* s,int s_l,const char* e,int e_l){
+  if (!s || !e) return false;
+  if (!s_l) s_l=strlen(s);
+  if (!e_l) e_l=strlen(e);
+  return e_l<=s_l && 0==memcmp(s,e,e_l);
+}
+
 static bool cg_endsWithZip(const char *s, int len){
   if(!len)len=cg_strlen(s);
   return s && ENDSWITHI(s,len,".zip");

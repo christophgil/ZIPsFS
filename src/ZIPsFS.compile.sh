@@ -14,7 +14,7 @@ if grep -n  '^ *[a-z].*) *LOCK(' $(find $dir -name '*.c');then
     echo 'Error: LOCK(...) requires curly braces'
     exit 1
 fi
-
+as=''
 if false;then
     gcc -DHAVE_CONFIG_H -I. -I/usr/local/include/fuse3 -O0 -D_FILE_OFFSET_BITS=64 -rdynamic -ggdb  $dir/ZIPsFS.c -lfuse3 -lpthread -L/usr/local/lib -lm -lzip -o $dir/ZIPsFS
 else

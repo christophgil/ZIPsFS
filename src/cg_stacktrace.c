@@ -65,7 +65,6 @@ static bool addr2line(const char *program_name, const void *addr, int lineNb){
   if (fp) pclose(fp);
   return ok;
 }
-
 static void cg_print_stacktrace(int calledFromSigInt){
   void* buffer[MAX_BACKTRACE_LINES];
   const int nptrs=backtrace(buffer,MAX_BACKTRACE_LINES);
@@ -77,7 +76,7 @@ static void cg_print_stacktrace(int calledFromSigInt){
   for(int i=calledFromSigInt?2:1; i<(nptrs-2); ++i){
     if (!addr2line(_thisPrg, buffer[i], nptrs-2-i-1)){
       //fprintf(stderr, "DEBUG_NOW !addr2line %s %d \n",_thisPrg, nptrs-2-i-1);
-      fprintf(_stckOut, " [%i] %s\n", nptrs-2-i-1, strings[i]);
+      fprintf(_stckOut?_stckOut:stderr, " [%i] %s\n", nptrs-2-i-1, strings[i]);
     }
   }
   free(strings);
