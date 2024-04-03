@@ -451,8 +451,6 @@ static bool unsimplify_fname(char *n,const char *zipfile){
   return true;
 }
 
-
-
 //////////////////////
 // struct directory //
 //////////////////////
@@ -1644,13 +1642,13 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t
   bool ok=false;
   FOR(cut_autogen,0,(zpath->flags&ZP_STARTS_AUTOGEN)?2:1){
     foreach_root(ir,r){
-      if (ok) break;
       if (cut_autogen && r!=_root_writable) continue;
       if (find_realpath_any_root(opt|(cut_autogen?0:FINDRP_AUTOGEN_CUT_NOT),zpath,r)){ /* FINDRP_AUTOGEN_CUT_NOT means only without cut.  Giving 0 means cut and not cut. */
         opt=FINDRP_NOT_TRANSIENT_CACHE; /* Transient cache only once */
         filler_readdir(0,zpath,buf,filler,&no_dups);
         IF1(WITH_AUTOGEN, if (cut_autogen) filler_readdir(READDIR_AUTOGEN,zpath,buf,filler,&no_dups));
         ok=true;
+        //        break;
       }
     }
   }

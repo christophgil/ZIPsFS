@@ -62,7 +62,7 @@
 // For each open tdf and tdf_bin file, a cache is temporarily created for these  redundant requests.
 // Upon file close, these caches are disposed.
 
-#define WITH_ZIPINLINE 0
+#define WITH_ZIPINLINE 1
 #define WITH_ZIPINLINE_CACHE 1
 // Normally, ZIP files are shown as folders with ZIP entries being the contained files.
 // This is consistent for Bruker and Agilent mass spectrometry files.
@@ -121,7 +121,7 @@
 /// Dynamically generated files ///
 ///////////////////////////////////
 
-#define WITH_AUTOGEN 1
+#define WITH_AUTOGEN 0
 #if WITH_AUTOGEN
 #define AUTOGEN_DELETE_FILES_AFTER_DAYS "99"
 #define AUTOGEN_MAX_DEPENDENCIES 5 /*  Dynamically generated file can depend on n input files.  Prevents runaway loop */
