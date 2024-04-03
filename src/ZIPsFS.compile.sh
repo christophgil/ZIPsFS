@@ -10,8 +10,8 @@
 dir=$PWD
 cd ~ # Otherwise the logs contain relative paths
 
-if grep -n  '^ *[a-z].*) *LOCK(' $(find $dir -name '*.c');then
-    echo 'Error: LOCK(...) requires curly braces'
+if grep -n  '^ *[a-z].*) *LOCK_N(' $(find $dir -name '*.c');then
+    echo 'Error: LOCK_N(...) requires curly braces'
     exit 1
 fi
 as=''

@@ -271,6 +271,14 @@ static long config_search_file_which_roots(const char *virtualpath,const int vir
 #endif //WITH_AUTOGEN
   return 0xFFFFffffFFFFffffL;
 }
+static bool config_readir_no_other_roots(const char *realpath,const int realpath_l){
+#define C(sfx) ENDSWITH(realpath,realpath_l,#sfx)
+  return C(.wiff2.Zip) || C(.wiff.Zip) || C(.rawIdx.Zip) || C(.raw.Zip) || C(.d.Zip);
+  #undef C
+}
+////////////////////////////
+/// Retry on failure.    ///
+////////////////////////////
 static long config_num_retries_getattr(const char *path, const int path_l,int *sleep_milliseconds){
   if (_is_tdf_or_tdf_bin(path)){
     *sleep_milliseconds=1000;

@@ -30,6 +30,7 @@ static void _fhdataWithMemcachePrint(const char *func,int line,const char *path,
 #define debugSpecificPath(path,path_l) _debugSpecificPath(0,path,path_l)
 #define debugSpecificPath_tdf(path,path_l) _debugSpecificPath(1,path,path_l)
 #define debugSpecificPath_tdf_bin(path,path_l) _debugSpecificPath(2,path,path_l)
+#define debugSpecificPath_d(path,path_l) _debugSpecificPath(3,path,path_l)
 static bool _debugSpecificPath(int mode, const char *path, int path_l){
   if (!path) return false;
   if (!path_l) path_l=strlen(path);
@@ -38,6 +39,7 @@ static bool _debugSpecificPath(int mode, const char *path, int path_l){
       case 0: b=NULL!=strstr(path,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d");break;
   case 1: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d/analysis.tdf");break;
   case 2: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d/analysis.tdf_bin");break;
+      case 3: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d");break;
   }
   if (b){
     const int n=countFhdataWithMemcache(path,path_l,0);

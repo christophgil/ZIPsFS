@@ -209,8 +209,6 @@ static struct fhdata *memcache_waitfor(struct fhdata *d,size_t min_fill){
     MEMCACHE_WAITFOR(d);
     return d;
   }
-  if (d2){
-    LOCK(mutex_fhdata,assert(!fhdata_can_destroy(d2)));
-  }
+  if (d2) LOCK(mutex_fhdata,assert(!fhdata_can_destroy(d2)));
   return d2;
 }

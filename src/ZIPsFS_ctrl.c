@@ -246,7 +246,7 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
 }/*trigger_files()*/
 static int read_special_file(const int i, char *buf, const size_t size, const off_t offset){
   const char *content;
-  LOCK(mutex_special_file,
+  LOCK_N(mutex_special_file,
        struct textbuffer b={0};special_file_content(&b,i);
        const int l=textbuffer_length(&b);
        const int n=MIN_int(size,l-(int)offset);

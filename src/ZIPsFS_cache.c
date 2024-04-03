@@ -27,10 +27,7 @@ static bool stat_from_cache(struct stat *stbuf,const char *path,const int path_l
   if (0<config_file_attribute_valid_seconds(true,path,path_l)){
     const int now=deciSecondsSinceStart();
     struct cached_stat st={0};
-    {
-      LOCK(mutex_dircache,struct cached_stat *pointer=ht_get(&stat_ht,path,path_l,hash));
-      if (pointer) st=*pointer;
-    }
+    LOCK(mutex_dircache,struct cached_stat *c=ht_get(&stat_ht,path,path_l,hash);if (c) st=*c);
     if (st.st_ino){
       if (now-st.when_read_decisec<10L*config_file_attribute_valid_seconds(IS_STAT_READONLY(st),path,path_l)){
 #define C(f) stbuf->st_##f=st.st_##f
@@ -82,7 +79,7 @@ static void dircache_clear_if_reached_limit_all(const bool always,const int mask
 #define C(m) 0==(mask&(1<<m))?"":#m
   if (always) log_verbose("%s %s %s\n",C(CLEAR_DIRCACHE),C(CLEAR_STATCACHE),C(CLEAR_ZIPINLINE_CACHE));
 #undef C
-  LOCK(mutex_dircache,foreach_root(i,r)  dircache_clear_if_reached_limit(always,mask,r,0));
+  LOCK(mutex_dircache,foreach_root(i,r) dircache_clear_if_reached_limit(always,mask,r,0));
 }
 static void dircache_clear_if_reached_limit(const bool always,const int mask,struct rootdata *r,size_t limit){
   if (!DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT && !always || !r) return;
@@ -232,7 +229,7 @@ static struct zippath *transient_cache_get_or_create_zpath(const char *path,cons
         HT_ENTRY_SET_NUMKEY(e,hash,path_l);
         if (!zpath) zpath=e->value=mstore_malloc(ht->value_store,SIZEOF_ZIPPATH,8);
         zpath_init(zpath,path);
-        zpath->flags|=(maybe_same_zip?ZP_TRANSIENT_CACHE_ASSUME_IS_ZIPENTRY:ZP_TRANSIENT_CACHE_IS_PARENT_OF_ZIP);
+        //zpath->flags|=(maybe_same_zip?ZP_TRANSIENT_CACHE_ASSUME_IS_ZIPENTRY:ZP_TRANSIENT_CACHE_IS_PARENT_OF_ZIP);
       }
       return zpath;
     }

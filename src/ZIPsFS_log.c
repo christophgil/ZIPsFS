@@ -528,7 +528,7 @@ static void _log_zpath(const char *fn,const int line,const char *msg, struct zip
   log_msg("    %p    RP="ANSI_FG_BLUE"'%s' "ANSI_RESET,RP(), snull(RP())); cg_log_file_stat("",&zpath->stat_rp);
   log_msg("    %p  root="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,zpath->root,rootpath(zpath->root));
 #define C(f) ((zpath->flags&f)?#f:"")
-  log_msg("       flags="ANSI_FG_BLUE"%s %s %s %s %s %s %s\n"ANSI_RESET,C(ZP_ZIP),C(ZP_DOES_NOT_EXIST),C(ZP_IS_COMPRESSED),C(ZP_VERBOSE),C(ZP_STARTS_AUTOGEN),C(ZP_TRANSIENT_CACHE_ASSUME_IS_ZIPENTRY),C(ZP_TRANSIENT_CACHE_IS_PARENT_OF_ZIP));
+  log_msg("       flags="ANSI_FG_BLUE"%s %s %s %s %s\n"ANSI_RESET,C(ZP_ZIP),C(ZP_DOES_NOT_EXIST),C(ZP_IS_COMPRESSED),C(ZP_VERBOSE),C(ZP_STARTS_AUTOGEN));
   #undef C
 }
 #define log_zpath(...) _log_zpath(__func__,__LINE__,__VA_ARGS__) /*TO_HEADER*/
