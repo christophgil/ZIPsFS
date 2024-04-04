@@ -227,15 +227,15 @@ static int counts_by_filetype(int n){
 <LI>getattr(), readdir(): Number of successful and failed calls to the FUSE call-back function.</LI>\n\
 <LI>lstat(): Number of successful and failed calls to the C function. The goal of the cache is to reduce the number of these calls.</LI></OL>\n\
 <TABLE border=\"1\">\n<THEAD>\n\
-<TR>"TH("")TH("Ext")THcolspan(4,"Count call to FUSE call-back")THcolspan(6,"Count calls to C-libraries")"</TR>\n\
-<TR>"TH("")TH("")SF(getattr)SF(readdir)SF(access)SF(lstat)SF(opendir)"</TR>\n</THEAD>\n");
+<TR>"TH("")TH("Ext")THcolspan(4,"Count call to FUSE call-back")THcolspan(8,"Count calls to C-libraries")"</TR>\n\
+<TR>"TH("")TH("")SF(getattr)SF(readdir)SF(access)SF(lstat)SF(opendir)SF(zip_open)"</TR>\n</THEAD>\n");
 #undef SF
     }
     done[x-ht_count_getattr.entries]=true;
     const int *vv=x->value;
     n=counts_by_filetype_row0(x->key,n);
 #define C(counter) vv[COUNTER_##counter##_SUCCESS],vv[COUNTER_##counter##_FAIL]
-    PRINTINFO(dTD()dTDfail() dTD()dTDfail() dTD()dTDfail() dTD()dTDfail() dTD()dTDfail()"</TR>\n",C(GETATTR),C(READDIR),C(ACCESS),C(STAT),C(OPENDIR));
+    PRINTINFO(dTD()dTDfail() dTD()dTDfail() dTD()dTDfail() dTD()dTDfail() dTD()dTDfail() dTD()dTDfail()"</TR>\n",C(GETATTR),C(READDIR),C(ACCESS),C(STAT),C(OPENDIR),C(ZIPOPEN));
 #undef C
   }
   if (count) PRINTINFO("</TABLE>\n");
@@ -308,7 +308,7 @@ static void log_virtual_memory_size(){
 }
 
 static int log_print_open_files(int n, int *fd_count){
-  PRINTINFO("<H1>All OS-level file handles</H1>\n(Should be almost empty if idle. FILE CONNECTIONS MAX: %d).<BR>",FILE_CONNECTIONS_MAX);
+  PRINTINFO("<H1>All OS-level file handles</H1>\n(Should be almost empty if idle).<BR>");
   static char path[256];
   struct dirent *dp;
   DIR *dir=opendir("/proc/self/fd/");
@@ -431,17 +431,14 @@ static size_t _kilo(size_t x){
   return ((1<<10)-1+x)>>10;
 }
 static int print_fhdata(int n,const char *title){
-  if (n<0) log_verbose("print_fhdata %s\n",snull(title));
-  else PRINTINFO("<H1>Data associated to file descriptors (struct fhdata)</H1>\n");
+ PRINTINFO("<H1>Data associated to file descriptors (struct fhdata)</H1>\n_fhdata_n: %d (Maximum %d)<BR>\n",n,FHDATA_MAX);
   if (!_fhdata_n){
-    if (n<0) log_strg("_fhdata_n is 0\n");
-    else PRINTINFO("The cache is empty which is good. It means that no entry is locked or leaked.<BR>\n");
+     PRINTINFO("The cache is empty which is good. It means that no entry is locked or leaked.<BR>\n");
   }else{
     PRINTINFO("Table should be empty when idle.<BR>Column <I><B>fd</B></I> file descriptor. Column <I><B>Last access</B></I>:    Column <I><B>Millisec</B></I>:  time to read entry en bloc into cache.  Column <I><B>R</B></I>: number of threads in currently in xmp_read().\
               Column <I><B>F</B></I>: flags. (D)elete indicates that it is marked for closing and (K)eep indicates that it can currently not be closed. Two possible reasons why data cannot be released: (I)  xmp_read() is currently run (II) the cached zip entry is needed by another file descriptor  with the same virtual path.<BR>\n\
               <TABLE border=\"1\">\n<THEAD><TR>"TH("Path")TH("fd")TH("Last access")TH("Cache addr")TH("Cache read kB")TH("Entry kB")TH("Millisec")TH(" F")TH("R")"</TR></THEAD>\n");
     const time_t t0=time(NULL);
-
     foreach_fhdata(id,d){
       if (n<0) log_msg("\t%p\t%s\t%p\t%zu\n",d,snull(D_VP(d)),IF1(WITH_MEMCACHE,d->memcache2,d->memcache_l)IF0(WITH_MEMCACHE,0,0));
       else{

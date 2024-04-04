@@ -3,7 +3,7 @@
 /// Dynamically generated files ///
 ///////////////////////////////////
 
-
+#define AUTOGEN_FILESIZE_ORIG_SIZE -100
 #define PLACEHOLDER_INPUTFILE "PLACEHOLDER_INPUTFILEx"
 #define PLACEHOLDER_TMP_OUTPUTFILE "PLACEHOLDER_TMP_OUTPUTFILEx"
 #define PLACEHOLDER_OUTPUTFILE "PLACEHOLDER_OUTPUTFILEx" // e.g /slow3/Users/x/ZIPsFS/modifications/ZIPsFS/a/6600-tof3/Data/50-0086/20240229S_TOF3_FA_060_50-0086_OxoScan-MSBatch04_P08_H01.wiff.scan
@@ -37,7 +37,8 @@ static void autogen_run(struct fhdata *d){
   cg_recursive_mk_parentdir(rp);
   char tmp[MAX_PATHLEN];
   char err[MAX_PATHLEN];
-  snprintf(tmp,MAX_PATHLEN,"%s.%d.%ld.autogen.tmp",rp,getpid(),currentTimeMillis());
+  //snprintf(tmp,MAX_PATHLEN,"%s.%d.%ld.autogen.tmp",rp,getpid(),currentTimeMillis());
+  snprintf(tmp,MAX_PATHLEN,"autogen_tmp_%d_%ld_%s",getpid(),currentTimeMillis(),rp);
   snprintf(err,MAX_PATHLEN,"%s.log",rp);
   struct textbuffer *buf=NULL;
   struct stat st={0};
@@ -49,7 +50,7 @@ static void autogen_run(struct fhdata *d){
   }else{
     if (stat(tmp,&st)){
       warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,tmp,"size=%ld ino: %ld",st.st_size, st.st_ino);
-       d->autogen_state=AUTOGEN_FAIL;
+      d->autogen_state=AUTOGEN_FAIL;
     }else{
       log_verbose("Size: %ld ino: %lu, Going to rename(%s,%s)\n",st.st_size,st.st_ino,tmp,rp);
       if (DEBUG_NOW==DEBUG_NOW) usleep(200*1000*1000);
@@ -66,6 +67,7 @@ static bool autogen_not_up_to_date(struct timespec st_mtim,const char *vp,const 
   uint64_t size;
   FOR(i,0,AUTOGEN_MAX_DEPENDENCIES){
     if (!config_autogen_dependencies(i,vp,vp_l,autogen_from,&size)) break;
+
     if (!stat(autogen_from,&st) && cg_timespec_b_before_a(st_mtim,st.st_mtim)) return true;
   }
   return false;
@@ -94,16 +96,23 @@ static bool virtualpath_startswith_autogen(const char *vp, const int vp_l){
 static long autogen_size_of_not_existing_file(const char *vp,const int vp_l){
   if (!virtualpath_startswith_autogen(vp,vp_l)) return -1;
   char autogen_from[MAX_PATHLEN];
-  uint64_t size=0;
+  uint64_t size=0,computed_size=-1;
   struct zippath zpath={0};
   FOR(i,0,AUTOGEN_MAX_DEPENDENCIES){
     if (!config_autogen_dependencies(i,vp,vp_l,autogen_from,&size)){
       if (!i) return -1;
       break;
     }
-    if (i && *autogen_from && !(zpath_init(&zpath,autogen_from),find_realpath_any_root(0,&zpath,NULL))) return -1;
+
+
+    if ((i || size==AUTOGEN_FILESIZE_ORIG_SIZE) && *autogen_from && !(zpath_init(&zpath,autogen_from),find_realpath_any_root(0,&zpath,NULL))) return -1;
+    if (!i){
+      switch(size){
+      case AUTOGEN_FILESIZE_ORIG_SIZE: computed_size=zpath.stat_rp.st_size;break;
+      }
+    }
   }
-  return size;
+  return computed_size>0?computed_size:size>=0?size:1234;
 }
 static void autogen_filldir(fuse_fill_dir_t filler,void *buf, const char *name, const struct stat *stbuf,struct ht *no_dups){
   const int name_l=strlen(name);

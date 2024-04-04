@@ -7,6 +7,7 @@
 
 #define AUTOGEN_CMD_MAX 100
 #define N_PATTERNS 9
+
 #define C(limit)  .ends=".raw",.patterns={"_30-0033_:_30-0037_",NULL},.filesize_limit=limit
 #define ID_AUTOGEN_HALLO 1
 #define DOCKER_MSCONVERT "docker","run","-v",PLACEHOLDER_INPUTFILE_PARENT":/data","-it","--rm","chambm/pwiz-skyline-i-agree-to-the-vendor-licenses","wine","msconvert",PLACEHOLDER_INPUTFILE_NAME,\
@@ -24,6 +25,7 @@ struct _autogen_config{ /* Note: those starting with underscore are initialized 
   atomic_int _count_concurrent;
   enum _autogen_capture_output stdout;
   uint64_t filesize_limit;
+  char *info;
   char **env;
   char *cmd[];
 }
@@ -33,13 +35,14 @@ struct _autogen_config{ /* Note: those starting with underscore are initialized 
   _test_malloc_fail= {C(  99),.ext=".test4.txt",.stdout=STDOUT_TO_OUTFILE,.cmd={"ls","-l","not exist",NULL},},
   _test_cmd_notexist={C(  99),.ext=".test5.txt",.stdout=STDOUT_TO_MALLOC,.cmd={"not exist",NULL},},  /* Yields  Operation not permitted */
   _test_textbuf=     {C(  99),.ext=".test6.txt",.id=ID_AUTOGEN_HALLO,.cmd={NULL}},
-  _wiff_strings={.ends=".wiff",.filesize_limit=99999,.ext=".strings",.stdout=true,.cmd={"bash","-c","tr -d '\\0' <"PLACEHOLDER_INPUTFILE"|strings|grep '\\w\\w\\w\\w' # "PLACEHOLDER_TMP_OUTPUTFILE" "PLACEHOLDER_TMP_OUTPUTFILE,NULL}},
+  _wiff_strings={.ends=".wiff",.filesize_limit=99999,.ext=".strings",.cmd={"bash","-c","tr -d '\\0' <"PLACEHOLDER_INPUTFILE"|strings|grep '\\w\\w\\w\\w' # "PLACEHOLDER_TMP_OUTPUTFILE" "PLACEHOLDER_TMP_OUTPUTFILE,NULL}},
 
 
   _msconvert_mzML={.ext=".mzML",.ends=".raw:.wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT,"--mzML",NULL}},
   _msconvert_mgf={.ext=".mgf",.ends=".raw:.wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT,"--mgf",NULL}},
 //  _wiff_scan={.ext=".scan",.ends=".wiff",.filesize_limit=99999999999,.no_redirect=true,.cmd={"bash","rawfile_mk_wiff_scan.sh",PLACEHOLDER_INPUTFILE,PLACEHOLDER_TMP_DIR,PLACEHOLDER_OUTPUTFILE,NULL}},
   _wiff_scan={.ext=".scan",.ends=".wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={PLACEHOLDER_EXTERNAL_QUEUE,PLACEHOLDER_INPUTFILE,PLACEHOLDER_OUTPUTFILE,NULL}},
+  _jpeg50={.info="Requires Imagemagick\n",.ext=".scale50%.jpeg", .ends=".jpeg", .filesize_limit=AUTOGEN_FILESIZE_ORIG_SIZE, .cmd={"convert",PLACEHOLDER_INPUTFILE,"-scale","50%",PLACEHOLDER_OUTPUTFILE,NULL} },
   *_autogen_array[]={&_test_outputfile,
                      &_test_stdout,
                      &_test_malloc_ok,&_test_malloc_fail,
@@ -48,6 +51,7 @@ struct _autogen_config{ /* Note: those starting with underscore are initialized 
                      &_wiff_strings,
                      &_wiff_scan,
                      &_msconvert_mzML,&_msconvert_mgf,
+                     &_jpeg50,
                      NULL};
 
 #undef C
@@ -59,7 +63,7 @@ static struct _autogen_config *autogen_config(const int i){
 }
 static bool config_autogen_file_is_invalid(const char *path,const int path_l, struct stat *st, const char *rootpath){
   if (!st) return false;
-  log_entered_function("%s %ld %d",path,st->st_size,ENDSWITH(path,path_l,".wiff.scan"));
+  // log_entered_function("%s %ld %d",path,st->st_size,ENDSWITH(path,path_l,".wiff.scan"));
   if (ENDSWITH(path,path_l,".wiff.scan") && st->st_size==44) return true; /*The tiny wiff.scan files are placeholders*/
   /* if (ENDSWITH(path,path_l,".wiff")){ */
   /*   char wiff_scan_rp[MAX_PATHLEN]; */
@@ -227,6 +231,7 @@ static int config_autogen_run(const char *virtual_outfile,const char *outfile,co
       if (s->stdout==STDOUT_TO_OUTFILE) res=autogen_fd_open(tmpoutfile,&fd_out);
       if (!res && !s->no_redirect) res=autogen_fd_open(errfile,&fd_err);
       if (!res){
+        if (fd_err && s->info) cg_fd_write_str(fd_err,s->info);
         char *cmd[AUTOGEN_CMD_MAX+1]={0};
         autogen_apply_replacements(cmd,s->cmd,infile,outfile,tmpoutfile);
         cg_log_exec_fd(STDERR_FILENO,NULL,cmd);

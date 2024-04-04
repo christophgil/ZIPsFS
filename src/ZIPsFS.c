@@ -194,6 +194,7 @@ static int  zpath_strlen(struct zippath *zpath,int s){
 enum enum_count_getattr{
   COUNTER_STAT_FAIL,COUNTER_STAT_SUCCESS,
   COUNTER_OPENDIR_FAIL,COUNTER_OPENDIR_SUCCESS,
+  COUNTER_ZIPOPEN_FAIL,COUNTER_ZIPOPEN_SUCCESS,
   COUNTER_GETATTR_FAIL,COUNTER_GETATTR_SUCCESS,
   COUNTER_ACCESS_FAIL,COUNTER_ACCESS_SUCCESS,
   COUNTER_READDIR_SUCCESS,COUNTER_READDIR_FAIL,
@@ -268,7 +269,7 @@ struct fhdata{
 #define FHDATA_LOG2_BLOCK_SIZE 5
 #define FHDATA_BLOCKS 512
 #define FHDATA_BLOCK_SIZE (1<<FHDATA_LOG2_BLOCK_SIZE)
-#define FILE_CONNECTIONS_MAX (FHDATA_BLOCKS*FHDATA_BLOCK_SIZE)
+#define FHDATA_MAX (FHDATA_BLOCKS*FHDATA_BLOCK_SIZE)
 static MAYBE_INLINE struct fhdata* fhdata_at_index(int i){
   static struct fhdata *_fhdata[FHDATA_BLOCKS];
 #define B _fhdata[i>>FHDATA_LOG2_BLOCK_SIZE]
@@ -520,7 +521,7 @@ static bool stat_maybe_cache(int opt, const char *path,const int path_l,const ht
   IF1(WITH_STAT_CACHE,
       if (0!=(opt&STAT_USE_CACHE) && stat_from_cache(stbuf,path,path_l,hash)) return true;
       if (0==(opt&STAT_ALSO_SYSCALL)) return false);
-  static int count; log_debug_now(" #%d Going to run lstat(%s,)",count++,path);
+  //static int count; log_debug_now(" #%d Going to run lstat(%s,)",count++,path);
   const int res=lstat(path,stbuf);
   LOCK(mutex_fhdata,inc_count_getattr(path,res?COUNTER_STAT_FAIL:COUNTER_STAT_SUCCESS));
   if (res) return false;
@@ -821,7 +822,9 @@ static struct zip *zip_open_ro(const char *orig){
     //static int count; log_verbose("Going to zip_open(%s) #%d ... ",orig,count);cg_print_stacktrace(0);
     RLOOP(try,2){
       int err;
-      if ((zip=zip_open(orig,ZIP_RDONLY,&err))) break;
+      zip=zip_open(orig,ZIP_RDONLY,&err);
+      LOCK(mutex_fhdata,inc_count_getattr(orig,zip?COUNTER_ZIPOPEN_SUCCESS:COUNTER_ZIPOPEN_FAIL));
+      if (zip) break;
       warning(WARN_OPEN|WARN_FLAG_ERRNO,orig,"zip_open_ro() err=%d",err);
       usleep(1000);
     }
@@ -1214,14 +1217,14 @@ static void fhdata_destroy(struct fhdata *d){
     IF1(WITH_AUTOGEN,const uint64_t fhr=d->fh_real;d->fh_real=0;if (fhr) close(fhr));
 #if WITH_TRANSIENT_ZIPENTRY_CACHES
     if (d->ht_transient_cache){
-      foreach_fhdata(id,d_loop) if (d->ht_transient_cache==d_loop->ht_transient_cache) goto keep;
+      foreach_fhdata(id,d_loop) if (d->ht_transient_cache==d_loop->ht_transient_cache) goto keep_transient_cache;
       ht_destroy(d->ht_transient_cache);
       FREE2(d->ht_transient_cache);
     }
-  keep:
+  keep_transient_cache:
 #endif //WITH_TRANSIENT_ZIPENTRY_CACHES
     IF1(WITH_MEMCACHE,memcache_free(d));
-    //log_msg(ANSI_FG_GREEN"Going to release fhdata d=%p path=%s fh=%lu "ANSI_RESET,d,snull(D_VP(d)),d->fh);
+    log_debug_now(ANSI_FG_GREEN"Going to release fhdata d=%p path=%s fh=%lu _fhdata_n=%d"ANSI_RESET,d,snull(D_VP(d)),d->fh,_fhdata_n);
     fhdata_zip_close(true,d);
     pthread_mutex_destroy(&d->mutex_read);
     memset(d,0,SIZEOF_FHDATA);
@@ -1262,9 +1265,9 @@ static void fhdata_init(struct fhdata *d, struct zippath *zpath){
 static struct fhdata* fhdata_create(const uint64_t fh, struct zippath *zpath){
   ASSERT_LOCKED_FHDATA();
   struct fhdata *d=NULL;
-  foreach_fhdata_also_emty(id,e) if (!D_VP(e)){ d=e; break;} /* Use empty slot */
+  foreach_fhdata_also_emty(id,e) if (!e->flags){ d=e; break;} /* Use empty slot */
   if (!d){ /* Append to list */
-    if (_fhdata_n>=FILE_CONNECTIONS_MAX){ warning(WARN_FHDATA|WARN_FLAG_ONCE_PER_PATH|WARN_FLAG_ERROR,VP(),"Excceeding FILE_CONNECTIONS_MAX");return NULL;}
+    if (_fhdata_n>=FHDATA_MAX){ warning(WARN_FHDATA|WARN_FLAG_ONCE_PER_PATH|WARN_FLAG_ERROR,VP(),"Excceeding FHDATA_MAX");return NULL;}
     d=fhdata_at_index(_fhdata_n++);
   }
   fhdata_init(d,zpath);
@@ -1739,8 +1742,7 @@ static int fhdata_read_zip(const char *path, char *buf, const size_t size, const
   { /* ***  offset>d: Need to skip data.   offset<d  means we need seek backward *** */
     const long diff=((long)offset)-zip_ftell(d->zip_file);
     if (diff){
-      if (zip_file_is_seekable(d->zip_file) && !zip_fseek(d->zip_file,offset,SEEK_SET)){
-      }
+      if (zip_file_is_seekable(d->zip_file) && !zip_fseek(d->zip_file,offset,SEEK_SET)){}
 #if WITH_MEMCACHE
       else if (diff<0 && _memcache_policy!=MEMCACHE_NEVER){ /* Worst case=seek backward - consider using cache */
         d->flags|=FHDATA_FLAGS_URGENT;
@@ -1818,7 +1820,7 @@ static int xmp_read(const char *path, char *buf, const size_t size, const off_t 
   ASSERT(fi!=NULL);
   const int path_l=strlen(path);
   uint64_t fd=fi->fh;
-  //log_msg("\n");log_entered_function(ANSI_BLUE" %lx "ANSI_RESET" %s size=%zu offset=%'lu next=%'lu   fh=%lu\n",pthread_self(),path,size,offset,offset+size,fd);
+  //log_entered_function(ANSI_BLUE" %lx "ANSI_RESET" %s size=%zu offset=%'lu next=%'lu   fh=%lu\n",pthread_self(),path,size,offset,offset+size,fd);
   int res=0;
   {
     LOCK_N(mutex_special_file,
@@ -1837,6 +1839,7 @@ static int xmp_read(const char *path, char *buf, const size_t size, const off_t 
        });
   if (d){
     IF1(WITH_AUTOGEN,if ((d->flags&FHDATA_FLAGS_IS_AUTOGEN) && _realpath_autogen && !d->fh_real){
+
         if (!d->autogen_state) autogen_run(d);
         if (d->autogen_state!=AUTOGEN_SUCCESS){
           res=-EPIPE;
@@ -2153,5 +2156,8 @@ int main(int argc,char *argv[]){
 /*   return false; */
 /* } */
 // SSMetaData zipinfo //s-mcpb-ms03/slow2/incoming/Z1/Data/30-0089/20230719_Z1_ZW_027_30-0089_Serum_EAD_14eV_3A_OxoIDA_rep_01.wiff2.Zip
-// FILE_CONNECTIONS_MAX
+// FHDATA_MAX
 // 44 readlink
+
+
+// FHDATA_MAX
