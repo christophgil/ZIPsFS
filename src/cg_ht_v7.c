@@ -253,6 +253,15 @@ static void *ht_numkey_set(struct ht *ht, uint64_t key_high_variability, const u
 
 #define HT_ENTRY_SET_NUMKEY(e,key_high_variability,key2)   {e->key=(char*)(uint64_t)key2;e->keylen_hash=key_high_variability;}
 #define ht_numkey_get_entry(ht,key_high_variability,key2) ht_get_entry_common(ht,(char*)(uint64_t)(key2),(key_high_variability))
+
+static struct ht_entry *ht_numkey_get_entry_create(struct ht *ht, uint64_t key_high_variability, uint64_t const key2,bool create){
+  struct ht_entry *e=ht_numkey_get_entry(ht,key_high_variability,key2);
+  if (!e->value && create){
+    e->key=(char*)key2;
+    e->keylen_hash=key_high_variability;
+  }
+  return e;
+}
 static void *ht_numkey_get(struct ht *ht, uint64_t key_high_variability, uint64_t const key2){
   HT_SET_INT_PREAMBLE();
   let_e_get_entry(ht,(char*)key2,key_high_variability);

@@ -95,7 +95,7 @@ static int config_containing_zipfile_of_virtual_file(const int approach,const ch
 #undef A
 }
 static void config_containing_zipfile_of_virtual_file_test(){
-    if (true) return; /* Remove to run tests */
+  if (true) return; /* Remove to run tests */
   char *ff[]={
     "20230310_aaaaaaaaaaa.wiff",
     "20230310_aaaaaaaaaaa.wiff.scan",
@@ -267,14 +267,17 @@ const int _FILE_EXT_TO=__COUNTER__;
 ////////////////////////////////////////////////////////////////////
 static long config_search_file_which_roots(const char *virtualpath,const int virtualpath_l,const bool path_starts_with_autogen){
 #if WITH_AUTOGEN
-  if (path_starts_with_autogen && _config_ends_like_a_generated_file(virtualpath,virtualpath_l)) return 1;
+  if (path_starts_with_autogen){
+    const int vp_l=virtualpath_l-(ENDSWITH(virtualpath,virtualpath_l,".log")?4:0);
+    if (_config_ends_like_a_generated_file(virtualpath,vp_l)) return 1;
+  }
 #endif //WITH_AUTOGEN
   return 0xFFFFffffFFFFffffL;
 }
 static bool config_readir_no_other_roots(const char *realpath,const int realpath_l){
 #define C(sfx) ENDSWITH(realpath,realpath_l,#sfx)
   return C(.wiff2.Zip) || C(.wiff.Zip) || C(.rawIdx.Zip) || C(.raw.Zip) || C(.d.Zip);
-  #undef C
+#undef C
 }
 ////////////////////////////
 /// Retry on failure.    ///

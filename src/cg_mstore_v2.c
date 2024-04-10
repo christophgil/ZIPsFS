@@ -153,7 +153,7 @@ static int _mstore_openfile(struct mstore *m,uint32_t block,const off_t adim){
   snprintf(path,PATH_MAX-1,"%s/%s_%02d_%03u.cache",mstore_set_base_path(NULL),m->name,m->id,block);
   log_entered_function("path: %s",path);
   const int fd=open(path,O_RDWR|O_CREAT|O_TRUNC,0640);
-  if (fd<2) DIE("open failed: %s fd: %d\n",path,fd);
+  if (fd<2) DIE("Open failed: %s fd: %d\n",path,fd);
   //  struct stat st; if (fstat(fd,&st)<0) log_error("fstat failed: %s\n",path);
   if (ftruncate(fd,adim) || write(fd,"",1)!=1){
     log_errno("write failed: %s\n",path);

@@ -220,16 +220,13 @@ static struct zippath *transient_cache_get_or_create_zpath(const char *path,cons
     const bool or_path_is_parent_dir=!maybe_same_zip && D_VP_L(d)>0 && cg_path_equals_or_is_parent(path,path_l,vp,D_VP_L(d));
     if (maybe_same_zip || or_path_is_parent_dir){
       struct ht *ht=transient_cache_get_ht(d);
-      struct ht_entry *e=ht_numkey_get_entry(ht,hash,path_l);
+      struct ht_entry *e=ht_numkey_get_entry_create(ht,hash,path_l,true);
       struct zippath *zpath=e->value;
       if (zpath && strcmp(path,VP())){ zpath=NULL; warning(WARN_DIRCACHE,path,"Rare case of hash_collision");}
       if (zpath && (zpath->realpath|| maybe_same_zip&&(zpath->flags&ZP_DOES_NOT_EXIST))){
-        //log_debug_now("%s  path: %s   d->path: %s\n"ANSI_RESET,(zpath->flags&ZP_DOES_NOT_EXIST)?ANSI_FG_RED:ANSI_FG_GREEN,path,vp);
       }else{
-        HT_ENTRY_SET_NUMKEY(e,hash,path_l);
         if (!zpath) zpath=e->value=mstore_malloc(ht->value_store,SIZEOF_ZIPPATH,8);
         zpath_init(zpath,path);
-        //zpath->flags|=(maybe_same_zip?ZP_TRANSIENT_CACHE_ASSUME_IS_ZIPENTRY:ZP_TRANSIENT_CACHE_IS_PARENT_OF_ZIP);
       }
       return zpath;
     }

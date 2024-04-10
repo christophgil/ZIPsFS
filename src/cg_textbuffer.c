@@ -164,7 +164,7 @@ static off_t textbuffer_read(struct textbuffer *b,const int fd){
     char *buf=malloc_or_mmap(b->flags&TEXTBUFFER_MMAP,blocksize);
     assert(buf!=NULL);
     const ssize_t n=read(fd,buf,blocksize);
-    if (n<=0){ free(buf); break;}
+    if (n<=0){ free_or_munmap(b->flags&TEXTBUFFER_MMAP,buf,blocksize); break;}
     count+=n;
     if (n!=blocksize){
       char *buf2=malloc_or_mmap(b->flags&TEXTBUFFER_MMAP,n);

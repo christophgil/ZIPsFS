@@ -13,7 +13,10 @@
 /////////////////
 #define WITH_ASSERT_LOCK 0
 #define WITH_PTHREAD_LOCK 1 /*  Should always be true. Only if suspect deadlock set to 0 */
-#define ASSERT(...) (assert(__VA_ARGS__))  // Optional assertion
+#define WITH_EXTRA_ASSERT 0 // Optional assertion
+
+
+
 
 
 

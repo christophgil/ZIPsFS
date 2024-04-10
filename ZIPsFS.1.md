@@ -95,10 +95,34 @@ Normally, the folder name is formed by appending "*.Content*" to the zip file na
 
 ## Autogeneration of files
 
-ZIPsFS can list files which do not yet exist, however, will be generated when used.
-The typical use-case are file conversions such as thumb images.
-With the current setting, Mascot mass spectrometry files and msML files are offered.
-Auto-generated files are found in *Mount-point/ZIPsFS/a/*.
+ZIPsFS offers  files which do not yet exist, and will be generated when used.
+This option is available if the first root directory which should be writable is provided.
+
+It will not be available, if an empty string is passed as the first root directory.
+
+The typical use-case are file conversions.
+Auto-generated files are found displayed in the default file tree.
+Instead,  *Mount-point/ZIPsFS/a/* replicates the entire file tree and also offers the generated files.
+
+With the current setting, Mascot mass spectrometry files and msML files are generated
+because this is required in our research group. As a more popular example, downscaled image files are offered for jpeg, jpg, png and gif files.
+The two scaling levels 50% and 25% demonstrate two different options:
+For size reduction to 50%, a file is generated and saved in *First-root-directory/ZIPsFS/a/Virtual-path.scale50%.ext.
+When loaded a second time, the data comes without delay, because the file is already there.
+For downscaling to 25%, the generated image data is not saved. Instead it is kept in RAM as long as the file handle is active.
+After loading the image, the image data in the RAM is discarded. The advantage is that no HD space is used.
+The disadvantage is, that for a short time the entire data resides in RAM and that the data is generated each time the file data is read.
+
+Users can use these Imagemagick based examples as a template for their own settings in ZIPsFS_configuration_autogen.c.
+
+Also see readme in the folder /ZIPsFS/.
+
+Some exotic wine based Windows executables did not work well within ZIPsFS.
+We had to externalize the into an external program. It is organized as an infinity loop and a queue.
+If you enconunter similar problems, see PLACEHOLDER_EXTERNAL_QUEUE and
+
+Problems/Limitations: The system does not know the file size of not-yet-generated files.
+It will report upper limit of the expected   file size.
 
 ZIPsFS Options
 --------------

@@ -170,7 +170,7 @@ static int counts_by_filetype_r(int n,struct rootdata *r, int *count_explain){
       assert(x->ext!=NULL);
       x->rank=0;
       if (!count++){
-        PRINTINFO("<H1>Counts by file type for root %s</H1>\n",rootpath(r));
+        PRINTINFO("<H1>Counts by file type for root %s</H1>\n",report_rootpath(r));
         if (!count_explain[0]++) PRINTINFO("<B>Columns explained:</B><UL>\n\
   <LI>zip_open(): How often are ZIP entries opened..</LI>\
   <LI>ZIP read no-cache: Count direct read operations for ZIP entries</LI>\n\
@@ -251,15 +251,15 @@ static int log_print_roots(int n){
   PRINTINFO("<H1>Roots</H1>\n<TABLE border=\"1\"><THEAD><TR>"TH("Path")TH("Writable")TH("Response")TH("Blocked")TH("Free[GB]")TH("Dir-Cache[kB]")TH("# entries in stat queue ")"</TR></THEAD>\n");
   foreach_root(i,r){
     const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30),diff=deciSecondsSinceStart()-r->pthread_when_loop_deciSec[PTHREAD_RESPONDING];
-    if (n>=0){
+
       PRINTINFO("<TR>"sTDl()sTDc(),rootpath(r),yes_no(f&ROOT_WRITABLE));
       if (f&ROOT_REMOTE) PRINTINFO(TD("%'ld ms")TD("%'ux / &sum; %'u s"), 10L*(diff>ROOT_OBSERVE_EVERY_MSECONDS_RESPONDING*10/1000*3?diff:r->statfs_took_deciseconds),r->log_count_delayed,r->log_count_delayed_periods*_wait_for_root_timeout_sleep/1000000);
       else PRINTINFO(TD("Local")TD(""));
       uint64_t u=0; IF1(WITH_DIRCACHE,LOCK(mutex_dircache, u=mstore_usage(DIRCACHE(r))/1024));
       PRINTINFO(dTD()zTD()dTD()"</TR>\n",freeGB,u,IF1(WITH_STAT_SEPARATE_THREADS,debug_statqueue_count_entries(r))IF0(WITH_STAT_SEPARATE_THREADS,0));
-    }else{
-      log_msg("\t%d\t%s\t%s\n",i,rootpath(r),!cg_strlen(rootpath(r))?"":(f&ROOT_REMOTE)?"Remote":(f&ROOT_WRITABLE)?"Writable":"Local");
-    }
+
+
+
   }
   PRINTINFO("</TABLE>\n");
   return n;

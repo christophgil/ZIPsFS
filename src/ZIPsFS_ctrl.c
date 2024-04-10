@@ -97,21 +97,29 @@ This is the virtual file system ZIPsFS.<BR><BR>\n\
 It can expand ZIP files and combine two or more file trees.<BR>\n\
 Records consisting of several files and archived as a ZIP  file can be unfolded and appear as if they would not have been zipped.\n\
 Software can directly work on the archived data without prior un-zipping.<BR><BR>\n\
-Write permission is pretended even for read-only file locations.\n\
+The files and folders appear to be writable even if the primary storage is read-only.\n\
 This is necessary for  software that uses wrong flags for opening files for reading or which creates output files in the same file location.<BR>\n\
 <A href=\"" HOMEPAGE "\">Homepage</A><BR>\n\
 <H2>Auto-generated files</H2>\n\
 This feature can be (de-)activated with the switch <b>WITH_AUTOGEN</b> in ZIPsFS_configuration.h. It is currently <B>" IF0(WITH_AUTOGEN,"de")"activated</B>.<BR>\n\
-Derived files are displayed in the file tree even when they do not exist yet.\n\
+Derived files are displayed in the file tree <B>");
+        textbuffer_add_segment(b,_mnt,0);
+        textbuffer_add_segment_const(b, DIR_ZIPsFS"/"DIRNAME_AUTOGEN"  </B>.\n\
+They are displayed even if they do  not exist.\n\
 They are generated when used for the first time.\n\
 On subsequent usage, the files are available without delay.\n\
 The generated files are disposed when they are not used within a customizeable number of days.\n\
-This can be prevented by updating the last-access-time with the scripts <B>."FN_SET_ATIME".*</B><BR><BR><BR>\n\
-When a file is accessed which is not yet generated potentially two  problems may occur:<OL>\n\
+This can be prevented by updating the last-access-time with the scripts<B>");
+    textbuffer_add_segment(b,_mnt,0);
+    textbuffer_add_segment_const(b,DIR_ZIPsFS FN_SET_ATIME".*</B><BR><BR><BR>\n\
+When a file is accessed that is not yet generated, potentially two  problems may occur:<OL>\n\
 <LI>Since the file will be generated upon first usage, the reading software receives the file data with delay. It may be possible, that the respective software may not  cope with this delay. At system level, the call to  open() returns prompt, while, the first call to read() may take some time.</LI>\n\
 <LI>While a file does not exist yet, its file size is guessed. The  estimate needs to be  equal-or-larger than the unknown file size. Programs may have a propblem with inaccurate file sizes.</LI>\n\
 </OL><B><U>Workaround</U></B>\n\
-Generation of the files can be forced using the scripts"FN_SET_ATIME". These scripts change the <B>last-access-time</B> and  can therefore also be used to prevent deletion after after timeout.<BR>\
+Generation of the files can be forced using "FN_SET_ATIME". These scripts change the <B>last-access-time</B> and  can also be used to prevent deletion after after a certain time.<BR><BR>\
+<B><U>Testing</U></B>\n\
+For testing,  copy  jpeg, png or give files.  downscaled versions will be found in the folder "DIR_ZIPsFS"/"DIRNAME_AUTOGEN"/.\n\
+This requires installation of Imagemagick\n\
 </BODY></HTML>\n");
     break;
 #if WITH_AUTOGEN
