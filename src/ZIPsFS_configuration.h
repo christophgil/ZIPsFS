@@ -124,7 +124,7 @@
 /// Dynamically generated files ///
 ///////////////////////////////////
 
-#define WITH_AUTOGEN 0
+#define WITH_AUTOGEN 1
 #if WITH_AUTOGEN
 #define AUTOGEN_DELETE_FILES_AFTER_DAYS "99"
 #define AUTOGEN_MAX_DEPENDENCIES 5 /*  Dynamically generated file can depend on n input files.  Prevents runaway loop */

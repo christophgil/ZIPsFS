@@ -10,8 +10,7 @@
 
 #define C(limit)  .ends=".raw",.patterns={"_30-0033_:_30-0037_",NULL},.filesize_limit=limit
 #define ID_AUTOGEN_HALLO 1
-#define DOCKER_MSCONVERT "docker","run","-v",PLACEHOLDER_INPUTFILE_PARENT":/data","-it","--rm","chambm/pwiz-skyline-i-agree-to-the-vendor-licenses","wine","msconvert",PLACEHOLDER_INPUTFILE_NAME,\
-    "--ext",".tmp","--outfile",PLACEHOLDER_OUTPUTFILE_NAME
+
 //static const char empty_string_array[]={NULL};
 enum _autogen_capture_output{STDOUT_DROP,STDOUT_TO_OUTFILE,STDOUT_TO_MALLOC,STDOUT_TO_MMAP,STDOUT_MERGE_TO_STDERR};
 struct _autogen_config{
@@ -41,16 +40,20 @@ struct _autogen_config{
   _test_malloc_fail= {C(  99),.ext=".test4.txt",.stdout=STDOUT_TO_OUTFILE,.cmd={"ls","-l","not exist",NULL},},
   _test_cmd_notexist={C(  99),.ext=".test5.txt",.stdout=STDOUT_TO_MALLOC,.cmd={"not exist",NULL},},  /* Yields  Operation not permitted */
   _test_textbuf=     {C(  99),.ext=".test6.txt",.id=ID_AUTOGEN_HALLO,.cmd={NULL}},
-  _wiff_strings={.ends=".wiff",.filesize_limit=99999,.ext=".strings",.cmd={"bash","-c","tr -d '\\0' <"PLACEHOLDER_INPUTFILE"|strings|grep '\\w\\w\\w\\w' # "PLACEHOLDER_TMP_OUTPUTFILE" "PLACEHOLDER_TMP_OUTPUTFILE,NULL}},
-  _msconvert_mzML={.info="Requires Docker",.ext=".mzML",.ends=".raw:.wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT,"--mzML",NULL}},
-  _msconvert_mgf= {.info="Requires Docker",.ext=".mgf", .ends=".raw:.wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT,"--mgf",NULL}},
-//  _wiff_scan={.ext=".scan",.ends=".wiff",.filesize_limit=99999999999,.no_redirect=true,.cmd={"bash","rawfile_mk_wiff_scan.sh",PLACEHOLDER_INPUTFILE,PLACEHOLDER_TMP_DIR,PLACEHOLDER_OUTPUTFILE,NULL}},
-  _wiff_scan={.ext=".scan",.ends=".wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={PLACEHOLDER_EXTERNAL_QUEUE,PLACEHOLDER_INPUTFILE,PLACEHOLDER_OUTPUTFILE,NULL}},
+  _wiff_strings={.ends=".wiff",.filesize_limit=99999,.ext=".strings",.cmd={"bash","-c","tr -d '\\0' <"PLACEHOLDER_INFILE"|strings|grep '\\w\\w\\w\\w' # "PLACEHOLDER_TMP_OUTFILE" "PLACEHOLDER_TMP_OUTFILE,NULL}},
+#define DOCKER_MSCONVERT_CMD "docker","run","-v",PLACEHOLDER_INFILE_PARENT":/data","-v",PLACEHOLDER_OUTFILE_PARENT":/dst","-it","--rm","chambm/pwiz-skyline-i-agree-to-the-vendor-licenses","wine","msconvert",PLACEHOLDER_INFILE_NAME,"--outdir","/dst", "--outfile",PLACEHOLDER_TMP_OUTFILE_NAME
+#define _msconvert(extension,suffix,limit) {.info="Requires Docker",.ext=extension,.ends=suffix,.filesize_limit=limit,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT_CMD,NULL}}
+  _msconvert_mzML=_msconvert(".mzML",".raw:.wiff",99999999999),
+  _msconvert_mgf=_msconvert(".mgf",".raw:.wiff",99999999999),
+//_msconvert_mzML={.info="Requires Docker",.ext=".mzML",.ends=".raw:.wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT,NULL}},
+// _msconvert_mgf= {.info="Requires Docker",.ext=".mgf", .ends=".raw:.wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT,"--mgf",NULL}},
+//  _wiff_scan={.ext=".scan",.ends=".wiff",.filesize_limit=99999999999,.no_redirect=true,.cmd={"bash","rawfile_mk_wiff_scan.sh",PLACEHOLDER_INFILE,PLACEHOLDER_TMP_DIR,PLACEHOLDER_OUTFILE,NULL}},
+  _wiff_scan={.ext=".scan",.ends=".wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={PLACEHOLDER_EXTERNAL_QUEUE,PLACEHOLDER_INFILE,PLACEHOLDER_OUTFILE,NULL}},
 
-#define I(x)  _##x##50={.info="Requires Imagemagick\n",.ext=".scale50%."#x,.ends_ic="."#x, .filesize_limit=AUTOGEN_FILESIZE_ORIG_SIZE, .cmd={"convert",PLACEHOLDER_INPUTFILE,"-scale","50%",PLACEHOLDER_TMP_OUTPUTFILE,NULL} }
+#define I(x)  _##x##50={.info="Requires Imagemagick\n",.ext=".scale50%."#x,.ends_ic="."#x, .filesize_limit=AUTOGEN_FILESIZE_ORIG_SIZE, .cmd={"convert",PLACEHOLDER_INFILE,"-scale","50%",PLACEHOLDER_TMP_OUTFILE,NULL} }
   I(jpeg),I(jpg),I(png),I(gif),
 #undef I
-#define I(x) _##x##25={.info="Requires Imagemagick\n",.ext=".scale25%."#x,.ends_ic="."#x,  .filesize_limit=AUTOGEN_FILESIZE_ORIG_SIZE, .cmd={"convert",PLACEHOLDER_INPUTFILE,"-scale","25%","-",NULL},.stdout=STDOUT_TO_MMAP}
+#define I(x) _##x##25={.info="Requires Imagemagick\n",.ext=".scale25%."#x,.ends_ic="."#x,  .filesize_limit=AUTOGEN_FILESIZE_ORIG_SIZE, .cmd={"convert",PLACEHOLDER_INFILE,"-scale","25%","-",NULL},.stdout=STDOUT_TO_MMAP}
   I(jpeg),I(jpg),I(png),I(gif),
 #undef I
   *_autogen_array[]={

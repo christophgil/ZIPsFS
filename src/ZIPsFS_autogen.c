@@ -4,22 +4,23 @@
 ///////////////////////////////////
 #define AUTOGEN_FLAG_NOT_REMEMBER_FILESIZE (1<<1)
 #define AUTOGEN_FILESIZE_ORIG_SIZE -100
-#define PLACEHOLDER_INPUTFILE "PLACEHOLDER_INPUTFILEx"
-#define PLACEHOLDER_TMP_OUTPUTFILE "PLACEHOLDER_TMP_OUTPUTFILEx"
-#define PLACEHOLDER_OUTPUTFILE "PLACEHOLDER_OUTPUTFILEx" // e.g /slow3/Users/x/ZIPsFS/modifications/ZIPsFS/a/6600-tof3/Data/50-0086/20240229S_TOF3_FA_060_50-0086_OxoScan-MSBatch04_P08_H01.wiff.scan
+#define PLACEHOLDER_INFILE "PLACEHOLDER_INFILEx"
+#define PLACEHOLDER_TMP_OUTFILE "PLACEHOLDER_TMP_OUTFILEx"
+#define PLACEHOLDER_OUTFILE "PLACEHOLDER_OUTFILEx" // e.g /slow3/Users/x/ZIPsFS/modifications/ZIPsFS/a/6600-tof3/Data/50-0086/20240229S_TOF3_FA_060_50-0086_OxoScan-MSBatch04_P08_H01.wiff.scan
 #define PLACEHOLDER_MNT "PLACEHOLDER_MNTx"
 #define PLACEHOLDER_TMP_DIR "PLACEHOLDER_TMP_DIRx"
-#define PLACEHOLDER_INPUTFILE_NAME "PLACEHOLDER_INPUTFILE_NAMEx"
-#define PLACEHOLDER_TMP_OUTPUTFILE_NAME "PLACEHOLDER_TMP_OUTPUTFILE_NAMEx"
-#define PLACEHOLDER_OUTPUTFILE_NAME "PLACEHOLDER_OUTPUTFILE_NAME"
-#define PLACEHOLDER_INPUTFILE_PARENT "PLACEHOLDER_INPUTFILE_PARENTx"
+#define PLACEHOLDER_INFILE_NAME "PLACEHOLDER_INFILE_NAMEx"
+#define PLACEHOLDER_TMP_OUTFILE_NAME "PLACEHOLDER_TMP_OUTFILE_NAMEx"
+#define PLACEHOLDER_OUTFILE_NAME "PLACEHOLDER_OUTFILE_NAME"
+#define PLACEHOLDER_INFILE_PARENT "PLACEHOLDER_INFILE_PARENTx"
+#define PLACEHOLDER_OUTFILE_PARENT "PLACEHOLDER_OUTFILE_PARENTx"
 #define PLACEHOLDER_EXTERNAL_QUEUE  "PLACEHOLDER_EXTERNAL_QUEUEx"
 
 static char *_realpath_autogen;
 
 const char *PLACEHOLDERS[]={
   PLACEHOLDER_EXTERNAL_QUEUE,
-  PLACEHOLDER_INPUTFILE,PLACEHOLDER_TMP_OUTPUTFILE,PLACEHOLDER_MNT,PLACEHOLDER_INPUTFILE_NAME,PLACEHOLDER_TMP_OUTPUTFILE_NAME,PLACEHOLDER_OUTPUTFILE,PLACEHOLDER_OUTPUTFILE_NAME,PLACEHOLDER_INPUTFILE_PARENT,PLACEHOLDER_TMP_DIR,NULL};
+  PLACEHOLDER_INFILE,PLACEHOLDER_TMP_OUTFILE,PLACEHOLDER_MNT,PLACEHOLDER_INFILE_NAME,PLACEHOLDER_TMP_OUTFILE_NAME,PLACEHOLDER_OUTFILE,PLACEHOLDER_OUTFILE_NAME,PLACEHOLDER_INFILE_PARENT,PLACEHOLDER_OUTFILE_PARENT,PLACEHOLDER_TMP_DIR,NULL};
 
 
 
@@ -112,7 +113,7 @@ static bool virtualpath_startswith_autogen(const char *vp, const int vp_l){
 
 static long autogen_size_of_not_existing_file(const char *vp,const int vp_l){
   if (!virtualpath_startswith_autogen(vp,vp_l)) return -1;
-  log_entered_function("%s",vp);
+  //  log_entered_function("%s",vp); cg_print_stacktrace(0);
   char autogen_from[MAX_PATHLEN];
   long size=-1;
   int flags;
@@ -178,26 +179,29 @@ static char *autogen_apply_replacements_for_cmd(const char *orig,const char *inf
       static char q[PATH_MAX+1];
       LOCK(mutex_autogen_init, if (!*q) strcpy(strcpy(q,_self_exe)+cg_last_slash(_self_exe)+1,"ZIPsFS_autogen_queue.sh"));
       replace=q;
-    }else if (placeholder==PLACEHOLDER_INPUTFILE){
+    }else if (placeholder==PLACEHOLDER_INFILE){
       replace=infile;
-    }else if (placeholder==PLACEHOLDER_OUTPUTFILE){
+    }else if (placeholder==PLACEHOLDER_OUTFILE){
       replace=outfile;
-    }else if (placeholder==PLACEHOLDER_TMP_OUTPUTFILE){
+    }else if (placeholder==PLACEHOLDER_TMP_OUTFILE){
       replace=tmpoutfile;
     }else if (placeholder==PLACEHOLDER_MNT){
       replace=_mnt;
     }else if (placeholder==PLACEHOLDER_TMP_DIR){
       static char t[MAX_PATHLEN+1];
       LOCK(mutex_autogen_init,if (!*t) snprintf(t,MAX_PATHLEN,"%s"DIR_AUTOGEN"/.tmp",_root_writable->rootpath);cg_recursive_mkdir(replace=t));
-    }else if (placeholder==PLACEHOLDER_INPUTFILE_NAME){
+    }else if (placeholder==PLACEHOLDER_INFILE_NAME){
       replace=infile+cg_last_slash(infile)+1;
-    }else if (placeholder==PLACEHOLDER_TMP_OUTPUTFILE_NAME){
+    }else if (placeholder==PLACEHOLDER_TMP_OUTFILE_NAME){
       replace=tmpoutfile+cg_last_slash(tmpoutfile)+1;
-    }else if (placeholder==PLACEHOLDER_OUTPUTFILE_NAME){
+    }else if (placeholder==PLACEHOLDER_OUTFILE_NAME){
       replace=outfile+cg_last_slash(outfile)+1;
-    }else if (placeholder==PLACEHOLDER_INPUTFILE_PARENT){
+    }else if (placeholder==PLACEHOLDER_INFILE_PARENT){
       replace=infile;
-      if ((replace_l=cg_last_slash(infile))<0) replace_l=0;
+      replace_l=MAX_int(0,cg_last_slash(infile));
+    }else if (placeholder==PLACEHOLDER_OUTFILE_PARENT){
+      replace=outfile;
+      replace_l=MAX_int(0,cg_last_slash(outfile));
     }else assert(false);
     if (replace && strlen(c)==placeholder_l){
       c=(char*)replace;
@@ -216,7 +220,7 @@ static char *autogen_apply_replacements_for_cmd(const char *orig,const char *inf
 }
 static bool _autogen_is_placeholder(const char *c){
   for(const char **r=PLACEHOLDERS;*r;r++){
-    if (*r<=c && c<*r+strlen(*r)) return true; /* if c is a pointer to the beginning or within string *r.  For 'within' see PLACEHOLDER_OUTPUTFILE_NAME  */
+    if (*r<=c && c<*r+strlen(*r)) return true; /* if c is a pointer to the beginning or within string *r.  For 'within' see PLACEHOLDER_OUTFILE_NAME  */
   }
   return false;
 }

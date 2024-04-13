@@ -5,7 +5,7 @@
 
 #Archive: //s-mcpb-ms03/slow2/incoming/6600-tof3/Data/50-0086/20240229S_TOF3_FA_060_50-0086_OxoScan-MSBatch04_P08_H01.rawIdx.Zip 107 MB  wiff.scan 44 Byte
 #raw rawIdx wiff
-
+set -u
 source ~/ref/sh/wine64_isolated.sh # Set up Wine
 RUN_WINE="wine64_isolated /local/wine_prefix/wine_for_dia_convert3"
 export NICE_WINE='time nice'
@@ -15,6 +15,10 @@ RAW2WIFF_EXE='/home/cgille/wine/raw_convert/2020_11_raw2wiff.exe'
 DIR_BASE=/slow3/Users/x/ZIPsFS/modifications/ZIPsFS/a
 DIR_QUEUE=$DIR_BASE/.queue
 DIR_TMP=$DIR_BASE/.temp
+tmux_rename_window(){
+    [[ -n ${1:-} ]] && tmux rename-window -t "$(tmux display-message -p '#I')" "$1"
+}
+
 #########################################################################
 ### The queue is recognized by the absence of command line arguments  ###
 ### Returns the number of instances                                   ###
@@ -33,6 +37,7 @@ count_queue_running(){
 ### Calling this directly from ZIPsFS, lead to frozen FS and Zoombies ###
 #########################################################################
 cleanup_tmp(){
+    echo "cleanup_tmp ..." >&2
     local d
     mkdir -p $DIR_TMP/trash
     for d in $DIR_TMP/*; do
@@ -42,6 +47,7 @@ cleanup_tmp(){
             mv -v  $d $DIR_TMP/trash/
         fi
     done
+    echo cleanup_tmp Done >&2
 }
 mk_wiff_scan(){
     local infile=$1 outfile=${2}
@@ -73,7 +79,8 @@ mk_wiff_scan(){
     echo "Going to run cd $PWD;  $cmd ..."
     export WINEDEBUG=-all
     if $cmd;then
-        sleep 10 # Exit value not working. Typing Ctrl-C may leads to truncated file. Sleep allows for  Ctrl-C twice.
+        sleep 10
+        # Exit value not working. Typing Ctrl-C may leads to truncated file. Sleep allows for  Ctrl-C twice.
         echo "Return value $?"
         local f
         for f in $b.wiff.scan ${b}TMP.wiff.scan ${b}TMP.wiff;do
@@ -93,14 +100,21 @@ mk_wiff_scan(){
 ### Infinity loop process queue items  ###
 ##########################################
 infinity_loop(){
+    echo "infinity_loop ... ">&2
     while true;do
         local q infile count=0
+        ls -l -t $DIR_QUEUE/*.q
         for q in $DIR_QUEUE/*.q;do
             ((count++))
             read -r infile outfile <$q
-            [[ -z ${outfile:-} ]] && echo "#$count  Warning: outfile empty" && continue
-            [[ -s $outfile     ]] && echo "#$count  Already exists $outfile" && continue
-            [[ ! -s $infile    ]] && echo "#$count  Infile does not exist $infile" && continue
+            echo "q: $q" >&2
+            echo "infile=$infile" >&2
+            echo "outfile=$outfile">&2
+            [[ -z ${outfile:-} ]] && echo "#$count  Warning: outfile empty" >&2 && continue
+            [[ -e $outfile     ]] && echo "#$count  Already exists $outfile" >&2 && continue
+            [[ ! -e $infile    ]] && echo "#$count  Infile does not exist $infile" >&2 && continue
+
+            echo "case $q ... ">&2
             case $q in
                 *.wiff.scan.q)
                     if mv -v $q $q.active;then
@@ -115,9 +129,29 @@ infinity_loop(){
             [[ -s $outfile ]] && z=SUCCESS
             zip -j $DIR_QUEUE/$z.zip  $q.active && rm $q.active
         done
-        set -x
-        sleep 10
-        set +x
+        read -r -t 10 -p "sleep 10 or press Enter" >&2
+    done
+}
+#####################
+### add_to_queue  ###
+#####################
+add_to_queue(){
+    tmux_rename_window "add_to_queue"
+    local f rel
+    [[ -z ${DIR_ZIPSFS_MODIFICATIONS:-} ]] && echo "$RED_ERROR DIR_ZIPSFS_MODIFICATIONS not set" && return
+    for f in "$@";do
+        rel=${f##*/ZIPsFS/}
+        [[ $f == $rel || ! -s $f ]] && continue
+        rel=ZIPsFS/$rel
+        local src='' dst=''
+        case $f in
+            *.wiff.scan) src=${f%.scan}; dst=$DIR_ZIPSFS_MODIFICATIONS/$rel;;
+            *) continue;;
+        esac
+        [[ -s  $dst ]] && echo "$GREEN_ALREADY_EXISTS$dst" && continue
+        local q=$DIR_QUEUE/${f##*/}.q
+        [[ -s   $q ]]  && echo "$GREEN_ALREADY_EXISTS$q" && continue
+        echo $src $dst >$q && echo "Written $q"
     done
 }
 
@@ -129,8 +163,9 @@ main(){
     shopt -s nullglob
     local OPTIND o
     mkdir -p  $DIR_QUEUE || return 1
-    while getopts 't' o;do
+    while getopts 'at' o;do
         case $o in
+            a) shift $((OPTIND-1)); add_to_queue "$@"; return;;
             t) local w=6600-tof3/Data/50-0086/20240229S_TOF3_FA_060_50-0086_OxoScan-MSBatch04_P08_H01.wiff
                $0 /s-mcpb-ms03/union/test/is/ZIPsFS/a/$w /slow3/Users/x/ZIPsFS/modifications/ZIPsFS/a/$w.scan >$DIR_QUEUE/test.wiff.scan.q
                return;;
@@ -138,14 +173,16 @@ main(){
         esac
     done
     shift $((OPTIND-1))
+
     case $# in
-        0) count_queue_running
+        0) tmux_rename_window "autogen"
+           count_queue_running
            local instances=$?
            read -r -p "instances=$instances. Press enter"
            cleanup_tmp
            infinity_loop
            ;;
-        2) local infile=$1 outfile=$2
+        2)local infile=$1 outfile=$2
            local f=$DIR_QUEUE/${outfile##*/}.q
            count_queue_running "Not going to add $outfile to queue" && return 1
            rm $outfile.failed 2>/dev/null
@@ -155,8 +192,7 @@ main(){
            while [[ ! -s $outfile && ! -e $outfile.failed ]];do
                #((count%10==0)) &&
                count_queue_running "Stop waiting" && break
-               sleep $((10+count++))
-               echo "Waiting for $outfile" >&2
+               read -r -t $((10+count++))  -p "sleep Waiting for $outfile" >&2
            done
            ls -l $outfile $outfile.failed >&2
            ;;

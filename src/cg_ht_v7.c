@@ -521,6 +521,15 @@ static void test_intern_substring(int argc,char *argv[]){
   printf("internalized=%s\n",internalized);
 }
 int main(int argc,char *argv[]){
+  if (1){
+      struct ht no_dups_={0};
+      struct ht *no_dups=&no_dups_;
+
+  ht_init_with_keystore_dim(no_dups,8,4096);
+
+  FOR(i,1,argc) if (!no_dups || ht_only_once(no_dups,argv[i],0)) printf("%d %s\n",i,argv[i]);
+  return 1;
+    };
   if (0){
   struct ht ht={0};
   ht_init_interner(&ht,8,4096);
