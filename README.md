@@ -230,6 +230,8 @@ SEE ALSO
 - https://github.com/google/mount-zip
 - https://github.com/cybernoid/archivemount
 - https://github.com/mxmlnkn/ratarmount
+- https://sourceforge.net/projects/avf/
+- https://github.com/ralic/fuse-zip
 
     # ZIPsFS - FUSE-based  overlay file system which expands  ZIP files
 
@@ -381,5 +383,3 @@ ZIPsFS has been developed to solve the following  problems:
  <DIV style="clear:both;"></DIV>
 
 </SPAN>
-
-
