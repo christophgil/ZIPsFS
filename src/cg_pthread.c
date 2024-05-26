@@ -1,33 +1,40 @@
 #include <pthread.h>
 #include "cg_utils.h"
 /////////////////////////////////////////////////////////////////
-/// Debugging ZIPsFS                                          ///
+/// lock
+/// Lock with WITH_ASSERT_LOCK 50 nanosec.
+/// Lock Without WITH_ASSERT_LOCK 25 nanosec.
+/// Not recursive 30 nanosec.
 /////////////////////////////////////////////////////////////////
 #if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__==0
 #define NUM_MUTEX 99
-#define WITH_PTHREAD_LOCK 1
-#define WITH_ASSERT_LOCK 0
 static char *MUTEX_S[NUM_MUTEX];
 static void cg_print_stacktrace(int calledFromSigInt){}
 #else
 static void cg_print_stacktrace(int calledFromSigInt);
 #endif
 
-
+static int deciSecondsSinceStart();
 static pthread_mutex_t _mutex[NUM_MUTEX];
 
 
 
 #if WITH_ASSERT_LOCK
-static pthread_key_t _pthread_key;
+static void destroy_thread_data(void *x){
+}
 /* Count recursive locks with (_mutex+mutex). Maybe inc or dec. */
-static MAYBE_INLINE int cg_mutex_count(int mutex,int inc){
+static int cg_mutex_count(int mutex,int inc){
+  pthread_mutex_lock(_mutex+mutex_mutex_count);
+  static pthread_key_t _pthread_key;
+  static bool initialized=false;
+  if (!initialized){ pthread_key_create(&_pthread_key,destroy_thread_data); initialized=true;}
   int *locked=pthread_getspecific(_pthread_key);
-  ASSERT(mutex<NUM_MUTEX);
   if (!locked) pthread_setspecific(_pthread_key,locked=calloc(NUM_MUTEX,sizeof(int)));
   //log_debug_now("mutex_count %s %d \n",MUTEX_S[mutex],locked[mutex]);
-  if (inc){ locked[mutex]+=inc;  assert(locked[mutex]>=0);}
-  return locked[mutex];
+  const int count=locked[mutex]+=inc;
+  pthread_mutex_unlock(_mutex+mutex_mutex_count);
+  if (inc) assert(count>=0);
+  return count;
 }
 #endif //WITH_ASSERT_LOCK
 
@@ -82,8 +89,34 @@ static void unlock(int mutex){
 
 #define ASSERT_LOCKED_FHDATA() cg_thread_assert_locked(mutex_fhdata)
 
+
+/////////////////
+///  Testing  ///
+/////////////////
+#if WITH_ASSERT_LOCK
+static void cg_mutex_test_1(){
+  log_entered_function0("");
+  LOCK(mutex_fhdata,
+       //ASSERT_LOCKED_FHDATA();
+       log_debug_now0("Within mutex_fhdata");
+       log_debug_now("count=%d",cg_mutex_count(mutex_fhdata,0));
+       LOCK(mutex_fhdata,log_debug_now("count2=%d",cg_mutex_count(mutex_fhdata,0)));
+       ASSERT_LOCKED_FHDATA();
+       );
+  log_debug_now("count2=%d",cg_mutex_count(mutex_fhdata,0));
+  ASSERT_LOCKED_FHDATA();
+}
+static void cg_mutex_test_2(){
+  log_entered_function0("");
+  LOCK(mutex_fhdata,
+
+cg_thread_assert_not_locked(mutex_fhdata);
+       );
+}
+#endif // !WITH_ASSERT_LOCK
 /////////////////////////////////////////////////////////////////////////////////
 #if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__==0
 int main(int argc, char *argv[]){
+  IF1(WITH_ASSERT_LOCK,cg_mutex_count_test());
 }
 #endif

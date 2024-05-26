@@ -251,7 +251,7 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
   }/*posHours*/
   return false;
 }/*trigger_files()*/
-static int read_special_file(const int i, char *buf, const size_t size, const off_t offset){
+static int read_special_file(const int i, char *buf, const off_t size, const off_t offset){
   const char *content;
   LOCK_N(mutex_special_file,
        struct textbuffer b={0};special_file_content(&b,i);

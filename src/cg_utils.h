@@ -99,7 +99,7 @@ M(MAX,long)
 #define log_char(c)  fputc(c,stderr)
 #define CG_PERROR(msg) fprintf(stderr,"%s:%d ",__FILE__,__LINE__),perror(msg)
 
-#define PRINT_PFX_FUNC_MSG(pfx1,pfx2,sfx,format,...)   fprintf(stderr,pfx1" %s():%i)"pfx2 format sfx,__func__,__LINE__,__VA_ARGS__)
+#define PRINT_PFX_FUNC_MSG(pfx1,pfx2,sfx,format,...)   fprintf(stderr,pfx1"%d s  %s():%i)"pfx2 format sfx,deciSecondsSinceStart()/10,__func__,__LINE__,__VA_ARGS__)
 
 #define log_entered_function(...)     PRINT_PFX_FUNC_MSG(ANSI_INVERSE" > > > "ANSI_RESET,"\n","\n",__VA_ARGS__)
 #define log_exited_function(...)     PRINT_PFX_FUNC_MSG(ANSI_INVERSE" < < < "ANSI_RESET,"\n","\n",__VA_ARGS__)
@@ -136,4 +136,10 @@ M(MAX,long)
 
 
 #define success_or_fail(b)  ((b)?GREEN_SUCCESS:RED_FAIL)
+
+
+#ifndef ASSERT
+#define ASSERT(...) assert(__VA_ARGS__)
+#endif
+#else
 #endif // _cg_utils_dot_h

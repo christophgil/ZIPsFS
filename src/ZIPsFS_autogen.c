@@ -32,7 +32,7 @@ static struct ht_entry *ht_entry_fsize(const char *vp,const int vp_l,const bool 
   log_entered_function("%s",vp);
   static struct ht ht_fsize={0};
   if (!ht_fsize.capacity) ht_init(&ht_fsize,HT_FLAG_NUMKEY|9);
-  struct ht_entry *e=ht_numkey_get_entry_create(&ht_fsize,inode_from_virtualpath(vp,vp_l),0,create);
+  struct ht_entry *e=ht_numkey_get_entry(&ht_fsize,inode_from_virtualpath(vp,vp_l),0,create);
   log_debug_now("vp: %s e=%p  %ld",vp, e,(long)e->value);
   return e;
 }
@@ -60,7 +60,7 @@ static void autogen_run(struct fhdata *d){
   if (!stat(err,&st) && st.st_ino>0) unlink(err);
   int err_gf=config_autogen_run(D_VP(d),D_RP(d),tmp,err,&buf);
   if (buf){
-    LOCK(mutex_fhdata, d->memcache2=buf;d->memcache_l=d->memcache_already=textbuffer_length(buf));
+    LOCK(mutex_fhdata, struct memcache *m=new_memcache(d);m->memcache2=buf;atomic_store(&m->memcache_already,m->memcache_l=textbuffer_length(buf)));
     d->autogen_state=AUTOGEN_SUCCESS;
     log_debug_now("textbuffer_length=%ld",textbuffer_length(buf));
     LOCK(mutex_fhdata,ht_entry_fsize(D_VP(d),D_VP_L(d),true)->value=(char*)textbuffer_length(buf));

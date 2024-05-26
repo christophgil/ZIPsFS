@@ -201,7 +201,7 @@ static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align){
     off_t begin=BLOCK_OFFSET_NEXT_FREE(d); begin=NEXT_MULTIPLE(begin,align);
     if (begin+bytes<BLOCK_CAPACITY(d)){ /* Block has sufficient capacity*/
       BLOCK_OFFSET_NEXT_FREE(d)=begin+bytes;
-      if (verbose) log_debug("begin: %ld bytes: %ld  BLOCK_CAPACITY: %ld\n",begin,bytes,BLOCK_CAPACITY(d));
+      if (verbose) log_debug("begin: %jd bytes: %jd  BLOCK_CAPACITY: %jd\n",(intmax_t)begin,(intmax_t)bytes,(intmax_t)BLOCK_CAPACITY(d));
       m->blockPreviouslyFilled=block;
       return d+begin;
     }

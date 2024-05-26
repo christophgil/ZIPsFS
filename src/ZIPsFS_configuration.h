@@ -11,9 +11,9 @@
 /////////////////
 /// Debugging ///
 /////////////////
-#define WITH_ASSERT_LOCK 0
-#define WITH_PTHREAD_LOCK 1 /*  Should always be true. Only if suspect deadlock set to 0 */
+#define WITH_ASSERT_LOCK 0 // Optional assertion
 #define WITH_EXTRA_ASSERT 0 // Optional assertion
+#define WITH_PTHREAD_LOCK 1 /*  Should always be true. Only if suspect deadlock set to 0 */
 
 
 
@@ -83,7 +83,7 @@
 #define WITH_STAT_CACHE 1
 // Activate a cache for file attributes of files and ZIP entries.
 
-
+#define WITH_EVICT_FROM_PAGECACHE 1
 
 ////////////
 /// Size ///
@@ -93,7 +93,7 @@
 #if DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
 #define DIRECTORY_CACHE_SEGMENTS 4 // Number of segments. If Exceeded, the directory cache is cleared and filled again.
 #endif
-#define MEMCACHE_READ_BYTES_NUM (16*1024*1024) // When storing zip entries in RAM, number of bytes read in one go
+#define MEMCACHE_READ_BYTES_NUM (512*1024*1024) // When storing zip entries in RAM, number of bytes read in one go
 #define SIZE_CUTOFF_MMAP_vs_MALLOC 100000
 
 
@@ -124,7 +124,7 @@
 /// Dynamically generated files ///
 ///////////////////////////////////
 
-#define WITH_AUTOGEN 1
+#define WITH_AUTOGEN 0
 #if WITH_AUTOGEN
 #define AUTOGEN_DELETE_FILES_AFTER_DAYS "99"
 #define AUTOGEN_MAX_DEPENDENCIES 5 /*  Dynamically generated file can depend on n input files.  Prevents runaway loop */

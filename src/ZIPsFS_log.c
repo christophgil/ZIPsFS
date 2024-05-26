@@ -22,11 +22,11 @@ static void inc_count_getattr(const char *path,enum enum_count_getattr field){
   if (path && ht_count_getattr.length<1024){
     char *ext=strrchr(path+cg_last_slash(path)+1,'.');
     if (!ext || !*ext) ext="-No extension-";
-      struct ht_entry *e=ht_sget_entry(&ht_count_getattr,ext,true);
-      assert(e!=NULL);assert(e->key!=NULL);
-      int *counts=e->value;
-      if (!counts) e->value=counts=mstore_malloc(&mstore_persistent,sizeof(int)*enum_count_getattr_length,8);
-      if (counts) counts[field]++;
+    struct ht_entry *e=ht_sget_entry(&ht_count_getattr,ext,true);
+    assert(e!=NULL);assert(e->key!=NULL);
+    int *counts=e->value;
+    if (!counts) e->value=counts=mstore_malloc(&mstore_persistent,sizeof(int)*enum_count_getattr_length,8);
+    if (counts) counts[field]++;
   }
 }
 //static void inc_count_getattr(const char *path,enum enum_count_getattr field){int *counts=}
@@ -252,11 +252,11 @@ static int log_print_roots(int n){
   foreach_root(i,r){
     const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30),diff=deciSecondsSinceStart()-r->pthread_when_loop_deciSec[PTHREAD_RESPONDING];
 
-      PRINTINFO("<TR>"sTDl()sTDc(),rootpath(r),yes_no(f&ROOT_WRITABLE));
-      if (f&ROOT_REMOTE) PRINTINFO(TD("%'ld ms")TD("%'ux / &sum; %'u s"), 10L*(diff>ROOT_OBSERVE_EVERY_MSECONDS_RESPONDING*10/1000*3?diff:r->statfs_took_deciseconds),r->log_count_delayed,r->log_count_delayed_periods*_wait_for_root_timeout_sleep/1000000);
-      else PRINTINFO(TD("Local")TD(""));
-      uint64_t u=0; IF1(WITH_DIRCACHE,LOCK(mutex_dircache, u=mstore_usage(DIRCACHE(r))/1024));
-      PRINTINFO(dTD()zTD()dTD()"</TR>\n",freeGB,u,IF1(WITH_STAT_SEPARATE_THREADS,debug_statqueue_count_entries(r))IF0(WITH_STAT_SEPARATE_THREADS,0));
+    PRINTINFO("<TR>"sTDl()sTDc(),rootpath(r),yes_no(f&ROOT_WRITABLE));
+    if (f&ROOT_REMOTE) PRINTINFO(TD("%'ld ms")TD("%'ux / &sum; %'u s"), 10L*(diff>ROOT_OBSERVE_EVERY_MSECONDS_RESPONDING*10/1000*3?diff:r->statfs_took_deciseconds),r->log_count_delayed,r->log_count_delayed_periods*_wait_for_root_timeout_sleep/1000000);
+    else PRINTINFO(TD("Local")TD(""));
+    uint64_t u=0; IF1(WITH_DIRCACHE,LOCK(mutex_dircache, u=mstore_usage(DIRCACHE(r))/1024));
+    PRINTINFO(dTD()zTD()dTD()"</TR>\n",freeGB,u,IF1(WITH_STAT_SEPARATE_THREADS,debug_statqueue_count_entries(r))IF0(WITH_STAT_SEPARATE_THREADS,0));
 
 
 
@@ -362,7 +362,7 @@ static int print_maps(int n){
 
 static int log_print_CPU(int n){
   PRINTINFO("<H1>CPU</H1>\n<PRE>");
-    PRINTINFO("Current CPU usage user: %.2f system: %.2f    Also try top -p %d\n",_ucpu_usage,_scpu_usage,getpid());
+  PRINTINFO("Current CPU usage user: %.2f system: %.2f    Also try top -p %d\n",_ucpu_usage,_scpu_usage,getpid());
   PRINTINFO("</PRE>\n");
   //n=print_maps(n);
 
@@ -397,8 +397,14 @@ static int log_print_memory(int n){
     if(rlset) PRINTINFO(" / rlimit %zu MB<BR>\n",rl.rlim_cur>>20);
 #endif
   }
-  PRINTINFO("uordblks: %'d bytes (Total allocated heap space)\n",mallinfo().uordblks);
-    {
+
+#if defined __GLIBC__ && __GLIBC__>=2 && __GLIBC_MINOR__>=33
+#define MALLINFO() mallinfo2()
+#else
+#define MALLINFO() mallinfo()
+#endif
+  PRINTINFO("uordblks: %'jd bytes (Total allocated heap space)\n",(intmax_t)MALLINFO().uordblks);
+  {
     int val; n=print_proc_status(n,"VmRSS:|VmHWM:|VmSize:|VmPeak:",&val);
   }
   {
@@ -406,8 +412,8 @@ static int log_print_memory(int n){
     getrlimit(RLIMIT_AS,&rl);
     if (rl.rlim_cur!=-1) PRINTINFO("Rlim soft: %'lx MB   hard: %'lx MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
   }
-  PRINTINFO("Number of calls to mmap: %'d to munmap: %'d<BR>\n",textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_FREE));
-  PRINTINFO("Number of calls to malloc: %'d to free: %'d<BR>\n",textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_FREE));
+  PRINTINFO("Number of calls to mmap: %'jd to munmap: %'jd<BR>\n",(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_FREE));
+  PRINTINFO("Number of calls to malloc: %'jd to free: %'jd<BR>\n",(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_FREE));
   return n;
 }
 
@@ -431,24 +437,22 @@ static size_t _kilo(size_t x){
   return ((1<<10)-1+x)>>10;
 }
 static int print_fhdata(int n,const char *title){
- PRINTINFO("<H1>Data associated to file descriptors (struct fhdata)</H1>\n_fhdata_n: %d (Maximum %d)<BR>\n",n,FHDATA_MAX);
+  PRINTINFO("<H1>Data associated to file descriptors (struct fhdata)</H1>\n_fhdata_n: %d (Maximum %d)<BR>\n",n,FHDATA_MAX);
   if (!_fhdata_n){
-     PRINTINFO("The cache is empty which is good. It means that no entry is locked or leaked.<BR>\n");
+    PRINTINFO("The cache is empty which is good. It means that no entry is locked or leaked.<BR>\n");
   }else{
     PRINTINFO("Table should be empty when idle.<BR>Column <I><B>fd</B></I> file descriptor. Column <I><B>Last access</B></I>:    Column <I><B>Millisec</B></I>:  time to read entry en bloc into cache.  Column <I><B>R</B></I>: number of threads in currently in xmp_read().\
-              Column <I><B>F</B></I>: flags. (D)elete indicates that it is marked for closing and (K)eep indicates that it can currently not be closed. Two possible reasons why data cannot be released: (I)  xmp_read() is currently run (II) the cached zip entry is needed by another file descriptor  with the same virtual path.<BR>\n\
-              <TABLE border=\"1\">\n<THEAD><TR>"TH("Path")TH("fd")TH("Last access")TH("Cache addr")TH("Cache read kB")TH("Entry kB")TH("Millisec")TH(" F")TH("R")"</TR></THEAD>\n");
+              Column <I><B>F</B></I>: flags. (D)elete indicates that it is marked for closing and (K)eep indicates that it can currently not be closed. Two possible reasons why data cannot be released: (I)  xmp_read() is currently run (II) the cached zip entry is needed by another file descriptor  with the same virtual path. Column <I><B>Tansient cache: Hex address, number of cached paths, count fetched non-existing paths, count fetched existing</B><BR>\n\
+              <TABLE border=\"1\">\n<THEAD><TR>"TH("Path")TH("Last access")IF1(WITH_MEMCACHE,TH("Cache ID")TH("Cache read kB")TH("Entry kB")TH("Millisec"))TH(" F")TH("R")IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,TH("Transient cache"))"</TR></THEAD>\n");
     const time_t t0=time(NULL);
     foreach_fhdata(id,d){
-      if (n<0) log_msg("\t%p\t%s\t%p\t%zu\n",d,snull(D_VP(d)),IF1(WITH_MEMCACHE,d->memcache2,d->memcache_l)IF0(WITH_MEMCACHE,0,0));
-      else{
-        PRINTINFO("<TR>"sTDl()TD("%'llu"),snull(D_VP(d)),d->fh);
-        if (d->accesstime) PRINTINFO(TD("%'ld s"),t0-d->accesstime);  else PRINTINFO(TD("Never"));
-        IF1(WITH_MEMCACHE,if (d->memcache2) PRINTINFO(TD("%p")""zTD()zTD()lTD(),d->memcache2,_kilo(d->memcache_already),_kilo(d->memcache_l),d->memcache_took_mseconds);else)
-         PRINTINFO(TD("")TD("")TD(""));
-        const bool can_destroy=fhdata_can_destroy(d);
-        PRINTINFO(TD("%c%c")dTD()"</TR>\n",(d->flags&FHDATA_FLAGS_DESTROY_LATER)?'D':' ', can_destroy?' ':'K',d->is_xmp_read);
-      }
+      PRINTINFO("<TR>"sTDl(),snull(D_VP(d)));
+      if (d->accesstime) PRINTINFO(TD("%'ld s"),t0-d->accesstime); else PRINTINFO(TD("Never"));
+      IF1(WITH_MEMCACHE, struct memcache *m=d->memcache; if (m && m->memcache2) PRINTINFO(TD("%05x")zTD()zTD()lTD(),m->id,_kilo(m->memcache_already),_kilo(m->memcache_l),m->memcache_took_mseconds); else PRINTINFO(TD("")TD("")TD("")TD("")));
+
+      PRINTINFO(TD("%c%c")dTD(),(d->flags&FHDATA_FLAGS_DESTROY_LATER)?'D':' ', fhdata_can_destroy(d)?' ':'K',d->is_xmp_read);
+      IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,const struct ht *ht=d->ht_transient_cache;PRINTINFO(TD("%0lx %d %d %d"),(long)ht,!ht?-1: (int)ht->length, !ht?-1:ht->client_value_int[0],!ht?-1:ht->client_value_int[1]));
+      PRINTINFO("</TR>\n");
     }
     PRINTINFO("</TABLE>");
   }
@@ -484,7 +488,7 @@ TD {text-align:right;}\n\
   LOCK(mutex_fhdata,n=print_fhdata(n,""));
   PRINTINFO("<H1>Inodes</H1>\nCreated sequentially: %'ld\n",_count_SeqInode);
   PRINTINFO("<H1>Cache</H1>");
-    PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",  IF1(WITH_MEMCACHE,WHEN_MEMCACHE_S[_memcache_policy])IF0(WITH_MEMCACHE,"!WITH_MEMCACHE"));
+  PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",  IF1(WITH_MEMCACHE,WHEN_MEMCACHE_S[_memcache_policy])IF0(WITH_MEMCACHE,"!WITH_MEMCACHE"));
   n=log_print_statistics_of_read(n);
   //  PRINTINFO("_cumul_time_store=%lf\n<BR>",((double)_cumul_time_store)/CLOCKS_PER_SEC);
   LOCK(mutex_fhdata,n=counts_by_filetype(n));
@@ -508,7 +512,8 @@ static const char *zip_fdopen_err(int err){
 #if WITH_MEMCACHE
 static void fhdata_log_cache(const struct fhdata *d){
   if (!d){ log_char('\n');return;}
-  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %zu/%zu   hasc: %s\n",d,D_VP(d),yes_no(d->memcache2!=NULL),MEMCACHE_STATUS_S[d->memcache_status],d->memcache_already,d->memcache_l,yes_no(d->memcache_l>0));
+  struct memcache *m=d->memcache;
+  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %jd/%jd   hasc: %s\n",d,D_VP(d),yes_no(m && m->memcache2),!m?0:MEMCACHE_STATUS_S[m->memcache_status],(intmax_t)(!m?-1:m->memcache_already),(intmax_t)(!m?-1:m->memcache_l),yes_no(m && m->memcache_l>0));
 }
 #endif //WITH_MEMCACHE
 static void _log_zpath(const char *fn,const int line,const char *msg, struct zippath *zpath){
@@ -526,7 +531,7 @@ static void _log_zpath(const char *fn,const int line,const char *msg, struct zip
   log_msg("    %p  root="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,zpath->root,rootpath(zpath->root));
 #define C(f) ((zpath->flags&f)?#f:"")
   log_msg("       flags="ANSI_FG_BLUE"%s %s %s %s %s\n"ANSI_RESET,C(ZP_ZIP),C(ZP_DOES_NOT_EXIST),C(ZP_IS_COMPRESSED),C(ZP_VERBOSE),C(ZP_STARTS_AUTOGEN));
-  #undef C
+#undef C
 }
 #define log_zpath(...) _log_zpath(__func__,__LINE__,__VA_ARGS__) /*TO_HEADER*/
 
@@ -558,14 +563,14 @@ static void usage(){
 The first root directory (here  ~/tmp/ZIPsFS/writable)  is writable and allows file creation and deletion, the others are read-only.\n\
 Root directories starting with double slash (here //computer/pub) are regarded as less reliable and potentially blocking.\n\n\
 Options and arguments before the colon are interpreted by ZIPsFS.  Those after the colon are passed to fuse_main(...).\n\n",stderr);
-  fputs(ANSI_UNDERLINE"ZIPsFS options:"ANSI_RESET"\n\n\
+    fputs(ANSI_UNDERLINE"ZIPsFS options:"ANSI_RESET"\n\n\
       -h Print usage.\n\
       -q quiet, no debug messages to stdout\n\
          Without the option -f (foreground) all logs are suppressed anyway.\n\
       -c [",stderr);
-  //  for(char **s=WHEN_MEMCACHE_S;*s;s++){if (s!=WHEN_MEMCACHE_S) putchar('|');fputs(*s,stderr);}
-  IF1(WITH_MEMCACHE,for(int i=0;WHEN_MEMCACHE_S[i];i++){ if (i) putchar('|');fputs(WHEN_MEMCACHE_S[i],stderr);});
-  fputs("]    When to read zip entries into RAM\n\
+    //  for(char **s=WHEN_MEMCACHE_S;*s;s++){if (s!=WHEN_MEMCACHE_S) putchar('|');fputs(*s,stderr);}
+    IF1(WITH_MEMCACHE,for(int i=0;WHEN_MEMCACHE_S[i];i++){ if (i) putchar('|');fputs(WHEN_MEMCACHE_S[i],stderr);});
+    fputs("]    When to read zip entries into RAM\n\
          seek: When the data is not read continuously\n\
          rule: According to rules based on the file name encoded in configuration.h\n\
          The default is when backward seeking would be requires otherwise\n\
@@ -573,7 +578,7 @@ Options and arguments before the colon are interpreted by ZIPsFS.  Those after t
       -l Limit memory usage for caching ZIP entries.\n\
          Without caching, moving read positions backwards for an non-seek-able ZIP-stream would require closing, reopening and skipping.\n\
          To avoid this, the limit is multiplied with factor 1.5 in such cases.\n\n",stderr);
-  fputs(ANSI_UNDERLINE"Fuse options:"ANSI_RESET"These options are given after a colon.\n\n\
+    fputs(ANSI_UNDERLINE"Fuse options:"ANSI_RESET"These options are given after a colon.\n\n\
  -d Debug information\n\
  -f File system should not detach from the controlling terminal and run in the foreground.\n\
  -s Single threaded mode. Maybe tried in case the default mode does not work properly.\n\

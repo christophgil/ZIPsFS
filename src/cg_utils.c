@@ -189,6 +189,25 @@ static int cg_strsplit(const int opt_and_sep, char *s, const int s_l, char *toke
   return count;
 }
 
+
+///////////////////
+/// time       ///
+///////////////////
+
+
+static struct timeval  _startTime;
+static int64_t currentTimeMillis(){
+  struct timeval tv={0};
+  gettimeofday(&tv,NULL);
+  return tv.tv_sec*1000+tv.tv_usec/1000;
+}
+static int deciSecondsSinceStart(){
+  if (!_startTime.tv_sec) gettimeofday(&_startTime,NULL);
+  struct timeval now;
+  gettimeofday(&now,NULL);
+  return (int)((now.tv_sec-_startTime.tv_sec)*10+(now.tv_usec-_startTime.tv_usec)/100000);
+}
+
 ///////////////////
 /// file path   ///
 ///////////////////
@@ -235,6 +254,9 @@ static int cg_find_invalidchar(enum validchars type,const char *s,const int len)
   }
   return -1;
 }
+
+
+
 
 static int cg_path_for_fd(const char *title, char *path, int fd){
   *path=0;
@@ -401,9 +423,9 @@ static bool cg_file_set_atime(const char *path, struct stat *stbuf,long secondsF
 /// file        ///
 ///////////////////
 /* write() may be write only part of the data */
-static bool cg_fd_write(int fd,char *t,const size_t size0){
-  for(size_t size=size0; size>0;){
-    size_t n=write(fd,t,size);
+static bool cg_fd_write(int fd,char *t,const off_t size0){
+  for(off_t size=size0; size>0;){
+    off_t n=write(fd,t,size);
     if (n<0) return false;
     t+=n;
     size-=n;
@@ -488,18 +510,6 @@ static bool cg_timespec_b_before_a(struct timespec a, struct timespec b) {  //Re
 }
 
 
-static struct timeval  _startTime;
-static int64_t currentTimeMillis(){
-  struct timeval tv={0};
-  gettimeofday(&tv,NULL);
-  return tv.tv_sec*1000+tv.tv_usec/1000;
-}
-static int deciSecondsSinceStart(){
-  if (!_startTime.tv_sec) gettimeofday(&_startTime,NULL);
-  struct timeval now;
-  gettimeofday(&now,NULL);
-  return (int)((now.tv_sec-_startTime.tv_sec)*10+(now.tv_usec-_startTime.tv_usec)/100000);
-}
 
 
 #define CG_TIMESPEC_EQ(a,b) (a.tv_sec==b.tv_sec && a.tv_nsec==b.tv_nsec)

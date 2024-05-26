@@ -40,19 +40,19 @@ struct textbuffer{
 #define TEXTBUFFER_MEMUSAGE_COUNT_FREE (1<<3)
 #define textbuffer_memusage_get(flags) textbuffer_memusage(flags,0)
 static pthread_mutex_t *_textbuffer_memusage_lock=NULL;
-static int64_t textbuffer_memusage(const int flags,const int64_t delta){
+static off_t textbuffer_memusage(const int flags,const off_t delta){
   if (_textbuffer_memusage_lock) pthread_mutex_lock(_textbuffer_memusage_lock);
-  static int64_t usage[1<<4];
+  static off_t usage[1<<4];
   if (delta){
     usage[flags]+=delta;
     usage[flags|(delta>0?TEXTBUFFER_MEMUSAGE_COUNT_ALLOC:TEXTBUFFER_MEMUSAGE_COUNT_FREE)]++;
     if (usage[flags]>usage[flags|TEXTBUFFER_MEMUSAGE_PEAK]) usage[flags|TEXTBUFFER_MEMUSAGE_PEAK]=usage[flags];
   }
-  int64_t u=usage[flags];
+  off_t u=usage[flags];
   if (_textbuffer_memusage_lock) pthread_mutex_unlock(_textbuffer_memusage_lock);
   return u;
 }
-static void textbuffer_memusage_change(struct textbuffer *b,const int64_t delta){
+static void textbuffer_memusage_change(struct textbuffer *b,const off_t delta){
   textbuffer_memusage(((b->flags&TEXTBUFFER_MMAP)!=0)?TEXTBUFFER_MEMUSAGE_MMAP:0,delta);
 }
 
@@ -87,18 +87,27 @@ static off_t _textbuffer_copy_to_or_compare(const bool isCopy,const struct textb
       if (f>=to) break;
       if (t>f){
         //log_debug_now("%d) [%d/%d] %ld-%ld  %ld-%ld    dst: %ld count:%ld",invocation,i,b->n,from,to,f,t, f-from, count);
-        if (0){
+        if (DEBUG_NOW!=DEBUG_NOW){
           off_t test=0;
           for(off_t j=f;j<t;j++){
-            const char c=b->segment[i][j-f0]; assert(f-from<to-from);
+            const char c=b->segment[i][j-f0];
+            assert(to-from>j-from);
             if (isCopy) dst[j-from]=c;
             else if (dst[j-from]!=c) return 1;
+
           }
-        }
+        }else{
         if (isCopy){
-        memcpy(dst+f-from,b->segment[i]+(f-f0),t-f);
+
+          //log_debug_now("%d  memcpy(%ld,  %ld,  %ld)   f0: %ld  f: %ld t: %ld  e0: %ld  mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm .... \n",i, f-from, (f-f0),t-f ,  f0,f,t,e0);
+
+
+
+
+          memcpy(dst+f-from,b->segment[i]+(f-f0),t-f);
         }else{
           if (memcmp(dst+f-from,b->segment[i]+(f-f0),t-f)) return 1;
+        }
         }
         count+=(t-f);
       }
@@ -260,7 +269,7 @@ static void test_ps_pid(const int pid){
   struct textbuffer b={0};
   textbuffer_reset(&b);
   textbuffer_from_exec_output(&b,cmd,NULL,NULL);
-  fprintf(stderr," Read %ld bytes \n",textbuffer_length(&b));
+  fprintf(stderr," Read %jd bytes \n",(intmax_t)textbuffer_length(&b));
   textbuffer_write_fd(&b,STDOUT_FILENO);
   fprintf(stderr,"EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE  \n");
   textbuffer_destroy(&b);
@@ -293,7 +302,7 @@ static void test_exec(){
     b.read_bufsize=5;
     textbuffer_from_exec_output(&b,cmd,NULL,path_stderr);
   }
-  fprintf(stderr," Read %ld bytes \n",textbuffer_length(&b));
+  fprintf(stderr," Read %jd bytes \n",(intmax_t)textbuffer_length(&b));
   //  test_write_bytes_block(-1,&b);
   test_write_bytes_block(STDOUT_FILENO,&b);
   fprintf(stderr,"EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE  \n");

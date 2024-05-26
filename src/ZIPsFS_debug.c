@@ -7,8 +7,7 @@ static int countFhdataWithMemcache(const char *path, int len,int h){
   if (!len) len=strlen(path);
   if (!h) h=hash32(path,len);
   int count=0;
-
-  IF1(WITH_MEMCACHE,foreach_fhdata(id,d)     if (D_VP_HASH(d)==h && d->memcache2!=NULL && !strcmp(path,D_VP(d))) count++);
+  IF1(WITH_MEMCACHE,foreach_fhdata(id,d)     if (D_VP_HASH(d)==h && d->memcache && d->memcache->memcache2 && !strcmp(path,D_VP(d))) count++);
   return count;
 }
 
@@ -19,8 +18,11 @@ static void _fhdataWithMemcachePrint(const char *func,int line,const char *path,
   if (!h) h=hash32(path,len);
   int count=0;
   foreach_fhdata(id,d){
-    if (D_VP_HASH(d)==h && (d->memcache2||d->memcache_status) && !strcmp(path,D_VP(d))){
-      log_msg("%s:%d fhdataWithMemcachePrint: %d %s  d->memcache_status: %s memcache_l: %zu\n",func,line,id,path,MEMCACHE_STATUS_S[d->memcache_status],d->memcache_l);
+    if (D_VP_HASH(d)==h){
+      struct memcache *m=d->memcache;
+      if (m && (m->memcache2||m->memcache_status) && !strcmp(path,D_VP(d))){
+        log_msg("%s:%d fhdataWithMemcachePrint: %d %s  memcache_status: %s memcache_l: %jd\n",func,line,id,path,MEMCACHE_STATUS_S[m->memcache_status],(intmax_t)m->memcache_l);
+      }
     }
   }
 #endif //WITH_MEMCACHE
@@ -36,7 +38,7 @@ static bool _debugSpecificPath(int mode, const char *path, int path_l){
   if (!path_l) path_l=strlen(path);
   bool b=false;
   switch(mode){
-      case 0: b=NULL!=strstr(path,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d");break;
+  case 0: b=NULL!=strstr(path,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d");break;
   case 1: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d/analysis.tdf");break;
   case 2: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d/analysis.tdf_bin");break;
       case 3: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d");break;
