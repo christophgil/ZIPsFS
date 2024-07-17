@@ -1,9 +1,10 @@
 # Installation of executable
 
 
-First install the required libraries. The command for Ubuntu Linux:
+First install the required libraries.
 
-    sudo apt-get install  libfuse3 libzip
+ - libfuse3
+ - libzip
 
 A ready-to-use executable for Linux (amd64) is found in the folder
 [RELEASE](./RELEASE/). It may or may not work on your system.
@@ -12,9 +13,10 @@ A ready-to-use executable for Linux (amd64) is found in the folder
 
 # Dependencies
 
-Install the required libraries. The command for Ubuntu Linux:
+ZIPsFS is written in standard C according to the POSIX industry strandard.  Installation works with
+both compilers, gcc and clang.  Install the required libraries. The command for Ubuntu Linux:
 
-    sudo apt-get install  libfuse3 libzip libfuse3-dev libzip-dev
+    sudo apt-get install  libfuse3.3 libzip4 libfuse3-dev libzip-dev build-essential
 
 For FreeBSD, NetBSD and MacOSX please see find instructions in [INSTALL_other_than_Linux](./INSTALL_other_than_Linux.md)
 It is likely that the quick installation script will work for you.
