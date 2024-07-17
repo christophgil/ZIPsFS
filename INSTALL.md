@@ -15,7 +15,7 @@ Install the required libraries. The command for Ubuntu Linux:
 
     sudo apt-get install  libfuse3 libzip libfuse3-dev libzip-dev
 
-For FreeBSD, NetBSD and MacOSX please see find instructions in [RELEASE](./INSTALL_other_than_Linux.html)
+For FreeBSD, NetBSD and MacOSX please see find instructions in [INSTALL_other_than_Linux](./INSTALL_other_than_Linux.md)
 It is likely that the quick installation script will work for you.
 
     src/ZIPsFS_testing.sh
@@ -44,7 +44,3 @@ This is usually not necessary.
 
     cd src
     make
-
-# Installation from source code - alternative way
-
-Edit and run the file [src/ZIPsFS.compile.sh](./src/ZIPsFS.compile.sh)
