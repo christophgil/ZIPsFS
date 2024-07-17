@@ -4452,7 +4452,7 @@ fi
 done
 
 
-for ac_header in stdlib.h string.h  fcntl.h limits.h sys/statvfs.h unistd.h  fuse.h zip.h
+for ac_header in stdlib.h string.h fcntl.h limits.h sys/statvfs.h unistd.h fuse.h zip.h  ctype.h errno.h grp.h locale.h math.h pthread.h stdbool.h sys/mount.h sys/param.h sys/stat.h sys/syscall.h sys/time.h sys/types.h sys/wait.h time.h utime.h
 do :
   as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
 ac_fn_c_check_header_mongrel "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default"
@@ -4464,6 +4464,7 @@ _ACEOF
 fi
 
 done
+
 
 
 # Check for FUSE development environment
@@ -4680,6 +4681,98 @@ $as_echo "yes" >&6; }
 fi
 
 pkg_failed=no
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for FUSE" >&5
+$as_echo_n "checking for FUSE... " >&6; }
+
+if test -n "$FUSE_CFLAGS"; then
+    pkg_cv_FUSE_CFLAGS="$FUSE_CFLAGS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"fuse\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "fuse") 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_FUSE_CFLAGS=`$PKG_CONFIG --cflags "fuse" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+if test -n "$FUSE_LIBS"; then
+    pkg_cv_FUSE_LIBS="$FUSE_LIBS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"fuse\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "fuse") 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_FUSE_LIBS=`$PKG_CONFIG --libs "fuse" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+
+
+
+if test $pkg_failed = yes; then
+   	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+if $PKG_CONFIG --atleast-pkgconfig-version 0.20; then
+        _pkg_short_errors_supported=yes
+else
+        _pkg_short_errors_supported=no
+fi
+        if test $_pkg_short_errors_supported = yes; then
+	        FUSE_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "fuse" 2>&1`
+        else
+	        FUSE_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "fuse" 2>&1`
+        fi
+	# Put the nasty error message in config.log where it belongs
+	echo "$FUSE_PKG_ERRORS" >&5
+
+	as_fn_error $? "Package requirements (fuse) were not met:
+
+$FUSE_PKG_ERRORS
+
+Consider adjusting the PKG_CONFIG_PATH environment variable if you
+installed software in a non-standard prefix.
+
+Alternatively, you may set the environment variables FUSE_CFLAGS
+and FUSE_LIBS to avoid the need to call pkg-config.
+See the pkg-config man page for more details." "$LINENO" 5
+elif test $pkg_failed = untried; then
+     	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+	{ { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
+$as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
+as_fn_error $? "The pkg-config script could not be found or is too old.  Make sure it
+is in your PATH or set the PKG_CONFIG environment variable to the full
+path to pkg-config.
+
+Alternatively, you may set the environment variables FUSE_CFLAGS
+and FUSE_LIBS to avoid the need to call pkg-config.
+See the pkg-config man page for more details.
+
+To get pkg-config, see <http://pkg-config.freedesktop.org/>.
+See \`config.log' for more details" "$LINENO" 5; }
+else
+	FUSE_CFLAGS=$pkg_cv_FUSE_CFLAGS
+	FUSE_LIBS=$pkg_cv_FUSE_LIBS
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+fi
+
+
+pkg_failed=no
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for LIBZIP" >&5
 $as_echo_n "checking for LIBZIP... " >&6; }
 
@@ -4770,6 +4863,8 @@ $as_echo "yes" >&6; }
 
 fi
 
+
+#AC_SEARCH_LIBS([fuse_main], [fuse fuse3], [], [AC_MSG_ERROR([unable to find the fuse_main() function])  ])
 
 # Checks for typedefs, structures, and compiler characteristics.
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for uid_t in sys/types.h" >&5

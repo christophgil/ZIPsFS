@@ -259,7 +259,7 @@ top_builddir = ..
 top_srcdir = ..
 ZIPsFS_SOURCES = ZIPsFS.c
 LDADD = -L/usr/local/lib/x86_64-linux-gnu -lfuse3 -lpthread -L/usr/local/lib -lzip  
-AM_CFLAGS = -I/usr/local/include/fuse3 -g3 -O0 -D_FILE_OFFSET_BITS=64 
+AM_CFLAGS = -I/usr/local/include/fuse3 -g3 -O0 -D_FILE_OFFSET_BITS=64 -Wno-format-truncation -Wno-string-compare
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am
 

@@ -44,8 +44,8 @@ HL_ERROR(){
 }
 LL='-lpthread -lm -lzip -lfuse'
 LP='-L/usr/pkg/lib -L/usr/local/lib -L/opt/local/lib'
-NOWARN="-Wno-format-truncation -Wno-string-compare"
 ! ((IS_APPLE || IS_NETBSD)) && LL+=3
+NOWARN="-Wno-format-truncation -Wno-string-compare"
 ((IS_FREEBSD)) && LL+=' -lexecinfo'
 {
     if ((IS_CLANG));then

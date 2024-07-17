@@ -14,12 +14,17 @@ AC_CONFIG_FILES([src/Makefile])
 AC_SEARCH_LIBS([sqrt], [m])
 
 # Checks for header files.
-AC_CHECK_HEADERS([stdlib.h string.h  fcntl.h limits.h sys/statvfs.h unistd.h  fuse.h zip.h        ctype.h errno.h grp.h locale.h math.h pthread.h stdbool.h sys/mount.h sys/param.h sys/stat.h sys/syscall.h sys/time.h sys/types.h sys/wait.h time.h utime.h])
+AC_CHECK_HEADERS([stdlib.h string.h fcntl.h limits.h sys/statvfs.h unistd.h fuse.h zip.h  ctype.h errno.h grp.h locale.h math.h pthread.h stdbool.h sys/mount.h sys/param.h sys/stat.h sys/syscall.h sys/time.h sys/types.h sys/wait.h time.h utime.h])
+
 
 # Check for FUSE development environment
 PKG_CHECK_MODULES(FUSE,fuse3)
+# PKG_CHECK_MODULES(FUSE,fuse)
+
 PKG_CHECK_MODULES(LIBZIP,libzip)
 
+
+#AC_SEARCH_LIBS([fuse_main], [fuse fuse3], [], [AC_MSG_ERROR([unable to find the fuse_main() function])  ])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_UID_T

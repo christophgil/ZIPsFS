@@ -4,6 +4,12 @@
 /* Define to 1 if your system has a working `chown' function. */
 #define HAVE_CHOWN 1
 
+/* Define to 1 if you have the <ctype.h> header file. */
+#define HAVE_CTYPE_H 1
+
+/* Define to 1 if you have the <errno.h> header file. */
+#define HAVE_ERRNO_H 1
+
 /* Define to 1 if you have the <fcntl.h> header file. */
 #define HAVE_FCNTL_H 1
 
@@ -13,15 +19,24 @@
 /* Define to 1 if you have the <fuse.h> header file. */
 /* #undef HAVE_FUSE_H */
 
+/* Define to 1 if you have the <grp.h> header file. */
+#define HAVE_GRP_H 1
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
 
 /* Define to 1 if you have the <limits.h> header file. */
 #define HAVE_LIMITS_H 1
 
+/* Define to 1 if you have the <locale.h> header file. */
+#define HAVE_LOCALE_H 1
+
 /* Define to 1 if your system has a GNU libc compatible `malloc' function, and
    to 0 otherwise. */
 #define HAVE_MALLOC 1
+
+/* Define to 1 if you have the <math.h> header file. */
+#define HAVE_MATH_H 1
 
 /* Define to 1 if you have the <memory.h> header file. */
 #define HAVE_MEMORY_H 1
@@ -29,11 +44,17 @@
 /* Define to 1 if you have the `mkdir' function. */
 #define HAVE_MKDIR 1
 
+/* Define to 1 if you have the <pthread.h> header file. */
+#define HAVE_PTHREAD_H 1
+
 /* Define to 1 if you have the `realpath' function. */
 #define HAVE_REALPATH 1
 
 /* Define to 1 if you have the `rmdir' function. */
 #define HAVE_RMDIR 1
+
+/* Define to 1 if you have the <stdbool.h> header file. */
+#define HAVE_STDBOOL_H 1
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #define HAVE_STDINT_H 1
@@ -63,20 +84,41 @@
    `HAVE_STRUCT_STAT_ST_BLOCKS' instead. */
 #define HAVE_ST_BLOCKS 1
 
+/* Define to 1 if you have the <sys/mount.h> header file. */
+#define HAVE_SYS_MOUNT_H 1
+
+/* Define to 1 if you have the <sys/param.h> header file. */
+#define HAVE_SYS_PARAM_H 1
+
 /* Define to 1 if you have the <sys/statvfs.h> header file. */
 #define HAVE_SYS_STATVFS_H 1
 
 /* Define to 1 if you have the <sys/stat.h> header file. */
 #define HAVE_SYS_STAT_H 1
 
+/* Define to 1 if you have the <sys/syscall.h> header file. */
+#define HAVE_SYS_SYSCALL_H 1
+
+/* Define to 1 if you have the <sys/time.h> header file. */
+#define HAVE_SYS_TIME_H 1
+
 /* Define to 1 if you have the <sys/types.h> header file. */
 #define HAVE_SYS_TYPES_H 1
+
+/* Define to 1 if you have the <sys/wait.h> header file. */
+#define HAVE_SYS_WAIT_H 1
+
+/* Define to 1 if you have the <time.h> header file. */
+#define HAVE_TIME_H 1
 
 /* Define to 1 if you have the <unistd.h> header file. */
 #define HAVE_UNISTD_H 1
 
 /* Define to 1 if you have the `utime' function. */
 #define HAVE_UTIME 1
+
+/* Define to 1 if you have the <utime.h> header file. */
+#define HAVE_UTIME_H 1
 
 /* Define to 1 if you have the <zip.h> header file. */
 #define HAVE_ZIP_H 1

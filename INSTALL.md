@@ -36,17 +36,22 @@ For FreeBSD, NetBSD and MacOSX please see instructions in [INSTALL_other_than_Li
 
 Download
 
-    wget https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
+    wget -N  https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
+    unzip main.zip
+    cd ZIPsFS-main
 
 First give  the quick installation script a try:
 
     src/ZIPsFS.compile.sh
 
-# Installation from source code with make
-
 If this does not work, proceed:
 
-## OPTIONAL: AUTOCONF
+# Installation from source code with autotools
+
+This is not yet perfect.
+For NetBSD and Apple you need to replace fuse3 by fuse in configure.ac.
+
+
 
 The following will Re-generating the file ./configure from configure.ac and Makefile.am
 This is usually not necessary.
@@ -55,13 +60,12 @@ This is usually not necessary.
     autoconf
     automake --add-missing
 
-## CREATE MAKEFILE
+Create src/Makefile
 
-    cd ZIPsFS
-    #  autoreconf -vif # Usually not required
+     autoreconf -vif # Usually not required
     ./configure
 
-## RUNNING MAKE
+Running Make
 
     cd src
     make
