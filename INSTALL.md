@@ -13,12 +13,21 @@ A ready-to-use executable for Linux (amd64) is found in the folder
 
 # Dependencies
 
-ZIPsFS is written in standard C according to the POSIX industry strandard.  Installation works with
-both compilers, gcc and clang.  Install the required libraries. The command for Ubuntu Linux:
+ZIPsFS is written in standard C according to the POSIX industry strandard.
+It has been developed on Linux.
+Installation works with
+both compilers, gcc and clang.
 
-    sudo apt-get install  libfuse3.3 libzip4 libfuse3-dev libzip-dev build-essential
+First install the required libraries and packages.
 
-For FreeBSD, NetBSD and MacOSX please see find instructions in [INSTALL_other_than_Linux](./INSTALL_other_than_Linux.md)
+ - bash
+ - libfuse3
+ - libzip
+ - libfuse3-dev
+ - libzip-dev
+ - build-essential (The C compiler and make)
+
+For FreeBSD, NetBSD and MacOSX please see instructions in [INSTALL_other_than_Linux](./INSTALL_other_than_Linux.md)
 It is likely that the quick installation script will work for you.
 
 
