@@ -1,3 +1,10 @@
+This page contains instructions to install the required libraries and to set up
+the Fuse system.
+
+When this is completed, ZIPsFS can be installed as described in [INSTALL](./INSTALL.md)
+
+
+
 # MS-Windows
 
 Install ZIPsFS in a WSL environment.
@@ -9,7 +16,6 @@ Please install
 
     pkg install fuse-zip lynx tmux sysutils/fusefs-libs3 libzip bash
 
-## Set up FUSE
 
 Now check whether fuse file systems work as root. fuse-zip is a simple FUSE file system for testing.
 
@@ -30,7 +36,7 @@ To load it automatically on boot, add the line to /etc/rc.conf
     kld_list="fusefs"
 
 
-Now check whether fuse-zip  works as a non-root user. If not run as root
+Now check whether fuse-zip  works if  run as a normal user
 
     sysctl vfs.usermount=1
     echo vfs.usermount=1 >>  /etc/sysctl.conf
@@ -40,6 +46,8 @@ Now check whether fuse-zip  works as a non-root user. If not run as root
 
 
 # NetBSD
+
+Please install
 
     pkg_add zip unzip libzip fuse-unionfs perfuse bash
 
