@@ -14,7 +14,7 @@ Install ZIPsFS in a WSL environment.
 
 Please install
 
-    pkg install fuse-zip lynx tmux sysutils/fusefs-libs3 libzip bash
+    pkg install fuse-zip lynx tmux sysutils/fusefs-libs3 libzip bash wget
 
 
 Now check whether fuse file systems work as root. fuse-zip is a simple FUSE file system for testing.
@@ -49,7 +49,7 @@ Now check whether fuse-zip  works if  run as a normal user
 
 Please install
 
-    pkg_add zip unzip libzip fuse-unionfs perfuse bash
+    pkg_add zip unzip libzip fuse-unionfs perfuse bash wget
 
 
 First get fuse-unionfs to work.
@@ -64,7 +64,7 @@ Download and install macFUSE https://osxfuse.github.io/
 
 Open terminal and run:
 
-    sudo port install libzip bindfs
+    sudo port install libzip bindfs wget
 
 Load the kernel. Give the correct OSX version, here 15.
 

@@ -51,17 +51,6 @@ All files in the source file trees (in the example four) can be accessed via the
 When files are created or modified, they will be stored in the first file tree (in the example *~/tmp/ZIPsFS/writable*).
 If files exist in two locations, the left most root takes precedence.
 
-## Unreliable roots
-
-When source file structures are stored remotely, there is increased risk that they  may become
-temporarily unavailable. Overlay file systems typically freeze when calls to the file API block.
-Conversely, ZIPsFS should continue to
-operate with the remaining file roots. This is implemented as follows: Paths starting with double
-slash (in the example *//computer1/pub*) are regarded as remote paths and treated specially.  ZIPsFS
-will periodically check file systems starting with a double slash.  If the last responds was too
-long ago then the respective file system is skipped. Furthermore the stat() function to obtain the
-attributes for a file are queued to be  performed in extra  threads.
-
 ## Modified and created files
 
 New files are created in the first file tree, while the following file trees are not modified.
@@ -166,6 +155,27 @@ Once no software is reading files from the  old instance, the old instance can b
 After initialization a symlink to the new mount point is created and programs start to use the new instance.
 
 
+## Fault management
+
+When source file structures are stored remotely, there is a risk that they  may be
+temporarily unavailable. Overlay file systems typically freeze when calls to the file API block.
+Conversely, ZIPsFS should continue to
+operate with the remaining file roots. This is implemented as follows: Paths starting with double
+slash (in the example *//computer1/pub*) are regarded as remote paths and treated specially.  ZIPsFS
+will periodically check file systems starting with a double slash.  If the last responds was too
+long ago then the respective file system is skipped. Furthermore the stat() function to obtain the
+attributes for a file are queued to be  performed in extra threads.
+
+For files which are located in ZIP files and which are first loaded entirely into RAM, the system is
+also robust for interruptions and blocks during loading. The system will not freeze. After some
+longer time it will try to load the same file from another root or return ENOENT.
+
+If loading of ZIP files fail, loading will be repeated after 1s.
+
+For ZIP entries loaded entirely into the RAM, the CRC sum is validated and possible errors are logged.
+
+
+
 FUSE Options
 ------------
 
@@ -188,20 +198,6 @@ FILES
 - ZIPsFS_configuration.h and ZIPsFS_configuration.c and ZIPsFS_configuration_autogen.c:  Customizable rules. Modification requires recompilation.
 - ~/.ZIPsFS:
   Contains the log file and cache
-
-# Implementation
-
-Written in GNU-C.
-
-## Dependencies
-
- - fuse3
- - libzip
-
-## Operation system
-
-  - Linux 64
-  - MacOS: Would require minor adaptations.
 
 
 LIMITATIONS

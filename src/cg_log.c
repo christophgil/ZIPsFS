@@ -3,7 +3,7 @@
 #ifndef _cg_log_dot_c
 #define _cg_log_dot_c
 #include <pthread.h>
-#include <stdarg.h>  // provides va_start
+//#include <stdarg.h>  // provides va_start
 #define log_struct(st,field,format)   fprintf(stderr,"    " #field "=" #format "\n",st->field)
 #include "cg_ht_v7.c"
 #include "cg_utils.c"

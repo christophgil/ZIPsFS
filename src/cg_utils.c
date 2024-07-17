@@ -15,6 +15,18 @@
 #include <limits.h>
 #include <math.h>
 #include <stdbool.h>
+#include <assert.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <inttypes.h>
+#include <stddef.h>
+//#include <malloc.h>
+#include <unistd.h>
+
+
 
 #include "cg_gnu.c"
 

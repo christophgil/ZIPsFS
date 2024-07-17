@@ -51,22 +51,6 @@ via the mount point (in the example \f[I]~/tmp/ZIPsFS/mnt\f[R]). When
 files are created or modified, they will be stored in the first file
 tree (in the example \f[I]~/tmp/ZIPsFS/writable\f[R]).
 If files exist in two locations, the left most root takes precedence.
-.SS Unreliable roots
-.PP
-When source file structures are stored remotely, there is increased risk
-that they may become temporarily unavailable.
-Overlay file systems typically freeze when calls to the file API block.
-Conversely, ZIPsFS should continue to operate with the remaining file
-roots.
-This is implemented as follows: Paths starting with double slash (in the
-example \f[I]//computer1/pub\f[R]) are regarded as remote paths and
-treated specially.
-ZIPsFS will periodically check file systems starting with a double
-slash.
-If the last responds was too long ago then the respective file system is
-skipped.
-Furthermore the stat() function to obtain the attributes for a file are
-queued to be performed in extra threads.
 .SS Modified and created files
 .PP
 New files are created in the first file tree, while the following file
@@ -226,6 +210,34 @@ instance can be terminated.
 .PP
 After initialization a symlink to the new mount point is created and
 programs start to use the new instance.
+.SS Fault management
+.PP
+When source file structures are stored remotely, there is a risk that
+they may be temporarily unavailable.
+Overlay file systems typically freeze when calls to the file API block.
+Conversely, ZIPsFS should continue to operate with the remaining file
+roots.
+This is implemented as follows: Paths starting with double slash (in the
+example \f[I]//computer1/pub\f[R]) are regarded as remote paths and
+treated specially.
+ZIPsFS will periodically check file systems starting with a double
+slash.
+If the last responds was too long ago then the respective file system is
+skipped.
+Furthermore the stat() function to obtain the attributes for a file are
+queued to be performed in extra threads.
+.PP
+For files which are located in ZIP files and which are first loaded
+entirely into RAM, the system is also robust for interruptions and
+blocks during loading.
+The system will not freeze.
+After some longer time it will try to load the same file from another
+root or return ENOENT.
+.PP
+If loading of ZIP files fail, loading will be repeated after 1s.
+.PP
+For ZIP entries loaded entirely into the RAM, the CRC sum is validated
+and possible errors are logged.
 .SS FUSE Options
 .TP
 .B \-f
@@ -245,19 +257,6 @@ ZIPsFS_configuration_autogen.c: Customizable rules.
 Modification requires recompilation.
 .IP \[bu] 2
 \[ti]/.ZIPsFS: Contains the log file and cache
-.SH Implementation
-.PP
-Written in GNU\-C.
-.SS Dependencies
-.IP \[bu] 2
-fuse3
-.IP \[bu] 2
-libzip
-.SS Operation system
-.IP \[bu] 2
-Linux 64
-.IP \[bu] 2
-MacOS: Would require minor adaptations.
 .SH LIMITATIONS
 .PP
 Hardlinks are not implemented, while symlinks work.
