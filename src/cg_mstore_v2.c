@@ -1,10 +1,13 @@
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 //#include <stdatomic.h>
 #include <sys/mman.h>
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS MAP_ANON
+#endif  // !MAP_ANONYMOUS
+
 #include <fcntl.h> /* open .. */
 #include <errno.h>
 #include <assert.h>
@@ -70,7 +73,7 @@ struct mstore{
   int id;
   off_t bytes_per_block;
   uint32_t opt,blockPreviouslyFilled,capacity;
-#if defined CG_THREAD_FIELDS
+#ifdef CG_THREAD_FIELDS
   CG_THREAD_FIELDS;
 #endif
 };

@@ -22,7 +22,8 @@ ZIPsFS \-l 2GB \[ti]/tmp/ZIPsFS/writable \[ti]/local/file/tree
 .SH DESCRIPTION
 .SS Summary
 .PP
-ZIPsFS combines multiple file structures into one, resulting in a single
+ZIPsFS acts as a union or overlay file system.
+It combines multiple file structures into one, resulting in a single
 directory structure that contains underlying files and sub\-directories
 from the given sources.
 Created or modified files are stored in the first file location.

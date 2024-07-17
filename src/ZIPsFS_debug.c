@@ -161,7 +161,7 @@ static bool debug_fhdata(const struct fhdata *d){
 static void debug_fhdata_listall(){
   log_msg(ANSI_INVERSE"%s"ANSI_RESET"\n",__func__);
   foreach_fhdata(id,d){
-    log_msg("d %p path: %s fh: %lu\n",d,D_VP(d),d->fh);
+    log_msg("d %p path: %s fh: %llu\n",d,D_VP(d),(LLU)d->fh);
   }
 }
 
@@ -208,7 +208,7 @@ static void debug_dircache_compare_cached(struct directory *mydir,const struct s
   int dde_result;
   struct directory dde_dir={0};
   directory_init(DIRECTORY_IS_ZIPARCHIVE,&dde_dir,mydir->dir_realpath,mydir->root);
-  LOCK_NCANCEL(mutex_dircache, dde_result=dircache_directory_from_cache(&dde_dir,rp_stat->st_mtim)?1:0);
+  LOCK_NCANCEL(mutex_dircache, dde_result=dircache_directory_from_cache(&dde_dir,rp_stat->ST_MTIMESPEC)?1:0);
   if (dde_result==1) debug_compare_directory_a_b(&dde_dir,mydir);
 }
 #endif //DEBUG_DIRCACHE_COMPARE_CACHED
@@ -219,7 +219,7 @@ static void debug_dircache_compare_cached(struct directory *mydir,const struct s
 #if DEBUG_TRACK_FALSE_GETATTR_ERRORS
 static void debug_track_false_getattr_errors(const char *vp,const int vp_l){
   if ((ENDSWITH(vp,vp_l,".SSMetaData") || ENDSWITH(vp,vp_l,".raw")  )){
-    log_debug_now("vp=%s",vp);
+    log_verbose("vp=%s",vp);
 
     NEW_ZIPPATH(vp);
     //zpath->flags|=ZP_VERBOSE2;

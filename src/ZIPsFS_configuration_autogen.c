@@ -47,7 +47,7 @@ struct _autogen_config{
   _msconvert_mgf=_msconvert(".mgf",".raw:.wiff",99999999999),
 //_msconvert_mzML={.info="Requires Docker",.ext=".mzML",.ends=".raw:.wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT,NULL}},
 // _msconvert_mgf= {.info="Requires Docker",.ext=".mgf", .ends=".raw:.wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT,"--mgf",NULL}},
-//  _wiff_scan={.ext=".scan",.ends=".wiff",.filesize_limit=99999999999,.no_redirect=true,.cmd={"bash","rawfile_mk_wiff_scan.sh",PLACEHOLDER_INFILE,PLACEHOLDER_TMP_DIR,PLACEHOLDER_OUTFILE,NULL}},
+  _wiff_scan={.ext=".scan",.ends=".wiff",.filesize_limit=99999999999,.no_redirect=true,.cmd={"bash","rawfile_mk_wiff_scan.sh",PLACEHOLDER_INFILE,PLACEHOLDER_TMP_DIR,PLACEHOLDER_OUTFILE,NULL}},
   _wiff_scan={.ext=".scan",.ends=".wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={PLACEHOLDER_EXTERNAL_QUEUE,PLACEHOLDER_INFILE,PLACEHOLDER_OUTFILE,NULL}},
 
 #define I(x)  _##x##50={.info="Requires Imagemagick\n",.ext=".scale50%."#x,.ends_ic="."#x, .filesize_limit=AUTOGEN_FILESIZE_ORIG_SIZE, .cmd={"convert",PLACEHOLDER_INFILE,"-scale","50%",PLACEHOLDER_TMP_OUTFILE,NULL} }
@@ -125,7 +125,7 @@ FOR(i,0,N_PATTERNS){
       if (s->patterns[i]){
         bool ok=false;
         for(int j=0,l;(l=s->_patterns_l[i][j]);j++){
-          if ((ok=  (vp_l>=l && 0!=memmem(vp,vp_l,s->_patterns[i][j],l)))) break;
+          if ((ok=  (vp_l>=l && 0!=cg_memmem(vp,vp_l,s->_patterns[i][j],l)))) break;
         }
         if (!ok) return false;
       }

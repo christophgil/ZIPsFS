@@ -1,5 +1,5 @@
 /*  Copyright (C) 2023   christoph Gille   This program can be distributed under the terms of the GNU GPLv3. */
-#define _GNU_SOURCE
+
 #ifndef _cg_log_dot_c
 #define _cg_log_dot_c
 #include <pthread.h>
@@ -76,7 +76,7 @@ static void _warning(const char *fn,int line,const uint32_t channel,const char* 
   }
   pthread_mutex_unlock(&mutex);
   if ((channel&WARN_FLAG_EXIT)) EXIT(1);
-  if (_killOnError && (channel&WARN_FLAG_MAYBE_EXIT)) DIE("Thread %lx\nTime=%'ld\n  _killOnError\n",pthread_self(),_startTime.tv_sec+_startTime.tv_usec/1000-currentTimeMillis());
+  if (_killOnError && (channel&WARN_FLAG_MAYBE_EXIT)) DIE("Thread %lx\nTime=%'lld\n  _killOnError\n",(long)pthread_self(),(LLD)(_startTime.tv_sec+_startTime.tv_usec/1000-currentTimeMillis()));
 }
 #endif //_cg_log_dot_c
 

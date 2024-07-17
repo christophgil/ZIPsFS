@@ -23,6 +23,7 @@ struct pstat {
   int ncpu;
 };
 static int cpuusage_read_proc(struct pstat* r,const pid_t pid){
+  if (!has_proc_fs()) return 0;
   memset(r,0,sizeof(struct pstat));
   static int pid_error=-1;
   if (pid==pid_error) return -1;

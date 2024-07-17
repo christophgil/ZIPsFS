@@ -31,7 +31,7 @@ DESCRIPTION
 
 ## Summary
 
-ZIPsFS combines multiple file structures into one, resulting in a single directory structure that
+ZIPsFS acts as a union or overlay file system. It combines multiple file structures into one, resulting in a single directory structure that
 contains underlying files and sub-directories from the given sources.  Created or modified files are stored in
 the first file location. The other file sources  are read-only and files will  never be modified.  ZIPsFS expands ZIP files as folders. Normally, the
 folder name is formed from the ZIP file name by appending ".Contents/".  This can be changed by the

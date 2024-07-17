@@ -62,7 +62,7 @@ static void autogen_run(struct fhdata *d){
   if (buf){
     LOCK(mutex_fhdata, struct memcache *m=new_memcache(d);m->memcache2=buf;atomic_store(&m->memcache_already,m->memcache_l=textbuffer_length(buf)));
     d->autogen_state=AUTOGEN_SUCCESS;
-    log_debug_now("textbuffer_length=%ld",textbuffer_length(buf));
+    //log_debug_now("textbuffer_length=%ld",textbuffer_length(buf));
     LOCK(mutex_fhdata,ht_entry_fsize(D_VP(d),D_VP_L(d),true)->value=(char*)textbuffer_length(buf));
   }else{
     if (stat(tmp,&st)){
@@ -85,7 +85,7 @@ static bool autogen_not_up_to_date(struct timespec st_mtim,const char *vp,const 
   FOR(i,0,AUTOGEN_MAX_DEPENDENCIES){
     if (!config_autogen_dependencies(i,vp,vp_l,autogen_from,&size,&flags)) break;
 
-    if (!stat(autogen_from,&st) && cg_timespec_b_before_a(st_mtim,st.st_mtim)) return true;
+    if (!stat(autogen_from,&st) && cg_timespec_b_before_a(st_mtim,st.ST_MTIMESPEC)) return true;
   }
   return false;
 }
@@ -94,7 +94,7 @@ static void autogen_remove_if_not_up_to_date(const char *vp,const int vp_l){
   snprintf(rp,MAX_PATHLEN,"%s%s/%s",_root_writable->rootpath,DIR_AUTOGEN,vp);
   struct stat st={0};
   if (!stat(rp,&st)){
-    if (autogen_not_up_to_date(st.st_mtim,vp,vp_l)) unlink(rp);
+    if (autogen_not_up_to_date(st.ST_MTIMESPEC,vp,vp_l)) unlink(rp);
     else{
       static int noAtime=-1;
       if (noAtime<0) {

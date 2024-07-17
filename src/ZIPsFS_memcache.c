@@ -4,7 +4,7 @@
 /////////////////////////////////////////////////////////////////
 #include "cg_crc32.c"
 #define memcache_set_status(m,status) {m->memcache_status=(status);}
-#define WITH_ZIP_TELL1 0
+
 static struct memcache *new_memcache(struct fhdata *d){
   ASSERT_LOCKED_FHDATA();
   if (!d->memcache){
@@ -64,7 +64,6 @@ bool memcache_malloc_or_mmap(struct fhdata *d){
     warning(WARN_MALLOC|WARN_FLAG_ONCE,"Cache %p failed using %s",(void*)mmap,(d->flags&FHDATA_FLAGS_HEAP)?"malloc":"mmap");
     //log_mem(stderr);
   }
-  IF1(WITH_ZIP_TELL1,memset(bb,0,st_size)); // DEBUG_NOW
   return bb!=NULL && bb!=MAP_FAILED;
 }
 static bool fhdata_check_crc32(struct fhdata *d){
@@ -120,19 +119,15 @@ static int memcache_store_try(struct fhdata *d){
         if (d->flags&FHDATA_FLAGS_INTERRUPTED) break;
         FOR(retry,0,RETRY_ZIP_FREAD){
           //          MEMCACHE_READ_BYTES_NUM
-#if WITH_ZIP_TELL1
-          const long n_max=st_size-m->memcache_already_current;
-#else
           const long n_max=MIN_long(64*1024*1024,st_size-m->memcache_already_current);
-#endif
           if ((n=zip_fread(zf,m->memcache2->segment[0]+m->memcache_already_current,n_max))>0){
+            observe_thread(d->zpath.root,PTHREAD_MEMCACHE);
             if (retry){ warning(WARN_RETRY,path,"succeeded on retry: %d/%d  n=%ld",retry,RETRY_ZIP_FREAD-1,n); fhdata_counter_inc(d,COUNT_RETRY_ZIP_FREAD);}
             break;
           }
-          log_debug_now("Retry: %d Going sleep 100 ...",retry);
+          log_verbose("Retry: %d Going sleep 100 ...",retry);
           usleep(100*1000);
         }
-        log_debug_now("n=%'ld",n);
         if (n<=0){ ret=MEMCACHE_READ_ERROR; warning(WARN_MEMCACHE,path,"memcache_zip_entry: n<0  d=%p  read=%'zu st_size=%'ld",d,m->memcache_already_current,st_size);break;}
         const off_t c=m->memcache_already_current+=n;
         if (c>m->memcache_already) m->memcache_already=c;
@@ -159,10 +154,12 @@ static int memcache_store_try(struct fhdata *d){
     zip_fclose(zf);
   }/*zf!=NULL*/
   zip_close(za);
-  log_debug_now("%s memcache_store_try %s  already: %'jd  st_size: %'jd interrup: %s",m->memcache_already>=st_size?GREEN_SUCCESS:RED_FAIL,path,(intmax_t)m->memcache_already,(intmax_t)st_size,yes_no(d->flags&FHDATA_FLAGS_INTERRUPTED));
+  //  LOCK(mutex_fhdata, log_debug_now("%s memcache_store_try %s  already: %'jd  st_size: %'jd interrup: %s",m->memcache_already>=st_size?GREEN_SUCCESS:RED_FAIL,path,(intmax_t)m->memcache_already,(intmax_t)st_size,yes_no(d->flags&FHDATA_FLAGS_INTERRUPTED)));
   return ret;
 #undef A
 }
+
+
 
 /* Invoked from infloop_memcache */
 static void memcache_store(struct fhdata *d){
@@ -174,39 +171,57 @@ static void memcache_store(struct fhdata *d){
       LOCK(mutex_fhdata,if (d->memcache->memcache_already==d->zpath.stat_vp.st_size){warning(WARN_RETRY,D_VP(d),"memcache_store succeeded on retry %d",retry);fhdata_counter_inc(d,COUNT_RETRY_MEMCACHE);});
     }
     if ((d->flags&FHDATA_FLAGS_INTERRUPTED) || ret!=MEMCACHE_READ_ERROR) break;
-    log_debug_now("Going to sleep 1000 ms and retry  %s ...",D_VP(d));
+    log_verbose("Going to sleep 1000 ms and retry  %s ...",D_VP(d));
     usleep(1000*1000);
+    find_realpath_again_fhdata(d); // If root is blocked use a different root
   }
 }
 
 static void *infloop_memcache(void *arg){
   struct rootdata *r=arg;
-  pthread_cleanup_push(infloop_memcache_start,r);
+  log_entered_function("%s", rootpath(r));
+  /* pthread_cleanup_push(infloop_memcache_start,r); Does not work because pthread_cancel not working when root blocked. */
   LOCK_NCANCEL(mutex_fhdata,if (r->memcache_d){ r->memcache_d->flags|=FHDATA_FLAGS_INTERRUPTED; log_debug_now(RED_WARNING" FHDATA_FLAGS_INTERRUPTED %s",D_VP(r->memcache_d));});
+  //const bool debug=strstr(rootpath(r),"block");
+  //log_debug_now(" GGGGGGGGGGGGGGGGGGGG Going look for memcache_reading %s ... ",rootpath(r));
+  foreach_fhdata(id,d){
+    struct memcache *m=d->memcache;
+    if (m && m->memcache_l){
+      //log_debug_now("r->q  %s %s  memcache_reading: %s",D_RP(d),MEMCACHE_STATUS_S[m->memcache_status],yes_no(m->memcache_status==memcache_reading));
+      if (m->memcache_status==memcache_reading){
+        find_realpath_again_fhdata(d);
+        log_zpath("after find_realpath_again_fhdata ",&d->zpath);
+        memcache_set_status(m,memcache_queued);
+        //        log_debug_now(ANSI_RED"Reading->queued memcache_is_queued: %s  wait_for_root_timeout: %s"ANSI_RESET,yes_no(memcache_is_queued(d->memcache)),yes_no(wait_for_root_timeout(r)));
+      }
+    }
+  }
+  struct fhdata *d=NULL;
   for(int i=0;;i++){
-    if (!wait_for_root_timeout(r)) continue;
     lock(mutex_fhdata);
     r->memcache_d=NULL;
-    foreach_fhdata(id,d){
-      //     observe_thread(r,PTHREAD_MEMCACHE);
-      if (memcache_is_queued(d->memcache)){
-        r->memcache_d=d;
-        memcache_set_status(d->memcache,memcache_reading);
+    foreach_fhdata(id,e){
+      if (memcache_is_queued(e->memcache) && e->zpath.root==r){
+        memcache_set_status(e->memcache,memcache_reading); /* e is protected from being destroyed if  memcache_reading or r->memcache_d is set or d->is_memcache_store. */
+        (r->memcache_d=d=e)->is_memcache_store++;
         break;
       }
-      /* d is protected from being destroyed if  memcache_reading */
-    };
-    unlock(mutex_fhdata);
-    if (i%128==0){putc(r->memcache_d!=NULL?'+':'-',stderr);}
-    if (r->memcache_d){
-      //log_debug_now("Going to memcache_store(%p) r: %d vp: %s  memcache: %p",r->memcache_d,rootindex(r),D_VP(r->memcache_d),r->memcache_d->memcache);
-      memcache_store(r->memcache_d);
     }
-    LOCK(mutex_fhdata,r->memcache_d=NULL);
+    unlock(mutex_fhdata);
+    //    if (i%128==0){putc(d!=NULL?'+':'-',stderr);}
+    if (d){
+      if (wait_for_root_timeout(r)){
+        //log_debug_now(ANSI_RED"Going to memcache_store(%s) r: %s  vp: %s  memcache: %p"ANSI_RESET,D_RP(d),rootpath(r),D_VP(d),d->memcache);
+        memcache_store(d);
+        //log_debug_now0(ANSI_RED"Done memcache_store()"ANSI_RESET);
+      }
+      LOCK(mutex_fhdata,d->is_memcache_store--; r->memcache_d=NULL);
+    }
+    //if (i%20==0 && debug) log_debug_now("%d Going observe_thread  %s ",i,rootpath(r));
     observe_thread(r,PTHREAD_MEMCACHE);
-    usleep(10*1000);
+    usleep(20*1000);
   }
-  pthread_cleanup_pop(0);
+  /* pthread_cleanup_pop(0); Does not work because pthread_cancel not working when root blocked. */
 }
 
 static bool memcache_is_advised(const struct fhdata *d){
@@ -223,20 +238,7 @@ static off_t memcache_waitfor(struct fhdata *d, off_t min_fill){
   ASSERT(d->is_xmp_read>0);
   LOCK_N(mutex_fhdata, struct memcache *m=new_memcache(d); if (!m->memcache_status && memcache_malloc_or_mmap(d)){memcache_set_status(m,memcache_queued);});
   while(memcache_is_queued(m)||m->memcache_status==memcache_reading){
-
     LOCK_N(mutex_fhdata,off_t a=m->memcache_already);
-#if  WITH_ZIP_TELL1
-    lock(mutex_fhdata);
-    if (m && m->memcache2->n){
-      char *bb=m->memcache2->segment[0];
-      off_t bb_l=m->memcache2->segment_e[0];
-      for(off_t a1=a; a1<bb_l; a1+=1024*1024) if (bb[a1]) a=a1;
-      //if (m->memcache_already<a) log_debug_now("%ld === > %ld ",m->memcache_already,a);
-      m->memcache_already=a;
-    }
-    //           if (m->zipsrc) log_debug_now("zip_source_tell %ld %ld",zip_source_tell(m->zipsrc),m->zipsrc->zip_source);
-    unlock(mutex_fhdata);
-#endif
     if (a>=min_fill) return a;
     //    log_debug_now("MEMCACHE_WAITFOR sleep %s  already: %zu  need: %zu",D_VP(d),a,min_fill);
     usleep(10*1000);

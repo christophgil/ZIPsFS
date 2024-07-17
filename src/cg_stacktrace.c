@@ -1,7 +1,7 @@
 /* Compare https://raw.githubusercontent.com/Dexter9313/C-stacktrace/master/c-stacktrace.h by  Florian Cabot */
 #ifndef EXCEPTIONS
 #define EXCEPTIONS
-#include <execinfo.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -10,6 +10,10 @@
 #include <err.h>
 #include <stdbool.h>
 #include "cg_utils.h"
+//#if IS_NETBSD || IS_FREEBSD // backtrace(), backtrace_symbols()
+#include <execinfo.h>
+//#endif
+
 #define MAX_BACKTRACE_LINES 64
 static char* _thisPrg;
 static FILE *_stckOut;
@@ -31,7 +35,7 @@ static void cg_print_stacktrace_using_debugger(){
 #ifdef __clang__
     execl("/usr/bin/lldb", "lldb", "-p", pid_buf, "-b", "-o","bt","-o","quit" ,NULL);
 #else
-    execl("/usr/bin/gdb", "gdb", "--batch", "-f","-n", "-ex", "thread", "-ex", "bt",path_of_this_executable(),pid_buf,NULL);
+    if (*path_of_this_executable()) execl("/usr/bin/gdb", "gdb", "--batch", "-f","-n", "-ex", "thread", "-ex", "bt",path_of_this_executable(),pid_buf,NULL);
 #endif
     abort(); /* If gdb failed to start */
   } else {
@@ -43,7 +47,7 @@ static void cg_print_stacktrace_using_debugger(){
   /*  See  addr2line_cmd=%s\n",addr2line_cmd);*/
 static bool addr2line(const char *program_name, const void *addr, int lineNb){
   char addr2line_cmd[512]={0},line1[1035]={0}, line2[1035]={0};
-#ifdef __APPLE__
+#if IS_APPLE
   sprintf(addr2line_cmd,"atos -o %.256s %p",program_name,addr);
 #else
   sprintf(addr2line_cmd,"addr2line -f -e %.256s %p",program_name,addr);
@@ -66,6 +70,7 @@ static bool addr2line(const char *program_name, const void *addr, int lineNb){
   return ok;
 }
 static void cg_print_stacktrace(int calledFromSigInt){
+#if HAS_BACKTRACE
   void* buffer[MAX_BACKTRACE_LINES];
   const int nptrs=backtrace(buffer,MAX_BACKTRACE_LINES);
    char **strings=backtrace_symbols(buffer,nptrs);
@@ -75,11 +80,13 @@ static void cg_print_stacktrace(int calledFromSigInt){
   }
   for(int i=calledFromSigInt?2:1; i<(nptrs-2); ++i){
     if (!addr2line(_thisPrg, buffer[i], nptrs-2-i-1)){
-      //fprintf(stderr, "DEBUG_NOW !addr2line %s %d \n",_thisPrg, nptrs-2-i-1);
       fprintf(_stckOut?_stckOut:stderr, " [%i] %s\n", nptrs-2-i-1, strings[i]);
     }
   }
   free(strings);
+  #else
+  log_warn0("Probably the os does not  supported function backtrace.\nYou may try to #define HAS_BACKTRACE 1\n");
+  #endif
 }
 static void my_signal_handler(int sig){
   signal(sig,SIG_DFL);

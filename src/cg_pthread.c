@@ -43,6 +43,9 @@ static int cg_mutex_count(int mutex,int inc){
 /// Lock / unlock ///
 /////////////////////
 // See pthread_cancel
+#define lock_ncancel(mutex) pthread_setcancelstate(PTHREAD_CANCEL_DISABLE,&_oldstate_not_needed);lock(mutex)
+#define unlock_ncancel(mutex) unlock(mutex);pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&_oldstate_not_needed)
+
 #define LOCK_NCANCEL_N(mutex,code) pthread_setcancelstate(PTHREAD_CANCEL_DISABLE,&_oldstate_not_needed);lock(mutex);code;unlock(mutex);pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&_oldstate_not_needed)
 #define LOCK_NCANCEL(mutex,code) {LOCK_NCANCEL_N(mutex,code);}
 
@@ -98,9 +101,9 @@ static void cg_mutex_test_1(){
   log_entered_function0("");
   LOCK(mutex_fhdata,
        //ASSERT_LOCKED_FHDATA();
-       log_debug_now0("Within mutex_fhdata");
-       log_debug_now("count=%d",cg_mutex_count(mutex_fhdata,0));
-       LOCK(mutex_fhdata,log_debug_now("count2=%d",cg_mutex_count(mutex_fhdata,0)));
+       log_verbose0("Within mutex_fhdata");
+       log_verbose("count=%d",cg_mutex_count(mutex_fhdata,0));
+       LOCK(mutex_fhdata,log_verbose("count2=%d",cg_mutex_count(mutex_fhdata,0)));
        ASSERT_LOCKED_FHDATA();
        );
   log_debug_now("count2=%d",cg_mutex_count(mutex_fhdata,0));

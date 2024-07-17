@@ -1,6 +1,9 @@
 #ifndef _cg_utils_dot_h
 #define _cg_utils_dot_h
-#define _GNU_SOURCE
+#include "cg_utils_early.h"
+
+
+
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -11,21 +14,37 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <linux/limits.h>
+// #if __linux__
+// #include <linux/limits.h>
+// #elif __FreeBSD__
+// #include <sys/limits.h>
+// #endif
+
 #include <stdint.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
-#include <sys/vfs.h>
-#include <sys/statfs.h>
+// #include <sys/vfs.h>
+#if IS_LINUX
+#include <sys/statvfs.h>
+#elif IS_FREEBSD
+#include <sys/param.h>
+#include <sys/mount.h>
+#include <sys/syscall.h>
+#endif
+#include <sys/param.h>
 #include <locale.h>
+
+
 
 #define MAYBE_INLINE
 #define FOR(var,from,to) for(int var=from;var<(to);var++)
 #define RLOOP(var,from) for(int var=from;--var>=0;)
 
-
+#define ERROR_MSG_NO_PROC_FS "No /proc file system on this computer"
+#ifndef MIN
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
+#endif
 #define MAX_PATHLEN 512
 #define DEBUG_NOW 1
 #define FREE(s) free((void*)s),s=NULL
@@ -120,6 +139,7 @@ M(MAX,long)
 #define log_entered_function0(msg) log_entered_function("%s",msg)
 #define log_exited_function0(msg) log_exited_function("%s",msg)
 #define log_error0(msg) log_error("%s",msg)
+#define log_msg0(msg) log_msg("%s",msg)
 #define log_debug0(msg) log_debug("%s",msg)
 #define log_debug_now0(msg) log_debug_now("%s",msg)
 #define log_warn0(msg) log_warn("%s",msg)
@@ -143,3 +163,8 @@ M(MAX,long)
 #endif
 #else
 #endif // _cg_utils_dot_h
+
+#define LLU unsigned long long
+#define LLD long long
+
+/* According to POSIX2008, the "st_atim", "st_mtim" and "st_ctim" members of the "stat" structure must be available in the <sys/stat.h> header when the _POSIX_C_SOURCE macro is defined as 200809L. */

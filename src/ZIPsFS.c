@@ -6,30 +6,37 @@
   Copyright (C) 2011       Sebastian Pipping <sebastian@pipping.org>
   ZIPsFS_notes.org  log.c
 */
-// unlink
+// (defun Copy_working() (interactive) (shell-command (concat  (file-name-directory (buffer-file-name) ) "Copy_working.sh")))
+// (buffer-filepath)
 //__asm__(".symver realpath,realpath@GLIBC_2.2.5");
 #define FUSE_USE_VERSION 31
-#define _GNU_SOURCE
-#ifdef __linux__
-/* For pread()/pwrite()/utimensat() */
-#define _XOPEN_SOURCE 700
-#endif
+#undef _GNU_SOURCE
+#include <sys/types.h> // ????
+#include <unistd.h> /// ???? lseek
+
+ #include <sys/mman.h>
+ #ifndef MAP_ANONYMOUS
+ #define MAP_ANONYMOUS MAP_ANON
+ #endif  // !MAP_ANONYMOUS
+#include "cg_utils_early.h"
 #include "config.h"
 #include <dirent.h>
-#ifdef __FreeBSD__
 #include <sys/un.h>
-#endif
-#include <sys/mman.h>
 #include <fuse.h>
 
-#include <unistd.h>
 #include <sys/syscall.h>
-#define fill_dir_plus 0
 #include <zip.h>
 
 #include <stdatomic.h>
 #include "ZIPsFS_configuration.h"
 
+#if IS_NETBSD
+ #include <sys/param.h>
+     #include <sys/mount.h>
+#endif //IS_NETBSD
+
+
+// statvfs statfs
 #if WITH_EXTRA_ASSERT
 #define ASSERT(...) (assert(__VA_ARGS__))
 #else
@@ -133,8 +140,6 @@ struct directory_core{
 #define DIRECTORY_IS_ZIPARCHIVE (1<<2)
 #define DIRECTORY_TO_QUEUE (1<<3)
 #define ROOTd(d) (d->zpath.root)
-
-// DEBUG_NOW
 struct directory{
   uint32_t dir_flags;
   const char *dir_realpath;
@@ -162,7 +167,7 @@ struct zippath{
   struct stat stat_rp,stat_vp;
   uint32_t flags;
 };
-
+static void zpath_reset_keep_VP(struct zippath *zpath);
 #define ZP_STARTS_AUTOGEN (1<<2)
 #define ZP_ZIP (1<<3)
 #define ZP_DOES_NOT_EXIST (1<<4)
@@ -286,13 +291,17 @@ struct fhdata{
   pthread_mutex_t mutex_read; /* Costs 40 Bytes */
   counter_rootdata_t *filetypedata;
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,struct ht *ht_transient_cache);
-  struct memcache *memcache;
   bool debug_not_yet_read;
+#if WITH_MEMCACHE
+  struct memcache *memcache;
+  int is_memcache_store;
+#endif //WITH_MEMCACHE
 };
 #define foreach_fhdata_also_emty(id,d) int id=_fhdata_n;for(struct fhdata *d;--id>=0 && ((d=fhdata_at_index(id))||true);)
 #define foreach_fhdata(id,d)  foreach_fhdata_also_emty(id,d) if (d->flags)
 #define fhdata_path_eq(d,path,hash) d->zpath.virtualpath_hash==hash && !strcmp(D_VP(d),path)
 #define memcache_is_queued(m)  (m && m->memcache_l && m->memcache_status==memcache_queued)
+#define find_realpath_again_fhdata(d) zpath_reset_keep_VP(&d->zpath); find_realpath_any_root(0,&d->zpath,NULL)
 #define SIZEOF_FHDATA sizeof(struct fhdata)
 #define SIZEOF_ZIPPATH sizeof(struct zippath)
 #define FHDATA_LOG2_BLOCK_SIZE 5
@@ -342,7 +351,7 @@ struct rootdata{ /* Data for a source directory. ZIPsFS acts like an overlay FS.
   char rootpath[MAX_PATHLEN];
   int rootpath_l;
   uint32_t features;
-  struct statfs statfs;
+  struct statvfs statfs;
   uint32_t log_count_delayed,log_count_delayed_periods,log_count_restarted;
   volatile uint32_t statfs_took_deciseconds; /* how long did it take */
   struct ht dircache_queue,dircache_ht; // !!
@@ -352,12 +361,13 @@ struct rootdata{ /* Data for a source directory. ZIPsFS acts like an overlay FS.
   pthread_t pthread[PTHREAD_LEN];
   int pthread_count_started[PTHREAD_LEN];
   int pthread_when_loop_deciSec[PTHREAD_LEN]; /* Detect blocked loop. */
+  int pthread_when_canceled_deciSec[PTHREAD_LEN];
   IF1(WITH_STAT_SEPARATE_THREADS,struct statqueue_entry statqueue[STATQUEUE_ENTRY_N]);
   bool debug_pretend_blocked[PTHREAD_LEN];
   IF1(WITH_MEMCACHE,struct fhdata *memcache_d);
   struct ht ht_filetypedata;
   counter_rootdata_t filetypedata_dummy,filetypedata_all, filetypedata[FILETYPEDATA_NUM],filetypedata_frequent[FILETYPEDATA_FREQUENT_NUM];
-  bool filetypedata_initialized;
+  bool filetypedata_initialized, blocked;
 };
 static struct rootdata _root[ROOTS]={0}, *_root_writable=NULL;
 static const char* rootpath(const struct rootdata *r){
@@ -407,6 +417,9 @@ static float _ucpu_usage,_scpu_usage;/* user and system */
 #include "ZIPsFS_debug.c"
 #include "ZIPsFS_log.c"
 #include "ZIPsFS_cache.c"
+#if WITH_TRANSIENT_ZIPENTRY_CACHES
+#include "ZIPsFS_transient_zipentry_cache.c"
+#endif
 #if WITH_MEMCACHE
 #include "ZIPsFS_memcache.c"
 #endif
@@ -446,10 +459,11 @@ static const char *simplify_fname(char *s,const char *u, const char *zipfile){
   s[0]=0;
   if (!ulen) return u;
   if (zipfile && (ulen<MAX_PATHLEN) && *zipfile){
-    const char *replacement=zipfile+cg_last_slash(zipfile)+1, *dot=strchrnul(replacement,'.');
+    const char *replacement=zipfile+cg_last_slash(zipfile)+1, *dot=cg_strchrnul(replacement,'.');
     const int replacement_l=dot-replacement;
-    const char *posaddr=dot && replacement_l>5?memmem(u,ulen,replacement,replacement_l):NULL;
-    if (posaddr){
+    const char *posaddr=dot && replacement_l>5?cg_memmem(u,ulen,replacement,replacement_l):NULL;
+    //    const char *posaddr=dot && replacement_l>5?strnstr(u,ulen,replacement,replacement_l):NULL;
+    if (posaddr && posaddr<replacement+replacement_l){
       const int pos=posaddr-u;
       memcpy(s,u,pos);
       s[pos]=PLACEHOLDER_NAME;
@@ -463,11 +477,26 @@ static const char *simplify_fname(char *s,const char *u, const char *zipfile){
 }/* simplify_fname*/
 /* Reverse of simplify_fname():  Replace PLACEHOLDER_NAME by name of zipfile */
 static bool unsimplify_fname(char *n,const char *zipfile){
+
+
+  {
+
+    char *n=NULL;
+    const char *replacement="";
+    const int n_l=cg_strlen(n);
+    int  pos=0;
+char *s=    cg_strchrnul(replacement,'.');
+// int replacement_l=s-replacement;
+ int replacement_l=((char*)cg_strchrnul(replacement,'.'))-(replacement);
+
+  }
+
+
 #if WITH_DIRCACHE_OPTIMIZE_NAMES
   char *placeholder=strchr(n,PLACEHOLDER_NAME);
   if (placeholder){
     const char *replacement=zipfile+cg_last_slash(zipfile)+1;
-    const int n_l=cg_strlen(n),pos=placeholder-n,replacement_l=strchrnul(replacement,'.')-replacement;
+    const int n_l=cg_strlen(n),pos=placeholder-n,replacement_l=((char*)cg_strchrnul(replacement,'.'))-replacement;
     int dst=n_l+replacement_l;/* Start copying with terminal zero */
     if (dst>=MAX_PATHLEN) return false;
     for(;--dst>=0;){
@@ -550,7 +579,8 @@ static bool stat_maybe_cache(const bool verbose,int opt, const char *path,const 
   IF1(WITH_STAT_CACHE,
       if (0!=(opt&STAT_USE_CACHE) && stat_from_cache(stbuf,path,path_l,hash)) return true;
       if (0==(opt&STAT_ALSO_SYSCALL)) return false);
-  static int count; if (strstr(path,"fularchiv")){ log_debug_now("#%d Going lstat(%s,) ...",count++,path); } // cg_print_stacktrace(0);}
+  static int count;
+  //if (strstr(path,"fularchiv")){ log_debug_now("#%d Going lstat(%s,) ...",count++,path); } // cg_print_stacktrace(0);}
   const int res=lstat(path,stbuf);
   LOCK(mutex_fhdata,inc_count_getattr(path,res?COUNTER_STAT_FAIL:COUNTER_STAT_SUCCESS));
   if (res) return false;
@@ -589,6 +619,7 @@ static void infloop_memcache_start(void *arg){
 }
 #endif //WITH_MEMCACHE
 static void root_start_thread(struct rootdata *r,int ithread){
+  //  log_entered_function("%s %s",rootpath(r),PTHREAD_S[ithread]);
   r->debug_pretend_blocked[ithread]=false;
   void *(*f)(void *)=NULL;
   switch(ithread){
@@ -603,18 +634,22 @@ static void root_start_thread(struct rootdata *r,int ithread){
   case PTHREAD_DIRCACHE: f=&infloop_dircache; break;
   case PTHREAD_MISC0: f=&infloop_misc0; break;
   }
+  if (r->pthread_count_started[ithread]++) warning(WARN_THREAD,report_rootpath(r),"pthread_start %s function: %p",PTHREAD_S[ithread],f);
+  ASSERT(f!=NULL);
   if (f){
-    if (r->pthread_count_started[ithread]++) warning(WARN_THREAD,report_rootpath(r),"pthread_start %s ",PTHREAD_S[ithread]);
     if (pthread_create(&r->pthread[ithread],NULL,f,(void*)r)) warning(WARN_THREAD|WARN_FLAG_EXIT|WARN_FLAG_ERRNO,rootpath(r),"Failed thread_create %s root=%d ",PTHREAD_S[ithread],rootindex(r));
   }
 }
 static void *infloop_responding(void *arg){
   struct rootdata *r=arg;
   pthread_cleanup_push(infloop_responding_start,r);
+  //const bool debug=filepath_contains_blocking(rootpath(r));
   for(int j=0;;j++){
     //if (r->features&ROOT_REMOTE) log_msg(" R%d.%d ",rootindex(r),j);
     const int now=deciSecondsSinceStart();
-    statfs(rootpath(r),&r->statfs);
+    //if (debug) fprintf(stderr," Going-statfs ");
+    statvfs(rootpath(r),&r->statfs);
+    //if (debug) fprintf(stderr," Done-statfs ");
     const int diff=observe_thread(r,PTHREAD_RESPONDING)-now;
     if (diff>ROOT_WARN_STATFS_TOOK_LONG_SECONDS*10) log_warn("\nstatfs %s took %'ld ms\n",rootpath(r),100L*diff);
     usleep(1000*ROOT_OBSERVE_EVERY_MSECONDS_RESPONDING);
@@ -633,7 +668,7 @@ static void *infloop_misc0(void *arg){
       cpuusage_read_proc(&pstat2,getpid());
       cpuusage_calc_pct(&pstat2,&pstat1,&_ucpu_usage,&_scpu_usage);
       pstat1=pstat2;
-      if (_ucpu_usage>40||_scpu_usage>40) log_verbose("pid: %d cpu_usage user: %.2f system: %.2f\n",getpid(),_ucpu_usage,_scpu_usage);
+      if (false) if (_ucpu_usage>40||_scpu_usage>40) log_verbose("pid: %d cpu_usage user: %.2f system: %.2f\n",getpid(),_ucpu_usage,_scpu_usage);
     }
   }
 }
@@ -662,23 +697,27 @@ static void *infloop_unblock(void *arg){
     *_mkSymlinkAfterStart=0;
   }
   while(true){
-    usleep(1000*1000);
+        usleep(5000*1000);
     foreach_root(i,r){
       if (!(r->features&ROOT_REMOTE)) continue;
       RLOOP(t,PTHREAD_LEN){
+        const bool debug=t==PTHREAD_MEMCACHE&& strstr(rootpath(r),"blocking");
         const int threshold=
           t==PTHREAD_STATQUEUE?10*UNBLOCK_AFTER_SECONDS_THREAD_STATQUEUE:
           t==PTHREAD_MEMCACHE?10*UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE:
           t==PTHREAD_DIRCACHE?10*UNBLOCK_AFTER_SECONDS_THREAD_DIRCACHE:
           t==PTHREAD_RESPONDING?10*UNBLOCK_AFTER_SECONDS_THREAD_RESPONDING:
           0;
-        if (!threshold) continue;
-        const int timeago=deciSecondsSinceStart()-r->pthread_when_loop_deciSec[t];
-        //if (timeago>threshold/10) log_debug_now("%s threshold: %d  timeago: %d %p ",PTHREAD_S[t],threshold,timeago,(void*)r->pthread[t]);
-        if (r->pthread[t] && (timeago>threshold)){
-          warning(WARN_THREAD,report_rootpath(r),"Going to pthread_cancel() %s %d. Last response was %d seconds ago\n",PTHREAD_S[t],rootindex(r),timeago/10);
-          r->pthread_when_loop_deciSec[t]=deciSecondsSinceStart()+10*threshold;
-          pthread_cancel(r->pthread[t]);
+        if (!threshold || !r->pthread[t]) continue;
+        const int timeago=deciSecondsSinceStart()-MAX_int(r->pthread_when_loop_deciSec[t],r->pthread_when_canceled_deciSec[t]);
+        //if (debug) log_debug_now("Waiting: %d / %d  %lu ",timeago,threshold, r->pthread[t]);
+        // if (timeago>threshold/10) log_debug_now("%s threshold: %d  timeago: %d %p ",PTHREAD_S[t],threshold,timeago,(void*)r->pthread[t]);
+        if (timeago>threshold){
+          warning(WARN_THREAD,report_rootpath(r),ANSI_RED"Going to  pthread_cancel() root: %s %d  PTHREAD_S: %s. Last response was %d seconds ago. Threshold: %d"ANSI_RESET"\n",rootpath(r),rootindex(r),PTHREAD_S[t],timeago/10,threshold/10);
+          pthread_cancel(r->pthread[t]); /* All but PTHREAD_MEMCACHE will restart themselfes via pthread_cleanup_push() */
+
+          IF1(WITH_MEMCACHE,if (i==PTHREAD_MEMCACHE) infloop_memcache_start(r)); /* pthread_cancel not working when root blocked. */
+          r->pthread_when_canceled_deciSec[t]=deciSecondsSinceStart();
         }
       }
     }
@@ -690,20 +729,27 @@ static void *infloop_unblock(void *arg){
 /// 2. Return false for remote file roots (starting with double slash) that has not responded for long time
 /// 2. Wait until last respond of root is below threshold.
 ////////////////////////////////////////////////////////////////////////////////////////////
+static void log_root_blocked(struct rootdata *r,const bool blocked){
+  if (r->blocked!=blocked){
+    warning(WARN_ROOT|WARN_FLAG_ERROR,rootpath(r),"Remote root %s"ANSI_RESET"\n",blocked?ANSI_FG_RED"not responding.":ANSI_FG_GREEN"responding again.");
+    r->blocked=blocked;
+  }
+}
 static bool wait_for_root_timeout(struct rootdata *r){
-  if (!(r->features&ROOT_REMOTE)) return true;
+  if (!(r->features&ROOT_REMOTE)){ log_root_blocked(r,false);return true;}
+  //const bool debug=filepath_contains_blocking(rootpath(r));
   const int N=10000;
-  static int j;
   RLOOP(try,N){
     const float delay=(deciSecondsSinceStart()-r->pthread_when_loop_deciSec[PTHREAD_RESPONDING])/10.0;
+    //if (debug) log_debug_now("ddddddddddddd delay: %3.4f",delay);
     if (delay>ROOT_SKIP_UNLESS_RESPONDED_WITHIN_SECONDS) break;
-    if (delay<ROOT_LAST_RESPONSE_MUST_BE_WITHIN_SECONDS){ j=0;return true; }
+    if (delay<ROOT_LAST_RESPONSE_MUST_BE_WITHIN_SECONDS){ log_root_blocked(r,false);return true; }
     usleep(_wait_for_root_timeout_sleep=1000*1000*ROOT_LAST_RESPONSE_MUST_BE_WITHIN_SECONDS/N);
     if (try>N/2 && try%(N/10)==0) log_msg("%s %s %d/%d\n",__func__,rootpath(r),try,N);
   }
   r->log_count_delayed_periods++;
-  if (!j) r->log_count_delayed++;
-  if (is_square_number(j++)) warning(WARN_ROOT|WARN_FLAG_ONCE_PER_PATH,rootpath(r),"Remote root not responding. %d",j);
+  r->log_count_delayed++;
+  log_root_blocked(r,true);
   r->log_count_delayed_periods++;
   return false;
 }
@@ -713,7 +759,7 @@ static bool wait_for_root_timeout(struct rootdata *r){
 /* *** Stat **** */
 #define ST_BLKSIZE 4096
 static void stat_set_dir(struct stat *s){
-  if(s){
+  if (s){
     mode_t *m=&(s->st_mode);
     ASSERT(S_IROTH>>2==S_IXOTH);
     if(!(*m&S_IFDIR)){
@@ -736,7 +782,7 @@ static void stat_init(struct stat *st, int64_t size,struct stat *uid_gid){
   if (uid_gid){
     st->st_gid=uid_gid->st_gid;
     st->st_uid=uid_gid->st_uid;
-    st->st_mtim=uid_gid->st_mtim;
+    st->ST_MTIMESPEC=uid_gid->ST_MTIMESPEC;
   }else{
     // geteuid()  effective user ID of the calling process.
     // getuid()   real user ID of the calling process.
@@ -812,7 +858,7 @@ static void zpath_init(struct zippath *zpath, const char *vp){
   zpath->virtualpath=zpath->strgs_l=1;  /* To distinguish from virtualpath==0  meaning not defined we use 1*/
   zpath->virtualpath_hash=hash_value_strg(vp);
   zpath->virtualpath_l=vp_l;
-  const char *NOCSC=strcasestr(vp,"$NOCSC$");
+  const char *NOCSC=cg_strcasestr(vp,"$NOCSC$");/* Windows no-client-side-cache */
   int removed=0;
   if (NOCSC){
     zpath_strncat(zpath,vp,NOCSC-vp);
@@ -847,6 +893,13 @@ static bool zpath_stat(const bool verbose,struct zippath *zpath,struct rootdata 
   }
   return true;
 }
+static void warning_zip(const char *path, zip_error_t *e,const char *txt){
+  if (!path) return;
+  const int ze=!e?0:zip_error_code_zip(e), se=!e?0:zip_error_code_system(e);
+  char s[1024];*s=0;  if (se) strerror_r(se,s,1023);
+  warning(WARN_FHDATA,path,"%s    sys_err: %s %s zip_err: %s %s",txt,!e?"e is NULL":!se?"":error_symbol(se),s, !ze?"":error_symbol_zip(ze), !ze?"":zip_error_strerror(e));
+}
+
 static struct zip *zip_open_ro(const char *orig){
   struct zip *zip=NULL;
   if (orig){
@@ -898,9 +951,9 @@ static bool _directory_from_dircache_zip_or_filesystem(struct directory *mydir,c
   //if (isZip && !ENDSWITH(mydir->dir_realpath,mydir->dir_realpath_l,".Zip")) {dde_print("mydir->dir_realpath:%s\n",mydir->dir_realpath);EXIT(9);}
   int result=0; /* Undefined:0 OK:1 Fail:-1 */
 #if WITH_DIRCACHE
-  const bool doCache=config_advise_cache_directory_listing(rp,mydir->dir_realpath_l,mydir->root->features&ROOT_REMOTE,isZip,rp_stat->st_mtim);
+  const bool doCache=config_advise_cache_directory_listing(rp,mydir->dir_realpath_l,mydir->root->features&ROOT_REMOTE,isZip,rp_stat->ST_MTIMESPEC);
   if (doCache){
-    LOCK_NCANCEL(mutex_dircache,result=dircache_directory_from_cache(mydir,rp_stat->st_mtim)?1:0);
+    LOCK_NCANCEL(mutex_dircache,result=dircache_directory_from_cache(mydir,rp_stat->ST_MTIMESPEC)?1:0);
   }
 #endif
   if (!result && (mydir->dir_flags&DIRECTORY_TO_QUEUE)){ /* Read zib dir asynchronously. Initially we see in the listing name.Content. Later we will see single files. */
@@ -944,7 +997,7 @@ static bool _directory_from_dircache_zip_or_filesystem(struct directory *mydir,c
       closedir(dir);
     }
     if (result==1){
-      mydir->core.mtim=rp_stat->st_mtim;
+      mydir->core.mtim=rp_stat->ST_MTIMESPEC;
       IF1(WITH_DIRCACHE,if (doCache) LOCK_NCANCEL(mutex_dircache,dircache_directory_to_cache(mydir)));
     }
   }
@@ -971,14 +1024,16 @@ static void *infloop_dircache(void *arg){
   while(true){
     *path=0;
     struct ht_entry *ee=r->dircache_queue.entries;
-    LOCK_NCANCEL(mutex_dircachejobs,/*Pick path from an entry and put in stack variable path */
-                 RLOOP(i,r->dircache_queue.capacity){
-                   if (ee[i].key){
-                     cg_strncpy(path,ee[i].key,MAX_PATHLEN);
-                     FREE2(ee[i].key);
-                     ht_clear_entry(ee+i);
-                     break;
-                   }});
+
+    lock_ncancel(mutex_dircachejobs);/*Pick path from an entry and put in stack variable path */
+    RLOOP(i,r->dircache_queue.capacity){
+      if (ee[i].key){
+        cg_strncpy(path,ee[i].key,MAX_PATHLEN);
+        FREE2(ee[i].key);
+        ht_clear_entry(ee+i);
+        break;
+      }}
+    unlock_ncancel(mutex_dircachejobs);/*Pick path from an entry and put in stack variable path */
     if (*path && stat_cache_or_queue(false,path,&stbuf,r)){
       directory_init(&mydir,DIRECTORY_IS_ZIPARCHIVE,path,strlen(path),r);
       directory_from_dircache_zip_or_filesystem(&mydir,&stbuf);
@@ -1129,6 +1184,7 @@ static bool find_realpath_nocache(const bool verbose,struct zippath *zpath,struc
   return t;
 } /*find_realpath_nocache*/
 
+
 static bool find_realpath_any_root1(const bool verbose,const bool path_starts_autogen,struct zippath *zpath,const struct rootdata *onlyThisRoot,const long which_roots){
   const char *vp=VP();
   const int vp_l=VP_L();
@@ -1180,7 +1236,7 @@ static bool find_realpath_any_root(int opt,struct zippath *zpath,const struct ro
   const long which_roots=config_search_file_which_roots(vp,vp_l,path_starts_autogen);
   if (opt&FINDRP_VERBOSE) log_entered_function("%s root: %s",vp,report_rootpath(onlyThisRoot));
 #if WITH_TRANSIENT_ZIPENTRY_CACHES
-  if (vp_l  && !path_starts_autogen){
+  if (vp_l  && vp && !path_starts_autogen){
     struct zippath cached={0};
     if (!(opt&FINDRP_NOT_TRANSIENT_CACHE)) LOCK(mutex_fhdata,struct zippath *zp=transient_cache_get_or_create_zpath(false,vp,vp_l); if (zp) cached=*zp);
     const int f=cached.flags;
@@ -1208,8 +1264,10 @@ static bool find_realpath_any_root(int opt,struct zippath *zpath,const struct ro
         if (i) warning(WARN_RETRY,vp,"find_realpath_any_root succeeded on retry %d",i);
         goto found;
       }
+      if (sleep_milliseconds){
       log_debug_now("Going sleep %d ms ...",sleep_milliseconds);
       usleep(sleep_milliseconds<<10);
+      }
     }
   }
   if (found) assert(zpath->realpath!=0);
@@ -1228,7 +1286,6 @@ static bool find_realpath_any_root(int opt,struct zippath *zpath,const struct ro
   return found;
 } /*find_realpath_any_root*/
 
-  //2023_my_data_zip_1.d.Zip
   ///////////////////////////////////////////////////////////
   // Data associated with file handle.
   // Motivation: When the same file is accessed from two different programs,
@@ -1245,7 +1302,7 @@ static bool fhdata_can_destroy(struct fhdata *d){
 #if WITH_MEMCACHE
   struct memcache *m=d->memcache;
   if (m){ /* Not close when serving as file-content-cache for other fhdata instances  with identical path */
-    if (m->memcache_status==memcache_reading || ROOTd(d)->memcache_d==d) return false;
+    if (m->memcache_status==memcache_reading IF1(WITH_MEMCACHE,||d->is_memcache_store>0)) return false;
     const ht_hash_t hash=D_VP_HASH(d);
     foreach_fhdata(id,e){
       if (e==d || (e->flags&FHDATA_FLAGS_DESTROY_LATER)) continue;
@@ -1257,17 +1314,12 @@ static bool fhdata_can_destroy(struct fhdata *d){
   return true;
 }
 
-static void fhdata_zip_close(bool alsoZipArchive,struct fhdata *d){
-  {
-    zip_file_t *z=d->zip_file;
-    d->zip_file=NULL;
-    if (z && zip_fclose(z)) warning(WARN_FHDATA|WARN_FLAG_ERRNO,D_VP(d),"Failed zip_fclose");
-  }
-  if (alsoZipArchive){
-    struct zip *z=d->zarchive;
-    d->zarchive=NULL;
-    if (z && zip_close(z)==-1) warning(WARN_FHDATA|WARN_FLAG_ERRNO,D_VP(d),"Failed zip_close");
-  }
+static void fhdata_zip_close(struct fhdata *d){
+  // log_entered_function("%s",D_VP(d));
+  zip_file_t *z=d->zip_file;
+  d->zip_file=NULL;
+  if (z) zip_file_error_clear(z);
+  if (z && zip_fclose(z)) warning_zip(D_RP(d),zip_file_get_error(z),"Failed zip_fclose");
 }
 
 ////////////////////////////////////////////////////////////
@@ -1295,12 +1347,13 @@ static void _fhdata_destroy(struct fhdata *d,const int fd_evict,const char *path
       IF1(WITH_MEMCACHE,memcache_free(d));
       IF1(WITH_EVICT_FROM_PAGECACHE,if (do_evict){const ht_hash_t hash=D_RP_HASH(d); foreach_fhdata(ie,e) if (d!=e && D_RP_HASH(e)==hash){ do_evict=false;break;}});
       //log_debug_now(ANSI_FG_GREEN"Going to release fhdata d=%p path=%s fh=%lu _fhdata_n=%d"ANSI_RESET,d,snull(D_VP(d)),d->fh,_fhdata_n);
-      fhdata_zip_close(true,d);
+      fhdata_zip_close(d);
+      if (d->zarchive && zip_close(d->zarchive)==-1) warning_zip(D_RP(d),zip_get_error(d->zarchive),"Failed zip_close");
       pthread_mutex_destroy(&d->mutex_read);
       memset(d,0,SIZEOF_FHDATA);
     }
   }
-    IF1(WITH_EVICT_FROM_PAGECACHE,if (do_evict){maybe_evict_from_filecache(fd_evict,path_evict,path_evict_l); log_verbose(ANSI_MAGENTA"Evicted %s"ANSI_RESET,path_evict);});
+  IF1(WITH_EVICT_FROM_PAGECACHE,if (do_evict){maybe_evict_from_filecache(fd_evict,path_evict,path_evict_l); log_verbose(ANSI_MAGENTA"Evicted %s"ANSI_RESET,path_evict);});
 }
 static void fhdata_destroy(struct fhdata *d){
   if (d) _fhdata_destroy(d,0,D_RP(d),D_RP_L(d));
@@ -1322,7 +1375,7 @@ static zip_file_t *fhdata_zip_open(struct fhdata *d,const char *msg){
       warning(WARN_OPEN|WARN_FLAG_ERRNO,RP(),"Failed zip_open");
     }else{
       zf=d->zip_file=zip_fopen(z,EP(),ZIP_RDONLY);
-      if (!zf) warning(WARN_OPEN|WARN_FLAG_ERRNO,RP(),"Failed zip_fopen");
+      if (!zf) warning_zip(RP(),zip_get_error(z),"zip_fopen()");
       fhdata_counter_inc(d,zf?ZIP_OPEN_SUCCESS:ZIP_OPEN_FAIL);
     }
   }
@@ -1362,7 +1415,6 @@ static struct fhdata* fhdata_create(const uint64_t fh, struct zippath *zpath){
       if (d!=e && hash==D_VP_HASH(e) && !strcmp(D_VP(d),D_VP(e))) d->memcache=e->memcache;
     }
   }
-
 #endif //WITH_MEMCACHE
   d->flags|=FHDATA_FLAGS_ACTIVE;
   assert(ROOTd(d)!=NULL);
@@ -1383,6 +1435,12 @@ static struct fhdata* fhdata_get(const char *path,const uint64_t fh){
 ///////////////////////////////////
 /* ******************************************************************************** */
 #define READDIR_AUTOGEN (1<<0)
+#if IS_ORIG_FUSE
+#define COMMA_FILL_DIR_PLUS ,0
+#else
+#define COMMA_FILL_DIR_PLUS
+#endif // IS_APPLE
+
 static void filldir(const int opt,fuse_fill_dir_t filler,void *buf, const char *name, const struct stat *stbuf,struct ht *no_dups){
 #if WITH_AUTOGEN
   if (_realpath_autogen && 0!=(opt&READDIR_AUTOGEN)){
@@ -1391,7 +1449,7 @@ static void filldir(const int opt,fuse_fill_dir_t filler,void *buf, const char *
   }
 #endif
 
-  if (ht_only_once(no_dups,name,0)) filler(buf,name,stbuf,0,fill_dir_plus);
+  if (ht_only_once(no_dups,name,0)) filler(buf,name,stbuf,0 COMMA_FILL_DIR_PLUS);
 }
 /* ******************************************************************************** */
 /* *** Inode *** */
@@ -1514,7 +1572,7 @@ static int filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_f
           stat_init(&st,(Nth0(d.fflags,i)&DIRENT_ISDIR)?-1:Nth0(d.fsize,i),NULL);
           st.st_ino=make_inode(zpath->stat_rp.st_ino,r,0,RP());
           if (!config_do_not_list_file(rp,u,u_l)){
-            IF1(WITH_ZIPINLINE,if (config_also_show_zipfile_in_listing(u,u_l))) filler(buf,u,&st,0,fill_dir_plus);
+            IF1(WITH_ZIPINLINE,if (config_also_show_zipfile_in_listing(u,u_l))) filler(buf,u,&st,0  COMMA_FILL_DIR_PLUS);
             filldir(opt,filler,buf,config_zipfilename_to_virtual_dirname(virtual_name,u,u_l),&st,no_dups);
           }
         }
@@ -1555,16 +1613,23 @@ static int realpath_mk_parent(char *realpath,const char *path){
 }
 /********************************************************************************/
 #define DO_LIBFUSE_CACHE_STAT 0
-static void *xmp_init(struct fuse_conn_info *conn,struct fuse_config *cfg){
+#if IS_ORIG_FUSE
+static void *xmp_init(struct fuse_conn_info *conn IF1(IS_ORIG_FUSE,,struct fuse_config *cfg)){
   //void *x=fuse_apply_conn_info_opts;  //cfg->async_read=1;
   cfg->use_ino=1;
   IF1(DO_LIBFUSE_CACHE_STAT,cfg->entry_timeout=cfg->attr_timeout=200;cfg->negative_timeout=20);
   IF0(DO_LIBFUSE_CACHE_STAT,cfg->entry_timeout=cfg->attr_timeout=2;  cfg->negative_timeout=10);
   return NULL;
 }
+#endif
 /////////////////////////////////////////////////
 // Functions where Only single paths need to be  substituted
-static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi_or_null){
+#if IS_ORIG_FUSE
+#define PARA_GETATTR ,struct fuse_file_info *fi_or_null
+#else
+#define PARA_GETATTR
+#endif
+int xmp_getattr(const char *path, struct stat *stbuf PARA_GETATTR){
   const int path_l=strlen(path);
   int err=0;
   bool debug=false; //IF1(WITH_AUTOGEN,if(!strncmp(path,DIR_AUTOGEN,sizeof(DIR_AUTOGEN)-1)) debug=true);
@@ -1572,6 +1637,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_inf
     stat_init(stbuf,0,NULL);
     return 0;
   }
+  if (ENDSWITH(path,path_l,"-journal") ||ENDSWITH(path,path_l,"-wal")) log_entered_function(ANSI_RED"journal and wal %s"ANSI_RESET,path);
   if (path_l==DIR_ZIPsFS_L && !strcmp(path,DIR_ZIPsFS)){
     stat_init(stbuf,0,NULL);
     stat_set_dir(stbuf);
@@ -1588,6 +1654,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_inf
       time(&stbuf->st_mtime);
       stbuf->st_mode&=~(S_IWOTH|S_IWUSR|S_IWGRP);
       stbuf->st_ino=inode_from_virtualpath(path,path_l);
+
       if (ENDSWITH(path,path_l,".command")) stbuf->st_mode|=(S_IXOTH|S_IXUSR|S_IXGRP);
       return 0;
     }
@@ -1595,6 +1662,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_inf
   bool found;FIND_REALPATH(path);
   if (found){
     *stbuf=zpath->stat_vp;
+    //if (ENDSWITH(path,path_l,"wiff")) log_debug_now("path: %s  %ld\n",path,stbuf->st_size);
   }else{
     IF1(WITH_AUTOGEN,long size;
         if(_realpath_autogen && (size=autogen_size_of_not_existing_file(path,path_l))>=0){
@@ -1607,9 +1675,8 @@ static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_inf
   LOCK(mutex_fhdata,inc_count_getattr(path,err?COUNTER_GETATTR_FAIL:COUNTER_GETATTR_SUCCESS));
   IF1(DEBUG_TRACK_FALSE_GETATTR_ERRORS, if (err) debug_track_false_getattr_errors(path,path_l));
 
-  if (debug_trigger_vp(path,path_l)){
-    if (err) DIE_DEBUG_NOW0("err != 0");
-  }
+  if (configuration_file_is_readonly(path,path_l)) stbuf->st_mode&=~(S_IWOTH|S_IWUSR|S_IWGRP); /* Does not improve performance */
+  //if (debug_trigger_vp(path,path_l))    if (err) DIE_DEBUG_NOW0("err != 0");
   return -err;
 }
 static int xmp_access(const char *path, int mask){
@@ -1622,7 +1689,7 @@ static int xmp_access(const char *path, int mask){
   if (!res && (mask&X_OK) && S_ISDIR(zpath->stat_vp.st_mode)) res=access(RP(),(mask&~X_OK)|R_OK);
   if (res) report_failure_for_tdf(path);
   LOCK(mutex_fhdata,inc_count_getattr(path,res?COUNTER_ACCESS_FAIL:COUNTER_ACCESS_SUCCESS));
-  if (debug_trigger_vp(path,path_l)){ log_debug_now("%s returning %d",path,minus_val_or_errno(res)); if (res) DIE_DEBUG_NOW0("res != 0");}
+  if (debug_trigger_vp(path,path_l)){ log_debug_now("%s returning %d",path,minus_val_or_errno(res)); if (false && res) DIE_DEBUG_NOW0("res != 0");}
   return minus_val_or_errno(res);
 }
 static int xmp_readlink(const char *path, char *buf, size_t size){
@@ -1665,7 +1732,6 @@ static int xmp_open(const char *path, struct fuse_file_info *fi){
   /*if (config_keep_file_attribute_in_cache(path)) fi->keep_cache=1;*/
   static uint64_t next_fh=FD_ZIP_MIN;
   bool found;FIND_REALPATH(path);
-
   IF1(WITH_AUTOGEN, if (found && _realpath_autogen && (zpath->flags&ZP_STARTS_AUTOGEN) && config_autogen_file_is_invalid(path,path_l,&zpath->stat_vp, _root_writable->rootpath)) found=false);
   if (found){
     if (ZPATH_IS_ZIP()){
@@ -1677,7 +1743,7 @@ static int xmp_open(const char *path, struct fuse_file_info *fi){
       ASSERT(zpath!=NULL);
       handle=open(RP(),fi->flags);
       if (handle<=0) warning(WARN_OPEN|WARN_FLAG_ERRNO,RP(),"open:  fh=%d",handle);
-      if (!cg_check_path_for_fd("my_open_fh",RP(),handle)) handle=-1;
+      if (has_proc_fs() && !cg_check_path_for_fd("my_open_fh",RP(),handle)) handle=-1;
     }
   }else{
 #if WITH_AUTOGEN
@@ -1699,18 +1765,23 @@ static int xmp_open(const char *path, struct fuse_file_info *fi){
   if (!found || handle==-1){
     if (!config_not_report_stat_error(path,path_l)) warning(WARN_GETATTR,path,"found:%s handle:%llu",success_or_fail(found),handle);
     if (debug_trigger_vp(path,path_l)){
-      DIE_DEBUG_NOW("found: %s handle: %lu",success_or_fail(found), handle);
+      //DIE_DEBUG_NOW("found: %s handle: %lu",success_or_fail(found), handle);
     }
     return !found?-ENOENT:-errno;
   }
   fi->fh=handle;
   return 0;
 }/*xmp_open*/
-static int xmp_truncate(const char *path, off_t size,struct fuse_file_info *fi){
+#if IS_ORIG_FUSE
+#define PARA_TRUNCATE ,struct fuse_file_info *fi
+#else
+#define PARA_TRUNCATE
+#endif
+// IF0(IS_NETBSD||IS_APPLE
+int xmp_truncate(const char *path, off_t size PARA_TRUNCATE){
   int res;
-  if (fi){
-    res=ftruncate(fi->fh,size);
-  }else{
+  IF1(IS_ORIG_FUSE,if (fi)    res=ftruncate(fi->fh,size); else)
+    {
     bool found;FIND_REALPATH(path);
     res=!ZPATH_ROOT_WRITABLE()?EACCES: found?truncate(RP(),size):ENOENT;
   }
@@ -1720,13 +1791,17 @@ static int xmp_truncate(const char *path, off_t size,struct fuse_file_info *fi){
 // Readdir
 /////////////////////////////////
 /** unsigned int cache_readdir:1; FOPEN_CACHE_DIR Can be filled in by opendir. It signals the kernel to  enable caching of entries returned by readdir(). */
-static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi,enum fuse_readdir_flags flags){
-  (void)offset;(void)fi;(void)flags;
+
+
+//static int hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
+static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi IF1(IS_ORIG_FUSE,,enum fuse_readdir_flags flags)){
+  (void)offset;(void)fi;
   struct ht no_dups={0};
   ht_init_with_keystore_dim(&no_dups,8,4096);
   NEW_ZIPPATH(path);
   int opt=0;
   bool ok=false;
+  const int path_l=strlen(path);
   FOR(cut_autogen,0,(zpath->flags&ZP_STARTS_AUTOGEN)?2:1){
     foreach_root(ir,r){
       if (find_realpath_any_root(opt|(cut_autogen?0:FINDRP_AUTOGEN_CUT_NOT),zpath,r)){ /* FINDRP_AUTOGEN_CUT_NOT means only without cut.  Giving 0 means cut and not cut. */
@@ -1734,12 +1809,12 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t
         filler_readdir(0,zpath,buf,filler,&no_dups);
         IF1(WITH_AUTOGEN, if (cut_autogen) filler_readdir(READDIR_AUTOGEN,zpath,buf,filler,&no_dups));
         ok=true;
-        if (!cut_autogen && config_readir_no_other_roots(RP(),RP_L())) break;
+        if (!cut_autogen && !ENDSWITH(path,path_l,EXT_CONTENT) && config_readir_no_other_roots(RP(),RP_L())) break;
       }
     }
   }
   if (*path=='/' && !path[1]){ /* Folder ZIPsFS in the root */
-    filler(buf,&DIR_ZIPsFS[1],NULL,0,fill_dir_plus);
+    filler(buf,&DIR_ZIPsFS[1],NULL,0  COMMA_FILL_DIR_PLUS);
     ok=true;
   }else if (!strcmp(path,DIR_ZIPsFS)){ /* Childs of folder ZIPsFS */
     FOR(i,0,SFILE_L) filldir(0,filler,buf,i==SFILE_DEBUG_CTRL?DIRNAME_AUTOGEN:SPECIAL_FILES[i]+1,NULL,&no_dups);
@@ -1799,11 +1874,29 @@ static int xmp_symlink(const char *target, const char *path){ // target,link
   if (!(realpath_mk_parent(real_path,path)) && symlink(target,real_path)==-1) return -errno;
   return 0;
 }
-static int xmp_rename(const char *old_path, const char *neu_path, uint32_t flags){ // from,to
+
+#if IS_ORIG_FUSE
+#define WITH_PARA_FLAGS 1
+#else
+#define WITH_PARA_FLAGS 0
+#endif
+int xmp_rename(const char *old_path, const char *neu_path IF1(WITH_PARA_FLAGS,, uint32_t flags)){ // from,to
+  #if WITH_GNU && WITH_PARA_FLAGS
+  bool eexist=false;
+  if (flags&RENAME_NOREPLACE){
+    bool found;FIND_REALPATH(neu_path);
+    if (found) eexist=true;
+  }else if (flags) return -EINVAL;
+#endif //WITH_GNU
+
+
   bool found;FIND_REALPATH(old_path);
-  if (!found) return -ENOENT;
+    if (!found) return -ENOENT;
+    IF1(WITH_GNU,if (eexist) return -EEXIST);
+
+
   if (!ZPATH_ROOT_WRITABLE()) return -EACCES;
-  if (flags) return -EINVAL;
+
   char neu[MAX_PATHLEN+1];
   int res=realpath_mk_parent(neu,neu_path);
   if (!res) res=rename(RP(),neu);
@@ -1812,6 +1905,7 @@ static int xmp_rename(const char *old_path, const char *neu_path, uint32_t flags
 //////////////////////////////////
 // Functions for reading bytes ///
 //////////////////////////////////
+#if HAS_FUSE_LSEEK
 static off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file_info *fi){
   ASSERT(fi!=NULL);
   int ret=off;
@@ -1819,17 +1913,20 @@ static off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file
          struct fhdata* d=fhdata_get(path,fi->fh);
          if (d){
            switch(whence){
+           #if __USE_GNU
+                        case SEEK_HOLE:ret=(d->offset=d->zpath.stat_vp.st_size);break;
            case SEEK_DATA:
+#endif // __USE_GNU
            case SEEK_SET: ret=d->offset=off;break;
            case SEEK_CUR: ret=(d->offset+=off);break;
            case SEEK_END: ret=(d->offset=d->zpath.stat_vp.st_size+off);break;
-           case SEEK_HOLE:ret=(d->offset=d->zpath.stat_vp.st_size);break;
+
            }
          });
   if (!d) warning(WARN_SEEK|WARN_FLAG_ONCE,path,"d is NULL");
   return ret;
 }
-
+#endif // HAS_FUSE_LSEEK
 /* Read size bytes from zip entry.   Invoked only from fhdata_read() unless memcache_is_advised(d) */
 static off_t fhdata_read_zip(const char *path, char *buf, const off_t size, const off_t offset,struct fhdata *d,struct fuse_file_info *fi){
   cg_thread_assert_not_locked(mutex_fhdata);
@@ -1847,7 +1944,7 @@ static off_t fhdata_read_zip(const char *path, char *buf, const off_t size, cons
         const off_t num=memcache_waitfor(d,offset+size);
         if (num>0){
           fi->direct_io=1;
-          fhdata_zip_close(false,d);
+          fhdata_zip_close(d);
           _count_readzip_memcache_because_seek_bwd++;
           fhdata_counter_inc(d,ZIP_READ_CACHE_SUCCESS);
           return memcache_read(buf,d,offset,num);
@@ -1859,15 +1956,16 @@ static off_t fhdata_read_zip(const char *path, char *buf, const off_t size, cons
   }
   {
     const int64_t pos=zip_ftell(d->zip_file);
+    if (pos<0){ warning_zip(path,zip_file_get_error(d->zip_file),"zip_ftell()");return -1;}
     if (offset<pos){ /* Worst case=seek backward - need reopen zip file */
-      warning(WARN_SEEK,path,"Seek bwd - going to reopen zip\n");
-      fhdata_zip_close(false,d);
+      warning_zip(path,zip_file_get_error(d->zip_file),"zip_ftell() - going to reopen zip\n");
+      fhdata_zip_close(d);
       fhdata_zip_open(d,"SEEK bwd.");
     }
   }
   for(int64_t diff;1;){
     const int64_t pos=zip_ftell(d->zip_file);
-    if (pos<0){ warning(WARN_SEEK,path,"zip_ftell returns %ld",pos);return -1;}
+    if (pos<0){ warning_zip(path,zip_file_get_error(d->zip_file),"zip_ftell()");return -1;}
     if (!(diff=offset-pos)) break;
     if (diff<0){ warning(WARN_SEEK,path,"diff<0 should not happen %ld",diff);return -1;}
     if (zip_fread(d->zip_file,buf,MIN(size,diff))<0){
@@ -1877,7 +1975,7 @@ static off_t fhdata_read_zip(const char *path, char *buf, const off_t size, cons
   }
   // if (fhdata_not_yet_logged(FHDATA_ALREADY_LOGGED_VIA_ZIP,d)){ log_msg("xmp_read_fhdata_zip %s size=%zu offset=%lu fh=%lu \n",path,size,offset,d->fh); }
   const off_t num=zip_fread(d->zip_file,buf,size);
-  if (num<0) warning(WARN_ZIP|WARN_FLAG_ERRNO,path," zip_fread(%p,%p,%zu) returned %d\n",d->zip_file,buf,size,num);
+  if (num<0) warning_zip(path,zip_file_get_error(d->zip_file)," zip_fread()");
   fhdata_counter_inc(d,num<0?ZIP_READ_NOCACHE_FAIL:!num?ZIP_READ_NOCACHE_ZERO:ZIP_READ_NOCACHE_SUCCESS);
   return num;
 }/*xmp_read_fhdata_zip*/
@@ -1894,6 +1992,7 @@ static off_t fhdata_read_zip1(char *buf, const off_t size, const off_t offset,st
     //    const clock_t clock0=clock();
     //     LOCK(mutex_fhdata,counter_rootdata_t *counter=filetypedata_for_ext(D_VP(d),ROOTd(d));if (counter) counter->wait+=(clock()-clock0));
     const off_t already=memcache_waitfor(d,offset+size);
+    if (offset==m->memcache_l) return 0; /* Otherwise md5sum fails with EPERM */
     if (already>offset && m->memcache_l){
       const off_t num=memcache_read(buf,d,offset,MIN(already,size+offset));
       if (num>0) _count_readzip_memcache++;
@@ -1938,7 +2037,7 @@ static int xmp_read(const char *path, char *buf, const size_t size, const off_t 
            else d->is_xmp_read++; /* Prevent fhdata_destroy() */
          });
   if (d){
-    struct memcache *m=d->memcache;
+    IF1(WITH_MEMCACHE,struct memcache *m=d->memcache);
     IF1(WITH_AUTOGEN,if ((d->flags&FHDATA_FLAGS_IS_AUTOGEN) && _realpath_autogen && !d->fh_real){
         if (!d->autogen_state) autogen_run(d);
         if (d->autogen_state!=AUTOGEN_SUCCESS){
@@ -1969,7 +2068,7 @@ static int xmp_read(const char *path, char *buf, const size_t size, const off_t 
     if (!fd){
       res=-errno;
     }else if (offset-lseek(fd,0,SEEK_CUR) && offset!=lseek(fd,offset,SEEK_SET)){
-      log_msg(ANSI_FG_RED""ANSI_YELLOW"SEEK_REG_FILE:"ANSI_RESET" offset: %'jd ",(intmax_t)offset),log_msg("Failed %s fd=%lu\n",path,fd);
+      log_msg(ANSI_FG_RED""ANSI_YELLOW"SEEK_REG_FILE:"ANSI_RESET" offset: %'jd ",(intmax_t)offset),log_msg("Failed %s fd=%llu\n",path,(LLU)fd);
       res=-1;
     }else if ((res=pread(fd,buf,size,offset))==-1){
       res=-errno;
@@ -2005,6 +2104,7 @@ static int xmp_flush(const char *path,  struct fuse_file_info *fi){
     0;
 }
 static void _exit_ZIPsFS(){
+  log_entered_function0("");
   int wroteMsg=0;
   while(true){
     int count=0;
@@ -2027,13 +2127,17 @@ static void _exit_ZIPsFS(){
 
 
 int main(int argc,char *argv[]){
-
+#define C(var) fprintf(stderr,"  %s: %d\n",#var,var);
+  C(IS_LINUX);C(IS_APPLE);C(IS_FREEBSD);C(IS_OPENBSD);C(IS_CLANG);C(WITH_GNU);
+  C(HAS_BACKTRACE);C(HAS_UNDERSCORE_ENVIRON);
+  #undef C
+  fprintf(stderr,"MAX_PATHLEN: %d\n",MAX_PATHLEN);
+  fprintf(stderr,"has_proc_fs: %s\n",yes_no(has_proc_fs()));
 
   if (!realpath(*argv,_self_exe)) DIE("Failed realpath %s",*argv);
   init_mutex();
   init_sighandler(argv[0],(1L<<SIGSEGV)|(1L<<SIGUSR1)|(1L<<SIGABRT),stderr);
   gettimeofday(&_startTime,NULL);
-
   {
     _warning_color[WARN_THREAD]=ANSI_FG_RED;
     _warning_color[WARN_GETATTR]=ANSI_FG_MAGENTA;
@@ -2055,7 +2159,7 @@ int main(int argc,char *argv[]){
   IF1(WITH_ZIPINLINE,config_containing_zipfile_of_virtual_file_test());
   static struct fuse_operations xmp_oper={0};
 #define S(f) xmp_oper.f=xmp_##f
-  S(init);
+  IF1(IS_LINUX,S(init));
   S(getattr); S(access);
   S(readlink);
   //S(opendir);
@@ -2064,7 +2168,7 @@ int main(int argc,char *argv[]){
   S(rmdir);   S(rename);    S(truncate);
   S(open);    S(create);    S(read);  S(write);   S(release); S(releasedir); S(statfs);
   S(flush);
-  S(lseek);
+  IF1(HAS_FUSE_LSEEK,S(lseek));
 #undef S
   if ((getuid()==0) || (geteuid()==0)){ log_strg("Running BBFS as root opens unnacceptable security holes\n");return 1;}
   //    argv_fuse[argc_fuse++]="--fuse-flag";    argv_fuse[argc_fuse++]="sync_read";
@@ -2083,7 +2187,7 @@ int main(int argc,char *argv[]){
     case 'L':{
       static struct rlimit _rlimit={0};
       _rlimit.rlim_cur=_rlimit.rlim_max=cg_atol_kmgt(optarg);
-      log_msg("Setting rlimit to %lu MB \n",_rlimit.rlim_max>>20);
+      log_msg("Setting rlimit to %llu MB \n",(LLU)_rlimit.rlim_max>>20);
       setrlimit(RLIMIT_AS,&_rlimit);
     } break;
 #if WITH_MEMCACHE
@@ -2097,14 +2201,14 @@ int main(int argc,char *argv[]){
   }
   log_msg("FUSE_MAJOR_VERSION=%d FUSE_MINOR_VERSION=%d \n",FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION);
   ASSERT(MAX_PATHLEN<=PATH_MAX);
-  char dot_ZIPsFS[MAX_PATHLEN+1],dirOldLogs[MAX_PATHLEN];
+  char dot_ZIPsFS[MAX_PATHLEN+1],dirOldLogs[MAX_PATHLEN+1];
   _mnt_l=strlen(strncpy(_mnt,argv[argc-1],MAX_PATHLEN));
   { /* dot_ZIPsFS */
     {
       char *dir=dot_ZIPsFS+strlen(cg_copy_path(dot_ZIPsFS,"~/.ZIPsFS/"));
       strcat(dir,_mnt);
       for(;*dir;dir++) if (*dir=='/') *dir='_';
-      snprintf(dirOldLogs,MAX_PATHLEN,"%s/%s",dot_ZIPsFS,"oldLogs");
+      snprintf(dirOldLogs,MAX_PATHLEN,"%s%s",dot_ZIPsFS,"/oldLogs");
       cg_recursive_mkdir(dirOldLogs);
     }
     FOR(i,0,2){
@@ -2114,8 +2218,8 @@ int main(int argc,char *argv[]){
         const time_t t=stbuf.st_mtime;
         struct tm lt;
         localtime_r(&t,&lt);
-        char oldLog[MAX_PATHLEN];
-        sprintf(oldLog,"%s%s",dirOldLogs,SPECIAL_FILES[i+SFILE_LOG_WARNINGS]);
+        char oldLog[MAX_PATHLEN+1];
+        snprintf(oldLog,MAX_PATHLEN,"%s%s",dirOldLogs,SPECIAL_FILES[i+SFILE_LOG_WARNINGS]);
         strftime(strrchr(oldLog,'.'),22,"_%Y_%m_%d_%H:%M:%S",&lt);
         strcat(oldLog,".log");
         assert(!rename(_fWarningPath[i],oldLog));
@@ -2134,8 +2238,8 @@ int main(int argc,char *argv[]){
     warning(0,NULL,"");
     snprintf(_debug_ctrl,MAX_PATHLEN,"%s/%s",dot_ZIPsFS,"ZIPsFS_debug_ctrl.sh");
     {
-      char mstore_base[MAX_PATHLEN];
-      sprintf(mstore_base,"%s/cachedir",dot_ZIPsFS);
+      char mstore_base[MAX_PATHLEN+1];
+      snprintf(mstore_base,MAX_PATHLEN,"%s/cachedir",dot_ZIPsFS);
       mstore_set_base_path(mstore_base);
       cg_recursive_mkdir(mstore_base);
     }
@@ -2156,6 +2260,7 @@ int main(int argc,char *argv[]){
   FOR(i,optind,colon){ /* Source roots are given at command line. Between optind and colon */
     if (_root_n>=ROOTS) DIE("Exceeding max number of ROOTS=%d   Increase constant ROOTS in configuration.h and recompile!\n",ROOTS);
     const char *p=argv[i];
+
     if (!*p){
       log_warn("Command line argument # %d is empty. %s\n",optind,i==optind?"Consequently, there will be no writable root.":"");
       continue;
@@ -2166,13 +2271,16 @@ int main(int argc,char *argv[]){
       int slashes=-1;while(p[++slashes]=='/');
       if (slashes>1){ r->features|=ROOT_REMOTE; p+=(slashes-1); }
     }
+    log_msg("Going to obtain realpath of  %s ...  ",p);
     r->rootpath_l=cg_strlen(realpath(p,r->rootpath));
-    if (!r->rootpath_l && i!=optind)     DIE("realpath '%s' is empty\n",p);
-
+    log_msg("Realpath is  %s\n",r->rootpath);
+    if (!r->rootpath_l) r->rootpath_l=cg_strlen(realpath(p,r->rootpath));
+    if (!r->rootpath_l && i!=optind){perror("");      DIE("realpath '%s':  %s  is empty\n",p,r->rootpath);}
     ht_set_mutex(mutex_dircache,ht_init(&r->dircache_ht,HT_FLAG_KEYS_ARE_STORED_EXTERN|12));
     ht_set_mutex(mutex_dircachejobs,ht_init(&r->dircache_queue,8));
     assert(r->dircache_queue.keystore==NULL);
     assert((r->dircache_queue.flags&(HT_FLAG_KEYS_ARE_STORED_EXTERN|HT_FLAG_NUMKEY))==0);
+
 #if WITH_DIRCACHE || WITH_STAT_CACHE
 
     ht_set_mutex(mutex_dircache,ht_init_interner_file(&r->dircache_ht_fname,"dircache_ht_fname",_root_n,16,DIRECTORY_CACHE_SIZE));
@@ -2182,7 +2290,9 @@ int main(int argc,char *argv[]){
     ht_set_mutex(mutex_dircache,ht_init_with_keystore_file(&r->dircache_ht_dir,"dircache_ht_dir",_root_n,HT_FLAG_KEYS_ARE_STORED_EXTERN|12,DIRECTORY_CACHE_SIZE));
 #endif
   }/* Loop roots */
+
   {
+    log_msg0("\n\nRoots:\n");
     foreach_root(i,r){
       log_msg("\t%d\t%s\t%s\n",i,rootpath(r),!cg_strlen(rootpath(r))?"":(r->features&ROOT_REMOTE)?"Remote":(r->features&ROOT_WRITABLE)?"Writable":"Local");
     }
@@ -2198,7 +2308,7 @@ int main(int argc,char *argv[]){
 
 
   bool warn=false;
-#define C(var,x) if (var!=x){warn=true;log_msg(RED_WARNING"%s is  %d  instead of  %d\n",#var,var,x); warning(WARN_MISC,#var,"is  %d instead of %d",var,x);}
+#define C(var,x) if (var!=x){warn=true;fprintf(stderr,RED_WARNING"%s is  %d  instead of  %d\n",#var,var,x); warning(WARN_MISC,#var,"is  %d instead of %d",var,x);}
   C(WITH_DIRCACHE,1);
   C(WITH_MEMCACHE,1);
   C(WITH_TRANSIENT_ZIPENTRY_CACHES,1);
@@ -2214,7 +2324,7 @@ int main(int argc,char *argv[]){
   C(DEBUG_DIRCACHE_COMPARE_CACHED,0);
   C(DEBUG_TRACK_FALSE_GETATTR_ERRORS,0);
   C(WITH_AUTOGEN,1);
-  C(WITH_EVICT_FROM_PAGECACHE,1);
+  C(WITH_EVICT_FROM_PAGECACHE,IS_NOT_APPLE);
   C(WITH_EXTRA_ASSERT,0);
   //if (DIRECTORY_CACHE_SIZE*DIRECTORY_CACHE_SEGMENTS<64*1024*1024){ warn=true;log_msg(RED_WARNING"Small file attribute and directory cache of only %d\n",DIRECTORY_CACHE_SEGMENTS*DIRECTORY_CACHE_SEGMENTS/1024);}
   IF1(WITH_AUTOGEN,if (!cg_is_member_of_group("docker")){ log_warn0(HINT_GRP_DOCKER); warn=true;});
@@ -2239,8 +2349,22 @@ int main(int argc,char *argv[]){
   pthread_create(&thread_unblock,NULL,&infloop_unblock,NULL);
   _textbuffer_memusage_lock=_mutex+mutex_textbuffer_usage;
   log_strg("Running fuse_main() ...\n");
+
+
+  /* { */
+  /*   char *new_argv[999]; */
+  /*   new_argv[0]=argv[0]; */
+  /*   int new_argc=argc-colon; */
+  /*   FOR(i,1,new_argc) new_argv[i]=argv[i+colon]; */
+  /*   _fuse_argc=new_argc; */
+  /*   _fuse_argv=new_argv; */
+  /*   for(int i=0;i<new_argc;i++) printf("%d new_argv %s \n",i, new_argv[i]); */
+  /* } */
+
+
+
   const int fuse_stat=fuse_main(_fuse_argc=argc-colon,_fuse_argv=argv+colon,&xmp_oper,NULL);
-  log_msg("fuse_main returned %d\n",fuse_stat);
+  log_msg(RED_WARNING" fuse_main returned %d\n",fuse_stat);
   const char *memleak=malloc(123);
   IF1(DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,IF1(WITH_DIRCACHE,dircache_clear_if_reached_limit_all(true,0xFFFF)));
   exit_ZIPsFS(fuse_stat);
@@ -2267,7 +2391,8 @@ int main(int argc,char *argv[]){
 // ls: cannot access '/s-mcpb-ms03/union/.mountpoints/is/2/PRO2/Data/30-0106/20240330_PRO2_AF_093_50-0139_GCKD-384_P09_H16.d': No such file or directory
 
 
-
 // freiwala@20240404+1109_50-0139_allFiles_PeptideAtlasWithIS_MBR.log.bat
 // ~/Projects/ZIPsFS/test/diann/anja_cannot
-// DIE DIE0 DEBUG_NOW
+// DIE DIE0 DEBUG_NOW fuse_session_exit
+// mkdir rule proc malloc fcntl O_PATH group_member execvpe  posix_fadvise lseek fill_dir_plus  __APPLE__ __clang__ COMMA_FILL_DIR_PLUS
+// log_debug_now log_debug_now0 mmap ys/mman.h  unistd _GNU_SOURCE DEBUG_NOW backtrace execinfo

@@ -179,7 +179,11 @@ static bool config_not_report_stat_error(const char *path,const int path_l){
 ////////////////////////////////////////////////////
 #if WITH_MEMCACHE
 static bool config_advise_cache_zipentry_in_ram(long filesize,const char *path,const int path_l,bool is_compressed){
-  return _is_tdf_or_tdf_bin(path);
+
+  return
+
+    //        ENDSWITH(path,path_l,".wiff2") ||        ENDSWITH(path,path_l,".raw") ||
+    _is_tdf_or_tdf_bin(path);
 }
 #endif //WITH_MEMCACHE
 static bool config_advise_evict_from_filecache(const char *realpath,const int realpath_l, const char *zipentryOrNull, const int zipentry_l){
@@ -276,7 +280,7 @@ static long config_search_file_which_roots(const char *virtualpath,const int vir
 }
 static bool config_readir_no_other_roots(const char *realpath,const int realpath_l){
 #define C(sfx) ENDSWITH(realpath,realpath_l,#sfx)
-  return C(.wiff2.Zip) || C(.wiff.Zip) || C(.rawIdx.Zip) || C(.raw.Zip) || C(.d.Zip);
+    return C(.wiff2.Zip) || C(.wiff.Zip) || C(.rawIdx.Zip) || C(.raw.Zip) || C(.d.Zip);
 #undef C
 }
 ////////////////////////////
@@ -289,3 +293,11 @@ static long config_num_retries_getattr(const char *path, const int path_l,int *s
   }
   return 1;
 }
+
+
+////////////////////////////
+/// File attributes      ///
+////////////////////////////
+  static bool configuration_file_is_readonly(const char *path, const int path_l){
+    return ENDSWITH(path,path_l,".tdf");
+  }

@@ -3,7 +3,6 @@
   Simple buffer for texts
 
 */
-# define _GNU_SOURCE
 #ifndef cg_textbuffer_dot_c
 #define cg_textbuffer_dot_c
 #include <assert.h>
@@ -13,10 +12,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <inttypes.h>
-#include <malloc.h>
+// #include <malloc.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS MAP_ANON
+ #endif  // !MAP_ANONYMOUS
 #include <unistd.h>
 #include <pthread.h>
 #include "cg_utils.c"
@@ -87,27 +89,11 @@ static off_t _textbuffer_copy_to_or_compare(const bool isCopy,const struct textb
       if (f>=to) break;
       if (t>f){
         //log_debug_now("%d) [%d/%d] %ld-%ld  %ld-%ld    dst: %ld count:%ld",invocation,i,b->n,from,to,f,t, f-from, count);
-        if (DEBUG_NOW!=DEBUG_NOW){
-          off_t test=0;
-          for(off_t j=f;j<t;j++){
-            const char c=b->segment[i][j-f0];
-            assert(to-from>j-from);
-            if (isCopy) dst[j-from]=c;
-            else if (dst[j-from]!=c) return 1;
-
-          }
-        }else{
         if (isCopy){
-
           //log_debug_now("%d  memcpy(%ld,  %ld,  %ld)   f0: %ld  f: %ld t: %ld  e0: %ld  mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm .... \n",i, f-from, (f-f0),t-f ,  f0,f,t,e0);
-
-
-
-
           memcpy(dst+f-from,b->segment[i]+(f-f0),t-f);
         }else{
           if (memcmp(dst+f-from,b->segment[i]+(f-f0),t-f)) return 1;
-        }
         }
         count+=(t-f);
       }

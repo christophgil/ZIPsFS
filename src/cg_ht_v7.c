@@ -17,7 +17,6 @@
   Dependencies:
   - cg_mstore_v?.c
 */
-#define _GNU_SOURCE
 #ifndef _ht_dot_c
 #define _ht_dot_c
 #define IF_HT_DEBUG(a) if (ht->flags&HT_FLAG_DEBUG) {a}
@@ -29,7 +28,7 @@
 #include <stddef.h>
 #include <inttypes.h>
 #include <stddef.h>
-#include <malloc.h>
+//#include <malloc.h>
 #include <unistd.h>
 #include "cg_mstore_v2.c"
 #define HT_FLAG_NUMKEY (1U<<30)
@@ -64,7 +63,7 @@ struct ht{
 
   int client_value_int[3];
 };
-#if defined CG_THREAD_METHODS_HT
+#ifdef CG_THREAD_METHODS_HT
 CG_THREAD_METHODS_HT(ht);
 #endif
 
@@ -274,7 +273,7 @@ const void *ht_intern(struct ht *ht,const void *bytes,const off_t bytes_l,ht_has
 static bool ht_only_once(struct ht *ht,const char *s,int s_l){
   if (!s) return false;
   if (!ht) return true;
-  ASSERT(!(ht->flags&HT_FLAG_NUMKEY)); // DEBUG_NOW
+  //ASSERT(!(ht->flags&HT_FLAG_NUMKEY)); // DEBUG_NOW
   if (!s_l) s_l=strlen(s);
   return !ht_set(ht,s,s_l,0,"");
 }

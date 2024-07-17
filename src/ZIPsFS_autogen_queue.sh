@@ -43,8 +43,13 @@ cleanup_tmp(){
     local d
     mkdir -p $DIR_TMP/trash
     for d in $DIR_TMP/*; do
+        local pid=${d##*/}
         [[ ! -e $d ]] && continue
-        [[ -e /proc/${d##*/} ]] && continue
+        if [[ /proc ]];then
+            [[ -e /proc/$pid ]] && continue
+        else
+            ps -p $pid && continue
+        fi
         rm -v $d/*.wiff.1.~idx2
         mv -v  $d $DIR_TMP/trash/
     done
@@ -99,8 +104,8 @@ mk_wiff_scan(){
             chmod +x "$o" # A marker for cleanup
             chmod -w "$o"
             if [[ $o == *.wiff ]]; then
-  #              ln -n -v $o $o.hardlink
- #                ln -n -v $o ${o%/*}/hardlink_${o##*/}.hardlink
+                #              ln -n -v $o $o.hardlink
+                #                ln -n -v $o ${o%/*}/hardlink_${o##*/}.hardlink
                 mkdir -p ${o%/*}/wiff && cp -v $o ${o%/*}/wiff/${o##*/}
                 mkdir -p ${o%/*}/wiff_lnk && ln  -v $o ${o%/*}/wiff/${o##*/}
             fi

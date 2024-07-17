@@ -1,17 +1,29 @@
 # Installation of executable
 
+
 First install the required libraries. The command for Ubuntu Linux:
 
     sudo apt-get install  libfuse3 libzip
 
 A ready-to-use executable for Linux (amd64) is found in the folder
-[RELEASE](./RELEASE/).
+[RELEASE](./RELEASE/). It may or may not work on your system.
 
-# Installation from source code
 
-First install the required libraries. The command for Ubuntu Linux:
+# Quick installation from source code
+
+Install the required libraries. The command for Ubuntu Linux:
 
     sudo apt-get install  libfuse3 libzip libfuse3-dev libzip-dev
+
+For FreeBSD, NetBSD and MacOSX please see find instructions in [RELEASE](./INSTALL_other_than_Linux.html)
+It is likely that the quick installation script will work for you.
+
+    src/ZIPsFS_testing.sh
+
+
+# Installation from source code with make
+
+If this does not work, proceed:
 
 ## OPTIONAL: AUTOCONF
 
@@ -36,10 +48,3 @@ This is usually not necessary.
 # Installation from source code - alternative way
 
 Edit and run the file [src/ZIPsFS.compile.sh](./src/ZIPsFS.compile.sh)
-
-# Other operation systems
-
-- Windows: ZIPsFS is probably not portable to Windows. However, you can run it in a WSL environment.
-
-- MacOSX, Free BSD, Solaris: For those UNIX or UNIX-like OS, only minor adaptations will be necessary.
-  ZIPsFS uses the /proc file system of Linux. This might not be available.

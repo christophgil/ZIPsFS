@@ -1,5 +1,4 @@
 /*  Copyright (C) 2023   christoph Gille   This program can be distributed under the terms of the GNU GPLv3. */
-#define _GNU_SOURCE
 #include "cg_utils.h"
 #ifndef _cg_utils_dot_c
 #define _cg_utils_dot_c
@@ -17,42 +16,38 @@
 #include <math.h>
 #include <stdbool.h>
 
+#include "cg_gnu.c"
 
 /*********************************************************************************/
+static bool has_proc_fs(){
+  struct stat st;
+  static int v;
+  if (!v) v=stat("/proc/self/fd",&st)?-1:1;
+  return v==1;
+}
 
 //////////////
 /// perror ///
 //////////////
-
-static const char *error_symbol(const int x){
 #define C(x)  case x: return #x
+static const char *error_symbol(const int x){
   switch(x){
-    C(EXIT_SUCCESS);
-    C(EPERM); C(ENOENT); C(ESRCH); C(EINTR); C(EIO); C(ENXIO); C(E2BIG); C(ENOEXEC);
-    C(EBADF); C(ECHILD); C(EAGAIN); C(ENOMEM); C(EACCES); C(EFAULT); C(ENOTBLK); C(EBUSY);
-    C(EEXIST); C(EXDEV); C(ENODEV); C(ENOTDIR); C(EISDIR); C(EINVAL); C(ENFILE); C(EMFILE);
-    C(ENOTTY); C(ETXTBSY); C(EFBIG); C(ENOSPC); C(ESPIPE); C(EROFS); C(EMLINK); C(EPIPE);
-    C(EDOM); C(ERANGE); C(EDEADLK); C(ENAMETOOLONG); C(ENOLCK); C(ENOSYS); C(ENOTEMPTY); C(ELOOP);
-    //    C(EWOULDBLOCK);
-    C(ENOMSG); C(EIDRM); C(ECHRNG); C(EL2NSYNC); C(EL3HLT); C(EL3RST); C(ELNRNG);
-    C(EUNATCH); C(ENOCSI); C(EL2HLT); C(EBADE); C(EBADR); C(EXFULL); C(ENOANO); C(EBADRQC);
-    C(EBADSLT);
-    //C(EDEADLOCK);
-    C(EBFONT); C(ENOSTR); C(ENODATA); C(ETIME); C(ENOSR); C(ENONET);
-    C(ENOPKG); C(EREMOTE); C(ENOLINK); C(EADV); C(ESRMNT); C(ECOMM); C(EPROTO); C(EMULTIHOP);
-    C(EDOTDOT); C(EBADMSG); C(EOVERFLOW); C(ENOTUNIQ); C(EBADFD); C(EREMCHG); C(ELIBACC); C(ELIBBAD);
-    C(ELIBSCN); C(ELIBMAX); C(ELIBEXEC); C(EILSEQ); C(ERESTART); C(ESTRPIPE); C(EUSERS); C(ENOTSOCK);
-    C(EDESTADDRREQ); C(EMSGSIZE); C(EPROTOTYPE); C(ENOPROTOOPT); C(EPROTONOSUPPORT); C(ESOCKTNOSUPPORT); C(EOPNOTSUPP); C(EPFNOSUPPORT);
-    C(EAFNOSUPPORT); C(EADDRINUSE); C(EADDRNOTAVAIL); C(ENETDOWN); C(ENETUNREACH); C(ENETRESET); C(ECONNABORTED); C(ECONNRESET);
-    C(ENOBUFS); C(EISCONN); C(ENOTCONN); C(ESHUTDOWN); C(ETOOMANYREFS); C(ETIMEDOUT); C(ECONNREFUSED); C(EHOSTDOWN);
-    C(EHOSTUNREACH); C(EALREADY); C(EINPROGRESS); C(ESTALE); C(EUCLEAN); C(ENOTNAM); C(ENAVAIL); C(EISNAM);
-    C(EREMOTEIO); C(EDQUOT); C(ENOMEDIUM); C(EMEDIUMTYPE); C(ECANCELED); C(ENOKEY); C(EKEYEXPIRED); C(EKEYREVOKED);
-    C(EKEYREJECTED); C(EOWNERDEAD); C(ENOTRECOVERABLE); C(ERFKILL); C(EHWPOISON);
-    //C(ENOTSUP);
+#include "cg_utils_error_codes.c"
   };
   return "?";
-  #undef C
 }
+#ifdef ZIP_ER_OK
+static const char *error_symbol_zip(const int x){
+  switch(x){
+    C(ZIP_ER_OK); C(ZIP_ER_MULTIDISK); C(ZIP_ER_RENAME); C(ZIP_ER_CLOSE); C(ZIP_ER_SEEK); C(ZIP_ER_READ); C(ZIP_ER_WRITE); C(ZIP_ER_CRC); C(ZIP_ER_ZIPCLOSED); C(ZIP_ER_NOENT);
+    C(ZIP_ER_EXISTS); C(ZIP_ER_OPEN); C(ZIP_ER_TMPOPEN); C(ZIP_ER_ZLIB); C(ZIP_ER_MEMORY); C(ZIP_ER_CHANGED);
+    C(ZIP_ER_COMPNOTSUPP); C(ZIP_ER_EOF); C(ZIP_ER_INVAL); C(ZIP_ER_NOZIP); C(ZIP_ER_INTERNAL); C(ZIP_ER_INCONS); C(ZIP_ER_REMOVE); C(ZIP_ER_DELETED); C(ZIP_ER_ENCRNOTSUPP); C(ZIP_ER_RDONLY); C(ZIP_ER_NOPASSWD);
+    C(ZIP_ER_WRONGPASSWD); C(ZIP_ER_OPNOTSUPP); C(ZIP_ER_INUSE); C(ZIP_ER_TELL); C(ZIP_ER_COMPRESSED_DATA);C(ZIP_ER_CANCELLED);
+  };
+  return "?";
+}
+#endif //defined ZIP_ER_OK
+#undef C
 
 
 
@@ -108,6 +103,8 @@ static bool cg_endsWithDotD(const char *s, int len){
   if(!len)len=cg_strlen(s);
   return s && ENDSWITHI(s,len,".d");
 }
+
+
 /*
   static bool equalsSlash(const char *s){
   return s && *s=='/' && !s[1];
@@ -220,7 +217,7 @@ static int cg_pathlen_ignore_trailing_slash(const char *p){
   return n && p[n-1]=='/'?n-1:n;
 }
 static bool cg_path_equals_or_is_parent(const char *subpath,const int subpath_l,const char *path,const int path_l){
-  return subpath && path && (subpath_l==path_l||subpath_l<path_l && path[subpath_l]=='/') && !memcmp(path,subpath,subpath_l);
+  return subpath && path && (subpath_l==path_l||(subpath_l<path_l&&path[subpath_l]=='/')) && !memcmp(path,subpath,subpath_l);
 }
 
 enum validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHARS_NUM};
@@ -260,8 +257,10 @@ static int cg_find_invalidchar(enum validchars type,const char *s,const int len)
 
 static int cg_path_for_fd(const char *title, char *path, int fd){
   *path=0;
+  if (!has_proc_fs()) return 1;
   char buf[99];
   sprintf(buf,"/proc/self/fd/%d",fd);
+
   const ssize_t n=readlink(buf,path, MAX_PATHLEN-1);
   if (n<0){
     log_errno("\n%s  %s: ",snull(title),buf);
@@ -272,9 +271,11 @@ static int cg_path_for_fd(const char *title, char *path, int fd){
 
 static int cg_count_fd_this_prg(){
   int n=0;
-  DIR *dir=opendir("/proc/self/fd");
-  while(readdir(dir)) n++;
-  closedir(dir);
+  if (has_proc_fs()){
+    DIR *dir=opendir("/proc/self/fd");
+    while(readdir(dir)) n++;
+    closedir(dir);
+  }
   return n;
 }
 
@@ -294,16 +295,19 @@ static bool cg_check_path_for_fd(const char *title, const char *path, int fd){
 
 static void cg_print_path_for_fd(int fd){
   char buf[99],path[512];
-  sprintf(buf,"/proc/self/fd/%d",fd);
-  const ssize_t n=readlink(buf,path,511);
-  if (n<0){
-    log_errno("%s  No path",buf);
+  if (!has_proc_fs()){
+    fprintf(stderr,ERROR_MSG_NO_PROC_FS"\n");
   }else{
-    path[n]=0;
-    fprintf(stderr,"Path for %d:  %s\n",fd,path);
+    sprintf(buf,"/proc/self/fd/%d",fd);
+    const ssize_t n=readlink(buf,path,511);
+    if (n<0){
+      log_errno("%s  No path",buf);
+    }else{
+      path[n]=0;
+      fprintf(stderr,"Path for %d:  %s\n",fd,path);
+    }
   }
 }
-
 ///////////////////
 /// Arithmetics ///
 ///////////////////
@@ -358,10 +362,10 @@ static void cg_log_file_mode(mode_t m){
 #define cg_log_file_stat(...) _cg_log_file_stat(__func__,__VA_ARGS__)
 static void _cg_log_file_stat(const char *fn,const char * name,const struct stat *s){
   char *color=ANSI_FG_BLUE;
-#if defined SHIFT_INODE_ROOT
+#ifdef SHIFT_INODE_ROOT
   if (s->st_ino>(1L<<SHIFT_INODE_ROOT)) color=ANSI_FG_MAGENTA;
 #endif
-  fprintf(stderr,"%s() %s  size=%ld blksize=%ld blocks=%ld links=%u inode=%s%lu"ANSI_RESET" dir=%s uid=%u gid=%u ",fn,name,s->st_size,s->st_blksize,s->st_blocks,  (uint32_t) s->st_nlink,color,s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
+  fprintf(stderr,"%s() %s  size=%lld blksize=%lld blocks=%lld links=%u inode=%s%llu"ANSI_RESET" dir=%s uid=%u gid=%u ",fn,name,(LLD)s->st_size,(LLD)s->st_blksize,(LLD)s->st_blocks,  (uint32_t) s->st_nlink,color,(LLU)s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
   //st_blksize st_blocks f_bsize
   cg_log_file_mode(s->st_mode);
   fputc('\n',stderr);
@@ -369,7 +373,30 @@ static void _cg_log_file_stat(const char *fn,const char * name,const struct stat
 static void cg_log_open_flags(int flags){
   fprintf(stderr,"flags=%x{",flags);
 #define C(a) if (flags&a) fprintf(stderr,#a" ")
-  C(O_RDONLY); C(O_WRONLY);C(O_RDWR);C(O_APPEND);C(O_ASYNC);C(O_CLOEXEC);C(O_CREAT);C(O_DIRECT);C(O_DIRECTORY);C(O_DSYNC);C(O_EXCL);C(O_LARGEFILE);C(O_NOATIME);C(O_NOCTTY);C(O_NOFOLLOW);C(O_NONBLOCK);C(O_NDELAY);C(O_PATH);C(O_SYNC);C(O_TMPFILE);C(O_TRUNC);
+  C(O_RDONLY); C(O_WRONLY);C(O_RDWR);C(O_APPEND);C(O_CLOEXEC);C(O_CREAT);C(O_DIRECTORY);C(O_DSYNC);C(O_EXCL);C(O_NOCTTY);C(O_NOFOLLOW);C(O_NONBLOCK);C(O_SYNC);C(O_TRUNC);
+#ifdef O_DIRECT
+  C(O_DIRECT);
+#endif
+#ifdef O_PATH
+  C(O_PATH);
+#endif
+#ifdef O_LARGEFILE
+  C(O_LARGEFILE);
+#endif
+
+#ifdef O_NOATIME
+  C(O_NOATIME);
+#endif
+#ifdef O_TMPFILE
+  C(O_TMPFILE);
+#endif
+#ifdef O_ASYNC
+  C(O_ASYNC);
+#endif
+#ifdef O_NDELAY
+  C(O_NDELAY);
+#endif
+
 #undef C
   fputc('}',stderr);
 }
@@ -397,6 +424,7 @@ static bool cg_is_stat_mode(const mode_t mode,const char *f){
   struct stat st={0};
   return !lstat(f,&st) &&  (st.st_mode&S_IFMT)==mode;
 }
+
 static bool cg_access_from_stat(const struct stat *stats,int mode){ // equivaletn to access(path,mode)
   int granted;
   mode&=(X_OK|W_OK|R_OK);
@@ -406,7 +434,7 @@ static bool cg_access_from_stat(const struct stat *stats,int mode){ // equivalet
   if (mode==F_OK) return 0;
   if (getuid()==stats->st_uid)
     granted=(unsigned int) (stats->st_mode&(mode<<6))>>6;
-  else if (getgid()==stats->st_gid || group_member(stats->st_gid))
+  else if (getgid()==stats->st_gid || cg_group_member(stats->st_gid))
     granted=(unsigned int) (stats->st_mode&(mode<<3))>>3;
   else
     granted=(stats->st_mode&mode);
@@ -473,11 +501,16 @@ static bool _cg_recursive_mkdir(const bool parentOnly,const char *path){
 
 
 static void log_list_filedescriptors(const int fd){
-  const pid_t pid0=getpid();
-  if (!fork()){
-    char path[33];
-    sprintf(path,"/proc/%d/fd",pid0);
-    execl("/usr/bin/ls","/usr/bin/ls",path);
+  if (!has_proc_fs()){
+    fprintf(stderr,ERROR_MSG_NO_PROC_FS"n");
+  }else{
+
+    const pid_t pid0=getpid();
+    if (!fork()){
+      char path[33];
+      sprintf(path,"/proc/%d/fd",pid0);
+      execl("/usr/bin/ls","/usr/bin/ls",path,NULL);
+    }
   }
 }
 
@@ -489,7 +522,7 @@ static char *cg_copy_path(char *dst,const char *src){
     strcpy(dst,src);
   }
   return dst;
- }
+}
 
 ///////////////////
 ///    time     ///
@@ -549,7 +582,7 @@ static bool cg_log_exec_fd(const int fd,  char * const env[],  char * const cmd[
       cg_fd_write_str(fd,j?"ENVIRONMENT VARIABLES:\n":"COMMAND-LINE:\n");
       while(*s){
         cg_fd_write_str(fd,"  ");
-const char quote=cg_find_invalidchar(VALIDCHARS_NOQUOTE,*s,strlen(*s))<0?0 :strchr(*s,'\'')||strchr(*cmd,'\\')?'"':'\'';
+        const char quote=cg_find_invalidchar(VALIDCHARS_NOQUOTE,*s,strlen(*s))<0?0 :strchr(*s,'\'')||strchr(*cmd,'\\')?'"':'\'';
         if (quote) write(fd,&quote,1);
         cg_fd_write_str(fd,*s++);
         if (quote) write(fd,&quote,1);
@@ -607,13 +640,18 @@ static int cg_waitpid_logtofile_return_exitcode(int pid,const char *err){
 }
 
 // #pragma GCC diagnostic ignored "-Wunused-variable" //__attribute__((unused));
+
 static void cg_exec(char * const env[],char *cmd[],const int fd_out,const int fd_err){
   if(fd_out>0) dup2(fd_out,STDOUT_FILENO);
   if(fd_err>0) dup2(fd_err,STDERR_FILENO);
   if(fd_out>0) close(fd_out);
   if(fd_err>0 && fd_err!=fd_out) close(fd_err);
   cg_log_exec_fd(STDERR_FILENO,env,cmd);
-  if (env && env[0]) execvpe(cmd[0],cmd,env); else execvp(cmd[0],cmd);
+  #if HAS_UNDERSCORE_ENVIRON
+  extern char **_environ;
+  if (env) _environ=(char**)env;
+  #endif
+  execvp(cmd[0],cmd);
   EXIT(EPIPE);
 }
 
@@ -651,7 +689,7 @@ static int differs_filecontent_from_string(const int opt,const char* path, const
 #endif // _cg_utils_dot_c
 // 1111111111111111111111111111111111111111111111111111111111111
 #if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__==0
-int main(int argc, char *argv[]){
+
   {  char m[10]; memset(m,9,10000); return 0;}
   switch(8){
   case 0:{

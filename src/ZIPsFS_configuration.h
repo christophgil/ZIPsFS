@@ -83,7 +83,7 @@
 #define WITH_STAT_CACHE 1
 // Activate a cache for file attributes of files and ZIP entries.
 
-#define WITH_EVICT_FROM_PAGECACHE 1
+#define WITH_EVICT_FROM_PAGECACHE IS_NOT_APPLE
 
 ////////////
 /// Size ///
@@ -103,7 +103,7 @@
 
 #define ROOT_WARN_STATFS_TOOK_LONG_SECONDS 3 /* Remote roots are probed periodically using statfs() */
 #define ROOT_LAST_RESPONSE_MUST_BE_WITHIN_SECONDS 6 /* Roots which have rosponded within the last n seconds are used. */
-#define ROOT_SKIP_UNLESS_RESPONDED_WITHIN_SECONDS 100 // Not responded within n seconds - skip this root
+#define ROOT_SKIP_UNLESS_RESPONDED_WITHIN_SECONDS 20 // Not responded within n seconds - skip this root
 
 ////////////
 /// Time ///

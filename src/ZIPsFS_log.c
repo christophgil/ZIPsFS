@@ -248,18 +248,15 @@ static int log_print_fuse_argv(int n){
   return n;
 }
 static int log_print_roots(int n){
-  PRINTINFO("<H1>Roots</H1>\n<TABLE border=\"1\"><THEAD><TR>"TH("Path")TH("Writable")TH("Response")TH("Blocked")TH("Free[GB]")TH("Dir-Cache[kB]")TH("# entries in stat queue ")"</TR></THEAD>\n");
+  PRINTINFO("<H1>Roots</H1>\n<TABLE border=\"1\"><THEAD><TR>"TH("Path")TH("Writable")TH("Last response")TH("Blocked")TH("Free[GB]")TH("Dir-Cache[kB]")TH("# entries in stat queue ")"</TR></THEAD>\n");
   foreach_root(i,r){
-    const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30),diff=deciSecondsSinceStart()-r->pthread_when_loop_deciSec[PTHREAD_RESPONDING];
-
+    const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30), last_response=deciSecondsSinceStart()-r->pthread_when_loop_deciSec[PTHREAD_RESPONDING];
+    //10L*(last_response>ROOT_OBSERVE_EVERY_MSECONDS_RESPONDING*10/1000*3?last_response:r->statfs_took_deciseconds)
     PRINTINFO("<TR>"sTDl()sTDc(),rootpath(r),yes_no(f&ROOT_WRITABLE));
-    if (f&ROOT_REMOTE) PRINTINFO(TD("%'ld ms")TD("%'ux / &sum; %'u s"), 10L*(diff>ROOT_OBSERVE_EVERY_MSECONDS_RESPONDING*10/1000*3?diff:r->statfs_took_deciseconds),r->log_count_delayed,r->log_count_delayed_periods*_wait_for_root_timeout_sleep/1000000);
+    if (f&ROOT_REMOTE) PRINTINFO(TD("%'d s ago")TD("%'u times"), last_response/10,r->log_count_delayed);
     else PRINTINFO(TD("Local")TD(""));
     uint64_t u=0; IF1(WITH_DIRCACHE,LOCK(mutex_dircache, u=mstore_usage(DIRCACHE(r))/1024));
     PRINTINFO(dTD()zTD()dTD()"</TR>\n",freeGB,u,IF1(WITH_STAT_SEPARATE_THREADS,debug_statqueue_count_entries(r))IF0(WITH_STAT_SEPARATE_THREADS,0));
-
-
-
   }
   PRINTINFO("</TABLE>\n");
   return n;
@@ -284,22 +281,26 @@ static int print_bar(int n,float rel){
 //////////////////
 /// Linux only ///
 //////////////////
-#ifdef __linux__
+#if IS_LINUX
 static int print_proc_status(int n,char *filter,int *val){
   PRINTINFO("<B>/proc/%ld/status</B>\n<PRE>\n", (long)getpid());
-  char buffer[1024]="";
-  FILE* file=fopen("/proc/self/status","r");
-  while (fscanf(file,"%1023s",buffer)==1){
-    for(char *f=filter;*f;f++){
-      if ((f==filter || f[-1]=='|') && !strcmp(buffer,f)){
-        fscanf(file," %d",val);
-        if (n>0) PRINTINFO("%s %'d kB\n",buffer,*val);
-        break;
+  if (!has_proc_fs()){
+    PRINTINFO(ERROR_MSG_NO_PROC_FS"\n");
+  }else{
+    char buffer[1024]="";
+    FILE* file=fopen("/proc/self/status","r");
+    while (fscanf(file,"%1023s",buffer)==1){
+      for(char *f=filter;*f;f++){
+        if ((f==filter || f[-1]=='|') && !strcmp(buffer,f)){
+          fscanf(file," %d",val);
+          if (n>0) PRINTINFO("%s %'d kB\n",buffer,*val);
+          break;
+        }
       }
     }
+    PRINTINFO("</PRE>\n");
+    fclose(file);
   }
-  PRINTINFO("</PRE>\n");
-  fclose(file);
   return n;
 }
 static void log_virtual_memory_size(){
@@ -309,54 +310,64 @@ static void log_virtual_memory_size(){
 
 static int log_print_open_files(int n, int *fd_count){
   PRINTINFO("<H1>All OS-level file handles</H1>\n(Should be almost empty if idle).<BR>");
-  static char path[256];
-  struct dirent *dp;
-  DIR *dir=opendir("/proc/self/fd/");
-  PRINTINFO("<OL>\n");
-  for(int i=0;(dp=readdir(dir));i++){
-    if (fd_count) (*fd_count)++;
-    if (n<0 || atoi(dp->d_name)<4) continue;
-    static char proc_path[PATH_MAX];
-    snprintf(proc_path,PATH_MAX,"/proc/self/fd/%s",dp->d_name);
-    const int l=readlink(proc_path,path,255);path[MAX(l,0)]=0;
-    if (cg_endsWith(path,0,SPECIAL_FILES[SFILE_LOG_WARNINGS],0)||!strncmp(path,"/dev/",5)|| !strncmp(path,"/proc/",6) || !strncmp(path,"pipe:",5)) continue;
-    PRINTINFO("<LI>%47s %s</LI>\n",proc_path,path);
+  if (!has_proc_fs()){
+    PRINTINFO(ERROR_MSG_NO_PROC_FS"\n");
+  }else{
+
+    static char path[256];
+    struct dirent *dp;
+    DIR *dir=opendir("/proc/self/fd/");
+    PRINTINFO("<OL>\n");
+    for(int i=0;(dp=readdir(dir));i++){
+      if (fd_count) (*fd_count)++;
+      if (n<0 || atoi(dp->d_name)<4) continue;
+      static char proc_path[PATH_MAX];
+      snprintf(proc_path,PATH_MAX,"/proc/self/fd/%s",dp->d_name);
+      const int l=readlink(proc_path,path,255);path[MAX(l,0)]=0;
+      if (cg_endsWith(path,0,SPECIAL_FILES[SFILE_LOG_WARNINGS],0)||!strncmp(path,"/dev/",5)|| !strncmp(path,"/proc/",6) || !strncmp(path,"pipe:",5)) continue;
+      PRINTINFO("<LI>%47s %s</LI>\n",proc_path,path);
+    }
+    closedir(dir);
+    PRINTINFO("</OL>\n");
   }
-  closedir(dir);
-  PRINTINFO("</OL>\n");
   return n;
 }
 
 // TODO Error in sscanf
 static int print_maps(int n){
   PRINTINFO("<H1>/proc/%ld/maps</H1>\n", (long)getpid());
-  size_t total=0;
-  FILE *f=fopen("/proc/self/maps","r");
-  if(!f) {
-    PRINTINFO("/proc/self/maps: %s\n",strerror(errno));
-    return n;
+  if (!has_proc_fs()){
+    PRINTINFO(ERROR_MSG_NO_PROC_FS"\n");
+  }else{
+
+    size_t total=0;
+    FILE *f=fopen("/proc/self/maps","r");
+    if(!f) {
+      PRINTINFO("/proc/self/maps: %s\n",strerror(errno));
+      return n;
+    }
+    PRINTINFO("<TABLE border=\"1\">\n<THEAD><TR>"TH("Addr&gt;&gt;12")TH("Name")TH("kB")TH("")"</TR></THEAD>\n");
+    const int L=333;
+    while(!feof(f)) {
+      char buf[PATH_MAX+100],perm[5],dev[6],mapname[PATH_MAX]={0};
+      uint64_t begin,end,inode,foo;
+      if(fgets(buf,sizeof(buf),f)==0) break;
+      *mapname=0;
+      //    %*[^\n]\n   /home/cgille/tmp/map.txt
+      const int k=sscanf(buf, "%lx-%lx %4s %lx %5s %lu %100s",&begin,&end,perm,&foo,dev, &inode,mapname);
+      if (k>=6){
+        const int64_t size=end-begin;
+        total+=size;
+        if (!strchr(mapname,'/') && size>=SIZE_CUTOFF_MMAP_vs_MALLOC){
+          PRINTINFO("<TR>"TD("%08lx")sTDl()""lTD()"<TD>",begin>>12,mapname,size>>10);
+          n=repeat_chars_info(n,'-',MIN_int(L,(int)(3*log(size))));
+          PRINTINFO("</TD></TR>\n");
+        }
+      }else warning(WARN_FORMAT,buf,"sscanf scanned n=%d",k);
+    }
+    fclose(f);
+    PRINTINFO("<TFOOT><TR>"TD("")TD("")TD("%'lu")TD("")"</TR></TFOOT>\n</TABLE>\n",total>>10);
   }
-  PRINTINFO("<TABLE border=\"1\">\n<THEAD><TR>"TH("Addr&gt;&gt;12")TH("Name")TH("kB")TH("")"</TR></THEAD>\n");
-  const int L=333;
-  while(!feof(f)) {
-    char buf[PATH_MAX+100],perm[5],dev[6],mapname[PATH_MAX]={0};
-    uint64_t begin,end,inode,foo;
-    if(fgets(buf,sizeof(buf),f)==0) break;
-    *mapname=0;
-    //    %*[^\n]\n   /home/cgille/tmp/map.txt
-    const int k=sscanf(buf, "%lx-%lx %4s %lx %5s %lu %100s",&begin,&end,perm,&foo,dev, &inode,mapname);
-    if (k>=6){
-      const int64_t size=end-begin;
-      total+=size;
-      if (!strchr(mapname,'/') && size>=SIZE_CUTOFF_MMAP_vs_MALLOC){
-        PRINTINFO("<TR>"TD("%08lx")sTDl()""lTD()"<TD>",begin>>12,mapname,size>>10);
-        n=repeat_chars_info(n,'-',MIN_int(L,(int)(3*log(size))));
-        PRINTINFO("</TD></TR>\n");
-      }
-    }else warning(WARN_FORMAT,buf,"sscanf scanned n=%d",k);
-  }
-  fclose(f);
-  PRINTINFO("<TFOOT><TR>"TD("")TD("")TD("%'lu")TD("")"</TR></TFOOT>\n</TABLE>\n",total>>10);
   return n;
 }
 
@@ -388,22 +399,25 @@ static int log_print_memory(int n){
     PRINTINFO("</UL>\n");
   }
   {
-#ifdef __linux__
+#if IS_LINUX
     struct rlimit rl={0}; getrlimit(RLIMIT_AS,&rl);
     const bool rlset=rl.rlim_cur!=-1;
     int val=-1;print_proc_status(-1,"VmSize:",&val);
     //if(rlset)  n=print_bar(n,val*1024/(.01+rl.rlim_cur));
-    PRINTINFO("Virt memory %'d MB",val>>10);
+    PRINTINFO("Virt memory: %'d MB",val>>10);
     if(rlset) PRINTINFO(" / rlimit %zu MB<BR>\n",rl.rlim_cur>>20);
 #endif
   }
 
+#if IS_LINUX
+#include <malloc.h>
 #if defined __GLIBC__ && __GLIBC__>=2 && __GLIBC_MINOR__>=33
 #define MALLINFO() mallinfo2()
 #else
 #define MALLINFO() mallinfo()
 #endif
   PRINTINFO("uordblks: %'jd bytes (Total allocated heap space)\n",(intmax_t)MALLINFO().uordblks);
+#endif // IS_LINUX
   {
     int val; n=print_proc_status(n,"VmRSS:|VmHWM:|VmSize:|VmPeak:",&val);
   }
@@ -543,6 +557,8 @@ static bool fhdata_not_yet_logged(unsigned int flag,struct fhdata *d){
   return true;
 }
 static void log_fuse_process(){
+  if (!has_proc_fs()) return;
+
   struct fuse_context *fc=fuse_get_context();
   const int BUF=333;
   char buf[BUF+1];
@@ -567,10 +583,10 @@ Options and arguments before the colon are interpreted by ZIPsFS.  Those after t
       -h Print usage.\n\
       -q quiet, no debug messages to stdout\n\
          Without the option -f (foreground) all logs are suppressed anyway.\n\
-      -c [",stderr);
-    //  for(char **s=WHEN_MEMCACHE_S;*s;s++){if (s!=WHEN_MEMCACHE_S) putchar('|');fputs(*s,stderr);}
-    IF1(WITH_MEMCACHE,for(int i=0;WHEN_MEMCACHE_S[i];i++){ if (i) putchar('|');fputs(WHEN_MEMCACHE_S[i],stderr);});
-    fputs("]    When to read zip entries into RAM\n\
+      -c  ",stderr);
+  //  for(char **s=WHEN_MEMCACHE_S;*s;s++){if (s!=WHEN_MEMCACHE_S) putchar('|');fputs(*s,stderr);}
+  IF1(WITH_MEMCACHE,for(int i=0;WHEN_MEMCACHE_S[i];i++){ if (i) putc('|',stderr);fputs(WHEN_MEMCACHE_S[i],stderr);});
+  fputs("    When to read zip entries into RAM\n\
          seek: When the data is not read continuously\n\
          rule: According to rules based on the file name encoded in configuration.h\n\
          The default is when backward seeking would be requires otherwise\n\
@@ -578,7 +594,7 @@ Options and arguments before the colon are interpreted by ZIPsFS.  Those after t
       -l Limit memory usage for caching ZIP entries.\n\
          Without caching, moving read positions backwards for an non-seek-able ZIP-stream would require closing, reopening and skipping.\n\
          To avoid this, the limit is multiplied with factor 1.5 in such cases.\n\n",stderr);
-    fputs(ANSI_UNDERLINE"Fuse options:"ANSI_RESET"These options are given after a colon.\n\n\
+  fputs(ANSI_UNDERLINE"Fuse options:"ANSI_RESET"These options are given after a colon.\n\n\
  -d Debug information\n\
  -f File system should not detach from the controlling terminal and run in the foreground.\n\
  -s Single threaded mode. Maybe tried in case the default mode does not work properly.\n\

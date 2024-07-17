@@ -1,15 +1,18 @@
 /*  Copyright (C) 2023   christoph Gille   This program can be distributed under the terms of the GNU GPLv3. */
-#define _GNU_SOURCE
+
 #ifndef _cg_debug_dot_c
 #define _cg_debug_dot_c
 #include "cg_utils.c"
 #include "cg_stacktrace.c"
 #include <sys/resource.h>
+
+
 static char *path_of_this_executable(){
   static char* _p;
   if (!_p){
     char p[512];
-    p[readlink("/proc/self/exe",p, 511)]=0;
+    *p=0;
+    if (has_proc_fs()) p[readlink("/proc/self/exe",p, 511)]=0;
     _p=strdup(p);
   }
   return _p;
@@ -37,6 +40,13 @@ static void enable_core_dumps(){
 ////////////////////////////////////
 /// recognize certain file names ///
 ////////////////////////////////////
+
+
+
+static bool filepath_contains_blocking(const char *p){
+  return p && strstr(p,"blocking");
+}
+
 static bool tdf_or_tdf_bin(const char *p){
   const int p_l=cg_strlen(p);
   return cg_endsWith(p,p_l,".tdf",4) || cg_endsWith(p,p_l,".tdf_bin",8);

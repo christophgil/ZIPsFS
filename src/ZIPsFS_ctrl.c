@@ -217,7 +217,7 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
               G();
               e();
             }else{
-              log_debug_now0("F_BAD_LOCK");
+              //log_debug_now0("F_BAD_LOCK");
               p();
               cg_thread_assert_not_locked(mutex_fhdata);
               log_strg(GREEN_SUCCESS"\n");
