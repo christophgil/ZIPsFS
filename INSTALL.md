@@ -9,7 +9,8 @@ A ready-to-use executable for Linux (amd64) is found in the folder
 [RELEASE](./RELEASE/). It may or may not work on your system.
 
 
-# Quick installation from source code
+
+# Dependencies
 
 Install the required libraries. The command for Ubuntu Linux:
 
@@ -17,6 +18,9 @@ Install the required libraries. The command for Ubuntu Linux:
 
 For FreeBSD, NetBSD and MacOSX please see find instructions in [INSTALL_other_than_Linux](./INSTALL_other_than_Linux.md)
 It is likely that the quick installation script will work for you.
+
+
+# Quick installation from source code
 
     src/ZIPsFS_testing.sh
 
