@@ -58,8 +58,8 @@ Then install ZIPsFS in the normal way.
 
 # MacOSX
 
-## Install FUSE
 
+Download and install MacPorts https://www.macports.org/
 Download and install macFUSE https://osxfuse.github.io/
 
 Open terminal and run:
@@ -90,8 +90,3 @@ The -f option means that bindfs runs in foreground.
 In another terminal check whether you see the content of the home directory at the mount point.
 
      ls ~/mnt/test_bindfs
-
-
-## Dependencies
-
-Download and install MacPorts https://www.macports.org/
