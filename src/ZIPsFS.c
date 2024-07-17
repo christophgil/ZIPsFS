@@ -18,7 +18,7 @@
  #ifndef MAP_ANONYMOUS
  #define MAP_ANONYMOUS MAP_ANON
  #endif  // !MAP_ANONYMOUS
-#include "cg_utils_early.h"
+#include "cg_os_dependencies.h"
 #include "config.h"
 #include <dirent.h>
 #include <sys/un.h>

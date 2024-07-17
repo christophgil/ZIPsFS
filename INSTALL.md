@@ -26,15 +26,17 @@ First install the required libraries and packages.
  - libfuse3-dev
  - libzip-dev
  - build-essential (The C compiler and make)
+ - autoconf
 
 For FreeBSD, NetBSD and MacOSX please see instructions in [INSTALL_other_than_Linux](./INSTALL_other_than_Linux.md)
-It is likely that the quick installation script will work for you.
+
 
 
 # Quick installation from source code
 
-    src/ZIPsFS_testing.sh
+First give  the quick installation script a try:
 
+    src/ZIPsFS.compile.sh
 
 # Installation from source code with make
 
@@ -59,3 +61,25 @@ This is usually not necessary.
 
     cd src
     make
+
+
+# Testing the installed ZIPsFS
+
+    src/ZIPsFS_testing.sh  <Path to ZIPsFS executable>
+
+
+# TroubleShooting
+
+Solving problems might be easiest  by adapting the simple installation script.
+
+    src/ZIPsFS.compile.sh
+
+Are the shared libraries found on the system?
+The option -fuse3 refers to libfuse3.so. Is this found in the library search paths.
+Are the include files in the include file search paths?
+
+
+
+Maybe this file requires adaptations for your OS:
+
+    cg_os_dependencies.h

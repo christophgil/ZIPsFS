@@ -5,8 +5,8 @@ _GNU_SOURCE is the only one you should ever define yourself.
 
 
 */
-#ifndef _cg_utils_early_dot_h
-#define _cg_utils_early_dot_h
+#ifndef _cg_os_dependencies_dot_h
+#define _cg_os_dependencies_dot_h
 
 
 #define HAS_FUSE_LSEEK 1
@@ -86,4 +86,4 @@ _GNU_SOURCE is the only one you should ever define yourself.
 #  define _XOPEN_SOURCE 700  /* Standard  X/Open 7, incorporating POSIX 2017   For pread()/pwrite()/utimensat() */
 #endif
 
-#endif // _cg_utils_early_dot_h
+#endif // _cg_os_dependencies_dot_h

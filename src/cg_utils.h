@@ -1,6 +1,6 @@
 #ifndef _cg_utils_dot_h
 #define _cg_utils_dot_h
-#include "cg_utils_early.h"
+#include "cg_os_dependencies.h"
 
 
 
