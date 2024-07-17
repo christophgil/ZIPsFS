@@ -1,20 +1,20 @@
 # MS-Windows
 
-Run it in a WSL environment.
+Install ZIPsFS in a WSL environment.
 
 
 # FreeBSD
 
 Please install
 
-  pkg install fuse-zip lynx tmux sysutils/fusefs-libs3 libzip bash
+    pkg install fuse-zip lynx tmux sysutils/fusefs-libs3 libzip bash
 
 ## Set up FUSE
 
 Now check whether fuse file systems work as root. fuse-zip is a simple FUSE file system for testing.
 
-   mkdir -p ~/mnt/test_fuse
-   fuse-zip  <path-any-zip-file> ~/mnt/test_fuse
+    mkdir -p ~/mnt/test_fuse
+    fuse-zip  <path-any-zip-file> ~/mnt/test_fuse
 
 If it does not please check fuse kernel module
 
@@ -41,7 +41,7 @@ Now check whether fuse-zip  works as a non-root user. If not run as root
 
 # NetBSD
 
-  pkg_add zip unzip libzip fuse-unionfs perfuse bash
+    pkg_add zip unzip libzip fuse-unionfs perfuse bash
 
 
 First get fuse-unionfs to work.
