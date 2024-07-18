@@ -44,29 +44,13 @@ First give  the quick installation script a try:
 
     src/ZIPsFS.compile.sh
 
-If this does not work, proceed:
+
 
 # Installation from source code with autotools
 
-This is not yet perfect.
-For NetBSD and Apple you need to replace fuse3 by fuse in configure.ac.
-
-
-
-The following will Re-generating the file ./configure from configure.ac and Makefile.am
-This is usually not necessary.
-
-    aclocal
-    autoconf
-    automake --add-missing
-
-Create src/Makefile
-
-     autoreconf -vif # Usually not required
+If above did not work, try this:
+This will currently install only for systems with fuse3 i.e. Linux and FreeBSD
     ./configure
-
-Running Make
-
     cd src
     make
 

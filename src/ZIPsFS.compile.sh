@@ -61,7 +61,11 @@ NOWARN="-Wno-format-truncation -Wno-string-compare"
         gcc  $NOWARN -DHAVE_CONFIG_H  $I  -O0 -D_FILE_OFFSET_BITS=64 -rdynamic -ggdb  $dir/ZIPsFS.c   $LP $LL -o $dir/../ZIPsFS
     fi
 } # 2>&1 | HL_ERROR
-ls -l -h $dir/ZIPsFS.h  $dir/../ZIPsFS
+if ls -l -h $dir/../ZIPsFS;then
+    echo $'\e[32m' 'Success' $'\e[0m'
+else
+    echo $'\e[31m' 'Failed' $'\e[0m'
+fi
 echo LL=$LL
 echo as=$as
 echo WITH_SANITIZER=$WITH_SANITIZER
