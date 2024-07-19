@@ -9,6 +9,7 @@
 // (defun Copy_working() (interactive) (shell-command (concat  (file-name-directory (buffer-file-name) ) "Copy_working.sh")))
 // (buffer-filepath)
 //__asm__(".symver realpath,realpath@GLIBC_2.2.5");
+
 #define FUSE_USE_VERSION 31
 #undef _GNU_SOURCE
 #include <sys/types.h> // ????
@@ -1434,6 +1435,8 @@ static struct fhdata* fhdata_get(const char *path,const uint64_t fh){
 /// Auto-Generated files             ///
 ///////////////////////////////////
 /* ******************************************************************************** */
+// FUSE when   Added enum fuse_readdir_flags
+// 2.9 not yet
 #define READDIR_AUTOGEN (1<<0)
 #if IS_ORIG_FUSE
 #define COMMA_FILL_DIR_PLUS ,0
@@ -1612,8 +1615,10 @@ static int realpath_mk_parent(char *realpath,const char *path){
   return 0;
 }
 /********************************************************************************/
+// FUSE FUSE 3.0.0rc3 The high-level init() handler now receives an additional struct fuse_config pointer that can be used to adjust high-level API specific configuration options.
 #define DO_LIBFUSE_CACHE_STAT 0
 #if IS_ORIG_FUSE
+
 static void *xmp_init(struct fuse_conn_info *conn IF1(IS_ORIG_FUSE,,struct fuse_config *cfg)){
   //void *x=fuse_apply_conn_info_opts;  //cfg->async_read=1;
   cfg->use_ino=1;
@@ -1624,6 +1629,8 @@ static void *xmp_init(struct fuse_conn_info *conn IF1(IS_ORIG_FUSE,,struct fuse_
 #endif
 /////////////////////////////////////////////////
 // Functions where Only single paths need to be  substituted
+
+// Release FUSE 2.9 The chmod, chown, truncate, utimens and getattr handlers of the high-level API now all receive an additional struct fuse_file_info pointer (which, however, may be NULL even if the file is currently open).
 #if IS_ORIG_FUSE
 #define PARA_GETATTR ,struct fuse_file_info *fi_or_null
 #else
@@ -1772,6 +1779,8 @@ static int xmp_open(const char *path, struct fuse_file_info *fi){
   fi->fh=handle;
   return 0;
 }/*xmp_open*/
+
+// FUSE 3.5 Added a new cache_readdir flag to fuse_file_info to enable caching of readdir results. Supported by kernels 4.20 and newer.
 #if IS_ORIG_FUSE
 #define PARA_TRUNCATE ,struct fuse_file_info *fi
 #else
@@ -2133,7 +2142,7 @@ int main(int argc,char *argv[]){
   #undef C
   fprintf(stderr,"MAX_PATHLEN: %d\n",MAX_PATHLEN);
   fprintf(stderr,"has_proc_fs: %s\n",yes_no(has_proc_fs()));
-
+  fprintf(stderr,"FUSE_MAJOR_VERSION=%d FUSE_MINOR_VERSION=%d \n",FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION);
   if (!realpath(*argv,_self_exe)) DIE("Failed realpath %s",*argv);
   init_mutex();
   init_sighandler(argv[0],(1L<<SIGSEGV)|(1L<<SIGUSR1)|(1L<<SIGABRT),stderr);
@@ -2199,7 +2208,6 @@ int main(int argc,char *argv[]){
 #endif //WITH_MEMCACHE
     }
   }
-  log_msg("FUSE_MAJOR_VERSION=%d FUSE_MINOR_VERSION=%d \n",FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION);
   ASSERT(MAX_PATHLEN<=PATH_MAX);
   char dot_ZIPsFS[MAX_PATHLEN+1],dirOldLogs[MAX_PATHLEN+1];
   _mnt_l=strlen(strncpy(_mnt,argv[argc-1],MAX_PATHLEN));
