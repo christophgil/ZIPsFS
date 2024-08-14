@@ -121,7 +121,7 @@ static off_t _mstore_common(struct mstore *m,int opt,const void *pointer){
 // MMAP with file                                                       //
 //////////////////////////////////////////////////////////////////////////
 static const char *mstore_set_base_path(const char *f){
-  static char base[MAX_PATHLEN];
+  static char base[MAX_PATHLEN+1];
   if (f && !*base) cg_recursive_mkdir(cg_copy_path(base,f));
   return base;
 }
@@ -182,7 +182,6 @@ static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align){
     }
     char *d=m->data[block];
     if (!d){ /* Need allocate memory for block */
-      //log_debug_now0("!d\n");
       off_t block_capacity=block?m->bytes_per_block:_MSTORE_BYTES_OF_FIRST_BLOCK;
       block_capacity=MAX(block_capacity,bytes);
       block_capacity=NEXT_MULTIPLE(block_capacity,4096); /* Aligned array dim */

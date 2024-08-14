@@ -29,11 +29,11 @@ const char *PLACEHOLDERS[]={
 ////////////////////////////////////////////////////////////
 static void config_autogen_cleanup(const char *root);
 static struct ht_entry *ht_entry_fsize(const char *vp,const int vp_l,const bool create){
-  log_entered_function("%s",vp);
+  //log_entered_function("%s",vp);
   static struct ht ht_fsize={0};
   if (!ht_fsize.capacity) ht_init(&ht_fsize,HT_FLAG_NUMKEY|9);
   struct ht_entry *e=ht_numkey_get_entry(&ht_fsize,inode_from_virtualpath(vp,vp_l),0,create);
-  log_debug_now("vp: %s e=%p  %ld",vp, e,(long)e->value);
+  //log_debug_now("vp: %s e=%p  %ld",vp, e,(long)e->value);
   return e;
 }
 
@@ -46,8 +46,8 @@ static void autogen_run(struct fhdata *d){
   log_entered_function("%s D_RP=%s\n",D_VP(d),rp);
   if (d->autogen_state) return;
   cg_recursive_mk_parentdir(rp);
-  char tmp[MAX_PATHLEN];
-  char err[MAX_PATHLEN];
+  char tmp[MAX_PATHLEN+1];
+  char err[MAX_PATHLEN+1];
   //snprintf(tmp,MAX_PATHLEN,"%s.%d.%ld.autogen.tmp",rp,getpid(),currentTimeMillis());
   {
     const int slash=cg_last_slash(rp);
@@ -79,7 +79,7 @@ static void autogen_run(struct fhdata *d){
 }
 static bool autogen_not_up_to_date(struct timespec st_mtim,const char *vp,const int vp_l){
   struct stat st={0};
-  char autogen_from[MAX_PATHLEN];
+  char autogen_from[MAX_PATHLEN+1];
   long size;
   int flags;
   FOR(i,0,AUTOGEN_MAX_DEPENDENCIES){
@@ -90,7 +90,7 @@ static bool autogen_not_up_to_date(struct timespec st_mtim,const char *vp,const 
   return false;
 }
 static void autogen_remove_if_not_up_to_date(const char *vp,const int vp_l){
-  char rp[MAX_PATHLEN];
+  char rp[MAX_PATHLEN+1];
   snprintf(rp,MAX_PATHLEN,"%s%s/%s",_root_writable->rootpath,DIR_AUTOGEN,vp);
   struct stat st={0};
   if (!stat(rp,&st)){
@@ -114,7 +114,7 @@ static bool virtualpath_startswith_autogen(const char *vp, const int vp_l){
 static long autogen_size_of_not_existing_file(const char *vp,const int vp_l){
   if (!virtualpath_startswith_autogen(vp,vp_l)) return -1;
   //  log_entered_function("%s",vp); cg_print_stacktrace(0);
-  char autogen_from[MAX_PATHLEN];
+  char autogen_from[MAX_PATHLEN+1];
   long size=-1;
   int flags;
   struct zippath zpath={0};
@@ -139,7 +139,7 @@ static long autogen_size_of_not_existing_file(const char *vp,const int vp_l){
 static void autogen_filldir(fuse_fill_dir_t filler,void *buf, const char *name, const struct stat *stbuf,struct ht *no_dups){
   const int name_l=strlen(name);
   if (ENDSWITH(name,name_l,EXT_CONTENT)) return;
-  char generated[MAX_PATHLEN];
+  char generated[MAX_PATHLEN+1];
   for(int i=0; config_autogen_from_virtualpath(i,generated,name,name_l);i++){
     //    if (ht_only_once(no_dups,generated,0)) filler(buf,generated,stbuf,0,fill_dir_plus);
     filldir(0,filler,buf,generated,stbuf,no_dups);

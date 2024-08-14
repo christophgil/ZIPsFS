@@ -43,6 +43,12 @@
 #else
 #define ASSERT(...)
 #endif
+
+#ifndef FUSE_MAJOR_V
+#define FUSE_MAJOR_V 9
+#define FUSE_MINOR_V 999
+#endif
+
 #include "cg_utils.h"
 #if ! WITH_DIRCACHE
 #undef WITH_DIRCACHE_OPTIMIZE_NAMES
@@ -209,7 +215,7 @@ static bool zpath_exists(struct zippath *zpath){
   if (!zpath) return false;
   const bool ex=zpath->stat_rp.st_ino;
   if (ex != (zpath->realpath_l!=0)){
-    log_debug_now(RED_ERROR" ex: %d zpath->realpath_l: %d",ex,zpath->realpath_l);
+    log_verbose(RED_ERROR" exists: %d zpath->realpath_l: %d",ex,zpath->realpath_l);
   }
   return ex;
 }
@@ -275,7 +281,6 @@ struct memcache{
   volatile off_t memcache_l,memcache_already_current,memcache_already;
   int64_t memcache_took_mseconds;
   int id;
-  struct zip_source *zipsrc;
 };
 #endif // WITH_MEMCACHE
 struct fhdata{
@@ -302,7 +307,7 @@ struct fhdata{
 #define foreach_fhdata(id,d)  foreach_fhdata_also_emty(id,d) if (d->flags)
 #define fhdata_path_eq(d,path,hash) d->zpath.virtualpath_hash==hash && !strcmp(D_VP(d),path)
 #define memcache_is_queued(m)  (m && m->memcache_l && m->memcache_status==memcache_queued)
-#define find_realpath_again_fhdata(d) zpath_reset_keep_VP(&d->zpath); find_realpath_any_root(0,&d->zpath,NULL)
+#define find_realpath_again_fhdata(d) zpath_reset_keep_VP(&d->zpath),find_realpath_any_root(0,&d->zpath,NULL)
 #define SIZEOF_FHDATA sizeof(struct fhdata)
 #define SIZEOF_ZIPPATH sizeof(struct zippath)
 #define FHDATA_LOG2_BLOCK_SIZE 5
@@ -349,7 +354,7 @@ static struct ht ht_intern_fileext IF1(WITH_STAT_CACHE,,stat_ht)  IF1(WITH_ZIPIN
 /// The others are always  read-only                          ///
 /////////////////////////////////////////////////////////////////
 struct rootdata{ /* Data for a source directory. ZIPsFS acts like an overlay FS. */
-  char rootpath[MAX_PATHLEN];
+  char rootpath[MAX_PATHLEN+1];
   int rootpath_l;
   uint32_t features;
   struct statvfs statfs;
@@ -992,7 +997,9 @@ static bool _directory_from_dircache_zip_or_filesystem(struct directory *mydir,c
         struct dirent *de;
         mydir->core.fsize=NULL;
         mydir->core.fcrc=NULL;
-        while((de=readdir(dir))) LOCK(mutex_dircache,directory_add_file((de->d_type==(S_IFDIR>>12))?DIRENT_ISDIR:0,mydir,de->d_ino,de->d_name,0,0,0));
+        while((de=readdir(dir))){
+          LOCK(mutex_dircache,directory_add_file((de->d_type==(S_IFDIR>>12))?DIRENT_ISDIR:0,mydir,de->d_ino,de->d_name,0,0,0));
+        }
         result=1;
       }
       closedir(dir);
@@ -1197,7 +1204,7 @@ static bool find_realpath_any_root1(const bool verbose,const bool path_starts_au
     // RRR zpath_reset_keep_VP(zpath);
     R(){
       if (onlyThisRoot && r!=onlyThisRoot) continue;
-      char zip[MAX_PATHLEN]; *zip=0;
+      char zip[MAX_PATHLEN+1]; *zip=0;
       LOCK(mutex_dircache,const char *z=zipinline_cache_virtualpath_to_zippath(vp,vp_l); if (z) strcpy(zip,z));
       if (*zip && !strncmp(zip,r->rootpath,r->rootpath_l) && zip[r->rootpath_l]=='/'  && wait_for_root_timeout(r)){
         // RRR zpath_reset_keep_VP(zpath);
@@ -1266,7 +1273,7 @@ static bool find_realpath_any_root(int opt,struct zippath *zpath,const struct ro
         goto found;
       }
       if (sleep_milliseconds){
-      log_debug_now("Going sleep %d ms ...",sleep_milliseconds);
+      log_verbose("Going sleep %d ms ...",sleep_milliseconds);
       usleep(sleep_milliseconds<<10);
       }
     }
@@ -1303,7 +1310,7 @@ static bool fhdata_can_destroy(struct fhdata *d){
 #if WITH_MEMCACHE
   struct memcache *m=d->memcache;
   if (m){ /* Not close when serving as file-content-cache for other fhdata instances  with identical path */
-    if (m->memcache_status==memcache_reading IF1(WITH_MEMCACHE,||d->is_memcache_store>0)) return false;
+    IF1(WITH_MEMCACHE,if (m->memcache_status==memcache_reading||d->is_memcache_store>0) return false);
     const ht_hash_t hash=D_VP_HASH(d);
     foreach_fhdata(id,e){
       if (e==d || (e->flags&FHDATA_FLAGS_DESTROY_LATER)) continue;
@@ -1436,9 +1443,9 @@ static struct fhdata* fhdata_get(const char *path,const uint64_t fh){
 ///////////////////////////////////
 /* ******************************************************************************** */
 // FUSE when   Added enum fuse_readdir_flags
-// 2.9 not yet
+// 2.9 not yet DEBUG_NOW
 #define READDIR_AUTOGEN (1<<0)
-#if IS_ORIG_FUSE
+#if FUSE_MAJOR_V>2
 #define COMMA_FILL_DIR_PLUS ,0
 #else
 #define COMMA_FILL_DIR_PLUS
@@ -1451,7 +1458,6 @@ static void filldir(const int opt,fuse_fill_dir_t filler,void *buf, const char *
     return;
   }
 #endif
-
   if (ht_only_once(no_dups,name,0)) filler(buf,name,stbuf,0 COMMA_FILL_DIR_PLUS);
 }
 /* ******************************************************************************** */
@@ -1576,7 +1582,9 @@ static int filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_f
           st.st_ino=make_inode(zpath->stat_rp.st_ino,r,0,RP());
           if (!config_do_not_list_file(rp,u,u_l)){
             IF1(WITH_ZIPINLINE,if (config_also_show_zipfile_in_listing(u,u_l))) filler(buf,u,&st,0  COMMA_FILL_DIR_PLUS);
-            filldir(opt,filler,buf,config_zipfilename_to_virtual_dirname(virtual_name,u,u_l),&st,no_dups);
+            config_zipfilename_to_virtual_dirname(virtual_name,u,u_l);
+            if (strlen(virtual_name)!=u_l || cg_endsWithZip(u,u_l)) st.st_mode=(st.st_mode&~S_IFMT)|S_IFDIR; /* ZIP files as  directory */
+            filldir(opt,filler,buf,virtual_name,&st,no_dups);
           }
         }
       }
@@ -1617,21 +1625,31 @@ static int realpath_mk_parent(char *realpath,const char *path){
 /********************************************************************************/
 // FUSE FUSE 3.0.0rc3 The high-level init() handler now receives an additional struct fuse_config pointer that can be used to adjust high-level API specific configuration options.
 #define DO_LIBFUSE_CACHE_STAT 0
-#if IS_ORIG_FUSE
+#if FUSE_MAJOR_V>2
+#define HAS_FUSE_CONFIG 1
+#else
+#define HAS_FUSE_CONFIG 0
+#endif
 
-static void *xmp_init(struct fuse_conn_info *conn IF1(IS_ORIG_FUSE,,struct fuse_config *cfg)){
-  //void *x=fuse_apply_conn_info_opts;  //cfg->async_read=1;
+#define EVAL(a) a
+#define EVAL2(a) EVAL(a)
+
+
+void *xmp_init(struct fuse_conn_info *conn IF1(HAS_FUSE_CONFIG,,struct fuse_config *cfg)){
+  //void *x=fuse_apply_conn_info_opts;  //cfg-async_read=1;
   cfg->use_ino=1;
+  #if HAS_FUSE_CONFIG
   IF1(DO_LIBFUSE_CACHE_STAT,cfg->entry_timeout=cfg->attr_timeout=200;cfg->negative_timeout=20);
   IF0(DO_LIBFUSE_CACHE_STAT,cfg->entry_timeout=cfg->attr_timeout=2;  cfg->negative_timeout=10);
+  #endif
   return NULL;
 }
-#endif
+
 /////////////////////////////////////////////////
 // Functions where Only single paths need to be  substituted
 
 // Release FUSE 2.9 The chmod, chown, truncate, utimens and getattr handlers of the high-level API now all receive an additional struct fuse_file_info pointer (which, however, may be NULL even if the file is currently open).
-#if IS_ORIG_FUSE
+#if FUSE_MAJOR_V>=2 && FUSE_MINOR_V>=9
 #define PARA_GETATTR ,struct fuse_file_info *fi_or_null
 #else
 #define PARA_GETATTR
@@ -1780,7 +1798,7 @@ static int xmp_open(const char *path, struct fuse_file_info *fi){
   return 0;
 }/*xmp_open*/
 
-// FUSE 3.5 Added a new cache_readdir flag to fuse_file_info to enable caching of readdir results. Supported by kernels 4.20 and newer.
+
 #if IS_ORIG_FUSE
 #define PARA_TRUNCATE ,struct fuse_file_info *fi
 #else
@@ -1800,6 +1818,11 @@ int xmp_truncate(const char *path, off_t size PARA_TRUNCATE){
 // Readdir
 /////////////////////////////////
 /** unsigned int cache_readdir:1; FOPEN_CACHE_DIR Can be filled in by opendir. It signals the kernel to  enable caching of entries returned by readdir(). */
+
+// FUSE 3.5 Added a new cache_readdir flag to fuse_file_info to enable caching of readdir results. Supported by kernels 4.20 and newer.
+#if FUSE_MAJOR_V>=3 && FUSE_MINOR_V>-5
+#define  WITH_FUSE_READDIR_FLAGS 1
+#endif
 
 
 //static int hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
@@ -2069,7 +2092,7 @@ static int xmp_read(const char *path, char *buf, const size_t size, const off_t 
              const int64_t n=d->n_read;
              const char *status=IF0(WITH_MEMCACHE,"!WITH_MEMCACHE")IF1(WITH_MEMCACHE,MEMCACHE_STATUS_S[!m?0:m->memcache_status]));
       if (res<0 && !config_not_report_stat_error(path,path_l)){
-        warning(WARN_MEMCACHE|WARN_FLAG_ONCE_PER_PATH,path,"res<0:  d=%p  off=%ld size=%zu  res=%d  n_read=%llu  memcache_status:%s"ANSI_RESET,d,offset,size,res,n,status);
+        warning(WARN_READ|WARN_FLAG_ONCE_PER_PATH,path,"res<0:  d=%p  off=%ld size=%zu  res=%d  n_read=%llu  memcache_status:%s"ANSI_RESET,d,offset,size,res,n,status);
       }
     }
   }
@@ -2162,7 +2185,7 @@ int main(int argc,char *argv[]){
   }
   if (!colon){ log_warn0("No single colon found in parameter list\n"); usage(); return 1;}
   if (colon==argc-1){ log_warn0("Expect mount point after single colon \n"); usage(); return 1;}
-  log_msg(ANSI_INVERSE""ANSI_UNDERLINE"This is %s  main(...)"ANSI_RESET"\nCompiled: %s %s  PID: %d\n",path_of_this_executable(),__DATE__,__TIME__,getpid());
+  log_msg(ANSI_INVERSE""ANSI_UNDERLINE"This is %s  main(...)"ANSI_RESET"\nCompiled: %s %s  PID: "ANSI_FG_WHITE ANSI_BLUE"%d"ANSI_RESET"\n",path_of_this_executable(),__DATE__,__TIME__,getpid());
   setlocale(LC_NUMERIC,""); /* Enables decimal grouping in fprintf */
   ASSERT(S_IXOTH==(S_IROTH>>2));
   IF1(WITH_ZIPINLINE,config_containing_zipfile_of_virtual_file_test());
@@ -2347,7 +2370,7 @@ int main(int argc,char *argv[]){
     }
   }
 #if WITH_AUTOGEN
-  char realpath_autogen_heap[MAX_PATHLEN];
+  char realpath_autogen_heap[MAX_PATHLEN+1];
   if (_root_writable){
     strcat(strcpy(_realpath_autogen=realpath_autogen_heap,_root_writable->rootpath),DIR_AUTOGEN);
     config_autogen_init();
@@ -2356,7 +2379,7 @@ int main(int argc,char *argv[]){
   static pthread_t thread_unblock;
   pthread_create(&thread_unblock,NULL,&infloop_unblock,NULL);
   _textbuffer_memusage_lock=_mutex+mutex_textbuffer_usage;
-  log_strg("Running fuse_main() ...\n");
+  log_msg("Running %s with PID %d. Going to fuse_main() ...\n",argv[0],getpid());
 
 
   /* { */

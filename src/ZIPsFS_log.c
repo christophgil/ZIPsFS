@@ -108,7 +108,7 @@ static void log_path(const char *f,const char *path){
   log_msg("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,cg_strlen(path));
 }
 static void log_fh(char *title,long fh){
-  char p[MAX_PATHLEN];
+  char p[MAX_PATHLEN+1];
   cg_path_for_fd(title,p,fh);
   log_msg("%s  fh: %ld %s \n",title?title:"", fh,p);
 }

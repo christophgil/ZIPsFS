@@ -152,6 +152,7 @@ static char *textbuffer_malloc(struct textbuffer *b, off_t size){
   return buf;
 }
 
+
 static off_t textbuffer_read(struct textbuffer *b,const int fd){
   const int blocksize=b->read_bufsize?b->read_bufsize:1024*1024;
   off_t count=0;
@@ -205,6 +206,12 @@ static void textbuffer_reset(struct textbuffer *b){
     }
   }
   b->n=0;
+}
+static char *textbuffer_first_segment_with_min_capacity(struct textbuffer *b, off_t min_size){
+  assert(b!=NULL);
+  if (b->n>0 && b->segment_e[0]<min_size) textbuffer_reset(b);
+  if (!b->n) textbuffer_malloc(b,min_size);
+  return b->segment[0];
 }
 static void textbuffer_destroy(struct textbuffer *b){
   if (b){

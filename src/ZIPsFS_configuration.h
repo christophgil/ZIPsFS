@@ -93,7 +93,7 @@
 #if DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
 #define DIRECTORY_CACHE_SEGMENTS 4 // Number of segments. If Exceeded, the directory cache is cleared and filled again.
 #endif
-#define MEMCACHE_READ_BYTES_NUM (512*1024*1024) // When storing zip entries in RAM, number of bytes read in one go
+#define MEMCACHE_READ_BYTES_NUM (64*1024*1024) // When storing zip entries in RAM, number of bytes read in one go
 #define SIZE_CUTOFF_MMAP_vs_MALLOC 100000
 
 

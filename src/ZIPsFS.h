@@ -67,7 +67,6 @@ static ino_t inode_from_virtualpath(const char *vp,const int vp_l);
 static int filler_readdir_zip(const int opt,struct zippath *zpath,void *buf, fuse_fill_dir_t filler_maybe_null,struct ht *no_dups);
 static int filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_fill_dir_t filler,struct ht *no_dups);
 static int realpath_mk_parent(char *realpath,const char *path);
-static void *xmp_init(struct fuse_conn_info *conn IF1(IS_ORIG_FUSE,,struct fuse_config *cfg));
 static int xmp_access(const char *path, int mask);
 static int xmp_readlink(const char *path, char *buf, size_t size);
 static int xmp_unlink(const char *path);

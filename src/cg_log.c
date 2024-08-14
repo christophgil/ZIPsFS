@@ -83,7 +83,7 @@ static void _warning(const char *fn,int line,const uint32_t channel,const char* 
 
 #if __INCLUDE_LEVEL__ == 0
 int main(int argc, char *argv[]){
-  log_debug_now("argc= %d \n",argc);
+  log_msg("argc= %d \n",argc);
   if (0){
     warning(0,argv[1],"%s","");
     open("afafsdfasd",O_WRONLY);

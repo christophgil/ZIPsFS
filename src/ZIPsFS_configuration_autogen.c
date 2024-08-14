@@ -210,7 +210,7 @@ static int config_autogen_run(const char *virtual_outfile,const char *outfile,co
   /* Obtain s. With s->_ext_l, determin infile */
   struct _autogen_config *s=_config_struct_autogen_for_path(virtual_outfile,strlen(virtual_outfile));
   if (!s) return ENOENT;
-  char infile[MAX_PATHLEN];
+  char infile[MAX_PATHLEN+1];
   sprintf(infile,"%s%s",_mnt,virtual_outfile);
   infile[strlen(infile)-s->_ext_l]=0;
   log_entered_function("tmpoutfile=%s   virtual_outfile=%s  infile=%s concurrent_computations: %d\n",tmpoutfile,virtual_outfile,infile,s->concurrent_computations);

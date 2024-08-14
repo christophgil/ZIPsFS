@@ -292,7 +292,7 @@ static int cg_count_fd_this_prg(){
 }
 
 static bool cg_check_path_for_fd(const char *title, const char *path, int fd){
-  char check_path[MAX_PATHLEN],rp[PATH_MAX];
+  char check_path[MAX_PATHLEN+1],rp[PATH_MAX];
   if (!realpath(path,rp)){
     log_error("%s  Failed realpath(%s)\n",snull(title),path);
     return false;
@@ -455,7 +455,7 @@ static bool cg_access_from_stat(const struct stat *stats,int mode){ // equivalet
 static bool cg_file_set_atime(const char *path, struct stat *stbuf,long secondsFuture){
   struct stat st;
   if (!stbuf && stat(path,stbuf=&st)) return false;
-  log_debug_now("secondsFuture=%ld\n",secondsFuture);
+  log_verbose("secondsFuture=%ld\n",secondsFuture);
   struct utimbuf new_times={.actime=time(NULL)+secondsFuture,.modtime=stbuf->st_mtime};
   return !utime(path,&new_times);
 }
@@ -480,7 +480,7 @@ static bool cg_fd_write_str(int fd,char *t){
 
 static int cg_symlink_overwrite_atomically(const char *src,const char *lnk){
   if (!cg_is_symlink(lnk)) unlink(lnk);
-  char lnk_tmp[MAX_PATHLEN];
+  char lnk_tmp[MAX_PATHLEN+1];
   strcpy(lnk_tmp,lnk);strcat(lnk_tmp,".tmp");
   unlink(lnk_tmp);
   symlink(src,lnk_tmp);

@@ -217,7 +217,6 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
               G();
               e();
             }else{
-              //log_debug_now0("F_BAD_LOCK");
               p();
               cg_thread_assert_not_locked(mutex_fhdata);
               log_strg(GREEN_SUCCESS"\n");
@@ -240,10 +239,10 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
   if (posHours){
     const int len=(int)(posHours-path);
     posHours+=sizeof(MAGIC_SFX_SET_ATIME)-1;
-    char path2[MAX_PATHLEN];
+    char path2[MAX_PATHLEN+1];
     strncpy(path2,path,len)[len]=0;
     bool found;FIND_REALPATH(path2);
-    log_debug_now("%s found=%d ",path2,found);
+    //log_debug_now("%s found=%d ",path2,found);
     if (found){
       cg_file_set_atime(RP(),&zpath->stat_rp,3600L*atoi(posHours));
       return true;

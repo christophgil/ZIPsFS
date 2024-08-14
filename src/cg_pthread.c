@@ -106,7 +106,7 @@ static void cg_mutex_test_1(){
        LOCK(mutex_fhdata,log_verbose("count2=%d",cg_mutex_count(mutex_fhdata,0)));
        ASSERT_LOCKED_FHDATA();
        );
-  log_debug_now("count2=%d",cg_mutex_count(mutex_fhdata,0));
+  log_msg("count2=%d",cg_mutex_count(mutex_fhdata,0));
   ASSERT_LOCKED_FHDATA();
 }
 static void cg_mutex_test_2(){
