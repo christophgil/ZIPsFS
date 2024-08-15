@@ -34,16 +34,10 @@ For FreeBSD, NetBSD and MacOSX please see instructions in [INSTALL_other_than_Li
 
 # Quick installation from source code
 
-Download
-
     wget -N  https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
     unzip main.zip
     cd ZIPsFS-main
-
-First give  the quick installation script a try:
-
     src/ZIPsFS.compile.sh
-
 
 
 # Installation from source code with autotools

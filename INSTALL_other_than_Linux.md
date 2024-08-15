@@ -48,28 +48,19 @@ Now check whether fuse-zip  works if run as a normal user
 
 ## FreeBSD: Install ZIPsFS
 
+    wget -N  https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
+    unzip main.zip
+    cd ZIPsFS-main
+    src/ZIPsFS.compile.sh
+
 # NetBSD
-
-
-Please install
 
     pkg_add zip unzip libzip fuse-unionfs perfuse bash wget
 
-1
-<embed src="./_snippet_install.md" />
-2
-<embed src="./_snippet_install.html" />
-3
-```rb
-# ./_snippet_install.md
-```
-4
-```rb
-# ./_snippet_install.html
-```
-
-
-
+    wget -N  https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
+    unzip main.zip
+    cd ZIPsFS-main
+    src/ZIPsFS.compile.sh
 
 
 ## Problems on NetBSD
@@ -119,3 +110,10 @@ The -f option means that bindfs runs in foreground.
 In another terminal check whether you see the content of the home directory at the mount point.
 
      ls ~/mnt/test_bindfs
+
+
+
+    wget -N  https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
+    unzip main.zip
+    cd ZIPsFS-main
+    src/ZIPsFS.compile.sh
