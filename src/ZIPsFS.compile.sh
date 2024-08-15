@@ -92,7 +92,7 @@ main(){
     }> $DIR/ZIPsFS.h
 
 
-   [[ $(hostname) == *.charite.de ]] && ! cd && return  # Otherwise the logs contain relative paths
+   [[ $(hostname) == s-mcpb-ms03.charite.de ]] && ! cd && return  # Otherwise the logs contain relative paths
 
     sanitize=''
     LL="-lpthread -lm -lzip $LFUSE $(print_linker_option_execinfo)"

@@ -38,10 +38,8 @@ First install the required libraries and packages.
 
 # Quick installation
 
-    wget -N  https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
-    unzip main.zip
-    cd ZIPsFS-main
-    src/ZIPsFS.compile.sh
+    U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
+    wget -N $U && unzip -o main.zip &&  ZIPsFS-main/src/ZIPsFS.compile.sh
 
 
 

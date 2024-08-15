@@ -48,19 +48,15 @@ Now check whether fuse-zip  works if run as a normal user
 
 ## FreeBSD: Install ZIPsFS
 
-    wget -N  https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
-    unzip main.zip
-    cd ZIPsFS-main
-    src/ZIPsFS.compile.sh
+    U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
+    wget -N $U && unzip -o main.zip &&  ZIPsFS-main/src/ZIPsFS.compile.sh
 
 # NetBSD
 
     pkg_add zip unzip libzip fuse-unionfs perfuse bash wget
 
-    wget -N  https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
-    unzip main.zip
-    cd ZIPsFS-main
-    src/ZIPsFS.compile.sh
+    U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
+    wget -N $U && unzip -o main.zip &&  ZIPsFS-main/src/ZIPsFS.compile.sh
 
 
 ## NetBSD - TroubleShooting
@@ -114,7 +110,5 @@ In another terminal check whether you see the content of the home directory at t
 
 ## MacOSX - Install ZIPsFS
 
-    wget -N  https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
-    unzip main.zip
-    cd ZIPsFS-main
-    src/ZIPsFS.compile.sh
+    U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
+    wget -N $U && unzip -o main.zip &&  ZIPsFS-main/src/ZIPsFS.compile.sh
