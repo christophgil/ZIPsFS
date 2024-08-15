@@ -8,13 +8,24 @@
 
 ## TroubleShooting
 
+### Problem running as normal user.
+
 Running ZIPsFS as root worked well.  Normally, ZIPsFS will not run as root unless the option -r is
 given.  However, we could not run ZIPsFS as a normal user because of acceess failure for /dev/puffs.
-We added the user to group wheel and did chmod go+rw /dev/puffs without success.
-See https://minux.hu/mounting-webdav-under-netbsd-unprivileged-user
+We added the user to group wheel and did
+
+    chmod go+rw /dev/puffs
+
+without success.
+
+Related:  https://minux.hu/mounting-webdav-under-netbsd-unprivileged-user
+
+Please tell me your solutions to this problem.
+
+### Problem finding shared libraries
 
 Shared libs libzip and libfuse were not found.  This could be fixed with
 
    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/pkg/lib
 
-One might first try to  get fuse-unionfs to work.
+One might first try to get fuse-unionfs to work.
