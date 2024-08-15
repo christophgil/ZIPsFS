@@ -34,15 +34,15 @@ DIR=${BASH_SOURCE[0]%/*}
 TEMP=~/tmp/ZIPsFS/compilation
 ! mkdir -p $TEMP && press_ctrl_c
 
-export ANSI_FG_GREEN=$'\e[32m' ANSI_FG_RED=$'\e[31m' ANSI_FG_MAGENTA=$'\e[35m' ANSI_FG_GRAY=$'\e[30;1m' ANSI_FG_BLUE=$'\e[34;1m' ANSI_RESET=$'\e[0m'
+
 detect_fuse_version(){
     local exe=$TEMP/print_fuse_version p
+    [[ -d /usr/pkg/lib &&  $OSTYPE == *netbsd* ]] && export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/pkg/lib
     for p in -lfuse3 -lfuse2 -lfuse1 -lfuse; do
         rm $exe 2>/dev/null
         if $CCOMPILER $IPATHS $LPATHS $p $DIR/print_fuse_version.c -o  $exe 2>$TEMP/try_compile$p.log && [[ -s $exe ]];then
             if ! $exe;then
                 echo "${ANSI_FG_RED}Problem$ANSI_RESET running $exe"
-                [[ $OSTYPE == *netbsd* ]] && echo 'On netbsd we noticed, that the libfuse.so was not found.  This was solved with  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/pkg/lib'
                 press_ctrl_c
             else
                 echo $p
