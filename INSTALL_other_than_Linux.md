@@ -63,7 +63,7 @@ Now check whether fuse-zip  works if run as a normal user
     src/ZIPsFS.compile.sh
 
 
-## NetBSD - Problems
+## NetBSD - TroubleShooting
 
 Running ZIPsFS as root worked well.  Normally, ZIPsFS will not run as root unless the option -r is
 given.  However, we could not run ZIPsFS as a normal user because of acceess failure for /dev/puffs.

@@ -122,9 +122,9 @@ main(){
     echo "See logs in $TEMP"
     if [[ -s $exe ]];then
         echo 'Suggest testing: '
-        [[ $OSTYPE == *freebsd* ]] && "If it might not work
-        echo $DIR/ZIPsFS_testing.sh $exe
-        fi
+        [[ $OSTYPE == *freebsd* ]] && "If it might not work, try as root"
+        echo "$DIR/ZIPsFS_testing.sh $exe"
+    fi
 
 }
 
