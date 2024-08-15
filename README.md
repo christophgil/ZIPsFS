@@ -1,3 +1,5 @@
+See [Installation](./INSTALL.md)
+
 <!---
 (defun Make-man()
 (interactive)

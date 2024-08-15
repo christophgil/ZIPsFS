@@ -51,7 +51,7 @@ First install the required libraries and packages.
     U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
     wget -N $U && unzip -o main.zip &&  ZIPsFS-main/src/ZIPsFS.compile.sh
 
-Alternatively, consider  [installation with autotools](./_INSTALL_autotools.md)
+Alternatively, consider  [installation with autotools](./INSTALL_autotools.md)
 
 # Testing the installed ZIPsFS
 
