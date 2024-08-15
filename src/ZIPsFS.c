@@ -44,6 +44,8 @@
 #define ASSERT(...)
 #endif
 
+
+/* If compiled with ZIPsFS.compile.sh, then the FUSE_MAJOR_V and FUSE_MINOR_V are detected with print_fuse_version.c */
 #ifndef FUSE_MAJOR_V
 #define FUSE_MAJOR_V 9
 #define FUSE_MINOR_V 999
@@ -1583,7 +1585,8 @@ static int filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_f
           if (!config_do_not_list_file(rp,u,u_l)){
             IF1(WITH_ZIPINLINE,if (config_also_show_zipfile_in_listing(u,u_l))) filler(buf,u,&st,0  COMMA_FILL_DIR_PLUS);
             config_zipfilename_to_virtual_dirname(virtual_name,u,u_l);
-            if (strlen(virtual_name)!=u_l || cg_endsWithZip(u,u_l)) st.st_mode=(st.st_mode&~S_IFMT)|S_IFDIR; /* ZIP files as  directory */
+            // if (strlen(virtual_name)!=u_l || cg_endsWithZip(u,u_l))
+              st.st_mode=(st.st_mode&~S_IFMT)|S_IFDIR; /* ZIP files as  directory */
             filldir(opt,filler,buf,virtual_name,&st,no_dups);
           }
         }
@@ -1637,8 +1640,8 @@ static int realpath_mk_parent(char *realpath,const char *path){
 
 void *xmp_init(struct fuse_conn_info *conn IF1(HAS_FUSE_CONFIG,,struct fuse_config *cfg)){
   //void *x=fuse_apply_conn_info_opts;  //cfg-async_read=1;
-  cfg->use_ino=1;
   #if HAS_FUSE_CONFIG
+  cfg->use_ino=1;
   IF1(DO_LIBFUSE_CACHE_STAT,cfg->entry_timeout=cfg->attr_timeout=200;cfg->negative_timeout=20);
   IF0(DO_LIBFUSE_CACHE_STAT,cfg->entry_timeout=cfg->attr_timeout=2;  cfg->negative_timeout=10);
   #endif
@@ -1649,7 +1652,7 @@ void *xmp_init(struct fuse_conn_info *conn IF1(HAS_FUSE_CONFIG,,struct fuse_conf
 // Functions where Only single paths need to be  substituted
 
 // Release FUSE 2.9 The chmod, chown, truncate, utimens and getattr handlers of the high-level API now all receive an additional struct fuse_file_info pointer (which, however, may be NULL even if the file is currently open).
-#if FUSE_MAJOR_V>=2 && FUSE_MINOR_V>=9
+#if FUSE_MAJOR_V>=2 && FUSE_MINOR_V>9
 #define PARA_GETATTR ,struct fuse_file_info *fi_or_null
 #else
 #define PARA_GETATTR
@@ -2183,8 +2186,6 @@ int main(int argc,char *argv[]){
     if(!strcmp(":",argv[i])) colon=i;
     foreground|=colon && !strcmp("-f",argv[i]);
   }
-  if (!colon){ log_warn0("No single colon found in parameter list\n"); usage(); return 1;}
-  if (colon==argc-1){ log_warn0("Expect mount point after single colon \n"); usage(); return 1;}
   log_msg(ANSI_INVERSE""ANSI_UNDERLINE"This is %s  main(...)"ANSI_RESET"\nCompiled: %s %s  PID: "ANSI_FG_WHITE ANSI_BLUE"%d"ANSI_RESET"\n",path_of_this_executable(),__DATE__,__TIME__,getpid());
   setlocale(LC_NUMERIC,""); /* Enables decimal grouping in fprintf */
   ASSERT(S_IXOTH==(S_IROTH>>2));
@@ -2202,15 +2203,18 @@ int main(int argc,char *argv[]){
   S(flush);
   IF1(HAS_FUSE_LSEEK,S(lseek));
 #undef S
-  if ((getuid()==0) || (geteuid()==0)){ log_strg("Running BBFS as root opens unnacceptable security holes\n");return 1;}
+
   //    argv_fuse[argc_fuse++]="--fuse-flag";    argv_fuse[argc_fuse++]="sync_read";
-  for(int c;(c=getopt(argc,argv,"+qnks:c:S:l:L:"))!=-1;){  // :o:sfdh
+  bool allow_root=false;
+  for(int c;(c=getopt(argc,argv,"+qnkhrs:c:S:l:L:"))!=-1;){  // :o:sfdh
     switch(c){
+    case 'r': allow_root=true; break;
     case 'q': _logIsSilent=true; break;
     case 'k': _killOnError=true; break;
     case 'S': _pretendSlow=true; break;
     case 's': strncpy(_mkSymlinkAfterStart,optarg,MAX_PATHLEN); break;
-    case 'h': usage();break;
+    case 'h': usage();
+      return 0;
     case 'l': if ((_memcache_maxbytes=cg_atol_kmgt(optarg))<1<<22){
         log_error("Option -l: _memcache_maxbytes is too small %s\n",optarg);
         return 1;
@@ -2231,6 +2235,9 @@ int main(int argc,char *argv[]){
 #endif //WITH_MEMCACHE
     }
   }
+  if (!allow_root && (!getuid() || !geteuid())){ log_strg("Running ZIPsFS as root opens unnacceptable security holes. Run with option -r if you know what you are doing.\n");return 1;}
+    if (!colon){ log_warn0("No single colon found in parameter list\n"); usage(); return 1;}
+  if (colon==argc-1){ log_warn0("Expect mount point after single colon \n"); usage(); return 1;}
   ASSERT(MAX_PATHLEN<=PATH_MAX);
   char dot_ZIPsFS[MAX_PATHLEN+1],dirOldLogs[MAX_PATHLEN+1];
   _mnt_l=strlen(strncpy(_mnt,argv[argc-1],MAX_PATHLEN));

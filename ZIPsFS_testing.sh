@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+export ANSI_FG_GREEN=$'\e[32m' ANSI_FG_RED=$'\e[31m' ANSI_FG_MAGENTA=$'\e[35m' ANSI_FG_GRAY=$'\e[30;1m' ANSI_FG_BLUE=$'\e[34;1m' ANSI_FG_BLACK=$'\e[100;1m' ANSI_FG_YELLOW=$'\e[33m' ANSI_FG_WHITE=$'\e[37m' ANSI_RESET=$'\e[0m'
+
 
 ## Specify root directory here.  Test file trees will be written here
 BASE=~/test/ZIPsFS/small_test
@@ -40,30 +42,47 @@ mk_test_files(){
 main(){
     mk_test_files $BASE ''
     mk_test_zip
-    local exe=${1:-}
+    local exe_from_para=${1:-}
+    local m=$BASE/mnt
+    mkdir -p $m $BASE/writable
+    echo "Maybe $m is still mounted - going to umount  ..."
+
+    JUNKPARA='';  [[ $OSTYPE == *netbsd* ]] &&  JUNKPARA="$m $m"  ## Otherwise error Note enough para
+    fusermount -u $m $JUNKPARA
+
+
+
+    #    $exe $BASE/writable $ROOTS : -f -o allow_other $m
+    local rr=''
+    for r in $ROOTS;do rr+=" $BASE/$r"; done
+
+    local exe=$exe_from_para
     if [[ -z $exe ]];then
         exe=~/git_projects/ZIPsFS/ZIPsFS
         [[ ! -s $exe ]] && exe=~/ZIPsFS/ZIPsFS
         [[ ! -s $exe ]] && echo 'Missing argument: executable of ZIPsFS' && return 1
         echo "Using default exe $exe"
     fi
+    if [[ ! -s $exe ]];then
+        echo "$exe (executable of ZIPsFS) does not exist"
+        echo "Please pass path of ZIPsFS executable as argument."
+    else
+        echo "Going to mount ZIPsFS on $m. This folder is still empty. Observe this folder now!"
+        read -r -p  "Press enter to continue"
 
-    [[ ! -s $exe ]] && echo "Argument $exe (executable of ZIPsFS) does not exist" && return 1
-    local m=$BASE/mnt
-    mkdir $m $BASE/writable
-    echo "Maybe $m is still mounted - going to umount  ..."
-    fusermount -u $m
-
-    echo "Going to mount $m ..."
-    set -x
-    #    $exe $BASE/writable $ROOTS : -f -o allow_other $m
-    local rr=''
-    for r in $ROOTS;do rr+=" $BASE/$r"; done
-    $exe $BASE/writable $rr : -f  $m
-    set +x
-
-echo 'export LD_LIBRARY_PATH=/usr/pkg/lib'
-
+        set +x
+        local allow_root=''
+        if [[ $OSTYPE == *netbsd* ]];then
+            allow_root='-r'
+            if ldd $exe |fgrep 'not found'; then
+                echo "${ANSI_FG_RED}Shared libs not found.$ANSI_RESET Therefore setting LD_LIBRARY_PATH:"
+                echo '    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/pkg/lib'
+                read -r -p  "Press enter to continue"
+                export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}:/usr/pkg/lib
+            fi
+        fi
+        $exe $allow_root  $BASE/writable $rr : -f  $m
+    fi
     return
 
 }

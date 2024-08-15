@@ -12,12 +12,13 @@ Install ZIPsFS in a WSL environment.
 
 # FreeBSD
 
-Please install
+## FreeBSD: FUSE as root
+
+Become root.
 
     pkg install fuse-zip lynx tmux sysutils/fusefs-libs3 libzip bash wget
 
-
-Now check whether fuse file systems work as root. fuse-zip is a simple FUSE file system for testing.
+Check whether fuse file systems works as root. fuse-zip is a simple FUSE file system for testing.
 
     mkdir -p ~/mnt/test_fuse
     fuse-zip  <path-any-zip-file> ~/mnt/test_fuse
@@ -35,8 +36,9 @@ To load it automatically on boot, add the line to /etc/rc.conf
     kldload fusefs
     kld_list="fusefs"
 
+## FreeBSD: FUSE as normal user
 
-Now check whether fuse-zip  works if  run as a normal user
+Now check whether fuse-zip  works if run as a normal user
 
     sysctl vfs.usermount=1
     echo vfs.usermount=1 >>  /etc/sysctl.conf
@@ -44,17 +46,32 @@ Now check whether fuse-zip  works if  run as a normal user
     chgrp fuse /dev/fuse
     pw groupmod group -m <user-id>
 
+## FreeBSD: Install ZIPsFS
 
 # NetBSD
+
 
 Please install
 
     pkg_add zip unzip libzip fuse-unionfs perfuse bash wget
 
-
-First get fuse-unionfs to work.
+<embed src="_snippet_install.md" />
 
 Then install ZIPsFS in the normal way.
+
+
+## Problems on NetBSD
+
+Running ZIPsFS as root worked well.  Normally, ZIPsFS will not run as root unless the option -r is
+given.  However, we could not run ZIPsFS as a normal user because of acceess failure for /dev/puffs.
+We added the user to group wheel and did chmod go+rw /dev/puffs without success.
+See https://minux.hu/mounting-webdav-under-netbsd-unprivileged-user
+
+Shared libs libzip and libfuse were not found.  This could be fixed with
+
+   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/pkg/lib
+
+One might first try to  get fuse-unionfs to work.
 
 # MacOSX
 
