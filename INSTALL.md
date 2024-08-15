@@ -1,7 +1,17 @@
 # Installation of ZIPsFS
 
 
-For FreeBSD, NetBSD and MacOSX please see instructions in [INSTALL_other_than_Linux](./INSTALL_other_than_Linux.md)
+Please visit the page for your OS.
+
+ - MS-Windows: Install ZIPsFS in a WSL environment.
+ - [Ubuntu, Debian](./_INSTALL_Ubuntu.md)
+ - [MacOSX](./_INSTALL_MacOSX.md)
+ - [FreeBSD](./_INSTALL_FreeBSD.md)
+ - [NetBSD](./_INSTALL_NetBSD.md)
+ - [Ubuntu, Debian](./_INSTALL_Ubuntu.md)
+
+
+If your OS is not listed, continue reading here.
 
 
 First install the required libraries.
@@ -31,7 +41,7 @@ First install the required libraries and packages.
  - libfuse3-dev
  - libzip-dev
  - build-essential (The C compiler and make)
- - autoconf
+
 
 
 
@@ -41,16 +51,7 @@ First install the required libraries and packages.
     U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
     wget -N $U && unzip -o main.zip &&  ZIPsFS-main/src/ZIPsFS.compile.sh
 
-
-
-# Installation from source code with autotools
-
-If above did not work, try this:
-This will currently install only for systems with fuse3 i.e. Linux and FreeBSD
-    ./configure
-    cd src
-    make
-
+Alternatively, consider  [installation with autotools](./_INSTALL_autotools.md)
 
 # Testing the installed ZIPsFS
 
@@ -59,15 +60,10 @@ This will currently install only for systems with fuse3 i.e. Linux and FreeBSD
 
 # TroubleShooting
 
-Solving problems might be easiest  by adapting the simple installation script.
-
-    src/ZIPsFS.compile.sh
 
 Are the shared libraries found on the system?
 The option -fuse3 refers to libfuse3.so. Is this found in the library search paths.
 Are the include files in the include file search paths?
-
-
 
 Maybe this file requires adaptations for your OS:
 
