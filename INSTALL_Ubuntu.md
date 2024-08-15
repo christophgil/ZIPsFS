@@ -9,6 +9,6 @@
 # TroubleShooting
 
 
-Check whether it is possible to mount a zip file with fuse-zip.
+Check whether it is possible to mount a zip file with fuse-zip as root and as a normal user.
 
 _SNIPPET_fuse-zip

@@ -1,5 +1,0 @@
-    mkdir -p ~/mnt/zip ~/test &&  zip -j ~/test/test.zip /etc/os-release &&  fuse-zip ~/test/test.zip ~/mnt/zip
-
-The zip file is mounted here:
-
-    ls ~/mnt/zip
