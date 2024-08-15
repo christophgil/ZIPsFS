@@ -38,5 +38,3 @@ In another terminal check whether you see the content of the home directory at t
 
     U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
     wget -N $U && unzip -o main.zip &&  ZIPsFS-main/src/ZIPsFS.compile.sh
-    U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
-    wget -N $U && unzip -o main.zip &&  ZIPsFS-main/src/ZIPsFS.compile.sh
