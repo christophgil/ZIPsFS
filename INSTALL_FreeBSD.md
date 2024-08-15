@@ -49,3 +49,11 @@ If not then run
 
     U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
     wget -N $U && unzip -o main.zip &&  ZIPsFS-main/src/ZIPsFS.compile.sh
+
+
+## TroubleShooting
+
+
+Check whether it is possible to mount a zip file with fuse-zip as root and as a normal user.
+
+_SNIPPET_fuse-zip
