@@ -4,11 +4,11 @@
 Please visit the page for your OS.
 
  - MS-Windows: Install ZIPsFS in a WSL environment.
- - [Ubuntu, Debian](./_INSTALL_Ubuntu.md)
- - [MacOSX](./_INSTALL_MacOSX.md)
- - [FreeBSD](./_INSTALL_FreeBSD.md)
- - [NetBSD](./_INSTALL_NetBSD.md)
- - [Ubuntu, Debian](./_INSTALL_Ubuntu.md)
+ - [Ubuntu, Debian](./INSTALL_Ubuntu.md)
+ - [MacOSX](./INSTALL_MacOSX.md)
+ - [FreeBSD](./INSTALL_FreeBSD.md)
+ - [NetBSD](./INSTALL_NetBSD.md)
+ - [Ubuntu, Debian](./INSTALL_Ubuntu.md)
 
 
 If your OS is not listed, continue reading here.
@@ -35,7 +35,7 @@ both compilers, gcc and clang.
 
 First install the required libraries and packages.
 
- - bash
+ - bash unzip tmux
  - libfuse3
  - libzip
  - libfuse3-dev
