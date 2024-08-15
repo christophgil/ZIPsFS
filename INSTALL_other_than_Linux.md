@@ -63,7 +63,7 @@ Now check whether fuse-zip  works if run as a normal user
     src/ZIPsFS.compile.sh
 
 
-## Problems on NetBSD
+## NetBSD - Problems
 
 Running ZIPsFS as root worked well.  Normally, ZIPsFS will not run as root unless the option -r is
 given.  However, we could not run ZIPsFS as a normal user because of acceess failure for /dev/puffs.
@@ -112,6 +112,7 @@ In another terminal check whether you see the content of the home directory at t
      ls ~/mnt/test_bindfs
 
 
+## MacOSX - Install ZIPsFS
 
     wget -N  https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
     unzip main.zip

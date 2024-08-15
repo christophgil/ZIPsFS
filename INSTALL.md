@@ -1,4 +1,7 @@
-# Installation of executable
+# Installation of ZIPsFS
+
+
+For FreeBSD, NetBSD and MacOSX please see instructions in [INSTALL_other_than_Linux](./INSTALL_other_than_Linux.md)
 
 
 First install the required libraries.
@@ -8,6 +11,8 @@ First install the required libraries.
 
 A ready-to-use executable for Linux (amd64) is found in the folder
 [RELEASE](./RELEASE/). It may or may not work on your system.
+
+
 
 
 
@@ -28,16 +33,16 @@ First install the required libraries and packages.
  - build-essential (The C compiler and make)
  - autoconf
 
-For FreeBSD, NetBSD and MacOSX please see instructions in [INSTALL_other_than_Linux](./INSTALL_other_than_Linux.md)
 
 
 
-# Quick installation from source code
+# Quick installation
 
     wget -N  https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
     unzip main.zip
     cd ZIPsFS-main
     src/ZIPsFS.compile.sh
+
 
 
 # Installation from source code with autotools
