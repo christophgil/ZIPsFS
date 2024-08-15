@@ -55,9 +55,21 @@ Please install
 
     pkg_add zip unzip libzip fuse-unionfs perfuse bash wget
 
-<embed src="_snippet_install.md" />
+1
+<embed src="./_snippet_install.md" />
+2
+<embed src="./_snippet_install.html" />
+3
+```rb
+# ./_snippet_install.md
+```
+4
+```rb
+# ./_snippet_install.html
+```
 
-Then install ZIPsFS in the normal way.
+
+
 
 
 ## Problems on NetBSD
