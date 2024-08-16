@@ -17,7 +17,7 @@ ZIPsFS [\f[I]ZIPsFS\-options\f[R]] \f[I]path\-of\-root1\f[R]
 .SS Example 1
 .PP
 ZIPsFS \[ti]/tmp/ZIPsFS/writable \[ti]/local/file/tree //computer1/pub
-//computer2/pub : \-f \-o allow_other \[ti]/tmp/ZIPsFS/mnt
+//computer2/pub : \-f \-o allow_other \[ti]/mnt/ZIPsFS
 .SH DESCRIPTION
 .SS Summary
 .PP
@@ -30,92 +30,107 @@ The other file sources are read\-only and files will never be modified.
 ZIPsFS expands ZIP files as folders.
 Normally, the folder name is formed from the ZIP file name by appending
 \[lq].Contents/\[rq].
-This can be changed by the administrator with rules based on file name
-patterns.
-It is also possible to inline the files in the ZIP files into the file
-listing without the containing folder.
+This can be changed with rules based on file name patterns.
+Extensive configuration is possible without interrupting the file
+system.
+Specific features and performance tweaks meet our needs for storing
+large data from mass spectrometry experiments.
 .SS Configuration
 .PP
 The default behavior can be modified with rules based on file names in
 \f[I]ZIPsFS_configuration.h\f[R] and \f[I]ZIPsFS_configuration.c\f[R].
 For changes to take effect, re\-compilation and restart is necessary.
 Using the \f[I]\-s symlink\f[R] option, the configuration can be changed
-in production.
+without interrupting the file system.
+Ongoing computations with file access to the ZIPsFS are not affected.
 .SS Union / overlay file system
 .PP
-ZIPsFS is a union or overlay file system because several file locations
-are combined to one.
-All files in the source file trees (in the example four) can be accessed
-via the mount point (in the example \f[I]~/tmp/ZIPsFS/mnt\f[R]). When
-files are created or modified, they will be stored in the first file
-tree (in the example \f[I]~/tmp/ZIPsFS/writable\f[R]).
-If files exist in two locations, the left most root takes precedence.
-.SS Modified and created files
+ZIPsFS is a union or overlay file system.
+Several file locations are combined to one.
+All files in the source file trees (in above example command three
+sources) can be accessed via the mount point (in the example
+\f[I]~/mnt/ZIPsFS\f[R]). When files are created or modified, they will
+be stored in the first file tree (in the example
+\f[I]~/tmp/ZIPsFS/writable\f[R]).
+If files exist in two locations, the left most source file system takes
+precedence.
 .PP
 New files are created in the first file tree, while the following file
 trees are not modified.
-If the first root is an empty string is passed as first file tree, no
-files can be created and the virtual file system is read\-only.
+If an empty string \[dq]\[dq] or \[cq]\[cq] is given for the first
+source, no writable source is used.
+.SS ZIP files
+.PP
+Let \f[I]file.zip\f[R] be a ZIP file in any of the source file systems.
+It will appear in the virtual file system together with a folder
+\f[I]file.zip.Content\f[R].
+Normally, the folder name is formed by appending
+\[lq]\f[I].Content\f[R]\[rq] to the zip file name.
+This can be changed in \f[I]ZIPsFS_configuration.c\f[R].
+.PP
+For Sciex mass spectrometry files it is necessary that the containing
+files are shown directly in the file listing rather than in a
+sub\-folder.
+The respective file extensions are specified in
+\f[I]ZIPsFS_configuration.c\f[R].
+.SS Deleting files
+.PP
+Files can only be deleted when their physical location is in the first
+source.
+Conversely, in the FUSE file systems unionfs\-fuse and fuse\-overlayfs,
+files can be always deleted irrespectively of their physical location.
+They are canceled out without actually deleting them from their physical
+location.
+If you need the same behaviour please drop a request\-for\-feature.
 .SS Cache
 .PP
 ZIPsFS can read certain ZIP entries entirely into RAM and provide the
 data from the RAM copy at higher speed.
 This may improve performance for compressed ZIP entries that are read
 from varying positions in the file, so\-called file file\-seek.
-The file entries are selected by rules based on file names and
-compression in \f[I]ZIPsFS_configuration.c\f[R].
-.PP
-In addition, compressed ZIP entries are cached in RAM if the reading
+This concerns file entries with file name and size rules given in in
+\f[I]ZIPsFS_configuration.c\f[R].
+Furthermore, compressed ZIP entries are cached in RAM if the reading
 position ever jumps backward.
-.PP
 With the option \f[B]\-l\f[R] an upper limit of memory consumption for
 the ZIP RAM cache is specified.
+.PP
+Further caches aim at faster file listing of large directories.
 .SS Logs
 .PP
 Running ZIPsFS in the foreground with the option \f[I]\-f\f[R], allows
 to observe logs continuously at the console.
-It is recommended to run it in a terminal multiplexer like
+It is convenient to run ZIPsFS in a terminal multiplexer like
 \f[I]tmux\f[R].
-Log files are in \f[B]\[ti]/.ZIPsFS/\f[R] written.
+Log files are found in \f[B]\[ti]/.ZIPsFS/\f[R].
 An HTML file with status information is found in and are also accessible
-from Mount\-point/ZIPsFS/.
-.SS ZIP files
-.PP
-Let \f[I]file.zip\f[R] be a ZIP file in any of the root file systems.
-It will appear in the virtual file system together with a folder
-\f[I]file.zip.Content\f[R].
-Special rules based on file name patterns can be defined whether the
-contained files are shown in a sub\-folder or directly in the file
-listing.
-Normally, the folder name is formed by appending
-\[lq]\f[I].Content\f[R]\[rq] to the zip file name.
-Conversely, complex rules can be implemented in
-\f[I]ZIPsFS_configuration.c\f[R].
+from the generated folder \f[B]ZIPsFS\f[R] in the virtual ZIPsFS file
+system.
 .SS Autogeneration of files
 .PP
 ZIPsFS offers files which do not yet exist, and will be generated when
 used.
-This option is available if the first root directory which should be
-writable is provided.
+This option is available if the first file source is provided.
+Generally, the first file source is writable
 .PP
 It will not be available, if an empty string is passed as the first root
 directory.
 .PP
 The typical use\-case are file conversions.
-Auto\-generated files are found displayed in the default file tree.
-Instead, \f[I]Mount\-point/ZIPsFS/a/\f[R] replicates the entire file
-tree and also offers the generated files.
+Auto\-generated files are displayed in the virtual file tree in
+\f[I]ZIPsFS/a/\f[R] and physically stored in the first source.
 .PP
 With the current setting, Mascot mass spectrometry files and msML files
-are generated because this is required in our research group.
-As a more popular example, downscaled image files are offered for jpeg,
-jpg, png and gif files.
+are generated.
+As a more popular example, down\-scaled image files are offered for
+jpeg, jpg, png and gif files.
 The two scaling levels 50% and 25% demonstrate two different options:
-For size reduction to 50%, a file is generated and saved in
-*First\-root\-directory/ZIPsFS/a/Virtual\-path.scale50%.ext.
-When loaded a second time, the data comes without delay, because the
+For size reduction to 50%, a file is generated and saved in the first
+file source in *ZIPsFS/a/\&...scale50%.jpg.
+When requested for the first time there will be some delay.
+When accessed a second time, the data comes without delay, because the
 file is already there.
-For downscaling to 25%, the generated image data is not saved.
+For down\-scaling to 25%, the generated image data is not saved.
 Instead it is kept in RAM as long as the file handle is active.
 After loading the image, the image data in the RAM is discarded.
 The advantage is that no HD space is used.
@@ -127,19 +142,22 @@ own settings in ZIPsFS_configuration_autogen.c.
 .PP
 Also see readme in the folder /ZIPsFS/.
 .PP
-Some exotic wine based Windows executables did not work well within
-ZIPsFS.
-We had to externalize the into an external program.
-It is organized as an infinity loop and a queue.
-If you enconunter similar problems, see PLACEHOLDER_EXTERNAL_QUEUE and
+Some exotic Windows executables do not work well within ZIPsFS.
+As a work around, we developed the shell script
+\f[I]ZIPsFS_autogen_queue.sh\f[R].
+With each pass of an infinity loop one task is taken from a queue and
+processed.
+One file is converted at a time per script instance.
+Several instances of this shell script can run in parallel.
+In the settings, the symbol \f[B]PLACEHOLDER_EXTERNAL_QUEUE\f[R] is
+given instead of an executable program.
 .PP
 Problems/Limitations: The system does not know the file size of
 not\-yet\-generated files.
-It will report upper limit of the expected file size.
+It will report an upper limit of the expected file size.
 .SS ZIPsFS Options
-.TP
-.B \-h
-Prints brief usage information.
+.PP
+\-h Prints brief usage information.
 .TP
 .B \-l \f[I]Maximum memory for caching ZIP\-entries in the RAM\f[R]
 Specifies a limit for the cache.
@@ -258,7 +276,7 @@ Modification requires recompilation.
 \[ti]/.ZIPsFS: Contains the log file and cache
 .SH LIMITATIONS
 .PP
-Hardlinks are not implemented, while symlinks work.
+Hard\-links are not implemented, while symlinks work.
 .SH BUGS
 .PP
 Current status: Testing and Bug fixing

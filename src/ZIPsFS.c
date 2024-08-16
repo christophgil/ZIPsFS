@@ -15,10 +15,10 @@
 #include <sys/types.h> // ????
 #include <unistd.h> /// ???? lseek
 
- #include <sys/mman.h>
- #ifndef MAP_ANONYMOUS
- #define MAP_ANONYMOUS MAP_ANON
- #endif  // !MAP_ANONYMOUS
+#include <sys/mman.h>
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS MAP_ANON
+#endif  // !MAP_ANONYMOUS
 #include "cg_os_dependencies.h"
 #include "config.h"
 #include <dirent.h>
@@ -32,8 +32,8 @@
 #include "ZIPsFS_configuration.h"
 
 #if IS_NETBSD
- #include <sys/param.h>
-     #include <sys/mount.h>
+#include <sys/param.h>
+#include <sys/mount.h>
 #endif //IS_NETBSD
 
 
@@ -493,9 +493,9 @@ static bool unsimplify_fname(char *n,const char *zipfile){
     const char *replacement="";
     const int n_l=cg_strlen(n);
     int  pos=0;
-char *s=    cg_strchrnul(replacement,'.');
-// int replacement_l=s-replacement;
- int replacement_l=((char*)cg_strchrnul(replacement,'.'))-(replacement);
+    char *s=    cg_strchrnul(replacement,'.');
+    // int replacement_l=s-replacement;
+    int replacement_l=((char*)cg_strchrnul(replacement,'.'))-(replacement);
 
   }
 
@@ -705,7 +705,7 @@ static void *infloop_unblock(void *arg){
     *_mkSymlinkAfterStart=0;
   }
   while(true){
-        usleep(5000*1000);
+    usleep(5000*1000);
     foreach_root(i,r){
       if (!(r->features&ROOT_REMOTE)) continue;
       RLOOP(t,PTHREAD_LEN){
@@ -1275,8 +1275,8 @@ static bool find_realpath_any_root(int opt,struct zippath *zpath,const struct ro
         goto found;
       }
       if (sleep_milliseconds){
-      log_verbose("Going sleep %d ms ...",sleep_milliseconds);
-      usleep(sleep_milliseconds<<10);
+        log_verbose("Going sleep %d ms ...",sleep_milliseconds);
+        usleep(sleep_milliseconds<<10);
       }
     }
   }
@@ -1586,7 +1586,7 @@ static int filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_f
             IF1(WITH_ZIPINLINE,if (config_also_show_zipfile_in_listing(u,u_l))) filler(buf,u,&st,0  COMMA_FILL_DIR_PLUS);
             config_zipfilename_to_virtual_dirname(virtual_name,u,u_l);
             // if (strlen(virtual_name)!=u_l || cg_endsWithZip(u,u_l))
-              st.st_mode=(st.st_mode&~S_IFMT)|S_IFDIR; /* ZIP files as  directory */
+            st.st_mode=(st.st_mode&~S_IFMT)|S_IFDIR; /* ZIP files as  directory */
             filldir(opt,filler,buf,virtual_name,&st,no_dups);
           }
         }
@@ -1640,11 +1640,11 @@ static int realpath_mk_parent(char *realpath,const char *path){
 
 void *xmp_init(struct fuse_conn_info *conn IF1(HAS_FUSE_CONFIG,,struct fuse_config *cfg)){
   //void *x=fuse_apply_conn_info_opts;  //cfg-async_read=1;
-  #if HAS_FUSE_CONFIG
+#if HAS_FUSE_CONFIG
   cfg->use_ino=1;
   IF1(DO_LIBFUSE_CACHE_STAT,cfg->entry_timeout=cfg->attr_timeout=200;cfg->negative_timeout=20);
   IF0(DO_LIBFUSE_CACHE_STAT,cfg->entry_timeout=cfg->attr_timeout=2;  cfg->negative_timeout=10);
-  #endif
+#endif
   return NULL;
 }
 
@@ -1812,9 +1812,9 @@ int xmp_truncate(const char *path, off_t size PARA_TRUNCATE){
   int res;
   IF1(IS_ORIG_FUSE,if (fi)    res=ftruncate(fi->fh,size); else)
     {
-    bool found;FIND_REALPATH(path);
-    res=!ZPATH_ROOT_WRITABLE()?EACCES: found?truncate(RP(),size):ENOENT;
-  }
+      bool found;FIND_REALPATH(path);
+      res=!ZPATH_ROOT_WRITABLE()?EACCES: found?truncate(RP(),size):ENOENT;
+    }
   return minus_val_or_errno(res);
 }
 /////////////////////////////////
@@ -1916,7 +1916,7 @@ static int xmp_symlink(const char *target, const char *path){ // target,link
 #define WITH_PARA_FLAGS 0
 #endif
 int xmp_rename(const char *old_path, const char *neu_path IF1(WITH_PARA_FLAGS,, uint32_t flags)){ // from,to
-  #if WITH_GNU && WITH_PARA_FLAGS
+#if WITH_GNU && WITH_PARA_FLAGS
   bool eexist=false;
   if (flags&RENAME_NOREPLACE){
     bool found;FIND_REALPATH(neu_path);
@@ -1926,8 +1926,8 @@ int xmp_rename(const char *old_path, const char *neu_path IF1(WITH_PARA_FLAGS,, 
 
 
   bool found;FIND_REALPATH(old_path);
-    if (!found) return -ENOENT;
-    IF1(WITH_GNU,if (eexist) return -EEXIST);
+  if (!found) return -ENOENT;
+  IF1(WITH_GNU,if (eexist) return -EEXIST);
 
 
   if (!ZPATH_ROOT_WRITABLE()) return -EACCES;
@@ -1948,8 +1948,8 @@ static off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file
          struct fhdata* d=fhdata_get(path,fi->fh);
          if (d){
            switch(whence){
-           #if __USE_GNU
-                        case SEEK_HOLE:ret=(d->offset=d->zpath.stat_vp.st_size);break;
+#if __USE_GNU
+           case SEEK_HOLE:ret=(d->offset=d->zpath.stat_vp.st_size);break;
            case SEEK_DATA:
 #endif // __USE_GNU
            case SEEK_SET: ret=d->offset=off;break;
@@ -2165,7 +2165,7 @@ int main(int argc,char *argv[]){
 #define C(var) fprintf(stderr,"  %s: %d\n",#var,var);
   C(IS_LINUX);C(IS_APPLE);C(IS_FREEBSD);C(IS_OPENBSD);C(IS_CLANG);C(WITH_GNU);
   C(HAS_BACKTRACE);C(HAS_UNDERSCORE_ENVIRON);
-  #undef C
+#undef C
   fprintf(stderr,"MAX_PATHLEN: %d\n",MAX_PATHLEN);
   fprintf(stderr,"has_proc_fs: %s\n",yes_no(has_proc_fs()));
   fprintf(stderr,"FUSE_MAJOR_VERSION=%d FUSE_MINOR_VERSION=%d \n",FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION);
@@ -2205,10 +2205,8 @@ int main(int argc,char *argv[]){
 #undef S
 
   //    argv_fuse[argc_fuse++]="--fuse-flag";    argv_fuse[argc_fuse++]="sync_read";
-  bool allow_root=false;
-  for(int c;(c=getopt(argc,argv,"+qnkhrs:c:S:l:L:"))!=-1;){  // :o:sfdh
+  for(int c;(c=getopt(argc,argv,"+qnkhs:c:S:l:L:"))!=-1;){  // :o:sfdh
     switch(c){
-    case 'r': allow_root=true; break;
     case 'q': _logIsSilent=true; break;
     case 'k': _killOnError=true; break;
     case 'S': _pretendSlow=true; break;
@@ -2235,12 +2233,27 @@ int main(int argc,char *argv[]){
 #endif //WITH_MEMCACHE
     }
   }
-  if (!allow_root && (!getuid() || !geteuid())){ log_strg("Running ZIPsFS as root opens unnacceptable security holes. Run with option -r if you know what you are doing.\n");return 1;}
-    if (!colon){ log_warn0("No single colon found in parameter list\n"); usage(); return 1;}
-  if (colon==argc-1){ log_warn0("Expect mount point after single colon \n"); usage(); return 1;}
+  if (!getuid() || !geteuid()){
+    log_strg("Running ZIPsFS as root opens unnacceptable security holes.\n");
+    if (!foreground) DIE0("It is only allowed in foreground mode  with option -f.");
+      fprintf(stderr,"Do you accept the risks [Enter / Ctrl-C] ?\n");getc_tty();
+  }
+  if (!colon){ log_error0("No single colon found in parameter list\n"); usage(); return 1;}
+  if (colon==argc-1){ log_error0("Expect mount point after single colon\n"); usage(); return 1;}
   ASSERT(MAX_PATHLEN<=PATH_MAX);
   char dot_ZIPsFS[MAX_PATHLEN+1],dirOldLogs[MAX_PATHLEN+1];
   _mnt_l=strlen(strncpy(_mnt,argv[argc-1],MAX_PATHLEN));
+  {
+    struct stat st;
+    if (stat(_mnt,&st)){
+      if (!foreground) DIE("Directory does not exist: %s",_mnt);
+      fprintf(stderr,"Create non-existing folder %s  [Enter / Ctrl-C] ?\n",_mnt);
+      getc_tty();
+      cg_recursive_mkdir(_mnt);
+    }else{
+      if (!S_ISDIR(st.st_mode)) DIE("Not a directory: %s",_mnt);
+    }
+  }
   { /* dot_ZIPsFS */
     {
       char *dir=dot_ZIPsFS+strlen(cg_copy_path(dot_ZIPsFS,"~/.ZIPsFS/"));
@@ -2367,8 +2380,7 @@ int main(int argc,char *argv[]){
   //if (DIRECTORY_CACHE_SIZE*DIRECTORY_CACHE_SEGMENTS<64*1024*1024){ warn=true;log_msg(RED_WARNING"Small file attribute and directory cache of only %d\n",DIRECTORY_CACHE_SEGMENTS*DIRECTORY_CACHE_SEGMENTS/1024);}
   IF1(WITH_AUTOGEN,if (!cg_is_member_of_group("docker")){ log_warn0(HINT_GRP_DOCKER); warn=true;});
 #undef C
-  FILE *tty=fopen("/dev/tty","r");
-  if (warn && !strstr(_mnt,"/cgille/") && tty){ fprintf(stderr,"Press enter ");getc(tty);}
+  if (warn && !strstr(_mnt,"/cgille/")){ fprintf(stderr,"Press enter ");getc_tty();}
   if (!foreground)  _logIsSilent=_logIsSilentFailed=_logIsSilentWarn=_logIsSilentError=true;
   foreach_root(ir,r){
     RLOOP(t,PTHREAD_LEN){
@@ -2433,4 +2445,5 @@ int main(int argc,char *argv[]){
 // ~/Projects/ZIPsFS/test/diann/anja_cannot
 // DIE DIE0 DEBUG_NOW fuse_session_exit
 // mkdir rule proc malloc fcntl O_PATH group_member execvpe  posix_fadvise lseek fill_dir_plus  __APPLE__ __clang__ COMMA_FILL_DIR_PLUS
-// log_debug_now log_debug_now0 mmap ys/mman.h  unistd _GNU_SOURCE DEBUG_NOW backtrace execinfo unistd.h
+// log_debug_now log_debug_now0 mmap ys/mman.h  unistd _GNU_SOURCE DEBUG_NOW backtrace execinfo unistd.h tty
+// PLACEHOLDER_EXTERNAL_QUEUE.

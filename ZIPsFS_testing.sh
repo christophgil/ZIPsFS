@@ -71,9 +71,7 @@ main(){
         read -r -p  "Press enter to continue"
 
         set +x
-        local allow_root=''
         if [[ $OSTYPE == *netbsd* ]];then
-            allow_root='-r'
             if ldd $exe |fgrep 'not found'; then
                 echo "${ANSI_FG_RED}Shared libs not found.$ANSI_RESET Therefore setting LD_LIBRARY_PATH:"
                 echo '    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/pkg/lib'
@@ -81,7 +79,7 @@ main(){
                 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}:/usr/pkg/lib
             fi
         fi
-        $exe $allow_root  $BASE/writable $rr : -f  $m
+        $exe  $BASE/writable $rr : -f  $m
     fi
     return
 

@@ -1,7 +1,8 @@
 /*  Copyright (C) 2023   christoph Gille   This program can be distributed under the terms of the GNU GPLv3. */
-#include "cg_utils.h"
 #ifndef _cg_utils_dot_c
 #define _cg_utils_dot_c
+#include "cg_gnu.c"
+#include "cg_utils.h"
 #include <errno.h>
 #include <fcntl.h>// provides posix_fadvise
 #include <sys/wait.h>
@@ -28,7 +29,7 @@
 
 
 
-#include "cg_gnu.c"
+
 
 /*********************************************************************************/
 static bool has_proc_fs(){
@@ -462,6 +463,15 @@ static bool cg_file_set_atime(const char *path, struct stat *stbuf,long secondsF
 ///////////////////
 /// file        ///
 ///////////////////
+
+
+
+static int getc_tty(){
+  static FILE *tty;
+  if (!tty && !(tty=fopen("/dev/tty","r"))) tty=stdin;
+  return getc(tty);
+}
+
 /* write() may be write only part of the data */
 static bool cg_fd_write(int fd,char *t,const off_t size0){
   for(off_t size=size0; size>0;){
@@ -701,6 +711,7 @@ static int differs_filecontent_from_string(const int opt,const char* path, const
 #endif // _cg_utils_dot_c
 // 1111111111111111111111111111111111111111111111111111111111111
 #if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__==0
+int main(int argc, char *argv[]){
 
   {  char m[10]; memset(m,9,10000); return 0;}
   switch(8){
