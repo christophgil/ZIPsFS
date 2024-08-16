@@ -66,12 +66,6 @@ For Sciex mass spectrometry files it is necessary that the containing files are 
 The respective file extensions are specified in *ZIPsFS_configuration.c*.
 
 
-## Deleting files
-
-Files can only be deleted when their physical location is in the first source.
-Conversely, in the FUSE file systems  unionfs-fuse and fuse-overlayfs, files can be always deleted irrespectively of their physical location.
-They are canceled out without actually deleting them from their physical location.
-If you need the same behaviour please drop a request-for-feature.
 
 ## Cache
 
@@ -131,16 +125,17 @@ ZIPsFS Options
 --------------
 
 -h
-    Prints brief usage information.
+
+Prints brief usage information.
 
 
 -l  *Maximum memory for caching ZIP-entries in the RAM*
 
-:   Specifies a limit for the cache.  For example *-l  8G* would limit the size of the cache to 8 Gigabyte.
+Specifies a limit for the cache.  For example *-l  8G* would limit the size of the cache to 8 Gigabyte.
 
 -c \[NEVER,SEEK,RULE,COMPRESSED,ALWAYS\]
 
-:   Policy when ZIP entries are cached in RAM.
+Policy when ZIP entries are cached in RAM.
 
 
 |           |                                                                                  |
@@ -158,14 +153,35 @@ ZIPsFS Options
 
 -s *path-of-symbolic-link*
 
-: After initialization the specified  symlink is created and points to the mount point. Previously existing links are overwritten.
-This allows to restart ZIPsFS without affecting running programs.
-Programs refer to the symlink rather than the real mount-point.
-Consider a ZIPsFS instance which needs to be replaced by a newer one.  The newer one is started with
-a different mount point. For some time both instances work simultaneously.
-Once no software is reading files from the  old instance, the old instance can be terminated.
+After initialization the specified  symlink is created and points to the mount point. Previously existing links are overwritten.
+This allows to restart ZIPsFS without affecting running programs which access file in the virtual ZIPsFS file system.
+For file paths in the virtual file system,  the symlink is used rather than the real mount-point.
+Consider a running  ZIPsFS instance which needs to be replaced by a newer one.  The new ZIPsFS instance is started with
+a different mount point. Both  instances work simultaneously. The symlink which used to point to the mount point of the old instance is now pointing to that of the new one.
+The old instance should be let running for an hour or so until no file handle is open any more.
 
-After initialization a symlink to the new mount point is created and programs start to use the new instance.
+
+
+
+FUSE Options
+------------
+
+-f
+
+Run in foreground and display some logs at stdout. This mode is useful inside tmux.
+
+
+-s
+
+Disable multi-threaded operation to rescue ZIPsFS in case of threading related bugs.
+
+-o *comma separated Options*
+
+-o allow_other
+
+Other users can read the files
+
+
 
 
 ## Fault management
@@ -189,34 +205,26 @@ For ZIP entries loaded entirely into the RAM, the CRC sum is validated and possi
 
 
 
-FUSE Options
-------------
-
--f
-
-:   Run in foreground and display some logs at stdout. This mode is useful inside tmux.
-
-
--s
-
-:   Disable multi-threaded operation to rescue ZIPsFS in case of threading related bugs.
-
--o *comma separated Options*
-
-:   *-o allow_other*     Other users can read the files
-
 FILES
 =====
 
 - ZIPsFS_configuration.h and ZIPsFS_configuration.c and ZIPsFS_configuration_autogen.c:  Customizable rules. Modification requires recompilation.
-- ~/.ZIPsFS:
-  Contains the log file and cache
+- ~/.ZIPsFS:  Contains the log file and cache and the folder a. The later holds auto-generated files.
 
 
 LIMITATIONS
 ===========
 
+## Hard-links
+
 Hard-links are not implemented, while symlinks work.
+
+## Deleting files
+
+Files can only be deleted when their physical location is in the first source.
+Conversely, in the FUSE file systems  unionfs-fuse and fuse-overlayfs, files can be always deleted irrespectively of their physical location.
+They are canceled out without actually deleting them from their physical location.
+If you need the same behaviour please drop a request-for-feature.
 
 BUGS
 ====

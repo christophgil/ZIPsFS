@@ -73,15 +73,6 @@ files are shown directly in the file listing rather than in a
 sub\-folder.
 The respective file extensions are specified in
 \f[I]ZIPsFS_configuration.c\f[R].
-.SS Deleting files
-.PP
-Files can only be deleted when their physical location is in the first
-source.
-Conversely, in the FUSE file systems unionfs\-fuse and fuse\-overlayfs,
-files can be always deleted irrespectively of their physical location.
-They are canceled out without actually deleting them from their physical
-location.
-If you need the same behaviour please drop a request\-for\-feature.
 .SS Cache
 .PP
 ZIPsFS can read certain ZIP entries entirely into RAM and provide the
@@ -157,14 +148,18 @@ not\-yet\-generated files.
 It will report an upper limit of the expected file size.
 .SS ZIPsFS Options
 .PP
-\-h Prints brief usage information.
-.TP
-.B \-l \f[I]Maximum memory for caching ZIP\-entries in the RAM\f[R]
+\-h
+.PP
+Prints brief usage information.
+.PP
+\-l \f[I]Maximum memory for caching ZIP\-entries in the RAM\f[R]
+.PP
 Specifies a limit for the cache.
 For example \f[I]\-l 8G\f[R] would limit the size of the cache to 8
 Gigabyte.
-.TP
-.B \-c [NEVER,SEEK,RULE,COMPRESSED,ALWAYS]
+.PP
+\-c [NEVER,SEEK,RULE,COMPRESSED,ALWAYS]
+.PP
 Policy when ZIP entries are cached in RAM.
 .PP
 .TS
@@ -212,21 +207,41 @@ T{
 T}@T{
 T}
 .TE
-.TP
-.B \-s \f[I]path\-of\-symbolic\-link\f[R]
+.PP
+\-s \f[I]path\-of\-symbolic\-link\f[R]
+.PP
 After initialization the specified symlink is created and points to the
 mount point.
 Previously existing links are overwritten.
-This allows to restart ZIPsFS without affecting running programs.
-Programs refer to the symlink rather than the real mount\-point.
-Consider a ZIPsFS instance which needs to be replaced by a newer one.
-The newer one is started with a different mount point.
-For some time both instances work simultaneously.
-Once no software is reading files from the old instance, the old
-instance can be terminated.
+This allows to restart ZIPsFS without affecting running programs which
+access file in the virtual ZIPsFS file system.
+For file paths in the virtual file system, the symlink is used rather
+than the real mount\-point.
+Consider a running ZIPsFS instance which needs to be replaced by a newer
+one.
+The new ZIPsFS instance is started with a different mount point.
+Both instances work simultaneously.
+The symlink which used to point to the mount point of the old instance
+is now pointing to that of the new one.
+The old instance should be let running for an hour or so until no file
+handle is open any more.
+.SS FUSE Options
 .PP
-After initialization a symlink to the new mount point is created and
-programs start to use the new instance.
+\-f
+.PP
+Run in foreground and display some logs at stdout.
+This mode is useful inside tmux.
+.PP
+\-s
+.PP
+Disable multi\-threaded operation to rescue ZIPsFS in case of threading
+related bugs.
+.PP
+\-o \f[I]comma separated Options\f[R]
+.PP
+\-o allow_other
+.PP
+Other users can read the files
 .SS Fault management
 .PP
 When source file structures are stored remotely, there is a risk that
@@ -255,28 +270,27 @@ If loading of ZIP files fail, loading will be repeated after 1s.
 .PP
 For ZIP entries loaded entirely into the RAM, the CRC sum is validated
 and possible errors are logged.
-.SS FUSE Options
-.TP
-.B \-f
-Run in foreground and display some logs at stdout.
-This mode is useful inside tmux.
-.TP
-.B \-s
-Disable multi\-threaded operation to rescue ZIPsFS in case of threading
-related bugs.
-.TP
-.B \-o \f[I]comma separated Options\f[R]
-\f[I]\-o allow_other\f[R] Other users can read the files
 .SH FILES
 .IP \[bu] 2
 ZIPsFS_configuration.h and ZIPsFS_configuration.c and
 ZIPsFS_configuration_autogen.c: Customizable rules.
 Modification requires recompilation.
 .IP \[bu] 2
-\[ti]/.ZIPsFS: Contains the log file and cache
+\[ti]/.ZIPsFS: Contains the log file and cache and the folder a.
+The later holds auto\-generated files.
 .SH LIMITATIONS
+.SS Hard\-links
 .PP
 Hard\-links are not implemented, while symlinks work.
+.SS Deleting files
+.PP
+Files can only be deleted when their physical location is in the first
+source.
+Conversely, in the FUSE file systems unionfs\-fuse and fuse\-overlayfs,
+files can be always deleted irrespectively of their physical location.
+They are canceled out without actually deleting them from their physical
+location.
+If you need the same behaviour please drop a request\-for\-feature.
 .SH BUGS
 .PP
 Current status: Testing and Bug fixing
