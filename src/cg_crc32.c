@@ -48,7 +48,7 @@ static uint32_t cg_crc32(const void *data, size_t n_bytes, uint32_t crc, pthread
   return crc;
 }
 #endif // _cg_crc32_dot_c
-#if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__ == 0
+#if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__ == 0
 int main(int argc, char *argv[]){
 
 }

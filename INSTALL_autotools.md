@@ -2,8 +2,8 @@
 
 
 
-This will currently work only for systems with fuse3 i.e. Linux and FreeBSD
-The package autoconf is needed.
+This is less flexible and will only work on Linux and only with  fuse3.
+It requires *make* which is in the package  build-essential.
 
     ./configure
     cd src

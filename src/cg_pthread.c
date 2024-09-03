@@ -6,7 +6,7 @@
 /// Lock Without WITH_ASSERT_LOCK 25 nanosec.
 /// Not recursive 30 nanosec.
 /////////////////////////////////////////////////////////////////
-#if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__==0
+#if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
 #define NUM_MUTEX 99
 static char *MUTEX_S[NUM_MUTEX];
 static void cg_print_stacktrace(int calledFromSigInt){}
@@ -118,7 +118,7 @@ cg_thread_assert_not_locked(mutex_fhdata);
 }
 #endif // !WITH_ASSERT_LOCK
 /////////////////////////////////////////////////////////////////////////////////
-#if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__==0
+#if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
 int main(int argc, char *argv[]){
   IF1(WITH_ASSERT_LOCK,cg_mutex_count_test());
 }

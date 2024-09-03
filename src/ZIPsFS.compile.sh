@@ -3,7 +3,7 @@
 ########################
 ### Please customize ###
 ########################
-
+set -u
 WITH_SANITIZER=0
 IPATHS='-I . -I/usr/local/include/fuse3  -I/usr/local/include -I/opt/local/include -I/usr/pkg/include'
 LPATHS='-L/usr/pkg/lib -L/usr/local/lib -L/opt/local/lib'
@@ -11,8 +11,21 @@ LPATHS='-L/usr/pkg/lib -L/usr/local/lib -L/opt/local/lib'
 CCOMPILER=CC
 clang --version && CCOMPILER=clang
 
+
+
 export ANSI_FG_GREEN=$'\e[32m' ANSI_FG_RED=$'\e[31m' ANSI_FG_MAGENTA=$'\e[35m' ANSI_FG_GRAY=$'\e[30;1m' ANSI_FG_BLUE=$'\e[34;1m' ANSI_FG_BLACK=$'\e[100;1m' ANSI_FG_YELLOW=$'\e[33m' ANSI_FG_WHITE=$'\e[37m'
 export ANSI_INVERSE=$'\e[7m' ANSI_BOLD=$'\e[1m' ANSI_UNDERLINE=$'\e[4m' ANSI_RESET=$'\e[0m'
+
+
+try_compile(){
+    local success=1 name=$1  includes=$2  main=$3  opt=${4:-}
+    local x=$TEMP/$name
+    local c=$x.c
+    [[ ! -s $c ]] && echo -e "$includes\nint main(int argc,char *argv[]){\n $main; }\n" >$c.$$.tmp && mv $c.$$.tmp $c
+    ! { $CCOMPILER $opt $c -o $x  2>&1; }  >$x.log && success=0
+    echo $success
+    return $((success==0))
+}
 
 ########################
 ### CLI Parameters   ###
@@ -29,23 +42,31 @@ while getopts 'sg' o;do
     esac
 done
 shift $((OPTIND-1))
-echo "WITH_SANITIZER:$WITH_SANITIZER  CCOMPILER:$CCOMPILER"
-DIR=${BASH_SOURCE[0]%/*}
+IS_CG=0
+[[ $(hostname) == s-mcpb-ms03.charite.de ]] && IS_CG=1 && WITH_SANITIZER=1  # && CCOMPILER=gcc
+SRC=${BASH_SOURCE[0]}
+DIR=${SRC%/*}
 TEMP=~/tmp/ZIPsFS/compilation
 ! mkdir -p $TEMP && press_ctrl_c
 
+for f in $TEMP/*;do
+    [[ -e $f && $SRC -nt $f ]] && rm "$f"
+done
 
 detect_fuse_version(){
-    local exe=$TEMP/print_fuse_version p
-    [[ -d /usr/pkg/lib &&  $OSTYPE == *netbsd* ]] && export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/pkg/lib
+    local p
+    [[ -d /usr/pkg/lib &&  $OSTYPE == *netbsd* ]] && export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}:/usr/pkg/lib
     for p in -lfuse3 -lfuse2 -lfuse1 -lfuse; do
-        rm $exe 2>/dev/null
-        if $CCOMPILER $IPATHS $LPATHS $p $DIR/print_fuse_version.c -o  $exe 2>$TEMP/try_compile$p.log && [[ -s $exe ]];then
-            if ! $exe;then
-                echo "${ANSI_FG_RED}Problem$ANSI_RESET running $exe"
+        local x=$TEMP/fuse_version$p
+        if try_compile ${x##*/} \
+                       $'#include <stdio.h>\n#define _FILE_OFFSET_BITS 64\n#define FUSE_USE_VERSION 33\n#include <fuse.h>' \
+                       'printf("-DFUSE_MAJOR_V=%d -DFUSE_MINOR_V=%d",FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION); '  \
+                       "$IPATHS $LPATHS $p" >/dev/null; then
+            if ! $x;then
+                echo "${ANSI_FG_RED}Problem$ANSI_RESET running $x" >&2
                 press_ctrl_c
             else
-                echo $p
+                echo " $p"
             fi
             return 0
         fi
@@ -54,78 +75,74 @@ detect_fuse_version(){
     press_ctrl_c
     return 1
 }
-
 print_linker_option_execinfo(){
-    local src=$TEMP/test_lib_execinfo.c
-    cat << EOF > $src
-#include <execinfo.h>
-int main(int argc, char *argv[]){
-    backtrace_symbols(0,0);
-}
-EOF
-    $CCOMPILER $src -o ${src%.c} 2>$TEMP/try_compile_without-lexecinfo.log && echo 'Not require option -lexecinfo' >&2  && return 0
-    $CCOMPILER $src -lexecinfo -o ${src%.c} 2>$TEMP/try_compile_with-lexecinfo.log && echo 'Do require option -lexecinfo' >&2 && echo ' -lexecinfo' && return 0
-    echo "${ANSI_FG_RED}Problem $ANSI_RESET  compiling function backtrace_symbols()."
+    local p
+    [[ -d /usr/pkg/lib &&  $OSTYPE == *netbsd* ]] && export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}:/usr/pkg/lib
+    for p in -lexecinfo ''; do
+        if try_compile "backtrace$p" '#include <execinfo.h>' 'backtrace_symbols(0,0);' $p >/dev/null;then
+            echo $p
+            return 0
+        fi
+    done
+    return 1
+    echo "${ANSI_FG_RED}Problem $ANSI_RESET  compiling function backtrace_symbols() in $x.c."
     press_ctrl_c
 }
-
 HL_ERROR(){
     grep --color=always -i 'error\|$'
 }
-
 find_bugs(){
     if grep -n  '^ *[a-z].*) *LOCK_N(' $(find $DIR -name '*.c');then
         echo 'Error: LOCK_N(...) requires curly braces'
         exit 1
     fi
 }
-
 main(){
-    local version
-    ! version=$(detect_fuse_version) && echo "$ANSI_FG_RED Failed to compile tiny test program with libfuse $ANSI_RESET"  && return 1
-    echo version: $version
-    exe=${DIR%/*}/ZIPsFS
-    [[ -s $exe ]] && rm -v $exe
+    ((IS_CG)) && ! cd && return 1 # Otherwise the logs contain relative paths
+    ! try_compile 'empty' '' '' >/dev/null && echo "Cannot compile simple file $TEMP/empty.c" && return 1
+    local has_atos=0 has_addr2line=0 LL="-lpthread -lm -lzip  "  has_backtrace=0  sanitize=''  NOWARN="-Wno-string-compare" fuse_version
+    addr2line -H >/dev/null 2>/dev/null && has_addr2line=1
+    atos -h 2>/dev/null && has_atos=1
+    LL+=" $(print_linker_option_execinfo) " && has_backtrace=1
+    ! fuse_version="$(detect_fuse_version) " && echo "$ANSI_FG_RED Failed to compile tiny test program with libfuse $ANSI_RESET"  && return 1
+    LL+=" -l${fuse_version##*-l} "
+    local opts=-D"HAS_ADDR2LINE=$has_addr2line "-D"HAS_ATOS=$has_atos "-D"HAS_BACKTRACE=$has_backtrace ${fuse_version% -l*} "
+    opts+=-D"HAS_EXECVPE=$(try_compile execvpe '#include <unistd.h>' 'execvpe("",NULL,NULL);' -Werror) "
+    opts+=-D"HAS_UNDERSCORE_ENVIRON=$(try_compile us_environ '#include <unistd.h>' 'extern char **_environ; char **ee=_environ;') "
+    opts+=-D"HAS_ST_MTIM=$(try_compile st_mtim '#include <sys/stat.h>' 'struct stat st;  st.st_mtim=st.st_mtim; ') "
+    opts+=-D"HAS_POSIX_FADVISE=$(try_compile posix_fadvise '#include <fcntl.h>' 'posix_fadvise(0,0,0,POSIX_FADV_DONTNEED);') "
+    local x=${DIR%/*}/ZIPsFS
+    rm  "$x" 2>/dev/null
+    [[ -s $x ]] && echo "${ANSI_RED}Warning, $x exists $ANSI_RESET"
     {
         cat $DIR/ZIPsFS_stat_queue.c $DIR/ZIPsFS.c $DIR/ZIPsFS_cache.c  $DIR/ZIPsFS_debug.c $DIR/ZIPsFS_log.c  | sed -n 's|^\(static .*)\) *{$|\1;|p'
         cat $DIR/ZIPsFS_log.c | grep '^#define .*\*TO_HEADER\*'
     }> $DIR/ZIPsFS.h
+    if [[ $CCOMPILER == clang ]];then
+ #       export ASAN_OPTIONS='suppressions=ZIPsFS_asan.supp,detect_leaks=0,check_initialization_order=0,use-after-return=0,detect_stack_use_after_return=0'
+#                export ASAN_OPTIONS="suppressions=$HOME/git_projects/ZIPsFS/src/ZIPsFS_asan.supp"
+    ((IS_CG)) && export PATH=/usr/lib/llvm-20/bin/:$PATH
+        ((WITH_SANITIZER)) && sanitize="-fsanitize=address  -fno-omit-frame-pointer  "
+    else
+        NOWARN+=" -Wno-format-truncation"
+        ((WITH_SANITIZER)) && sanitize='-fsanitize=address -static-libasan'
+    fi
 
-
-   [[ $(hostname) == s-mcpb-ms03.charite.de ]] && ! cd && return  # Otherwise the logs contain relative paths
-
-    sanitize=''
-    LL="-lpthread -lm -lzip $LFUSE $(print_linker_option_execinfo)"
-    ##    [[ $OSTYPE == *freebsd* ]] && LL+=' -lexecinfo'
-    NOWARN="-Wno-string-compare"
-    {
-
-        if [[ $CCOMPILER == clang ]];then
-            export PATH=/usr/lib/llvm-10/bin/:$PATH
-            sanitize=''
-            ((WITH_SANITIZER)) && sanitize="-fsanitize=address  -fno-omit-frame-pointer"
-            export PATH=/usr/lib/llvm-10/bin/:$PATH
-        else
-            NOWARN+=" -Wno-format-truncation"
-        fi
-        set -x
-        $CCOMPILER  $NOWARN  -DHAVE_CONFIG_H $IPATHS  -O0 -D_FILE_OFFSET_BITS=64 -rdynamic -g $sanitize  $DIR/ZIPsFS.c $LPATHS $LL $version   -o $exe
-        set +x
-    } # 2>&1 | HL_ERROR
-    if ls -l -h $exe;then
-        echo "$ANSI_FG_GREEN Success $ANSI_RESET"
+    local c=${x}_compilation.sh
+    echo "# This file has been created with $SRC"$'\n\n'$CCOMPILER $NOWARN $opts $IPATHS -O0 -D_FILE_OFFSET_BITS=64 -rdynamic -g $sanitize $DIR/ZIPsFS.c $LPATHS $LL  -o $x |tee $c
+    chmod +x $c
+    press_ctrl_c
+    . $c
+    more $c |grep -v '^#'
+    if ls -l -h $x;then
+        echo "$ANSI_FG_GREEN Success $ANSI_RESET" $'\n\nSuggest testing:\n'$DIR/ZIPsFS_testing.sh $x'$\n'
+        [[ $OSTYPE == *freebsd* ]] && echo 'If ZIPsFS does not work, try as root'
     else
         echo "$ANSI_FG_RED Failed $ANSI_RESET"
     fi
-    echo LL=$LL
-    echo sanitize=$sanitize
-    echo "See logs in $TEMP"
-    if [[ -s $exe ]];then
-        echo 'Suggest testing: '
-        [[ $OSTYPE == *freebsd* ]] && "If it might not work, try as root"
-        echo "$DIR/ZIPsFS_testing.sh $exe"
-    fi
+
+
+
 
 }
-
 main "$@"

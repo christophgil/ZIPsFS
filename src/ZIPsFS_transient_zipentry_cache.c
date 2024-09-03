@@ -12,7 +12,7 @@ static struct ht* transient_cache_get_ht(struct fhdata *d){
   struct ht *ht=d->ht_transient_cache;
   if (!ht){
     ht_set_mutex(mutex_fhdata,ht_init(ht=d->ht_transient_cache=calloc(1,sizeof(struct ht)),HT_FLAG_NUMKEY|5));
-    mstore_set_mutex(mutex_fhdata,mstore_init(ht->value_store=calloc(1,sizeof(struct mstore)),(SIZEOF_ZIPPATH*16)|MSTORE_OPT_MALLOC));
+    mstore_set_mutex(mutex_fhdata,mstore_init(ht->value_store=calloc(1,sizeof(struct mstore)),NULL,(SIZEOF_ZIPPATH*16)|MSTORE_OPT_MALLOC));
     //const ht_hash_t hash=d->zpath.virtualpath_without_entry_hash;
     foreach_fhdata(ie,e){
       if (!e->ht_transient_cache && FHDATA_BOTH_SHARE_TRANSIENT_CACHE(e,d)) e->ht_transient_cache=ht;
@@ -41,7 +41,7 @@ static struct zippath *transient_cache_get_or_create_zpath(const bool create,con
       struct ht_entry *e=ht_numkey_get_entry(ht,hash,virtualpath_l,create);
       if (e){
         const bool no_value=e->value==NULL;
-        if (no_value) e->value=mstore_malloc(ht->value_store,SIZEOF_ZIPPATH,8);
+        if (no_value) e->value=mstore_malloc(ht->value_store,SIZEOF_ZIPPATH,8, MSTOREID(transient_cache_get_or_create_zpath),virtualpath);
         struct zippath *zpath=e->value;
         if (no_value || !zpath->virtualpath || strcmp(virtualpath,VP())){ /* Accept hash_collision */
           zpath_init(zpath,virtualpath);

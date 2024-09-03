@@ -2,6 +2,8 @@
 #ifndef EXCEPTIONS
 #define EXCEPTIONS
 
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -10,11 +12,24 @@
 #include <err.h>
 #include <stdbool.h>
 #include "cg_utils.h"
-//#if IS_NETBSD || IS_FREEBSD // backtrace(), backtrace_symbols()
+////////////////////
+#ifndef HAS_BACKTRACE
+#define HAS_BACKTRACE 1
+#endif
+#if HAS_BACKTRACE
 #include <execinfo.h>
-//#endif
-
 #define MAX_BACKTRACE_LINES 64
+#endif
+////////////////////
+////////////////////
+#if !defined(HAS_ADDR2LINE)
+#define HAS_ADDR2LINE IS_NOT_APPLE
+#endif
+////////////////////
+#if !defined(HAS_ATOS)
+#define HAS_ATOS IS_APPLE
+#endif
+////////////////////
 static char* _thisPrg;
 static FILE *_stckOut;
 
@@ -44,14 +59,16 @@ static void cg_print_stacktrace_using_debugger(){
 }
 #endif
 ////////////////////////////////////////////////////////////////////////
-  /*  See  addr2line_cmd=%s\n",addr2line_cmd);*/
 static bool addr2line(const char *program_name, const void *addr, int lineNb){
+  if (!HAS_ATOS && !HAS_ADDR2LINE) return false;
   char addr2line_cmd[512]={0},line1[1035]={0}, line2[1035]={0};
-#if IS_APPLE
-  sprintf(addr2line_cmd,"atos -o %.256s %p",program_name,addr);
-#else
-  sprintf(addr2line_cmd,"addr2line -f -e %.256s %p",program_name,addr);
+  sprintf(addr2line_cmd,
+#if HAS_ADDR2LINE
+          "addr2line -f -e %.256s %p",
+#elif HAS_ATOS
+          "atos -o %.256s %p",
 #endif
+          program_name,addr);
   FILE *fp=popen(addr2line_cmd, "r");
   bool ok=fp!=NULL;
   while(ok && fgets(line1,sizeof(line1)-1,fp)){
@@ -88,6 +105,16 @@ static void cg_print_stacktrace(int calledFromSigInt){
   log_warn0("Probably the os does not  supported function backtrace.\nYou may try to #define HAS_BACKTRACE 1\n");
   #endif
 }
+static void _cg_print_stacktrace_test1(){
+  cg_print_stacktrace(0);
+}
+static void _cg_print_stacktrace_test2(){
+  _cg_print_stacktrace_test1();
+}
+static void cg_print_stacktrace_test(){
+  _cg_print_stacktrace_test2();
+}
+
 static void my_signal_handler(int sig){
   signal(sig,SIG_DFL);
   fprintf(_stckOut,"\x1B[41mCaught signal %s\x1B[0m\n",strsignal(sig));
@@ -111,7 +138,7 @@ static void init_sighandler(char* main_argv_0, uint64_t signals,FILE *out){
 }
 #endif
 //////////////////////////////////////////////////////////////////////////////////////////
-#if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__==0
+#if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
 static void function_a(){
   //cg_print_stacktrace(1);
   //DIE0("Hello");

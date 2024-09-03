@@ -52,7 +52,7 @@ static void autogen_run(struct fhdata *d){
   {
     const int slash=cg_last_slash(rp);
     memcpy(tmp,rp,slash+1);
-    snprintf(tmp+slash+1,MAX_PATHLEN,"autogen_tmp_%d_%ld_%s",getpid(),currentTimeMillis(),rp+slash+1);
+    snprintf(tmp+slash+1,MAX_PATHLEN,"autogen_tmp_%d_%lld_%s",getpid(),(LLU)currentTimeMillis(),rp+slash+1);
   }
   snprintf(err,MAX_PATHLEN,"%s.log",rp);
   struct textbuffer *buf=NULL;
@@ -60,7 +60,7 @@ static void autogen_run(struct fhdata *d){
   if (!stat(err,&st) && st.st_ino>0) unlink(err);
   int err_gf=config_autogen_run(D_VP(d),D_RP(d),tmp,err,&buf);
   if (buf){
-    LOCK(mutex_fhdata, struct memcache *m=new_memcache(d);m->memcache2=buf;atomic_store(&m->memcache_already,m->memcache_l=textbuffer_length(buf)));
+    LOCK(mutex_fhdata, struct memcache *m=new_memcache(d);m->memcache2=buf;m->memcache_already=m->memcache_l=textbuffer_length(buf));
     d->autogen_state=AUTOGEN_SUCCESS;
     //log_debug_now("textbuffer_length=%ld",textbuffer_length(buf));
     LOCK(mutex_fhdata,ht_entry_fsize(D_VP(d),D_VP_L(d),true)->value=(char*)textbuffer_length(buf));
@@ -69,7 +69,7 @@ static void autogen_run(struct fhdata *d){
       warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,tmp,"size=%ld ino: %ld",st.st_size, st.st_ino);
       d->autogen_state=AUTOGEN_FAIL;
     }else{
-      log_verbose("Size: %ld ino: %lu, Going to rename(%s,%s)\n",st.st_size,st.st_ino,tmp,rp);
+      log_verbose("Size: %lld ino: %llu, Going to rename(%s,%s)\n",(LLD)st.st_size,(LLU)st.st_ino,tmp,rp);
       if (rename(tmp,rp)) log_errno("rename(%s,%s)",tmp,rp);
       else if (chmod(rp,0777)) log_errno("chmod(%s,0777)",rp);
       zpath_stat(false,&d->zpath,_root_writable);
@@ -96,6 +96,7 @@ static void autogen_remove_if_not_up_to_date(const char *vp,const int vp_l){
   if (!stat(rp,&st)){
     if (autogen_not_up_to_date(st.ST_MTIMESPEC,vp,vp_l)) unlink(rp);
     else{
+#if WITH_GNU
       static int noAtime=-1;
       if (noAtime<0) {
         struct statfs statfsbuf;
@@ -103,6 +104,7 @@ static void autogen_remove_if_not_up_to_date(const char *vp,const int vp_l){
         noAtime=0!=(statfsbuf.f_flags&ST_NOATIME);
       }
       if (noAtime) cg_file_set_atime(rp,&st,0);
+#endif
     }
   }
 }

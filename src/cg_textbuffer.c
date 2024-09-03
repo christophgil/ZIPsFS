@@ -24,8 +24,9 @@
 #include "cg_utils.c"
 
 // vfork pthread_create
-#define TEXTBUFFER_DIM_STACK 16
+#define TEXTBUFFER_DIM_STACK 64
 #define TEXTBUFFER_MMAP (1<<0)
+#define TEXTBUFFER_NEVER_DESTROY (1<<1)
 struct textbuffer{
   int flags; /* Otherwise heap */
   int n; /* Number segments contained */
@@ -76,8 +77,6 @@ static int textbuffer_char_at(const struct textbuffer *b, const off_t pos){
 
 static off_t _textbuffer_copy_to_or_compare(const bool isCopy,const struct textbuffer *b,const off_t from,const off_t to, char *dst){
   if (!b) return 0;
-  //log_entered_function(" from=%ld to=%ld \n",from,to);
-  //  const off_t l=textbuffer_length(b);  if (to>l) to=l;
   static int invocation;++invocation;
   assert(from>=0);
   if (from>=to) return 0;
@@ -88,7 +87,6 @@ static off_t _textbuffer_copy_to_or_compare(const bool isCopy,const struct textb
       const off_t f=MAX(f0,from),t=MIN(e0,to);
       if (f>=to) break;
       if (t>f){
-        //log_debug_now("%d) [%d/%d] %ld-%ld  %ld-%ld    dst: %ld count:%ld",invocation,i,b->n,from,to,f,t, f-from, count);
         if (isCopy){
           //log_debug_now("%d  memcpy(%ld,  %ld,  %ld)   f0: %ld  f: %ld t: %ld  e0: %ld  mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm .... \n",i, f-from, (f-f0),t-f ,  f0,f,t,e0);
           memcpy(dst+f-from,b->segment[i]+(f-f0),t-f);
@@ -100,21 +98,13 @@ static off_t _textbuffer_copy_to_or_compare(const bool isCopy,const struct textb
     }
     f0=e0;
   }
-  //if(count!=(MIN_long(to,textbuffer_length(b))-from)) warning(1,__func__,"count:%ld, from:%ld to:%ld textbuffer_length:%ld",count,from,to,textbuffer_length(b));
+  //if(count!=(MIN_long(to,textbuffer_lengthuffer_length(b))-from)) warning(1,__func__,"count:%ld, from:%ld to:%ld textbuffer_length:%ld",count,from,to,textbuffer_length(b));
   assert(count==(MIN_long(to,textbuffer_length(b))-from));
-
   return isCopy?count:0;
 }
 
 #define textbuffer_copy_to(b,from,to,dst) _textbuffer_copy_to_or_compare(true,b,from,to,dst)
 #define textbuffer_differs_from_string(b,from,to,dst) (0!=_textbuffer_copy_to_or_compare(false,b,from,to,dst))
-
-
-
-
-
-
-
 static void textbuffer_add_segment(struct textbuffer *b, char *bytes, off_t size){
   if (!b || !bytes) return;
   if (!size) size=strlen(bytes);
@@ -194,6 +184,7 @@ static int textbuffer_from_exec_output(struct textbuffer *b,char *cmd[],char *en
 }
 static void textbuffer_reset(struct textbuffer *b){
   if (!b) return;
+  assert(!(b->flags&TEXTBUFFER_NEVER_DESTROY));
   char **ss=b->segment;
   off_t *ee=b->segment_e;
   bool is_mmap=0!=(b->flags&TEXTBUFFER_MMAP);
@@ -205,6 +196,7 @@ static void textbuffer_reset(struct textbuffer *b){
       textbuffer_memusage_change(b,-size);
     }
   }
+  b->capacity=0;
   b->n=0;
 }
 static char *textbuffer_first_segment_with_min_capacity(struct textbuffer *b, off_t min_size){

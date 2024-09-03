@@ -1,4 +1,5 @@
 /*
+
   Copyright (C) 2023   christoph Gille
   Simple hash map
   The algorithm of the hash table was inspired by the Racko Game and by  Ben Hoyt:
@@ -19,7 +20,6 @@
 */
 #ifndef _ht_dot_c
 #define _ht_dot_c
-#define IF_HT_DEBUG(a) if (ht->flags&HT_FLAG_DEBUG) {a}
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -33,7 +33,6 @@
 #include "cg_mstore_v2.c"
 #define HT_FLAG_NUMKEY (1U<<30)
 #define HT_FLAG_KEYS_ARE_STORED_EXTERN (1U<<29)
-#define HT_FLAG_DEBUG (1U<<28)
 #define HT_FLAG_BINARY_KEY (1U<<27)
 typedef uint32_t ht_keylen_t;
 #define HT_KEYLEN_MAX UINT32_MAX
@@ -57,11 +56,12 @@ struct ht{
   struct ht_entry entry_zero,*entries,_stack_ht_entry[_STACK_HT_ENTRY];
 
   struct mstore keystore_buf, *keystore, *value_store;
-#if defined CG_THREAD_FIELDS
+#ifdef CG_THREAD_FIELDS
   CG_THREAD_FIELDS;
 #endif
 
   int client_value_int[3];
+  int debugid;
 };
 #ifdef CG_THREAD_METHODS_HT
 CG_THREAD_METHODS_HT(ht);
@@ -108,6 +108,7 @@ static void _ht_free_entries(struct ht *ht){
   }
 }
 static void ht_destroy(struct ht *ht){
+  if (!ht) return;
   CG_THREAD_OBJECT_ASSERT_LOCK(ht);
   if (ht->keystore && ht->keystore->capacity){ /* All keys are in the keystore */
     mstore_destroy(ht->keystore);
@@ -193,7 +194,7 @@ static int _ht_expand(struct ht *ht){
 #define let_e_get_entry(ht,key,keylen_hash) CG_THREAD_OBJECT_ASSERT_LOCK(ht);ASSERT(key!=NULL); ASSERT(ht!=NULL); ASSERT(ht->entries!=NULL);_HT_HASH();  const uint64_t keylen_hash=HT_KEYLEN_HASH(key_l,hash);struct ht_entry *e=E()
 static const char* _newKey(struct ht *ht,const char *key,uint64_t keylen_hash){
   if (0!=(ht->flags&HT_FLAG_KEYS_ARE_STORED_EXTERN)) return key;
-  return ht->keystore?mstore_addstr(ht->keystore,key,keylen_hash>>HT_KEYLEN_SHIFT):strdup(key);
+  return ht->keystore?mstore_addstr(ht->keystore,key,keylen_hash>>HT_KEYLEN_SHIFT, ht->debugid,key):strdup(key);
 }
 static struct ht_entry* ht_get_entry(struct ht *ht, const char* key,const ht_keylen_t key_l,ht_hash_t hash,const bool create){
   let_e_get_entry(ht,key,keylen_hash);
@@ -204,8 +205,9 @@ static struct ht_entry* ht_get_entry(struct ht *ht, const char* key,const ht_key
   }
   return e;
 }
-static void ht_clear_entry(struct ht_entry *e){
+static void ht_clear_entry(struct ht *ht,struct ht_entry *e){
   if (e){
+    if (!ht->keystore) free((char*)e->key);
     e->key=e->value=NULL;
     e->keylen_hash=0;
   }
@@ -213,8 +215,7 @@ static void ht_clear_entry(struct ht_entry *e){
 static struct ht_entry* ht_remove(struct ht *ht,const char* key,const ht_keylen_t key_l, ht_hash_t hash ){
   let_e_get_entry(ht,key,keylen_hash);
   if (e->key || e->keylen_hash==keylen_hash){
-    if (!ht->keystore) free((char*)e->key);
-    ht_clear_entry(e);
+    ht_clear_entry(ht,e);
     ht->length--;
   }
   return e;
@@ -259,7 +260,7 @@ const void *ht_intern(struct ht *ht,const void *bytes,const off_t bytes_l,ht_has
   if (!hash) hash=hash32(bytes,bytes_l);
   struct ht_entry *e=ht_get_entry(ht,bytes,bytes_l,hash,true);
   if (!e->value){
-    e->key=e->value=(void*)(memoryalign==HT_MEMALIGN_FOR_STRG?mstore_addstr(ht->keystore,bytes,bytes_l): mstore_add(ht->keystore,bytes,bytes_l,memoryalign));
+    e->key=e->value=(void*)(memoryalign==HT_MEMALIGN_FOR_STRG?mstore_addstr(ht->keystore,bytes,bytes_l,ht->debugid,""): mstore_add(ht->keystore,bytes,bytes_l,memoryalign, ht->debugid,""));
 
     //log_debug(ANSI_MAGENTA"ht_internalize mstore_add %ld " ANSI_RESET " bytes: %p mstore_contains:%d\n",bytes_l,bytes,mstore_contains(ht->keystore,e->key));
     //    ASSERT(e->value==ht_intern(ht,e->value,bytes_l,0,memoryalign));
@@ -492,7 +493,7 @@ static void test_mstore2(int argc,char *argv[]){
   mstore_set_base_path("/home/cgille/tmp/test/mstore_mstore1");
   struct ht ht_int,ht;
   struct mstore m;
-  mstore_init(&m,1024*1024*1024);
+  mstore_init(&m,"",1024*1024*1024);
   ht_init_with_keystore(&ht_int,HT_FLAG_KEYS_ARE_STORED_EXTERN|8,&m);
   ht_init(&ht,16);
   const int nLine=argc>2?atoi(argv[2]):INT_MAX;
@@ -518,7 +519,7 @@ static void test_mstore2(int argc,char *argv[]){
         }/* From here line_on_stack invalid */
         //fputs("5)",stderr);
         const int key_l=strlen(key);
-        const char *stored=mstore_addstr(&m,value,value_l);
+        const char *stored=mstore_addstr(&m,value,value_l, 0,"");
         //fputc(',',stderr);
 
         ht_set(&ht,key,key_l,0,stored);
@@ -554,9 +555,10 @@ static void test_intern_substring(int argc,char *argv[]){
 
 static  void test_no_dups(int argc,char *argv[]){
   struct ht no_dups={0};
-  ht_init_with_keystore_dim(&no_dups,8,4096);
+  ht_init_with_keystore_dim(&no_dups,4,1024);
   FOR(i,1,argc) if (ht_only_once(&no_dups,argv[i],0)) printf("%d %s ,ht.length: %u\n",i,argv[i],no_dups.length);
 }
+
 
 int main(int argc,char *argv[]){
   if (0){
@@ -567,7 +569,7 @@ int main(int argc,char *argv[]){
     return 1;
   }
 
-  switch(5){
+  switch(2){
   case 0:
     printf("ht_entry %zu bytes\n",sizeof(struct ht_entry));
     assert(false);break;

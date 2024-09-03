@@ -20,13 +20,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <inttypes.h>
 #include <stddef.h>
 //#include <malloc.h>
 #include <unistd.h>
-
 
 
 
@@ -531,7 +531,7 @@ static void log_list_filedescriptors(const int fd){
     if (!fork()){
       char path[33];
       sprintf(path,"/proc/%d/fd",pid0);
-      execl("/usr/bin/ls","/usr/bin/ls",path,NULL);
+      execl("/usr/bin/ls","/usr/bin/ls",path,(char*)NULL);
     }
   }
 }
@@ -550,29 +550,18 @@ static char *cg_copy_path(char *dst,const char *src){
 ///    time     ///
 ///////////////////
 static double cg_timespec_diff(const struct timespec a, const struct timespec b) {
-  double v= (a.tv_sec-b.tv_sec)+(a.tv_nsec-b.tv_nsec)/(1000*1000*1000.0);
+  double v=(a.tv_sec-b.tv_sec)+(a.tv_nsec-b.tv_nsec)/(1000*1000*1000.0);
   return v;
 }
-
 static double cg_timespec_diff_lt(const struct timespec a, const struct timespec b,const double threshold) {
   double dsec=a.tv_sec-b.tv_sec;
   return dsec+1<=threshold ||  (threshold-dsec)*(1000*1000*1000.0)<(a.tv_nsec-b.tv_nsec);
 }
-
 static bool cg_timespec_b_before_a(struct timespec a, struct timespec b) {  //Returns true if b happened first.
   if (a.tv_sec==b.tv_sec) return a.tv_nsec>b.tv_nsec;
   return a.tv_sec>b.tv_sec;
 }
-
-
-
-
 #define CG_TIMESPEC_EQ(a,b) (a.tv_sec==b.tv_sec && a.tv_nsec==b.tv_nsec)
-////////////////////
-/// heap, memory ///
-////////////////////
-
-#define CG_REALLOC(type,pointer,expr) {type tmp=realloc(pointer,expr); if (!tmp){fprintf(stderr,"realloc failed.\n"); EXIT(1);};pointer=tmp;}
 /////////////
 ////  id  ///
 /////////////
@@ -662,18 +651,21 @@ static int cg_waitpid_logtofile_return_exitcode(int pid,const char *err){
 }
 
 // #pragma GCC diagnostic ignored "-Wunused-variable" //__attribute__((unused));
-
 static void cg_exec(char * const env[],char *cmd[],const int fd_out,const int fd_err){
   if(fd_out>0) dup2(fd_out,STDOUT_FILENO);
   if(fd_err>0) dup2(fd_err,STDERR_FILENO);
   if(fd_out>0) close(fd_out);
   if(fd_err>0 && fd_err!=fd_out) close(fd_err);
   cg_log_exec_fd(STDERR_FILENO,env,cmd);
-  #if HAS_UNDERSCORE_ENVIRON
-  extern char **_environ;
+#if defined(HAS_EXECVPE) && HAS_EXECVPE
+  execvpe(cmd[0],cmd,env);
+#elif ! defined(HAS_UNDERSCORE_ENVIRON) || HAS_UNDERSCORE_ENVIRON
+  extern char **_environ; /* default */
   if (env) _environ=(char**)env;
-  #endif
   execvp(cmd[0],cmd);
+#else
+  execvp(cmd[0],cmd);
+#endif
   EXIT(EPIPE);
 }
 
@@ -710,7 +702,7 @@ static int differs_filecontent_from_string(const int opt,const char* path, const
 
 #endif // _cg_utils_dot_c
 // 1111111111111111111111111111111111111111111111111111111111111
-#if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__==0
+#if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
 int main(int argc, char *argv[]){
 
   {  char m[10]; memset(m,9,10000); return 0;}
@@ -756,24 +748,27 @@ int main(int argc, char *argv[]){
   }
   case 5:{
     char *s=strdup("hello");
-    CG_REALLOC(char *,s,10);
+    // CG_REALLOC(char *,s,10);
+    char *tmp=realloc(s,10);
+    if (!tmp){fprintf(stderr,"realloc failed.\n"); EXIT(1);};
+    s=tmp;
   } break;
   case 6:{
     int a=atoi(argv[1]),b=atoi(argv[2]);
     int c=(2);
     printf("max(%d,%d)=%d\n",a,b,c);
   } break;
-  case 7:{
-    //    log_verbose("cg_find_invalidchar=%d\n",cg_find_invalidchar(VALIDCHARS_PATH,argv[1],strlen(argv[1])));    EXIT(1);
-    char *env[]={"a=1",NULL};
-    char *cmd[]={"ls","-l","space char","backslash\\","single'quote'",NULL};
-    cg_log_exec_fd(2,env,cmd);
-  } break;
-  case 8:{
-    printf("isqrt=%d\n",isqrt(atoi(argv[1])));
-  } break;
+    case 7:{
+      //    log_verbose("cg_find_invalidchar=%d\n",cg_find_invalidchar(VALIDCHARS_PATH,argv[1],strlen(argv[1])));    EXIT(1);
+      char *env[]={"a=1",NULL};
+      char *cmd[]={"ls","-l","space char","backslash\\","single'quote'",NULL};
+      cg_log_exec_fd(2,env,cmd);
+    } break;
+      case 8:{
+        printf("isqrt=%d\n",isqrt(atoi(argv[1])));
+      } break;
 
-  }
+}
 }
 
 #endif

@@ -1,40 +1,57 @@
 #ifndef _cg_utils_dot_h
 #define _cg_utils_dot_h
-#include "cg_os_dependencies.h"
 
+////////////////////////////////////////
+#ifdef __USE_GNU
+#define WITH_GNU 1
+#else
+#define WITH_GNU 0
+#endif
+////////////////////////////////////////
+#if  __clang__
+#  define IS_CLANG 1
+#else
+#  define IS_CLANG 0
+#endif
+////////////////////////////////////////
+#ifdef __APPLE__
+#  define IS_APPLE 1
+#  define IS_NOT_APPLE 0
+# define ST_MTIMESPEC st_mtimespec
+#define HAS_FUSE_LSEEK 0
+#else
+#  define IS_APPLE 0
+#  define IS_NOT_APPLE 1
+#  define ST_MTIMESPEC st_mtim
+#endif
+////////////////////////////////////////
+
+
+
+#if defined(HAS_ST_MTIM) && ! HAS_ST_MTIM
+#define ST_MTIMESPEC st_mtimespec
+#else
+#define ST_MTIMESPEC st_mtim
+#endif
+
+////////////////////////////////////////
 
 
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
-
 #include <dirent.h>
-
 #include <stdio.h>
 #include <assert.h>
 #include <sys/types.h>
 #include <unistd.h>
-// #if __linux__
-// #include <linux/limits.h>
-// #elif __FreeBSD__
-// #include <sys/limits.h>
-// #endif
-
 #include <stdint.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
-// #include <sys/vfs.h>
-#if IS_LINUX
-#include <sys/statvfs.h>
-#elif IS_FREEBSD
 #include <sys/param.h>
 #include <sys/mount.h>
 #include <sys/syscall.h>
-#endif
-#include <sys/param.h>
 #include <locale.h>
-
-
 
 #define MAYBE_INLINE
 #define FOR(var,from,to) for(int var=from;var<(to);var++)

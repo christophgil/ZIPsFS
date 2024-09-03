@@ -3,6 +3,19 @@
 /// Customizations by the user  ///
 ///////////////////////////////////
 
+
+
+////////////////////////////////////
+/// GNU                          ///
+/// Can be activated with        ///
+///     #define _GNU_SOURCE      ///
+///                              ///
+// Conditional computation uses  ///
+///     WITH_GNU                 ///
+////////////////////////////////////
+#undef _GNU_SOURCE
+
+
 /////////////////////////////////
 /// Limitations of pathlength ///
 /////////////////////////////////
@@ -35,7 +48,7 @@
 // Currently, DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT is off as cache clearing is not yet fully tested.
 
 
-#define WITH_DIRCACHE 1
+#define WITH_DIRCACHE 0
 // This activates sorage of the ZIP file index and the file listing of rarely changing file directories in a cache.
 // The cache key is the filepath of the ZIP file or directory  plus the last-modified file  attribute.
 
@@ -83,7 +96,9 @@
 #define WITH_STAT_CACHE 1
 // Activate a cache for file attributes of files and ZIP entries.
 
-#define WITH_EVICT_FROM_PAGECACHE IS_NOT_APPLE
+
+#define WITH_EVICT_FROM_PAGECACHE 1 // Not for MacOSX
+
 
 ////////////
 /// Size ///
@@ -125,7 +140,33 @@
 ///////////////////////////////////
 
 #define WITH_AUTOGEN 0
+/* WITH_AUTOGEN depends on WITH_MEMCACHE */
+#if ! WITH_MEMCACHE
+#undef WITH_AUTOGEN
+#define WITH_AUTOGEN 0
+#endif // WITH_MEMCACHE
+
 #if WITH_AUTOGEN
+#define WITH_AUTOGEN_DIR_HIDDEN 1  /* Hide the directory a in ZIPsFS to avoid recursive searches */
 #define AUTOGEN_DELETE_FILES_AFTER_DAYS "99"
 #define AUTOGEN_MAX_DEPENDENCIES 5 /*  Dynamically generated file can depend on n input files.  Prevents runaway loop */
+#endif
+
+
+
+
+#if 0 /* Deactivate all caches for testing */
+#undef WITH_DIRCACHE
+#define WITH_DIRCACHE 0
+#undef WITH_MEMCACHE
+#define WITH_MEMCACHE 0
+#undef WITH_AUTOGEN
+#define WITH_AUTOGEN 0
+#undef WITH_TRANSIENT_ZIPENTRY_CACHES
+#define WITH_TRANSIENT_ZIPENTRY_CACHES 0
+#undef WITH_STAT_CACHE
+#define WITH_STAT_CACHE 0
+#undef WITH_ZIPINLINE_CACHE
+#define WITH_ZIPINLINE_CACHE 0
+
 #endif

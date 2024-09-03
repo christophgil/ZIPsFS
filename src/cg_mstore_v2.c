@@ -1,8 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
-//#include <stdatomic.h>
 #include <sys/mman.h>
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
@@ -77,14 +72,14 @@ struct mstore{
   CG_THREAD_FIELDS;
 #endif
 };
-#if defined CG_THREAD_METHODS
+#ifdef CG_THREAD_METHODS
 CG_THREAD_METHODS(mstore);
 #endif
 
 #define mstore_usage(m)           _mstore_common(m,_mstore_usage,NULL)
 #define mstore_count_blocks(m)  _mstore_common(m,_mstore_blocks,NULL)
 #define mstore_clear(m)           _mstore_common(m,_mstore_clear,NULL)
-#define mstore_add(m,src,bytes,align)  memcpy(mstore_malloc(m,bytes,align),src,bytes)
+#define mstore_add(m,src,bytes,align,   debugid,debugmsg)  memcpy(mstore_malloc(m,bytes,align,debugid,debugmsg),src,bytes)
 #define mstore_contains(m,pointer)  (0!=_mstore_common(m,_mstore_contains,pointer))
 static off_t _mstore_common(struct mstore *m,int opt,const void *pointer){
   CG_THREAD_OBJECT_ASSERT_LOCK(m);
@@ -132,7 +127,7 @@ static const char *mstore_set_base_path(const char *f){
 //   dim: Size of the mmap files.  Will be rounded to next n*4096       //
 //////////////////////////////////////////////////////////////////////////
 #define mstore_init_file(m,name,instance,size_and_opt) _mstore_init(m,name,instance,size_and_opt|MSTORE_OPT_MMAP_WITH_FILE)
-#define mstore_init(m,size_and_opt) _mstore_init(m,NULL,0,size_and_opt)
+#define mstore_init(m,name,size_and_opt) _mstore_init(m,name,0,size_and_opt)
 static struct mstore *_mstore_init(struct mstore *m,const char *name, const int instance,const int size_and_opt){
   memset(m,0,sizeof(struct mstore));
   m->data=m->pointers_data_on_stack;
@@ -164,11 +159,33 @@ static int _mstore_openfile(struct mstore *m,uint32_t block,const off_t adim){
   }
   return fd;
 }
+#ifndef WITH_DEBUG_MSTORE
+#define WITH_DEBUG_MSTORE 0
+#endif
 
-static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align){
-  //  log_entered_function0("");
+#if WITH_DEBUG_MSTORE
+static char **_ht_debugid_s;
+static void _mstore_malloc_debug(struct mstore *m,const off_t bytes, const int debugid, const char *debugmsg){
+
+  //if (debugid!=MSTOREID_no_dups)
+    return;
+  static long long count_bytes[99];
+  int count_calls[99];
+  count_bytes[debugid]+=bytes;
+  count_calls[debugid]++;
+  //if (count_calls[debugid]%1000==0);
+      {
+    log_verbose("debugid:%s\t%'lld MB\t%s\n",_ht_debugid_s[debugid],count_bytes[debugid]/(1024*1024),debugmsg);
+    //    cg_print_stacktrace(0);
+  }
+}
+#endif //WITH_DEBUG_MSTORE
+
+static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align, const int debugid, const char *debugmsg){
+  //log_entered_function0("");
   static int count;  bool verbose=0; //++count>27290;
   if (verbose) log_debug("Count=%d\n",count);
+  IF1(WITH_DEBUG_MSTORE,if (_ht_debugid_s) _mstore_malloc_debug(m,bytes,debugid,debugmsg));
   CG_THREAD_OBJECT_ASSERT_LOCK(m);  assert(align==1||align==2||align==4||align==8);
   for(uint32_t s0=0;;s0++){
     const uint32_t block=!s0?m->blockPreviouslyFilled:s0-1;
@@ -218,11 +235,11 @@ static void mstore_destroy(struct mstore *m){
 //////////////////
 // Add a string //
 // ///////////////
-static const char *mstore_addstr(struct mstore *m, const char *str,off_t len){
+static const char *mstore_addstr(struct mstore *m, const char *str,off_t len, const int debugid, const char *debugmsg){
   if (!str) return NULL;
   if (!*str) return "";
   if (!len) len=strlen(str);
-  char *s=mstore_malloc(m,len+1,1);
+  char *s=mstore_malloc(m,len+1,1, debugid,debugmsg);
   assert(s!=NULL);
   memcpy(s,str,len);
   s[len]=0;
@@ -230,7 +247,7 @@ static const char *mstore_addstr(struct mstore *m, const char *str,off_t len){
   return s;
 }
 //////////////////////////////////////////////////////////////////////////
-#if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__==0
+#if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
 //#include "cg_utils.c"
 struct mytest{
   int64_t l;
@@ -240,7 +257,7 @@ static void test_mstore1(int argc,char *argv[]){
   const char *dir="/home/cgille/tmp/test";
   //cg_recursive_mkdir(dir);
   struct mstore m={0};
-  mstore_init(&m,"test_mstore1",0,20);
+  mstore_init(&m,"test_mstore1",20);
   char *tt[99999];
   const int method=atoi(argv[1]);
   printf("method=%d\n",method);
@@ -248,15 +265,15 @@ static void test_mstore1(int argc,char *argv[]){
     char *a=argv[i];
     switch(2){
     case 0:
-      tt[i]=mstore_malloc(&m,1+strlen(a),8);
+      tt[i]=mstore_malloc(&m,1+strlen(a),8, 1,"Testing");
       assert( ((long)tt[i]) %8==0);
       strcpy(tt[i],a);
       break;
     case 1:
-      tt[i]=(char*)mstore_addstr(&m,a,strlen(a));
+      tt[i]=(char*)mstore_addstr(&m,a,strlen(a),0,"Testing");
       break;
     case 2:
-      tt[i]=(char*)mstore_add(&m,a,strlen(a)+1,4);
+      tt[i]=(char*)mstore_add(&m,a,strlen(a)+1,4,0,"Testing");
       break;
     }
   }
@@ -273,7 +290,7 @@ static void test_mstore1(int argc,char *argv[]){
 
 static void test_mstore2(int argc, char *argv[]){
   struct mstore ms;
-  mstore_init(&ms,"test_mstore2",0,256|MSTORE_OPT_MALLOC);
+  mstore_init(&ms,"test_mstore2",256|MSTORE_OPT_MALLOC);
   const int N=atoi(argv[1]);
   int data[N][10];
   int *intern[N];
@@ -286,7 +303,7 @@ static void test_mstore2(int argc, char *argv[]){
   const int data_l=10*sizeof(int);
   FOR(i,0,N){
     //    int * internalized=mstore_add(&ms,data[i],data_l,sizeof(int));
-    int * internalized=mstore_malloc(&ms,data_l,sizeof(int));
+    int * internalized=mstore_malloc(&ms,data_l,sizeof(int), 1,"Testing");
     //tern[i]=(int*)ht_set(&ht,(char*)data[i],data_l,0,data[i]);
   }
   mstore_destroy(&ms);

@@ -22,7 +22,6 @@ struct cached_stat{
   gid_t st_gid;
 };
 
-
 static bool stat_from_cache(struct stat *stbuf,const char *path,const int path_l,const ht_hash_t hash){
   if (0<config_file_attribute_valid_seconds(true,path,path_l)){
     const int now=deciSecondsSinceStart();
@@ -33,7 +32,6 @@ static bool stat_from_cache(struct stat *stbuf,const char *path,const int path_l
 #define C(f) stbuf->f=st.f
         C(st_ino);C(st_mode);C(st_uid);C(st_gid); C(ST_MTIMESPEC);
 #undef C
-        //        stbuf->ST_MTIMESPEC=st.ST_MTIMESPEC;
         _count_stat_from_cache++;
         return true;
       }
@@ -46,12 +44,10 @@ static void stat_to_cache(struct stat *stbuf,const char *path,const int path_l,c
 #define C(f) st->f=stbuf->f
   LOCK(mutex_dircache,
        struct cached_stat *st=ht_get(&stat_ht,path,path_l,hash);
-       if (!st) ht_set(&stat_ht,ht_intern(&_root->dircache_ht_fname,path,path_l,hash,HT_MEMALIGN_FOR_STRG),path_l,hash,st=mstore_malloc(DIRCACHE(_root),sizeof(struct cached_stat),8));
+       if (!st) ht_set(&stat_ht,ht_intern(&_root->dircache_ht_fname,path,path_l,hash,HT_MEMALIGN_FOR_STRG),path_l,hash,st=mstore_malloc(DIRCACHE(_root),sizeof(struct cached_stat),8, MSTOREID_stat_to_cache,path));
        C(st_ino);C(st_mode);C(st_uid);C(st_gid);
        C(ST_MTIMESPEC);
-       //       st->ST_MTIMESPEC=stbuf->ST_MTIMESPEC;
        st->when_read_decisec=deciSecondsSinceStart());
-  // assert(st->ST_MTIMESPEC.tv_nsec==stbuf->ST_MTIMESPEC.tv_nsec));
 #undef C
 }
 
@@ -130,12 +126,12 @@ static void dircache_directory_to_cache(const struct directory *dir){
   struct rootdata *r=dir->root;
   IF1(DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,dircache_clear_if_reached_limit(false,0xFFFF,r,DIRECTORY_CACHE_SEGMENTS));
   assert_validchars_direntries(VALIDCHARS_PATH,dir);
-  struct directory_core src=dir->core, *d=mstore_add(DIRCACHE(r),&src,sizeof(struct directory_core),SIZEOF_POINTER);
+  struct directory_core src=dir->core, *d=mstore_add(DIRCACHE(r),&src,sizeof(struct directory_core),SIZEOF_POINTER, MSTOREID(dircache_directory_to_cache),"");
   if (src.files_l){
     RLOOP(i,src.files_l){
       d->fname[i]=(char*)ht_sinternalize(&r->dircache_ht_fname,src.fname[i]); /* All  filenames internalized */
     }
-#define C(F,type) if (src.F) d->F=mstore_add(DIRCACHE(r),src.F,src.files_l*sizeof(type),sizeof(type))
+#define C(F,type) if (src.F) d->F=mstore_add(DIRCACHE(r),src.F,src.files_l*sizeof(type),sizeof(type), MSTOREID(dircache_directory_to_cache),"")
     C_FILE_DATA_WITHOUT_NAME();
 #undef C    /*  Due to simplify_name and internalization, the array of filenames will often be the same and needs to be stored only once - hence ht_intern.*/
     d->fname=(char**)ht_intern(&r->dircache_ht_fnamearray,src.fname,src.files_l*SIZE_POINTER,0,SIZE_POINTER);
@@ -186,7 +182,7 @@ static bool dircache_directory_from_cache(struct directory *dir,const struct tim
 ///////////////////////////
 ///// file i/o cache  /////
 ///////////////////////////
-#if WITH_EVICT_FROM_PAGECACHE
+#if WITH_EVICT_FROM_PAGECACHE && (!defined(HAS_POSIX_FADVISE) || HAS_POSIX_FADVISE)
 static void maybe_evict_from_filecache(const int fdOrZero,const char *realpath,const int realpath_l){
   const int fd=fdOrZero?fdOrZero:realpath?open(realpath,O_RDONLY):0;
     if (fd>0){
@@ -194,4 +190,6 @@ static void maybe_evict_from_filecache(const int fdOrZero,const char *realpath,c
       if (!fdOrZero) close(fd);
     }
 }
+#else
+#define maybe_evict_from_filecache(fdOrZero,realpath,realpath_l)
 #endif //WITH_EVICT_FROM_PAGECACHE

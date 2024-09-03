@@ -69,9 +69,11 @@ static int cpuusage_read_proc(struct pstat* r,const pid_t pid){
 #define U() *ucpu_usage=((cur_usage->utime_ticks+cur_usage->cutime_ticks) - (last_usage->utime_ticks+last_usage->cutime_ticks))
 #define S() *scpu_usage=((cur_usage->stime_ticks+cur_usage->cstime_ticks) - (last_usage->stime_ticks+last_usage->cstime_ticks))
 static void cpuusage_calc_pct(const struct pstat* cur_usage,const struct pstat* last_usage,float* ucpu_usage, float* scpu_usage){
+  if (has_proc_fs()){
   const float total_time_diff=(cur_usage->cpu_total_time-last_usage->cpu_total_time)/(100.0*cur_usage->ncpu);
   U()/total_time_diff;
   S()/total_time_diff;
+  }
 }
 /* calculates the elapsed CPU usage between 2 measuring points in ticks */
 static void cpuusage_calc(const struct pstat* cur_usage,const struct pstat* last_usage,long unsigned int* ucpu_usage,long unsigned int* scpu_usage){
@@ -81,7 +83,7 @@ static void cpuusage_calc(const struct pstat* cur_usage,const struct pstat* last
 #undef U
 #undef S
 #endif //_cg_cpuusage_pid
-#if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__ == 0
+#if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__ == 0
 int main(int argc,char *argv[]){
   struct pstat first, second;
   float ucpu_usage, scpu_usage;

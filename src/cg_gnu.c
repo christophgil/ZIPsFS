@@ -9,7 +9,6 @@
 #include <grp.h>
 #include <unistd.h>
 #include <limits.h>
-
 /*
   static int strcasecmpxxxxx(const char *s1, const char *s2) {
   const unsigned char *us1=(const unsigned char *)s1, *us2=(const unsigned char *)s2;
@@ -30,7 +29,7 @@ static int cg_group_member(gid_t gid) {
   for(int i=0;i<ngroups;i++) if (gid==groups[i]) return 1;
   return 0;
 }
-char *cg_strcasestr(const char *haystack, const char *needle){
+static char *cg_strcasestr(const char *haystack, const char *needle){
   if (haystack && needle && *needle){
     const int nl=strlen(needle), imax=strlen(haystack)-nl;
     const unsigned char n32=needle[0]|32;
@@ -57,10 +56,8 @@ static void *cg_memmem(const void *haystack, const size_t hlen, const void *need
 }
 #endif
 // 1111111111111111111111111111111111111111111111111111111111111
-#if defined __INCLUDE_LEVEL__ && __INCLUDE_LEVEL__==0
-
+#if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
 int main(int argc, char *argv[]){
-
   if (1){
     printf("strcasestr %s  %s   ---> %s \n",argv[1],argv[2], cg_strcasestr(argv[1],argv[2]));
     return 0;
@@ -83,6 +80,4 @@ int main(int argc, char *argv[]){
     return 0;
   }
 }
-
-
 #endif // main

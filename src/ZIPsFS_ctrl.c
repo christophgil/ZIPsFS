@@ -100,11 +100,15 @@ The files and folders appear to be writable even if the primary storage is read-
 This is necessary for  software that uses wrong flags for opening files for reading or which creates output files in the same file location.<BR>\n\
 <A href=\"" HOMEPAGE "\">Homepage</A><BR>\n\
 <H2>Auto-generated files</H2>\n\
-This feature can be (de-)activated with the switch <b>WITH_AUTOGEN</b> in ZIPsFS_configuration.h. It is currently <B>" IF0(WITH_AUTOGEN,"de")"activated</B>.<BR>\n\
+This feature can be activated with the switch <b>WITH_AUTOGEN</b> in ZIPsFS_configuration.h. It is currently <B>" IF0(WITH_AUTOGEN,"de")"activated</B>.\n\
 Derived files are displayed in the file tree <B>");
-        textbuffer_add_segment(b,_mnt,0);
-        textbuffer_add_segment_const(b, DIR_ZIPsFS"/"DIRNAME_AUTOGEN"  </B>.\n\
-They are displayed even if they do  not exist.\n\
+    textbuffer_add_segment(b,_mnt,0);
+    #if WITH_AUTOGEN
+    textbuffer_add_segment_const(b, DIR_ZIPsFS"/"DIRNAME_AUTOGEN"</B>.\n\
+With <b>WITH_AUTOGEN_DIR_HIDDEN</b> set to <b>1</b>, the folder <B>"DIRNAME_AUTOGEN"</B> is not listed in its parent.\n\
+The prevents recursive file searches to enter this tree.\n\
+It is currently <B>" IF0(WITH_AUTOGEN_DIR_HIDDEN,"de")"activated</B>.<BR><BR>\n\
+The generated files  are displayed even if they do  not exist.\n\
 They are generated when used for the first time.\n\
 On subsequent usage, the files are available without delay.\n\
 The generated files are disposed when they are not used within a customizeable number of days.\n\
@@ -112,14 +116,15 @@ This can be prevented by updating the last-access-time with the scripts<B>");
     textbuffer_add_segment(b,_mnt,0);
     textbuffer_add_segment_const(b,DIR_ZIPsFS FN_SET_ATIME".*</B><BR><BR><BR>\n\
 When a file is accessed that is not yet generated, potentially two  problems may occur:<OL>\n\
-<LI>Since the file will be generated upon first usage, the reading software receives the file data with delay. It may be possible, that the respective software may not  cope with this delay. At system level, the call to  open() returns prompt, while, the first call to read() may take some time.</LI>\n\
+<LI>Since the file will be generated upon first usage, the reading software receives the file data with delay. It may be possible, that the respective software may not  cope with this delay. At system level, the call to  open() returns immediately, while, the first call to read() may take long.</LI>\n\
 <LI>While a file does not exist yet, its file size is guessed. The  estimate needs to be  equal-or-larger than the unknown file size. Programs may have a propblem with inaccurate file sizes.</LI>\n\
 </OL><B><U>Workaround</U></B>\n\
-Generation of the files can be forced using "FN_SET_ATIME". These scripts change the <B>last-access-time</B> and  can also be used to prevent deletion after after a certain time.<BR><BR>\
+Generation of the files can be forced using "FN_SET_ATIME". These scripts change the <B>last-access-time</B> and  can also be used to postpone  deletion.<BR><BR>\
 <B><U>Testing</U></B>\n\
-For testing,  copy  jpeg, png or give files.  downscaled versions will be found in the folder "DIR_ZIPsFS"/"DIRNAME_AUTOGEN"/.\n\
+For testing,  copy  jpeg, png or give files. Downscaled versions will be found in the file tree "DIR_ZIPsFS"/"DIRNAME_AUTOGEN"/.\n\
 This requires installation of Imagemagick\n\
 </BODY></HTML>\n");
+#endif // WITH_AUTOGEN
     break;
 #if WITH_AUTOGEN
   case SFILE_SET_ATIME_SH:
@@ -144,7 +149,8 @@ for f in $ff;do\n\
     done\n");
     break;
   case SFILE_SET_ATIME_BAT: textbuffer_add_segment_const(b,"powershell %~dp0\\%~n0.ps1 %*\n@pause\n"); break;
-  case SFILE_SET_ATIME_PS: textbuffer_add_segment_const(b,"\n\
+  case SFILE_SET_ATIME_PS:
+    textbuffer_add_segment_const(b,"\n\
 $ff=$args\n\
 if (!$ff -or !$ff.Length){ $ff=$(Get-Clipboard -format filedroplist);}\n\
 $no_comput=1; $h=0\n"I"\
@@ -166,13 +172,14 @@ foreach($f in $ff){\n\
 read-host -Prompt 'Press Enter'\n");
     break;
 #endif //WITH_AUTOGEN
-  case SFILE_INFO: textbuffer_add_segment(b,_info,_info_l);
+  case SFILE_INFO:
+
+    textbuffer_add_segment(b,_info,_info_l);
   default:;
   }
 }
 #undef F
 #undef C
-
 #undef I
 #undef P
 #undef B
@@ -252,19 +259,38 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
 }/*trigger_files()*/
 static int read_special_file(const int i, char *buf, const off_t size, const off_t offset){
   const char *content;
-  LOCK_N(mutex_special_file,
-       struct textbuffer b={0};special_file_content(&b,i);
-       const int l=textbuffer_length(&b);
-       const int n=MIN_int(size,l-(int)offset);
-       textbuffer_copy_to(&b,offset,offset+n,buf));
-  //       if (n>0) memcpy(buf,content+offset,n));
+  lock(mutex_special_file);
+  struct textbuffer b={0};
+  b.flags|=TEXTBUFFER_NEVER_DESTROY;
+  special_file_content(&b,i);
+  const int l=textbuffer_length(&b);
+  const int n=MIN_int(size,l-(int)offset);
+  if (n>0 && buf){
+    log_debug_now("i=%d textbuffer_write_fd l=%d offset=%d n=%d ... ",i,l,(int)offset,n);
+    textbuffer_copy_to(&b,offset,offset+n,buf);
+  }
+  //textbuffer_write_fd(&b,STDOUT_FILENO);
+  unlock(mutex_special_file);
   return n<0?EOF:n;
 }
 static void make_info(){
   cg_thread_assert_locked(mutex_special_file);
   int l;
+
+
   while((l=print_all_info())>=_info_capacity){
-    CG_REALLOC(char *,_info,_info_capacity=_info_capacity*2+0x100000+17);
+    //CG_REALLOC(char *,_info,_info_capacity=_info_capacity*2+0x100000+17);
+    //    #define CG_REALLOC(type,pointer,expr) {type tmp=realloc(pointer,expr); if (!tmp){fprintf(stderr,"realloc failed.\n"); EXIT(1);};pointer=tmp;}
+
+
+    // heap use after free
+    char * tmp=realloc(_info,_info_capacity=_info_capacity*2+0x100000+17);
+
+
+    if (!tmp){ fprintf(stderr,"realloc failed.\n"); EXIT(1);};
+
+
+    _info=tmp;
   }
   _info_l=l;
 }

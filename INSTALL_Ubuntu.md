@@ -1,7 +1,14 @@
 # Install ZIPsFS on Debian or Ubuntu
 
     apt-get update
-    apt-get install fuse-zip   libfuse3-dev  libzip-dev build-essential unzip lynx tmux
+    apt-get install fuse-zip   libfuse3-dev  libzip-dev  unzip lynx tmux
+    addr2line -H || apt-get install binutils
+
+    apt-get install gcc
+
+or
+
+    apt-get install clang
 
     U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
     wget -N $U && unzip -o main.zip &&  ZIPsFS-main/src/ZIPsFS.compile.sh

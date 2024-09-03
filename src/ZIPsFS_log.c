@@ -16,7 +16,6 @@ static void init_count_getattr(){
     ht_set_mutex(mutex_fhdata,ht_init_with_keystore(&ht_count_getattr,11,&mstore_persistent));
   }
 }
-
 static void inc_count_getattr(const char *path,enum enum_count_getattr field){
   init_count_getattr();
   if (path && ht_count_getattr.length<1024){
@@ -25,7 +24,7 @@ static void inc_count_getattr(const char *path,enum enum_count_getattr field){
     struct ht_entry *e=ht_sget_entry(&ht_count_getattr,ext,true);
     assert(e!=NULL);assert(e->key!=NULL);
     int *counts=e->value;
-    if (!counts) e->value=counts=mstore_malloc(&mstore_persistent,sizeof(int)*enum_count_getattr_length,8);
+    if (!counts) e->value=counts=mstore_malloc(&mstore_persistent,sizeof(int)*enum_count_getattr_length,8  ,MSTOREID(inc_count_getattr),path);
     if (counts) counts[field]++;
   }
 }
@@ -281,7 +280,7 @@ static int print_bar(int n,float rel){
 //////////////////
 /// Linux only ///
 //////////////////
-#if IS_LINUX
+
 static int print_proc_status(int n,char *filter,int *val){
   PRINTINFO("<B>/proc/%ld/status</B>\n<PRE>\n", (long)getpid());
   if (!has_proc_fs()){
@@ -304,16 +303,18 @@ static int print_proc_status(int n,char *filter,int *val){
   return n;
 }
 static void log_virtual_memory_size(){
+  if (has_proc_fs()){
   int val;print_proc_status(-1,"VmSize:",&val);
   log_msg("Virtual memory size: %'d kB\n",val);
+  }
 }
 
 static int log_print_open_files(int n, int *fd_count){
+  if (has_proc_fs()){
   PRINTINFO("<H1>All OS-level file handles</H1>\n(Should be almost empty if idle).<BR>");
   if (!has_proc_fs()){
     PRINTINFO(ERROR_MSG_NO_PROC_FS"\n");
   }else{
-
     static char path[256];
     struct dirent *dp;
     DIR *dir=opendir("/proc/self/fd/");
@@ -330,16 +331,15 @@ static int log_print_open_files(int n, int *fd_count){
     closedir(dir);
     PRINTINFO("</OL>\n");
   }
+  }
   return n;
 }
-
-// TODO Error in sscanf
 static int print_maps(int n){
+  if (has_proc_fs()){
   PRINTINFO("<H1>/proc/%ld/maps</H1>\n", (long)getpid());
   if (!has_proc_fs()){
     PRINTINFO(ERROR_MSG_NO_PROC_FS"\n");
   }else{
-
     size_t total=0;
     FILE *f=fopen("/proc/self/maps","r");
     if(!f) {
@@ -350,11 +350,10 @@ static int print_maps(int n){
     const int L=333;
     while(!feof(f)) {
       char buf[PATH_MAX+100],perm[5],dev[6],mapname[PATH_MAX]={0};
-      uint64_t begin,end,inode,foo;
+      unsigned long long begin,end,inode,foo;
       if(fgets(buf,sizeof(buf),f)==0) break;
       *mapname=0;
-      //    %*[^\n]\n   /home/cgille/tmp/map.txt
-      const int k=sscanf(buf, "%lx-%lx %4s %lx %5s %lu %100s",&begin,&end,perm,&foo,dev, &inode,mapname);
+      const int k=sscanf(buf, "%llx-%llx %4s %llx %5s %llu %100s",&begin,&end,perm,&foo,dev, &inode,mapname);
       if (k>=6){
         const int64_t size=end-begin;
         total+=size;
@@ -368,57 +367,54 @@ static int print_maps(int n){
     fclose(f);
     PRINTINFO("<TFOOT><TR>"TD("")TD("")TD("%'lu")TD("")"</TR></TFOOT>\n</TABLE>\n",total>>10);
   }
+  }
   return n;
 }
 
+
 static int log_print_CPU(int n){
+  if (has_proc_fs()){
   PRINTINFO("<H1>CPU</H1>\n<PRE>");
   PRINTINFO("Current CPU usage user: %.2f system: %.2f    Also try top -p %d\n",_ucpu_usage,_scpu_usage,getpid());
   PRINTINFO("</PRE>\n");
-  //n=print_maps(n);
-
+  }
   return n;
 }
-#else
-#define print_proc_status(...) 1
-#define log_virtual_memory_size(...) 1
-#define log_print_open_files(...) 1
-#define log_print_CPU(...) 1
-#define print_maps(...) 1
-#endif
+
+
 ////////////////////////////////////////////////////////////////////
 
 static int log_print_memory(int n){
   PRINTINFO("<H1>Virtual memory</H1>\n");
+  #if WITH_MEMCACHE
   {
     const uint64_t current=textbuffer_memusage_get(0)+textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP);
     const uint64_t peak=textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_PEAK)+textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_PEAK);
-    PRINTINFO("<H2>struct textbuffer</H2>\n<UL>");
-    PRINTINFO("<LI>Current MMAP usage %'ld MB of %'ld MB</LI>\n",current>>20,_memcache_maxbytes>>20); //n=print_bar(n,current/(float)_memcache_maxbytes);
+    PRINTINFO("<H2>Cache ZIP entries in RAM (WITH_MEMCACHE)</H2>\n<UL>");
+    PRINTINFO("<LI>Current anonymous MMAP usage %'ld MB of %'ld MB</LI>\n",current>>20,_memcache_maxbytes>>20); //n=print_bar(n,current/(float)_memcache_maxbytes);
     PRINTINFO("<LI>Peak MMAP usage    %'ld MB of %'ld MB</LI>\n",peak>>20,_memcache_maxbytes>>20);   //n=print_bar(n,peak/(float)_memcache_maxbytes);
     PRINTINFO("</UL>\n");
   }
-  {
-#if IS_LINUX
+#endif //WITH_MEMCACHE
+  if (has_proc_fs()){
     struct rlimit rl={0}; getrlimit(RLIMIT_AS,&rl);
     const bool rlset=rl.rlim_cur!=-1;
     int val=-1;print_proc_status(-1,"VmSize:",&val);
     //if(rlset)  n=print_bar(n,val*1024/(.01+rl.rlim_cur));
-    PRINTINFO("Virt memory: %'d MB",val>>10);
+    PRINTINFO("Virt memory: %'d MB<BR>\n",val>>10);
     if(rlset) PRINTINFO(" / rlimit %zu MB<BR>\n",rl.rlim_cur>>20);
-#endif
   }
 
 #if IS_LINUX
 #include <malloc.h>
-#if defined __GLIBC__ && __GLIBC__>=2 && __GLIBC_MINOR__>=33
+#if defined(__GLIBC__) && __GLIBC__>=2 && __GLIBC_MINOR__>=33
 #define MALLINFO() mallinfo2()
 #else
 #define MALLINFO() mallinfo()
 #endif
   PRINTINFO("uordblks: %'jd bytes (Total allocated heap space)\n",(intmax_t)MALLINFO().uordblks);
 #endif // IS_LINUX
-  {
+  if (has_proc_fs()){
     int val; n=print_proc_status(n,"VmRSS:|VmHWM:|VmSize:|VmPeak:",&val);
   }
   {
@@ -493,7 +489,8 @@ TD,TH {padding:5px;padding-right:2EM;}\n\
 TD {text-align:right;}\n\
 </STYLE>\n</HEAD>\n<BODY>\n\
 <B>ZIPsFS:</B> <A href=\"%s\">%s</A><BR> \n",HOMEPAGE,HOMEPAGE);
-  PRINTINFO("\nStarted %s: %s &nbsp; PID: %d &nbsp; Compiled: "__DATE__"  "__TIME__"<BR>",_thisPrg,ctime(&_startTime.tv_sec),getpid());
+  PRINTINFO("Compiled: &nbsp; "__DATE__"  "__TIME__"<BR>\nStarted: &nbsp; %s &nbsp; %s &nbsp; PID: %d<BR>\n",ctime(&_startTime.tv_sec), _thisPrg, getpid());
+  time_t rawtime;  time(&rawtime);  PRINTINFO("Now: &nbsp; %s<BR>\n",ctime(&rawtime));
   n=log_print_roots(n);
   n=log_print_fuse_argv(n);
   n=log_print_open_files(n,NULL);
@@ -501,6 +498,7 @@ TD {text-align:right;}\n\
   n=log_print_CPU(n);
   LOCK(mutex_fhdata,n=print_fhdata(n,""));
   PRINTINFO("<H1>Inodes</H1>\nCreated sequentially: %'ld\n",_count_SeqInode);
+  //n=print_maps(n);
   PRINTINFO("<H1>Cache</H1>");
   PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",  IF1(WITH_MEMCACHE,WHEN_MEMCACHE_S[_memcache_policy])IF0(WITH_MEMCACHE,"!WITH_MEMCACHE"));
   n=log_print_statistics_of_read(n);

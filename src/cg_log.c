@@ -55,7 +55,7 @@ static void _warning(const char *fn,int line,const uint32_t channel,const char* 
       written>1000*1000*1000 ||
       ((channel&WARN_FLAG_ONCE) && _warning_count[i]) ||
 
-      ((channel&WARN_FLAG_ONCE_PER_PATH) && path &&  ht_only_once(&ht,path,0))) toFile=false;
+      ((channel&WARN_FLAG_ONCE_PER_PATH) && path && ht_only_once(&ht,path,0))) toFile=false;
   _warning_count[i]++;
   written+=strlen(format)+strlen(p);
 

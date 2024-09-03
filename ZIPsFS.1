@@ -109,7 +109,7 @@ directory.
 .PP
 The typical use\-case are file conversions.
 Auto\-generated files are displayed in the virtual file tree in
-\f[I]ZIPsFS/a/\f[R] and physically stored in the first source.
+\f[B]ZIPsFS/a/\f[R] and physically stored in the first source.
 .PP
 With the current setting, Mascot mass spectrometry files and msML files
 are generated.
@@ -117,7 +117,7 @@ As a more popular example, down\-scaled image files are offered for
 jpeg, jpg, png and gif files.
 The two scaling levels 50% and 25% demonstrate two different options:
 For size reduction to 50%, a file is generated and saved in the first
-file source in *ZIPsFS/a/\&...scale50%.jpg.
+file source in \f[I]ZIPsFS/a/\&...scale50%.jpg\f[R].
 When requested for the first time there will be some delay.
 When accessed a second time, the data comes without delay, because the
 file is already there.
@@ -129,13 +129,13 @@ The disadvantage is, that for a short time the entire data resides in
 RAM and that the data is generated each time the file data is read.
 .PP
 Users can use these Imagemagick based examples as a template for their
-own settings in ZIPsFS_configuration_autogen.c.
+own settings in \f[B]ZIPsFS_configuration_autogen.c\f[R].
 .PP
-Also see readme in the folder /ZIPsFS/.
+Also see readme in the folder \f[B]ZIPsFS/a/\f[R].
 .PP
 Some exotic Windows executables do not work well within ZIPsFS.
 As a work around, we developed the shell script
-\f[I]ZIPsFS_autogen_queue.sh\f[R].
+\f[B]ZIPsFS_autogen_queue.sh\f[R].
 With each pass of an infinity loop one task is taken from a queue and
 processed.
 One file is converted at a time per script instance.
@@ -160,7 +160,7 @@ Gigabyte.
 .PP
 \-c [NEVER,SEEK,RULE,COMPRESSED,ALWAYS]
 .PP
-Policy when ZIP entries are cached in RAM.
+Policy for ZIP entries cached in RAM.
 .PP
 .TS
 tab(@);
@@ -225,6 +225,14 @@ The symlink which used to point to the mount point of the old instance
 is now pointing to that of the new one.
 The old instance should be let running for an hour or so until no file
 handle is open any more.
+.SS Debug Options
+.PP
+See ZIPsFS.compile.sh for activation of sanitizers.
+.PP
+\-T Checks the capability to print a backtrace.
+This requires addr2line which is usually in /usr/bin/ of Linux and
+FreeBSD.
+For MacOSX, the tool atos is used.
 .SS FUSE Options
 .PP
 \-f

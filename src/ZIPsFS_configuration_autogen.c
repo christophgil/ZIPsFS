@@ -4,7 +4,6 @@
 ///////////////////////////////////
 //    if (fcntl(fd, F_SETFD, FD_CLOEXEC) == -1) {
 
-
 #define AUTOGEN_CMD_MAX 100
 #define N_PATTERNS 9
 
@@ -20,7 +19,7 @@ struct _autogen_config{
   char **_ends_ic;int *_ends_ic_l;
   int _ext_l;
   atomic_int _count_concurrent;
-  enum _autogen_capture_output stdout;
+  enum _autogen_capture_output out;
   uint64_t filesize_limit;
   /* The following are configured by the user: */
   int id; /* Not required. Only to implement specific rule */
@@ -37,23 +36,23 @@ struct _autogen_config{
   char *cmd[]; /* Command line parameters. Requires trailing NULL */
 }
 
-  _test_malloc_fail= {C(  99),.ext=".test4.txt",.stdout=STDOUT_TO_OUTFILE,.cmd={"ls","-l","not exist",NULL},},
-  _test_cmd_notexist={C(  99),.ext=".test5.txt",.stdout=STDOUT_TO_MALLOC,.cmd={"not exist",NULL},},  /* Yields  Operation not permitted */
+  _test_malloc_fail= {C(  99),.ext=".test4.txt",.out=STDOUT_TO_OUTFILE,.cmd={"ls","-l","not exist",NULL},},
+  _test_cmd_notexist={C(  99),.ext=".test5.txt",.out=STDOUT_TO_MALLOC,.cmd={"not exist",NULL},},  /* Yields  Operation not permitted */
   _test_textbuf=     {C(  99),.ext=".test6.txt",.id=ID_AUTOGEN_HALLO,.cmd={NULL}},
   _wiff_strings={.ends=".wiff",.filesize_limit=99999,.ext=".strings",.cmd={"bash","-c","tr -d '\\0' <"PLACEHOLDER_INFILE"|strings|grep '\\w\\w\\w\\w' # "PLACEHOLDER_TMP_OUTFILE" "PLACEHOLDER_TMP_OUTFILE,NULL}},
 #define DOCKER_MSCONVERT_CMD "docker","run","-v",PLACEHOLDER_INFILE_PARENT":/data","-v",PLACEHOLDER_OUTFILE_PARENT":/dst","-it","--rm","chambm/pwiz-skyline-i-agree-to-the-vendor-licenses","wine","msconvert",PLACEHOLDER_INFILE_NAME,"--outdir","/dst", "--outfile",PLACEHOLDER_TMP_OUTFILE_NAME
-#define _msconvert(extension,suffix,limit) {.info="Requires Docker",.ext=extension,.ends=suffix,.filesize_limit=limit,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT_CMD,NULL}}
+#define _msconvert(extension,suffix,limit) {.info="Requires Docker",.ext=extension,.ends=suffix,.filesize_limit=limit,.out=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT_CMD,NULL}}
   _msconvert_mzML=_msconvert(".mzML",".raw:.wiff",99999999999),
   _msconvert_mgf=_msconvert(".mgf",".raw:.wiff",99999999999),
-//_msconvert_mzML={.info="Requires Docker",.ext=".mzML",.ends=".raw:.wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT,NULL}},
-// _msconvert_mgf= {.info="Requires Docker",.ext=".mgf", .ends=".raw:.wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT,"--mgf",NULL}},
+//_msconvert_mzML={.info="Requires Docker",.ext=".mzML",.ends=".raw:.wiff",.filesize_limit=99999999999,.out=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT,NULL}},
+// _msconvert_mgf= {.info="Requires Docker",.ext=".mgf", .ends=".raw:.wiff",.filesize_limit=99999999999,.out=STDOUT_MERGE_TO_STDERR,.cmd={DOCKER_MSCONVERT,"--mgf",NULL}},
   _wiff_scan={.ext=".scan",.ends=".wiff",.filesize_limit=99999999999,.no_redirect=true,.cmd={"bash","rawfile_mk_wiff_scan.sh",PLACEHOLDER_INFILE,PLACEHOLDER_TMP_DIR,PLACEHOLDER_OUTFILE,NULL}},
-  _wiff_scan={.ext=".scan",.ends=".wiff",.filesize_limit=99999999999,.stdout=STDOUT_MERGE_TO_STDERR,.cmd={PLACEHOLDER_EXTERNAL_QUEUE,PLACEHOLDER_INFILE,PLACEHOLDER_OUTFILE,NULL}},
+//  _wiff_scan={.ext=".scan",.ends=".wiff",.filesize_limit=99999999999,.out=STDOUT_MERGE_TO_STDERR,.cmd={PLACEHOLDER_EXTERNAL_QUEUE,PLACEHOLDER_INFILE,PLACEHOLDER_OUTFILE,NULL}},
 
 #define I(x)  _##x##50={.info="Requires Imagemagick\n",.ext=".scale50%."#x,.ends_ic="."#x, .filesize_limit=AUTOGEN_FILESIZE_ORIG_SIZE, .cmd={"convert",PLACEHOLDER_INFILE,"-scale","50%",PLACEHOLDER_TMP_OUTFILE,NULL} }
   I(jpeg),I(jpg),I(png),I(gif),
 #undef I
-#define I(x) _##x##25={.info="Requires Imagemagick\n",.ext=".scale25%."#x,.ends_ic="."#x,  .filesize_limit=AUTOGEN_FILESIZE_ORIG_SIZE, .cmd={"convert",PLACEHOLDER_INFILE,"-scale","25%","-",NULL},.stdout=STDOUT_TO_MMAP}
+#define I(x) _##x##25={.info="Requires Imagemagick\n",.ext=".scale25%."#x,.ends_ic="."#x,  .filesize_limit=AUTOGEN_FILESIZE_ORIG_SIZE, .cmd={"convert",PLACEHOLDER_INFILE,"-scale","25%","-",NULL},.out=STDOUT_TO_MMAP}
   I(jpeg),I(jpg),I(png),I(gif),
 #undef I
   *_autogen_array[]={
@@ -198,15 +197,16 @@ static int autogen_fd_open(const char *path, int *fd){
 
 static int config_autogen_run(const char *virtual_outfile,const char *outfile,const char *tmpoutfile,const char *errfile, struct textbuffer *buf[]){
   if (!_realpath_autogen) return EACCES;
-  { /* Free Space */
-    struct statfs st;
-    if (statfs(_realpath_autogen,&st)) warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,virtual_outfile,"");
+    { /* Free Space */
+    struct statvfs st;
+    if (statvfs(_realpath_autogen,&st)) warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,virtual_outfile,"");
     const int64_t bytes_free=st.f_bsize*st.f_bfree;
     if (bytes_free<1L*1024*1024*1024){
       warning(WARN_AUTOGEN|WARN_FLAG_ONCE_PER_PATH,_realpath_autogen,"%s Free: %'ld bytes",strerror(ENOSPC),bytes_free);
       return ENOSPC;
     }
   }
+
   /* Obtain s. With s->_ext_l, determin infile */
   struct _autogen_config *s=_config_struct_autogen_for_path(virtual_outfile,strlen(virtual_outfile));
   if (!s) return ENOENT;
@@ -225,16 +225,16 @@ static int config_autogen_run(const char *virtual_outfile,const char *outfile,co
     switch(s->id){
     case ID_AUTOGEN_HALLO:      textbuffer_add_segment((buf[0]=textbuffer_new()),strdup("How is it going?"),sizeof("How is it going?")); break;
     default:
-      if (s->stdout==STDOUT_TO_OUTFILE) res=autogen_fd_open(tmpoutfile,&fd_out);
+      if (s->out==STDOUT_TO_OUTFILE) res=autogen_fd_open(tmpoutfile,&fd_out);
       if (!res && !s->no_redirect) res=autogen_fd_open(errfile,&fd_err);
       if (!res){
         if (fd_err && s->info) cg_fd_write_str(fd_err,s->info);
         char *cmd[AUTOGEN_CMD_MAX+1]={0};
         autogen_apply_replacements(cmd,s->cmd,infile,outfile,tmpoutfile);
         cg_log_exec_fd(STDERR_FILENO,NULL,cmd);
-        if (s->stdout==STDOUT_TO_MALLOC || s->stdout==STDOUT_TO_MMAP){   /* Make virtual file by putting output of external prg  into textbuffer */
+        if (s->out==STDOUT_TO_MALLOC || s->out==STDOUT_TO_MMAP){   /* Make virtual file by putting output of external prg  into textbuffer */
           *buf=textbuffer_new();
-          if (s->stdout==STDOUT_TO_MMAP) buf[0]->flags|=TEXTBUFFER_MMAP;
+          if (s->out==STDOUT_TO_MMAP) buf[0]->flags|=TEXTBUFFER_MMAP;
           if ((res=textbuffer_from_exec_output(buf[0],cmd,s->env,errfile))){ textbuffer_destroy(buf[0]); FREE(buf[0]);}
         }else{
           const pid_t pid=fork(); /* Make real file by running external prg */
@@ -243,7 +243,7 @@ static int config_autogen_run(const char *virtual_outfile,const char *outfile,co
             cg_fd_write_str(fd_err,"fork() failed.\n");
             res=EIO;
           }else{
-            if (!pid) cg_exec(s->env,cmd,s->no_redirect?-1:s->stdout==STDOUT_MERGE_TO_STDERR?fd_err:fd_out,s->no_redirect?-1:fd_err);
+            if (!pid) cg_exec(s->env,cmd,s->no_redirect?-1:s->out==STDOUT_MERGE_TO_STDERR?fd_err:fd_out,s->no_redirect?-1:fd_err);
             res=cg_waitpid_logtofile_return_exitcode(pid,errfile);
           }
         }

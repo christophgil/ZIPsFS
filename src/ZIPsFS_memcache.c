@@ -4,6 +4,7 @@
 /////////////////////////////////////////////////////////////////
 #include "cg_crc32.c"
 //#define memcache_set_status(m,status) {m->memcache_status=(status);}
+static int64_t _memcache_maxbytes=3L*1000*1000*1000;
 
 static void memcache_set_status(struct memcache *m,const int status){
   ASSERT_LOCKED_FHDATA();

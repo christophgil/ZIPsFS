@@ -72,7 +72,6 @@ static int xmp_readlink(const char *path, char *buf, size_t size);
 static int xmp_unlink(const char *path);
 static int xmp_rmdir(const char *path);
 static int xmp_open(const char *path, struct fuse_file_info *fi);
-static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi IF1(IS_ORIG_FUSE,,enum fuse_readdir_flags flags));
 static int xmp_mkdir(const char *path, mode_t mode);
 static int create_or_open(const char *path, mode_t mode,struct fuse_file_info *fi);
 static int xmp_write(const char *path, const char *buf, size_t size,off_t offset, struct fuse_file_info *fi);

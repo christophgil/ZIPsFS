@@ -96,25 +96,25 @@ This option is available if the first file source  is provided. Generally, the f
 It will not be available, if an empty string is passed as the first root directory.
 
 The typical use-case are file conversions.
-Auto-generated files are displayed in the virtual file tree in *ZIPsFS/a/*  and physically stored in the first source.
+Auto-generated files are displayed in the virtual file tree in **ZIPsFS/a/**  and physically stored in the first source.
 
 
 With the current setting, Mascot mass spectrometry files and msML files are generated.
 As a more popular example, down-scaled image files are offered for jpeg, jpg, png and gif files.
 The two scaling levels 50% and 25% demonstrate two different options:
-For size reduction to 50%, a file is generated and saved in the first file source in *ZIPsFS/a/...scale50%.jpg.
+For size reduction to 50%, a file is generated and saved in the first file source in *ZIPsFS/a/...scale50%.jpg*.
 When requested for the first time there will be some delay.
 When accessed a second time, the data comes without delay, because the file is already there.
 For down-scaling to 25%, the generated image data is not saved. Instead it is kept in RAM as long as the file handle is active.
 After loading the image, the image data in the RAM is discarded. The advantage is that no HD space is used.
 The disadvantage is, that for a short time the entire data resides in RAM and that the data is generated each time the file data is read.
 
-Users can use these Imagemagick based examples as a template for their own settings in ZIPsFS_configuration_autogen.c.
+Users can use these Imagemagick based examples as a template for their own settings in **ZIPsFS_configuration_autogen.c**.
 
-Also see readme in the folder /ZIPsFS/.
+Also see readme in the folder **ZIPsFS/a/**.
 
 Some exotic Windows executables do not work well within ZIPsFS.
-As a work around, we developed the shell script *ZIPsFS_autogen_queue.sh*.
+As a work around, we developed the shell script **ZIPsFS_autogen_queue.sh**.
 With each pass of an  infinity loop  one task is taken from a queue and processed. One file is converted at a time per script instance.
 Several instances of this shell script can run in parallel. In the settings, the symbol **PLACEHOLDER_EXTERNAL_QUEUE** is given instead of an executable program.
 
@@ -135,7 +135,7 @@ Specifies a limit for the cache.  For example *-l  8G* would limit the size of t
 
 -c \[NEVER,SEEK,RULE,COMPRESSED,ALWAYS\]
 
-Policy when ZIP entries are cached in RAM.
+Policy for ZIP entries  cached in RAM.
 
 
 |           |                                                                                  |
@@ -161,7 +161,11 @@ a different mount point. Both  instances work simultaneously. The symlink which 
 The old instance should be let running for an hour or so until no file handle is open any more.
 
 
+Debug Options
+-------------
+See ZIPsFS.compile.sh for activation of sanitizers.
 
+-T  Checks the capability to print a backtrace.  This requires addr2line which is usually in /usr/bin/ of Linux and FreeBSD. For MacOSX, the tool atos is used.
 
 FUSE Options
 ------------
