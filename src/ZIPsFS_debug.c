@@ -7,7 +7,7 @@ static int countFhdataWithMemcache(const char *path, int len,int h){
   if (!len) len=strlen(path);
   if (!h) h=hash32(path,len);
   int count=0;
-  IF1(WITH_MEMCACHE,foreach_fhdata(id,d)     if (D_VP_HASH(d)==h && d->memcache && d->memcache->memcache2 && !strcmp(path,D_VP(d))) count++);
+  IF1(WITH_MEMCACHE,foreach_fhdata(id,d)     if (D_VP_HASH(d)==h && d->memcache && d->memcache->txtbuf && !strcmp(path,D_VP(d))) count++);
   return count;
 }
 
@@ -20,7 +20,7 @@ static void _fhdataWithMemcachePrint(const char *func,int line,const char *path,
   foreach_fhdata(id,d){
     if (D_VP_HASH(d)==h){
       struct memcache *m=d->memcache;
-      if (m && (m->memcache2||m->memcache_status) && !strcmp(path,D_VP(d))){
+      if (m && (m->txtbuf||m->memcache_status) && !strcmp(path,D_VP(d))){
         log_msg("%s:%d fhdataWithMemcachePrint: %d %s  memcache_status: %s memcache_l: %jd\n",func,line,id,path,MEMCACHE_STATUS_S[m->memcache_status],(intmax_t)m->memcache_l);
       }
     }
@@ -61,15 +61,14 @@ static bool _debugSpecificPath(int mode, const char *path, int path_l){
 /// Check File names ///
 ////////////////////////
 #define assert_validchars(t,s,len,msg) _assert_validchars(t,s,len,msg,__func__)
+
 static void _assert_validchars(enum validchars t,const char *s,int len,const char *msg,const char *fn){
   static bool initialized;
   if (!initialized) initialized=cg_validchars(VALIDCHARS_PATH)[PLACEHOLDER_NAME]=cg_validchars(VALIDCHARS_FILE)[PLACEHOLDER_NAME]=true;
   const int pos=cg_find_invalidchar(t,s,len);
   if (pos>=0){
     LOCK_NCANCEL(mutex_validchars,
-                 static struct ht ht={0};
-                 if (!ht.capacity) ht_set_mutex(mutex_validchars,ht_init(&ht,HT_FLAG_NUMKEY|12));
-                 if (!ht_numkey_set(&ht,hash32(s,len),len,"X")) warning(WARN_CHARS|WARN_FLAG_ONCE_PER_PATH,s,ANSI_FG_BLUE"%s()"ANSI_RESET" %s: position: %d",fn,msg?msg:"",pos));
+                 if (!ht_numkey_set(&_ht_valid_chars,hash32(s,len),len,"X")) warning(WARN_CHARS|WARN_FLAG_ONCE_PER_PATH,s,ANSI_FG_BLUE"%s()"ANSI_RESET" %s: position: %d",fn,msg?msg:"",pos));
   }
 }
 #define  assert_validchars_direntries(t,dir) _assert_validchars_direntries(t,dir,__func__)
@@ -78,8 +77,7 @@ static void _assert_validchars_direntries(enum validchars t,const struct directo
     bool ok=true;
     RLOOP(i,dir->core.files_l){
       const char *s=dir->core.fname[i];
-      if (!s){ ok=false; continue;}
-      _assert_validchars(VALIDCHARS_PATH,s,cg_strlen(s),dir->dir_realpath,fn);
+      if (s) _assert_validchars(VALIDCHARS_PATH,s,cg_strlen(s),dir->dir_realpath,fn);
     }
   }
 }
@@ -91,7 +89,7 @@ static void _debug_directory_print(const struct directory *dir,const char *fn,co
     log_msg(ANSI_INVERSE"%s():%d Directory rp: %s files_l: %d\n"ANSI_RESET,fn,line,dir->dir_realpath, d->files_l);
     RLOOP(i,d->files_l){
       const char *s=d->fname[i];
-      log_msg(" (%d) '%s'\n",i,snull(s));
+      if(s)log_msg(" (%d) '%s'\n",i,snull(s));
     }
   }
 }
@@ -122,7 +120,7 @@ static void directory_debug_filenames(const char *func,const char *msg,const str
   if (print) fprintf(stderr,"\n"ANSI_INVERSE"%s Directory %s   files_l=%d\n"ANSI_RESET,func,msg,d->files_l);
   FOR(i,0,d->files_l){
     const char *n=d->fname[i];
-    if (!n){ fprintf(stderr,"%s %s: d->fname[%d] is NULL\n",__func__,func,i);EXIT(9);}
+    if (!n) continue;
     const int len=strnlen(n,MAX_PATHLEN);
     if (len>=MAX_PATHLEN){ log_error("%s %s %s: strnlen d->fname[%d] is %d\n",__func__,func,msg,i,len);EXIT(9);}
     const char *s=Nth0(d->fname,i);
@@ -158,7 +156,7 @@ static bool debug_path(const char *vp){
 static bool debug_fhdata(const struct fhdata *d){
   return d && !d->n_read && tdf_or_tdf_bin(D_VP(d));
 }
-static void debug_fhdata_listall(){
+static void debug_fhdata_listall(void){
   log_msg(ANSI_INVERSE"%s"ANSI_RESET"\n",__func__);
   foreach_fhdata(id,d){
     log_msg("d %p path: %s fh: %llu\n",d,D_VP(d),(LLU)d->fh);
@@ -190,7 +188,7 @@ static void debug_compare_directory_a_b(struct directory *A,struct directory *B)
     diff=true;
   }else{
     FOR(i,0,b.files_l){
-      if (strcmp(a.fname[i],b.fname[i])){
+      if ((!a.fname[i])!=(!b.fname[i]) || a.fname[i] && strcmp(a.fname[i],b.fname[i])){
         dde_print("fname[%d]  %s %s\n",i,a.fname[i],b.fname[i]);
         diff=true;
       }
@@ -201,7 +199,7 @@ static void debug_compare_directory_a_b(struct directory *A,struct directory *B)
   }
   if (diff){
     print_realpath();
-    exit_ZIPsFS(1);
+    exit_ZIPsFS();
   } //else dde_print(GREEN_SUCCESS"%s\n",B->dir_realpath);
 }
 static void debug_dircache_compare_cached(struct directory *mydir,const struct stat *rp_stat){
@@ -225,7 +223,7 @@ static void debug_track_false_getattr_errors(const char *vp,const int vp_l){
     //zpath->flags|=ZP_VERBOSE2;
     const bool found=find_realpath_any_root(0,zpath,NULL);
     log_zpath("",zpath);
-    exit_ZIPsFS(0);
+    exit_ZIPsFS();
     usleep(1000*500);
   }
 }

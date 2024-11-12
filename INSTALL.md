@@ -4,15 +4,20 @@
 Please visit the page for your OS.
 
  - MS-Windows: Install ZIPsFS in a WSL environment.
- - [Ubuntu, Debian](./INSTALL_Ubuntu.md)
- - [MacOSX](./INSTALL_MacOSX.md)
- - [FreeBSD](./INSTALL_FreeBSD.md)
- - [NetBSD](./INSTALL_NetBSD.md)
- - [Ubuntu, Debian and friends](./INSTALL_Ubuntu.md)
- - [Solaris (Illumos, Smartos, ...)](./_INSTALL_Solaris.md)
+ - Linux
+   - [Ubuntu, Debian and friends](./INSTALL_Ubuntu.md)
+ - BSD
+   - [MacOSX](./INSTALL_MacOSX.md)
+   - [FreeBSD](./INSTALL_FreeBSD.md)
+   - [NetBSD](./INSTALL_NetBSD.md)
+   - [OpenBSD](./INSTALL_OpenBSD.md)
+ - Solaris / Illumos
+   On  Solaris getting FUSE file systems to work seems tricky.
+   More work is needed to understand the permission. At least, ZIPsFS compiles.
+   - [Omnios](./INSTALL_Omnios.md) Compiles. No files are seen at mount point.
+   - [OpenIndiana](./INSTALL_OpenIndiana.md)  Works as root, but not as normal user.
 
 If your OS is not listed, continue reading here.
-
 
 First install the required libraries.
 
@@ -47,8 +52,6 @@ First install the required libraries and packages.
 
 # Quick installation
 
-    U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
-    wget -N $U && unzip -o main.zip &&  ZIPsFS-main/src/ZIPsFS.compile.sh
 
 Alternatively, consider  [installation with autotools](./INSTALL_autotools.md) on Linux
 
@@ -65,14 +68,3 @@ The option -fuse3 refers to libfuse3.so. Is this found in the library search pat
 Are the include files in the include file search paths?
 
 
-## Testing FUSE system
-
-To test  FUSE, one can  check whether it is possible to mount a zip file with fuse-zip.
-This test may be performed as a normal user or as ROOT.
-The zip file will be mounted on ~/mnt/zip. The content of the zip-file will be accessible from this folder which acts as a mount point.
-
-    mkdir -p ~/mnt/zip ~/test &&  zip -j ~/test/test.zip /etc/os-release &&  fuse-zip ~/test/test.zip ~/mnt/zip
-
-The zip file is mounted here:
-
-    ls ~/mnt/zip

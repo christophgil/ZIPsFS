@@ -8,12 +8,12 @@
 
 //enum memusage{memusage_mmap,memusage_malloc,memusage_n,memusage_get_curr,memusage_get_peak};
 
-static struct ht ht_count_getattr;
-static void init_count_getattr(){
+
+static void init_count_getattr(void){
   static bool initialized;
   if (!initialized){
     initialized=true;
-    ht_set_mutex(mutex_fhdata,ht_init_with_keystore(&ht_count_getattr,11,&mstore_persistent));
+    ht_set_mutex(mutex_fhdata,ht_init_with_keystore(&ht_count_getattr,11,&mstore_persistent)); ht_set_id(HT_MALLOC_ht_count_getattr,&ht_count_getattr);
   }
 }
 static void inc_count_getattr(const char *path,enum enum_count_getattr field){
@@ -24,7 +24,7 @@ static void inc_count_getattr(const char *path,enum enum_count_getattr field){
     struct ht_entry *e=ht_sget_entry(&ht_count_getattr,ext,true);
     assert(e!=NULL);assert(e->key!=NULL);
     int *counts=e->value;
-    if (!counts) e->value=counts=mstore_malloc(&mstore_persistent,sizeof(int)*enum_count_getattr_length,8  ,MSTOREID(inc_count_getattr),path);
+    if (!counts) e->value=counts=mstore_malloc(&mstore_persistent,sizeof(int)*enum_count_getattr_length,8);
     if (counts) counts[field]++;
   }
 }
@@ -50,7 +50,7 @@ static counter_rootdata_t *filetypedata_for_ext(const char *path,struct rootdata
     assert(FILETYPEDATA_FREQUENT_NUM>_FILE_EXT_TO-_FILE_EXT_FROM);
     init_count_getattr();
     r->filetypedata_initialized=true;
-    ht_set_mutex(mutex_fhdata,ht_init_with_keystore(&r->ht_filetypedata,10,&mstore_persistent));
+    ht_set_mutex(mutex_fhdata,ht_init_with_keystore(&r->ht_filetypedata,10,&mstore_persistent)); ht_set_id(HT_MALLOC_file_ext,&r->ht_filetypedata);
     ht_sset(&r->ht_filetypedata, r->filetypedata_all.ext=".*",&r->filetypedata_all);
     ht_sset(&r->ht_filetypedata, r->filetypedata_dummy.ext="*",&r->filetypedata_dummy);
   }
@@ -77,7 +77,7 @@ static void _rootdata_counter_inc(counter_rootdata_t *c, enum enum_counter_rootd
 }
 static void fhdata_counter_inc( struct fhdata* d, enum enum_counter_rootdata f){
   if (d->zpath.root>=0){
-    if (!d->filetypedata) d->filetypedata=filetypedata_for_ext(D_VP(d), ROOTd(d));
+    if (!d->filetypedata) d->filetypedata=filetypedata_for_ext(D_VP(d),d->zpath.root);
     _rootdata_counter_inc(d->filetypedata,f);
   }
 }
@@ -113,22 +113,15 @@ static void log_fh(char *title,long fh){
 }
 static int _info_capacity=0, _info_l=0, _info_count_open=0;
 static char *_info=NULL;
-#ifdef __cppcheck__
-#define PRINTINFO(...)   fprintf(stderr,__VA_ARGS__)
-#else
-#define PRINTINFO(...)   n=printinfo(n,__VA_ARGS__)
-#endif
-static int printinfo(int n, const char *format,...){
-  if (n<_info_capacity && n>=0){
-    va_list argptr;
-    va_start(argptr,format);
-    //fprintf(stderr,"printinfo: _info_capacity=%d n=%d _info=%p \n",_info_capacity,n,_info);
-    //vprintf(format,argptr);
-    n+=vsnprintf(_info+n,_info_capacity-n,format,argptr);
-    va_end(argptr);
-  }
-  return n;
-}
+
+#define PRINTINFO(...)   { if (_info && n>=0 && _info_capacity>n) n+=snprintf(_info+n,_info_capacity-n,__VA_ARGS__);}
+#define BEGIN_H1(is_html) (is_html?"<H1>":ANSI_INVERSE)
+#define END_H1(is_html) (is_html?"<H1>":ANSI_RESET)
+#define BEGIN_B(is_html) (is_html?"<B>":ANSI_BOLD)
+#define END_B(is_html) (is_html?"<B>":ANSI_RESET)
+#define BEGIN_PRE(is_html) (is_html?"<PRE>":"")
+#define END_PRE(is_html) (is_html?"</PRE>":"")
+
 static bool isKnownExt(const char *path, int len){
   static int index_not_needed;
   return config_some_file_path_extensions(path,len?len:strlen(path),&index_not_needed);
@@ -249,12 +242,15 @@ static int log_print_fuse_argv(int n){
 static int log_print_roots(int n){
   PRINTINFO("<H1>Roots</H1>\n<TABLE border=\"1\"><THEAD><TR>"TH("Path")TH("Writable")TH("Last response")TH("Blocked")TH("Free[GB]")TH("Dir-Cache[kB]")TH("# entries in stat queue ")"</TR></THEAD>\n");
   foreach_root(i,r){
-    const int f=r->features, freeGB=(int)((r->statfs.f_bsize*r->statfs.f_bfree)>>30), last_response=deciSecondsSinceStart()-r->pthread_when_loop_deciSec[PTHREAD_RESPONDING];
+    const int f=r->features, freeGB=(int)((r->statvfs.f_bsize*r->statvfs.f_bfree)>>30), last_response=deciSecondsSinceStart()-r->pthread_when_loop_deciSec[PTHREAD_RESPONDING];
     //10L*(last_response>ROOT_OBSERVE_EVERY_MSECONDS_RESPONDING*10/1000*3?last_response:r->statfs_took_deciseconds)
     PRINTINFO("<TR>"sTDl()sTDc(),rootpath(r),yes_no(f&ROOT_WRITABLE));
-    if (f&ROOT_REMOTE) PRINTINFO(TD("%'d s ago")TD("%'u times"), last_response/10,r->log_count_delayed);
-    else PRINTINFO(TD("Local")TD(""));
-    uint64_t u=0; IF1(WITH_DIRCACHE,LOCK(mutex_dircache, u=mstore_usage(DIRCACHE(r))/1024));
+    if (f&ROOT_REMOTE){
+      PRINTINFO(TD("%'d s ago")TD("%'u times"), last_response/10,r->log_count_delayed);
+    }else{
+      PRINTINFO(TD("Local")TD(""));
+    }
+    uint64_t u=0; IF1(WITH_DIRCACHE,LOCK(mutex_dircache, u=mstore_usage(&r->dircache_mstore)/1024));
     PRINTINFO(dTD()zTD()dTD()"</TR>\n",freeGB,u,IF1(WITH_STAT_SEPARATE_THREADS,debug_statqueue_count_entries(r))IF0(WITH_STAT_SEPARATE_THREADS,0));
   }
   PRINTINFO("</TABLE>\n");
@@ -282,7 +278,10 @@ static int print_bar(int n,float rel){
 //////////////////
 
 static int print_proc_status(int n,char *filter,int *val){
-  PRINTINFO("<B>/proc/%ld/status</B>\n<PRE>\n", (long)getpid());
+
+
+  if (n>0) PRINTINFO("<B>/proc/%ld/status</B>\n<PRE>\n", (long)getpid());
+
   if (!has_proc_fs()){
     PRINTINFO(ERROR_MSG_NO_PROC_FS"\n");
   }else{
@@ -297,76 +296,157 @@ static int print_proc_status(int n,char *filter,int *val){
         }
       }
     }
-    PRINTINFO("</PRE>\n");
+    if (n>0) PRINTINFO("</PRE>\n");
     fclose(file);
   }
   return n;
 }
-static void log_virtual_memory_size(){
+static void log_virtual_memory_size(void){
   if (has_proc_fs()){
-  int val;print_proc_status(-1,"VmSize:",&val);
-  log_msg("Virtual memory size: %'d kB\n",val);
+    int val;print_proc_status(-1,"VmSize:",&val);
+    log_msg("Virtual memory size: %'d kB\n",val);
   }
 }
 
+static int log_memusage_ht(int n,const bool html){
+  PRINTINFO("%sMemory usage of hash maps%s%s\n",BEGIN_H1(html),END_H1(html),BEGIN_PRE(html));
+#define R(ht) n+=ht_report_memusage_to_strg(_info+n, _info_capacity-n,ht,html)
+  R(NULL);
+  FOR(i,0,9){
+    struct ht *ht=
+      IF1(WITH_STAT_CACHE, i==0?&stat_ht:)
+      IF1(WITH_ZIPINLINE_CACHE, i==1?&ht_zinline_cache_vpath_to_zippath:)
+      IF1(WITH_AUTOGEN,i==2?&ht_fsize:)
+      i==3?&ht_intern_fileext:
+      i==4?&ht_count_getattr:
+      i==5?&_ht_valid_chars:
+      i==6?&ht_inodes_vp:
+
+      NULL;
+    if (ht) R(ht);
+  }
+  foreach_root(ir,r){
+    PRINTINFO("\n%sRoot %s%s\n",BEGIN_B(html),r->rootpath,END_B(html));
+    R(NULL);
+    FOR(i,0,12){
+#define C(n,ht) i==n?&r->ht:
+      struct ht *ht=
+        C(0,dircache_queue)
+        C(1,dircache_ht)
+        C(3,ht_inodes)
+        C(4,ht_filetypedata)
+#if WITH_DIRCACHE || WITH_STAT_CACHE
+        C(7,dircache_ht_fname)
+        C(8,dircache_ht_fnamearray)
+#endif
+        NULL;
+#undef C
+      if (ht) R(ht);
+    }
+    PRINTINFO("\n");
+    n+=mstore_report_memusage_to_strg(_info+n,_info_capacity-n,&r->dircache_mstore);
+  }
+  PRINTINFO("\n%sMemory storages%s\n",BEGIN_B(html),END_B(html));
+  n+=mstore_report_memusage_to_strg(_info+n,_info_capacity-n, &mstore_persistent);
+      PRINTINFO("\n\n%s",END_PRE(html));
+  PRINTINFO("\n");
+  return n;
+#undef R
+}
+
+
+static int log_mutex_locks(int n,const bool html){
+#if WITH_ASSERT_LOCK
+  PRINTINFO("%sMutex lock level%s%s\n",BEGIN_H1(html),END_H1(html),BEGIN_PRE(html));
+  FOR(m,0,mutex_len){
+    const int c=cg_mutex_count(m,0);
+    if (c) PRINTINFO("  %24s %3d\n",MUTEX_S[m],c);
+  }
+  PRINTINFO("\n%s",END_PRE(html));
+#endif //WITH_ASSERT_LOCK
+  return n;
+    }
+
+
+static int log_malloc(int n,const bool html){
+#if WITH_DEBUG_MALLOC
+  PRINTINFO("%sMemory-leak: Count Malloc%s%s\n",BEGIN_H1(html),END_H1(html),BEGIN_PRE(html));
+  FOR(is_mmap,0,2){
+    int header=0;
+    FOR(i,1,MALLOC_LEN){
+      const long m=(is_mmap?_mmap_count:_malloc_count)[i], f=(is_mmap?_munmap_count:_free_count)[i];
+      if (m || f || !is_mmap){
+        if (!header++)     PRINTINFO("\n%s%40s %20s %20s %20s%s\n",html?"<u>":ANSI_UNDERLINE,"ID",is_mmap?"Mmap":"Malloc",is_mmap?"Munmap":"Free","Diff",html?"</u>":ANSI_RESET);
+        PRINTINFO("%s%40s %'20ld %'20ld %'20ld%s\n", html?"":m==0&&f==0?ANSI_FG_GRAY:m==f?ANSI_FG_GREEN:ANSI_FG_RED, MALLOC_S[i], m,f,m-f,html?"":ANSI_RESET);
+      }
+    }
+  }
+    PRINTINFO("\n%s",END_PRE(html));
+#endif //WITH_DEBUG_MALLOC
+  return n;
+}
+
+
+
+
 static int log_print_open_files(int n, int *fd_count){
   if (has_proc_fs()){
-  PRINTINFO("<H1>All OS-level file handles</H1>\n(Should be almost empty if idle).<BR>");
-  if (!has_proc_fs()){
-    PRINTINFO(ERROR_MSG_NO_PROC_FS"\n");
-  }else{
-    static char path[256];
-    struct dirent *dp;
-    DIR *dir=opendir("/proc/self/fd/");
-    PRINTINFO("<OL>\n");
-    for(int i=0;(dp=readdir(dir));i++){
-      if (fd_count) (*fd_count)++;
-      if (n<0 || atoi(dp->d_name)<4) continue;
-      static char proc_path[PATH_MAX];
-      snprintf(proc_path,PATH_MAX,"/proc/self/fd/%s",dp->d_name);
-      const int l=readlink(proc_path,path,255);path[MAX(l,0)]=0;
-      if (cg_endsWith(path,0,SPECIAL_FILES[SFILE_LOG_WARNINGS],0)||!strncmp(path,"/dev/",5)|| !strncmp(path,"/proc/",6) || !strncmp(path,"pipe:",5)) continue;
-      PRINTINFO("<LI>%47s %s</LI>\n",proc_path,path);
+    PRINTINFO("<H1>All OS-level file handles</H1>\n(Should be almost empty if idle).<BR>");
+    if (!has_proc_fs()){
+      PRINTINFO(ERROR_MSG_NO_PROC_FS"\n");
+    }else{
+      static char path[256];
+      struct dirent *dp;
+      DIR *dir=opendir("/proc/self/fd/");
+      PRINTINFO("<OL>\n");
+      for(int i=0;(dp=readdir(dir));i++){
+        if (fd_count) (*fd_count)++;
+        if (n<0 || atoi(dp->d_name)<4) continue;
+        static char proc_path[PATH_MAX];
+        snprintf(proc_path,PATH_MAX,"/proc/self/fd/%s",dp->d_name);
+        const int l=readlink(proc_path,path,255);path[MAX(l,0)]=0;
+        if (cg_endsWith(path,0,SPECIAL_FILES[SFILE_LOG_WARNINGS],0)||!strncmp(path,"/dev/",5)|| !strncmp(path,"/proc/",6) || !strncmp(path,"pipe:",5)) continue;
+        PRINTINFO("<LI>%47s %s</LI>\n",proc_path,path);
+      }
+      closedir(dir);
+      PRINTINFO("</OL>\n");
     }
-    closedir(dir);
-    PRINTINFO("</OL>\n");
-  }
   }
   return n;
 }
 static int print_maps(int n){
   if (has_proc_fs()){
-  PRINTINFO("<H1>/proc/%ld/maps</H1>\n", (long)getpid());
-  if (!has_proc_fs()){
-    PRINTINFO(ERROR_MSG_NO_PROC_FS"\n");
-  }else{
-    size_t total=0;
-    FILE *f=fopen("/proc/self/maps","r");
-    if(!f) {
-      PRINTINFO("/proc/self/maps: %s\n",strerror(errno));
-      return n;
+    PRINTINFO("<H1>/proc/%ld/maps</H1>\n", (long)getpid());
+    if (!has_proc_fs()){
+      PRINTINFO(ERROR_MSG_NO_PROC_FS"\n");
+    }else{
+      size_t total=0;
+      FILE *f=fopen("/proc/self/maps","r");
+      if(!f) {
+        PRINTINFO("/proc/self/maps: %s\n",strerror(errno));
+        return n;
+      }
+      PRINTINFO("<TABLE border=\"1\">\n<THEAD><TR>"TH("Addr&gt;&gt;12")TH("Name")TH("kB")TH("")"</TR></THEAD>\n");
+      const int L=333;
+      while(!feof(f)) {
+        char buf[PATH_MAX+100],perm[5],dev[6],mapname[PATH_MAX]={0};
+        unsigned long long begin,end,inode,foo;
+        if(fgets(buf,sizeof(buf),f)==0) break;
+        *mapname=0;
+        const int k=sscanf(buf, "%llx-%llx %4s %llx %5s %llu %100s",&begin,&end,perm,&foo,dev, &inode,mapname);
+        if (k>=6){
+          const int64_t size=end-begin;
+          total+=size;
+          if (!strchr(mapname,'/') && size>=SIZE_CUTOFF_MMAP_vs_MALLOC){
+            PRINTINFO("<TR>"TD("%08lx")sTDl()""lTD()"<TD>",(unsigned long)(begin>>12),mapname,size>>10);
+            n=repeat_chars_info(n,'-',MIN_int(L,(int)(3*log(size))));
+            PRINTINFO("</TD></TR>\n");
+          }
+        }else warning(WARN_FORMAT,buf,"sscanf scanned n=%d",k);
+      }
+      fclose(f);
+      PRINTINFO("<TFOOT><TR>"TD("")TD("")TD("%'lu")TD("")"</TR></TFOOT>\n</TABLE>\n",(unsigned long)(total>>10));
     }
-    PRINTINFO("<TABLE border=\"1\">\n<THEAD><TR>"TH("Addr&gt;&gt;12")TH("Name")TH("kB")TH("")"</TR></THEAD>\n");
-    const int L=333;
-    while(!feof(f)) {
-      char buf[PATH_MAX+100],perm[5],dev[6],mapname[PATH_MAX]={0};
-      unsigned long long begin,end,inode,foo;
-      if(fgets(buf,sizeof(buf),f)==0) break;
-      *mapname=0;
-      const int k=sscanf(buf, "%llx-%llx %4s %llx %5s %llu %100s",&begin,&end,perm,&foo,dev, &inode,mapname);
-      if (k>=6){
-        const int64_t size=end-begin;
-        total+=size;
-        if (!strchr(mapname,'/') && size>=SIZE_CUTOFF_MMAP_vs_MALLOC){
-          PRINTINFO("<TR>"TD("%08lx")sTDl()""lTD()"<TD>",begin>>12,mapname,size>>10);
-          n=repeat_chars_info(n,'-',MIN_int(L,(int)(3*log(size))));
-          PRINTINFO("</TD></TR>\n");
-        }
-      }else warning(WARN_FORMAT,buf,"sscanf scanned n=%d",k);
-    }
-    fclose(f);
-    PRINTINFO("<TFOOT><TR>"TD("")TD("")TD("%'lu")TD("")"</TR></TFOOT>\n</TABLE>\n",total>>10);
-  }
   }
   return n;
 }
@@ -374,9 +454,9 @@ static int print_maps(int n){
 
 static int log_print_CPU(int n){
   if (has_proc_fs()){
-  PRINTINFO("<H1>CPU</H1>\n<PRE>");
-  PRINTINFO("Current CPU usage user: %.2f system: %.2f    Also try top -p %d\n",_ucpu_usage,_scpu_usage,getpid());
-  PRINTINFO("</PRE>\n");
+    PRINTINFO("<H1>CPU</H1>\n<PRE>");
+    PRINTINFO("Current CPU usage user: %.2f system: %.2f    Also try top -p %d\n",_ucpu_usage,_scpu_usage,getpid());
+    PRINTINFO("\n</PRE>\n");
   }
   return n;
 }
@@ -386,7 +466,7 @@ static int log_print_CPU(int n){
 
 static int log_print_memory(int n){
   PRINTINFO("<H1>Virtual memory</H1>\n");
-  #if WITH_MEMCACHE
+#if WITH_MEMCACHE
   {
     const uint64_t current=textbuffer_memusage_get(0)+textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP);
     const uint64_t peak=textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_PEAK)+textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_PEAK);
@@ -397,12 +477,14 @@ static int log_print_memory(int n){
   }
 #endif //WITH_MEMCACHE
   if (has_proc_fs()){
-    struct rlimit rl={0}; getrlimit(RLIMIT_AS,&rl);
-    const bool rlset=rl.rlim_cur!=-1;
     int val=-1;print_proc_status(-1,"VmSize:",&val);
     //if(rlset)  n=print_bar(n,val*1024/(.01+rl.rlim_cur));
     PRINTINFO("Virt memory: %'d MB<BR>\n",val>>10);
-    if(rlset) PRINTINFO(" / rlimit %zu MB<BR>\n",rl.rlim_cur>>20);
+#if ! defined(HAS_RLIMIT) || HAS_RLIMIT
+    struct rlimit rl={0}; getrlimit(RLIMIT_AS,&rl);
+    const bool rlset=rl.rlim_cur!=-1;
+    if(rlset) PRINTINFO(" / rlimit %ld MB<BR>\n",(long)(rl.rlim_cur>>20));
+#endif
   }
 
 #if IS_LINUX
@@ -417,18 +499,20 @@ static int log_print_memory(int n){
   if (has_proc_fs()){
     int val; n=print_proc_status(n,"VmRSS:|VmHWM:|VmSize:|VmPeak:",&val);
   }
+#if ! defined(HAS_RLIMIT) || HAS_RLIMIT
   {
     struct rlimit rl={0};
     getrlimit(RLIMIT_AS,&rl);
     if (rl.rlim_cur!=-1) PRINTINFO("Rlim soft: %'lx MB   hard: %'lx MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
   }
+#endif
   PRINTINFO("Number of calls to mmap: %'jd to munmap: %'jd<BR>\n",(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_FREE));
-  PRINTINFO("Number of calls to malloc: %'jd to free: %'jd<BR>\n",(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_FREE));
+  PRINTINFO("Number of calls to Malloc: %'jd to Free: %'jd<BR>\n",(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_FREE));
   return n;
 }
 
 
-static long _count_readzip_memcache=0,_count_readzip_memcache_because_seek_bwd=0,_log_read_max_size=0,_count_SeqInode=0;
+
 static int log_print_statistics_of_read(int n){
   PRINTINFO("Count events related to cache:\n<TABLE border=\"1\"><THEAD><TR>"TH("Event")TH("Count")"</TR></THEAD>\n");
 #define TABLEROW(a) { const char *us=strchr(#a,'_'); PRINTINFO("<TR>"sTDlb()lTD()"</TR>\n",us?us+1:"Null",a);}
@@ -451,14 +535,25 @@ static int print_fhdata(int n,const char *title){
   if (!_fhdata_n){
     PRINTINFO("The cache is empty which is good. It means that no entry is locked or leaked.<BR>\n");
   }else{
-    PRINTINFO("Table should be empty when idle.<BR>Column <I><B>fd</B></I> file descriptor. Column <I><B>Last access</B></I>:    Column <I><B>Millisec</B></I>:  time to read entry en bloc into cache.  Column <I><B>R</B></I>: number of threads in currently in xmp_read().\
+    PRINTINFO("Table should be empty when idle.<BR>Column <I><B>fd</B></I> file descriptor. Column <I><B>Last-access</B></I>:    Column <I><B>Millisec</B></I>:  time to read entry en bloc into cache.  Column <I><B>R</B></I>: number of threads in currently in xmp_read().\
               Column <I><B>F</B></I>: flags. (D)elete indicates that it is marked for closing and (K)eep indicates that it can currently not be closed. Two possible reasons why data cannot be released: (I)  xmp_read() is currently run (II) the cached zip entry is needed by another file descriptor  with the same virtual path. Column <I><B>Tansient cache: Hex address, number of cached paths, count fetched non-existing paths, count fetched existing</B><BR>\n\
-              <TABLE border=\"1\">\n<THEAD><TR>"TH("Path")TH("Last access")IF1(WITH_MEMCACHE,TH("Cache ID")TH("Cache read kB")TH("Entry kB")TH("Millisec"))TH(" F")TH("R")IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,TH("Transient cache"))"</TR></THEAD>\n");
+              <TABLE border=\"1\">\n<THEAD><TR>"TH("Path")TH("Last-access")IF1(WITH_MEMCACHE,TH("Cache-ID")TH("Cache-read-kB")TH("Entry-kB")TH("Millisec"))TH(" F")TH("R")IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,TH("Transient-cache"))"</TR></THEAD>\n");
     const time_t t0=time(NULL);
     foreach_fhdata(id,d){
       PRINTINFO("<TR>"sTDl(),snull(D_VP(d)));
-      if (d->accesstime) PRINTINFO(TD("%'ld s"),t0-d->accesstime); else PRINTINFO(TD("Never"));
-      IF1(WITH_MEMCACHE, struct memcache *m=d->memcache; if (m && m->memcache2) PRINTINFO(TD("%05x")zTD()zTD()lTD(),m->id,_kilo(m->memcache_already),_kilo(m->memcache_l),m->memcache_took_mseconds); else PRINTINFO(TD("")TD("")TD("")TD("")));
+      if (d->accesstime){
+        PRINTINFO(TD("%'ld s"),t0-d->accesstime);
+      }else{
+        PRINTINFO(TD("Never"));
+      }
+#if WITH_MEMCACHE
+      struct memcache *m=d->memcache;
+      if (m && m->txtbuf){
+        PRINTINFO(TD("%05x")zTD()zTD()lTD(),m->id,_kilo(m->memcache_already),_kilo(m->memcache_l),m->memcache_took_mseconds);
+      }else{
+        PRINTINFO(TD("")TD("")TD("")TD(""));
+      }
+#endif //WITH_MEMCACHE
 
       PRINTINFO(TD("%c%c")dTD(),(d->flags&FHDATA_FLAGS_DESTROY_LATER)?'D':' ', fhdata_can_destroy(d)?' ':'K',d->is_xmp_read);
       IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,const struct ht *ht=d->ht_transient_cache;PRINTINFO(TD("%0lx %d %d %d"),(long)ht,!ht?-1: (int)ht->length, !ht?-1:ht->client_value_int[0],!ht?-1:ht->client_value_int[1]));
@@ -468,11 +563,14 @@ static int print_fhdata(int n,const char *title){
   }
   return n;
 }
-
-static int print_all_info(){
+#define MAKE_INFO_HTML (1<<1)
+#define MAKE_INFO_ALL (1<<2)
+static int print_all_info(const int flags){
   //log_entered_function("print_all_info _info_capacity=%d \n",_info_capacity);
   int n=0;
-  PRINTINFO("<!DOCTYPE html><HTML>\n<HEAD>\n\
+  const bool html=flags&MAKE_INFO_HTML;
+  if (html){
+    PRINTINFO("<!DOCTYPE html><HTML>\n<HEAD>\n\
 <TITLE>ZIPsFS File system info</TITLE>\n\
 <META http-equiv=\"Cache-Control\" content=\"no-cache,no-store,must-revalidate\"/>\n\
 <META http-equiv=\"Pragma\" content=\"no-cache\"/>\n\
@@ -489,23 +587,30 @@ TD,TH {padding:5px;padding-right:2EM;}\n\
 TD {text-align:right;}\n\
 </STYLE>\n</HEAD>\n<BODY>\n\
 <B>ZIPsFS:</B> <A href=\"%s\">%s</A><BR> \n",HOMEPAGE,HOMEPAGE);
-  PRINTINFO("Compiled: &nbsp; "__DATE__"  "__TIME__"<BR>\nStarted: &nbsp; %s &nbsp; %s &nbsp; PID: %d<BR>\n",ctime(&_startTime.tv_sec), _thisPrg, getpid());
-  time_t rawtime;  time(&rawtime);  PRINTINFO("Now: &nbsp; %s<BR>\n",ctime(&rawtime));
-  n=log_print_roots(n);
-  n=log_print_fuse_argv(n);
-  n=log_print_open_files(n,NULL);
-  n=log_print_memory(n);
-  n=log_print_CPU(n);
-  LOCK(mutex_fhdata,n=print_fhdata(n,""));
-  PRINTINFO("<H1>Inodes</H1>\nCreated sequentially: %'ld\n",_count_SeqInode);
-  //n=print_maps(n);
-  PRINTINFO("<H1>Cache</H1>");
-  PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",  IF1(WITH_MEMCACHE,WHEN_MEMCACHE_S[_memcache_policy])IF0(WITH_MEMCACHE,"!WITH_MEMCACHE"));
-  n=log_print_statistics_of_read(n);
-  //  PRINTINFO("_cumul_time_store=%lf\n<BR>",((double)_cumul_time_store)/CLOCKS_PER_SEC);
-  LOCK(mutex_fhdata,n=counts_by_filetype(n));
-  PRINTINFO("</BODY>\n</HTML>\n\0\0\0");
-  return n;
+    PRINTINFO("Compiled: &nbsp; "__DATE__"  "__TIME__"<BR>\nStarted: &nbsp; %s &nbsp; %s &nbsp; PID: %d<BR>\n",ctime(&_startTime.tv_sec), snull(this_executable()), getpid());
+  }
+  if (flags&MAKE_INFO_ALL){
+    time_t rawtime;  time(&rawtime);  PRINTINFO("Now: &nbsp; %s<BR>\n",ctime(&rawtime));
+    n=log_print_roots(n);
+    n=log_print_fuse_argv(n);
+    n=log_print_open_files(n,NULL);
+    n=log_print_memory(n);
+    n=log_print_CPU(n);
+    LOCK(mutex_fhdata,n=print_fhdata(n,""));
+    PRINTINFO("<H1>Inodes</H1>\nCreated sequentially: %'ld\n",_count_SeqInode);
+    //n=print_maps(n);
+    PRINTINFO("<H1>Cache</H1>");
+    PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",  IF1(WITH_MEMCACHE,WHEN_MEMCACHE_S[_memcache_policy])IF0(WITH_MEMCACHE,"!WITH_MEMCACHE"));
+    n=log_print_statistics_of_read(n);
+    //  PRINTINFO("_cumul_time_store=%lf\n<BR>",((double)_cumul_time_store)/CLOCKS_PER_SEC);
+    LOCK(mutex_fhdata,n=counts_by_filetype(n));
+  }
+  n=log_memusage_ht(n,html);
+  n=log_malloc(n,html);
+  n=log_mutex_locks(n,html);
+  if (html) PRINTINFO("</BODY>\n</HTML>\n");
+  if (n<_info_capacity) _info[n]=0;
+  return n+1;
 }
 static const char *zip_fdopen_err(int err){
 #define  ZIP_FDOPEN_ERR(code,descr) if (err==code) return descr
@@ -525,7 +630,7 @@ static const char *zip_fdopen_err(int err){
 static void fhdata_log_cache(const struct fhdata *d){
   if (!d){ log_char('\n');return;}
   struct memcache *m=d->memcache;
-  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %jd/%jd   hasc: %s\n",d,D_VP(d),yes_no(m && m->memcache2),!m?0:MEMCACHE_STATUS_S[m->memcache_status],(intmax_t)(!m?-1:m->memcache_already),(intmax_t)(!m?-1:m->memcache_l),yes_no(m && m->memcache_l>0));
+  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %jd/%jd   hasc: %s\n",d,D_VP(d),yes_no(m && m->txtbuf),!m?0:MEMCACHE_STATUS_S[m->memcache_status],(intmax_t)(!m?-1:m->memcache_already),(intmax_t)(!m?-1:m->memcache_l),yes_no(m && m->memcache_l>0));
 }
 #endif //WITH_MEMCACHE
 static void _log_zpath(const char *fn,const int line,const char *msg, struct zippath *zpath){
@@ -554,7 +659,7 @@ static bool fhdata_not_yet_logged(unsigned int flag,struct fhdata *d){
   d->already_logged|=flag;
   return true;
 }
-static void log_fuse_process(){
+static void log_fuse_process(void){
   if (!has_proc_fs()) return;
 
   struct fuse_context *fc=fuse_get_context();
@@ -570,32 +675,41 @@ static void log_fuse_process(){
     fclose(f);
   }
 }
-static void usage(){
-  fputs(ANSI_INVERSE"ZIPsFS"ANSI_RESET"\n\nCompiled: "__DATE__"  "__TIME__"\n\n",stderr);
-  fputs(ANSI_UNDERLINE"Usage:"ANSI_RESET"  ZIPsFS [options]  root-dir1 root-dir2 ... root-dir-n : [libfuse-options]  mount-Point\n\n"
-        ANSI_UNDERLINE"Example:"ANSI_RESET"  ZIPsFS -l 2GB  ~/tmp/ZIPsFS/writable  ~/local/folder //computer/pub :  -f -o allow_other  ~/tmp/ZIPsFS/mnt\n\n\
+static void suggest_help(void){
+  fprintf(stderr,"For help run\n   %s -h\n\n",_thisPrg);
+  exit(1);
+}
+static void usage(void){
+  puts_stderr(ANSI_INVERSE"ZIPsFS"ANSI_RESET"\n\nCompiled: "__DATE__"  "__TIME__"\n\n");
+  puts_stderr(ANSI_UNDERLINE"Usage:"ANSI_RESET"  ZIPsFS [options]  root-dir1 root-dir2 ... root-dir-n : [libfuse-options]  mount-Point\n\n"
+              ANSI_UNDERLINE"Example:"ANSI_RESET"  ZIPsFS -l 2GB  ~/tmp/ZIPsFS/writable  ~/local/folder //computer/pub :  -f -o allow_other  ~/tmp/ZIPsFS/mnt\n\n\
 The first root directory (here  ~/tmp/ZIPsFS/writable)  is writable and allows file creation and deletion, the others are read-only.\n\
 Root directories starting with double slash (here //computer/pub) are regarded as less reliable and potentially blocking.\n\n\
-Options and arguments before the colon are interpreted by ZIPsFS.  Those after the colon are passed to fuse_main(...).\n\n",stderr);
-    fputs(ANSI_UNDERLINE"ZIPsFS options:"ANSI_RESET"\n\n\
-      -h Print usage.\n\
+Options and arguments before the colon are interpreted by ZIPsFS.  Those after the colon are passed to fuse_main(...).\n\n");
+  puts_stderr(ANSI_UNDERLINE"ZIPsFS options:"ANSI_RESET"\n\n\
+      -h Print usage.\n\n\
       -q quiet, no debug messages to stdout\n\
-         Without the option -f (foreground) all logs are suppressed anyway.\n\
-      -c  ",stderr);
-  //  for(char **s=WHEN_MEMCACHE_S;*s;s++){if (s!=WHEN_MEMCACHE_S) putchar('|');fputs(*s,stderr);}
-  IF1(WITH_MEMCACHE,for(int i=0;WHEN_MEMCACHE_S[i];i++){ if (i) putc('|',stderr);fputs(WHEN_MEMCACHE_S[i],stderr);});
-  fputs("    When to read zip entries into RAM\n\
+         Without the option -f (foreground) all logs are suppressed anyway.\n\n\
+      -c  ");
+  //  for(char **s=WHEN_MEMCACHE_S;*s;s++){if (s!=WHEN_MEMCACHE_S) putchar('|');puts_stderr(*s);}
+  IF1(WITH_MEMCACHE,for(int i=0;WHEN_MEMCACHE_S[i];i++){ if (i) putc('|',stderr);puts_stderr(WHEN_MEMCACHE_S[i]);});
+  puts_stderr("    When to read zip entries into RAM\n\
          seek: When the data is not read continuously\n\
          rule: According to rules based on the file name encoded in configuration.h\n\
-         The default is when backward seeking would be requires otherwise\n\
-      -k Kill on error. For debugging only.\n\
+         The default is when backward seeking would be requires otherwise\n\n\
+      -k Kill on error. For debugging only.\n\n\
       -l Limit memory usage for caching ZIP entries.\n\
          Without caching, moving read positions backwards for an non-seek-able ZIP-stream would require closing, reopening and skipping.\n\
-         To avoid this, the limit is multiplied with factor 1.5 in such cases.\n\n",stderr);
-  fputs(ANSI_UNDERLINE"Fuse options:"ANSI_RESET"These options are given after a colon.\n\n\
- -d Debug information\n\
- -f File system should not detach from the controlling terminal and run in the foreground.\n\
- -s Single threaded mode. Maybe tried in case the default mode does not work properly.\n\
- -h Print usage information.\n\
- -V Version\n\n",stderr);
+         To avoid this, the limit is multiplied with factor 1.5 in such cases.\n\n\
+      -T 0 or -T 1 or -T 2  Generate a stack trace to check whether ZIPsFS can produce stack traces with line numbers.\n\
+         This requires /usr/bin/addr2line (package binutils) or atos (MacOSx).\n\n");
+  puts_stderr(ANSI_UNDERLINE"Fuse options:"ANSI_RESET"These options are given after a colon.\n\n\
+      -d Debug information\n\n\
+      -f File system should not detach from the controlling terminal and run in the foreground.\n\n\
+      -s Single threaded mode. Maybe tried in case the default mode does not work properly.\n\n\
+      -h Print usage information.\n\n\
+      -V Version\n\n");
+
+  puts_stderr(ANSI_UNDERLINE"Reporting bugs:"ANSI_RESET"\n\n\
+If ZIPsFS crashes, please report the stack-trace and the ZIPsFS version.\n\n");
 }

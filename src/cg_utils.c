@@ -7,13 +7,13 @@
 #include <fcntl.h>// provides posix_fadvise
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <limits.h>
 #include <time.h>
 #include <utime.h>
 #include <grp.h>
-#include <limits.h>
 #include <math.h>
 #include <stdbool.h>
 #include <assert.h>
@@ -27,16 +27,33 @@
 #include <stddef.h>
 //#include <malloc.h>
 #include <unistd.h>
+#include <stdatomic.h>
+
+#include <dirent.h>
+
+#include <sys/mman.h>
+
+#include <sys/param.h>
+//#include <sys/mount.h>
+#include <sys/syscall.h>
+#include <locale.h>// Provides decimal grouping
+
+#ifndef PROFILED
+#define PROFILED(function) function
+#endif
 
 
 
 
 /*********************************************************************************/
-static bool has_proc_fs(){
+static bool has_proc_fs(void){
   struct stat st;
   static int v;
-  if (!v) v=stat("/proc/self/fd",&st)?-1:1;
+  if (!v) v=PROFILED(stat)("/proc/self/fd",&st)?-1:1;
   return v==1;
+}
+static void puts_stderr(const char *s){
+  if(s)fputs(s,stderr);
 }
 
 //////////////
@@ -72,6 +89,64 @@ static void fprint_strerror(FILE *f,int err){
   }
 }
 
+#if ! defined WITH_DEBUG_MALLOC
+#define WITH_DEBUG_MALLOC 0
+#endif
+#if ! WITH_DEBUG_MALLOC || ! defined MALLOC_ID_COUNT
+#define MMAP_INC(...)
+#define MUNMAP_INC(...)
+#define MALLOC_INC(...)
+#define FREE_INC(...)
+#define cg_free(id,...)   free_untracked(__VA_ARGS__)
+#define cg_malloc(id,...) malloc_untracked(__VA_ARGS__)
+#define cg_calloc(id,...) calloc_untracked(__VA_ARGS__)
+#define cg_strdup(id,...) strdup_untracked(__VA_ARGS__)
+#define cg_mmap(id,...) _cg_mmap(0,__VA_ARGS__)
+#define cg_munmap(id,...) _cg_munmap(0,__VA_ARGS__)
+#else
+static atomic_long _malloc_count[MALLOC_ID_COUNT],_free_count[MALLOC_ID_COUNT], _mmap_count[MALLOC_ID_COUNT], _munmap_count[MALLOC_ID_COUNT];
+#define MALLOC_INC(id)     if (id) atomic_fetch_add(_malloc_count+id,1)
+#define FREE_INC(id)       if (id) atomic_fetch_add(_free_count+id,1)
+#define MMAP_INC(id,inc)   if (id) atomic_fetch_add(_mmap_count+id,inc)
+#define MUNMAP_INC(id,inc) if (id) atomic_fetch_add(_munmap_count+id,inc)
+
+#define cg_mmap(...) _cg_mmap(__VA_ARGS__)
+#define cg_munmap(...) _cg_munmap(__VA_ARGS__)
+
+static bool _malloc_is_count_mstore[MALLOC_ID_COUNT];
+static void *cg_malloc(const int id, const size_t size){
+  MALLOC_INC(id);
+  return malloc_untracked(size);
+}
+static void *cg_calloc(const int id,size_t nmemb, size_t size){
+  MALLOC_INC(id);
+  return calloc(nmemb,size);
+}
+static char *cg_strdup(const int id,const char *s){
+  MALLOC_INC(id);
+  return strdup(s);
+}
+static void cg_free(const int id,const void *ptr){
+  if (!ptr) return;
+  FREE_INC(id);
+  free_untracked((void*)ptr);
+}
+#endif
+
+static void *_cg_mmap(const int id, const size_t length, const int fd_or_zero){
+  const int fd=fd_or_zero?fd_or_zero:-1;
+  const off_t offset=0;
+  const int flags=fd==-1?(MAP_SHARED|MAP_ANONYMOUS):MAP_SHARED;
+  void *ptr=mmap(NULL,length,PROT_READ|PROT_WRITE,flags,fd, offset);
+  if (ptr) MMAP_INC(id,length);
+  return ptr;
+}
+static int _cg_munmap(const int id,const void *ptr,size_t length){
+  if (!ptr) return -1;
+  MUNMAP_INC(id,length);
+  return munmap((void*)ptr,length);
+}
+
 //////////////
 /// String ///
 //////////////
@@ -87,12 +162,33 @@ static char *cg_strncpy(char *dst,const char *src, int n){
 static uint32_t cg_strlen(const char *s){
   return s?strlen(s):0;
 }
+
+
+
+static int cg_sum_strlen(const char **ss, const int n){
+  int sum=0;
+  FOREACH_CSTRING(s,ss) sum+=cg_strlen(*s);
+  return sum;
+}
+
+#define cg_idx_of_NULL(aa) cg_idx_of_pointer(aa,NULL)
+static int cg_idx_of_pointer(void **aa, void *a){
+  if (aa){
+    for(int i=0; ;i++){
+      if (aa[i]==a) return i;
+      if (!aa[i]) break;
+    }
+  }
+return -1;
+
+}
+
+
+
+
+
 static const char* snull(const char *s){ return s?s:"Null";}
 static MAYBE_INLINE char *yes_no(int i){ return i?"Yes":"No";}
-#define LASTCHAR(x) x[sizeof(x)-2]
-#define STRLEN(ending) ((int)sizeof(ending)-1)
-#define ENDSWITH(s,slen,ending)  ((slen>=STRLEN(ending)) && s[slen-1]==LASTCHAR(ending) && (!memcmp(s+slen-STRLEN(ending),ending,STRLEN(ending))))
-#define ENDSWITHI(s,slen,ending) ((slen>=STRLEN(ending)) && (s[slen-1]|32)==(32|LASTCHAR(ending)) && (!strcasecmp(s+slen-STRLEN(ending),ending)))
 
 static bool cg_endsWith(const char* s,int s_l,const char* e,int e_l){
   if (!s || !e) return false;
@@ -135,6 +231,8 @@ static int cg_last_slash(const char *path){
   }
   return -1;
 }
+
+
 
 #define OPT_STR_REPLACE_DRYRUN (1<<0)
 #define OPT_STR_REPLACE_ASSERT (1<<1)
@@ -200,18 +298,22 @@ static int cg_strsplit(const int opt_and_sep, char *s, const int s_l, char *toke
 }
 
 
+static const char *rm_pfx_us(const char *s){
+  const char *us=!s?NULL:strchr(s,'_');
+  return us?us+1:NULL;
+}
 ///////////////////
 /// time       ///
 ///////////////////
 
 
-static struct timeval  _startTime;
-static int64_t currentTimeMillis(){
+static struct timeval _startTime;
+static int64_t currentTimeMillis(void){
   struct timeval tv={0};
   gettimeofday(&tv,NULL);
   return tv.tv_sec*1000+tv.tv_usec/1000;
 }
-static int deciSecondsSinceStart(){
+static int deciSecondsSinceStart(void){
   if (!_startTime.tv_sec) gettimeofday(&_startTime,NULL);
   struct timeval now;
   gettimeofday(&now,NULL);
@@ -232,8 +334,6 @@ static int cg_pathlen_ignore_trailing_slash(const char *p){
 static bool cg_path_equals_or_is_parent(const char *subpath,const int subpath_l,const char *path,const int path_l){
   return subpath && path && (subpath_l==path_l||(subpath_l<path_l&&path[subpath_l]=='/')) && !memcmp(path,subpath,subpath_l);
 }
-
-enum validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHARS_NUM};
 static bool *cg_validchars(enum validchars type){
   static bool ccc[VALIDCHARS_NUM][128];
   static bool initialized;
@@ -282,7 +382,7 @@ static int cg_path_for_fd(const char *title, char *path, int fd){
   return path[n]=0;
 }
 
-static int cg_count_fd_this_prg(){
+static int cg_count_fd_this_prg(void){
   int n=0;
   if (has_proc_fs()){
     DIR *dir=opendir("/proc/self/fd");
@@ -363,7 +463,7 @@ static void cg_log_file_mode(mode_t m){
   C(S_IROTH,'r');C(S_IWOTH,'w');C(S_IXOTH,'x');
 #undef C
   mode[i++]=0;
-  fputs(mode,stderr);
+  puts_stderr(mode);
 }
 
 
@@ -433,9 +533,11 @@ static bool cg_stat_differ(const char *title,struct stat *s1,struct stat *s2){
 #define cg_is_dir(f) cg_is_stat_mode(S_IFDIR,f)
 #define cg_is_symlink(f) cg_is_stat_mode(S_IFLNK,f)
 #define cg_is_regular_file(f) cg_is_stat_mode(S_IFREG,f)
+
+
 static bool cg_is_stat_mode(const mode_t mode,const char *f){
   struct stat st={0};
-  return !lstat(f,&st) &&  (st.st_mode&S_IFMT)==mode;
+  return !PROFILED(lstat)(f,&st) &&  (st.st_mode&S_IFMT)==mode;
 }
 
 static bool cg_access_from_stat(const struct stat *stats,int mode){ // equivaletn to access(path,mode)
@@ -455,18 +557,35 @@ static bool cg_access_from_stat(const struct stat *stats,int mode){ // equivalet
 }
 static bool cg_file_set_atime(const char *path, struct stat *stbuf,long secondsFuture){
   struct stat st;
-  if (!stbuf && stat(path,stbuf=&st)) return false;
+  if (!stbuf && PROFILED(stat)(path,stbuf=&st)) return false;
   log_verbose("secondsFuture=%ld\n",secondsFuture);
   struct utimbuf new_times={.actime=time(NULL)+secondsFuture,.modtime=stbuf->st_mtime};
   return !utime(path,&new_times);
 }
-///////////////////
-/// file        ///
-///////////////////
 
+static struct timespec cg_file_last_modified(const char *path){
+  struct stat st;
+  static struct timespec ZERO={0};
+  if (!path || !*path || PROFILED(stat)(path,&st)) return ZERO;
+  return st.ST_MTIMESPEC;
+}
+static bool  cg_file_is_newer_than(const char *path1,const char *path2){
+  struct timespec t1=cg_file_last_modified(path1);
+  struct timespec t2=cg_file_last_modified(path2);
+  if (!t1.tv_sec) return false;
+  if (!t2.tv_sec) return true;
+  return t1.tv_sec>t2.tv_sec || (t1.tv_sec==t2.tv_sec && t1.tv_nsec>t2.tv_nsec);
+}
 
+#define  cg_set_executable(path)  cg_set_st_mode_flag(path,S_IRWXU)
+static bool cg_set_st_mode_flag(const char *path, mode_t mode){
+  struct stat st;
+  return path && *path && !PROFILED(stat)(path,&st) && !chmod(path,mode|st.st_mode);
+}
 
-static int getc_tty(){
+static bool _cg_is_none_interactive;
+static int cg_getc_tty(void){
+  if (_cg_is_none_interactive) return EOF;
   static FILE *tty;
   if (!tty && !(tty=fopen("/dev/tty","r"))) tty=stdin;
   return getc(tty);
@@ -489,13 +608,18 @@ static bool cg_fd_write_str(int fd,char *t){
 
 
 static int cg_symlink_overwrite_atomically(const char *src,const char *lnk){
+  log_entered_function("src: %s lnk: %s \n",src,lnk);
   if (!cg_is_symlink(lnk)) unlink(lnk);
   char lnk_tmp[MAX_PATHLEN+1];
   strcpy(lnk_tmp,lnk);strcat(lnk_tmp,".tmp");
+
   unlink(lnk_tmp);
   symlink(src,lnk_tmp);
   return rename(lnk_tmp,lnk);
 }
+
+
+
 static void cg_print_substring(int fd,const char *s,int f,int t){  write(fd,s,MIN_int(cg_strlen(s),t)); }
 
 
@@ -536,16 +660,35 @@ static void log_list_filedescriptors(const int fd){
   }
 }
 
-static char *cg_copy_path(char *dst,const char *src){
-  if (*src=='~'){
-    assert(src[1]=='/');
-    sprintf(dst,"%s%s",getenv("HOME"),src+1);
-  }else{
-    strcpy(dst,src);
+
+static char* cg_path_expand_tilde(char *dst, const int dst_max, const char *path){
+
+  if (!dst) dst=(char*)path;
+  if (dst){
+    char *d=dst;
+    if (path){
+      const char *s=path;
+      if (*path=='~'){
+        const char *h;
+        assert((h=getenv("HOME")));
+        if (h){
+          const int hl=strlen(h),path_l=strlen(path);
+          assert(hl+path_l<=(dst_max?dst_max:PATH_MAX));
+          memmove(dst+hl-1,path,path_l+1); /* Overlapping allowed. dst and path may be identical*/
+          memcpy(dst,h,hl);
+          s=dst;
+        }
+      }
+      while(*s){
+        if ((*d++=*s++)=='/')  while(*s=='/') s++;
+      }
+      while(d>path && d[-1]=='/') --d;
+    }
+    *d=0;
   }
   return dst;
 }
-
+#define cg_copy_path(dst,src) cg_path_expand_tilde(dst,PATH_MAX,src)
 ///////////////////
 ///    time     ///
 ///////////////////
@@ -553,13 +696,8 @@ static double cg_timespec_diff(const struct timespec a, const struct timespec b)
   double v=(a.tv_sec-b.tv_sec)+(a.tv_nsec-b.tv_nsec)/(1000*1000*1000.0);
   return v;
 }
-static double cg_timespec_diff_lt(const struct timespec a, const struct timespec b,const double threshold) {
-  double dsec=a.tv_sec-b.tv_sec;
-  return dsec+1<=threshold ||  (threshold-dsec)*(1000*1000*1000.0)<(a.tv_nsec-b.tv_nsec);
-}
 static bool cg_timespec_b_before_a(struct timespec a, struct timespec b) {  //Returns true if b happened first.
-  if (a.tv_sec==b.tv_sec) return a.tv_nsec>b.tv_nsec;
-  return a.tv_sec>b.tv_sec;
+  return a.tv_sec==b.tv_sec ? a.tv_nsec>b.tv_nsec : a.tv_sec>b.tv_sec;
 }
 #define CG_TIMESPEC_EQ(a,b) (a.tv_sec==b.tv_sec && a.tv_nsec==b.tv_nsec)
 /////////////
@@ -576,8 +714,8 @@ static bool cg_is_member_of_group(char *group){
 
   return false;
 }
-#define HINT_GRP_DOCKER "The current user is not member of group 'docker'. See https://en.wikipedia.org/wiki/Docker_(software).  Docker based auto-generation wont work.\nConsider to run 'newgrp docker' before starting ZIPsFS.\n"
-static bool cg_is_member_of_group_docker(){
+#define HINT_GRP_DOCKER "The current user is not member of group 'docker'. Docker based auto-generation will not work.\nIf you do not need auto-generation, then ignore this message.\nConsider to run 'newgrp docker' before starting ZIPsFS.\n"
+static bool cg_is_member_of_group_docker(void){
   static int r=0;
   if (!r) r=cg_is_member_of_group("docker")?1:-1;
   return r==1;
@@ -633,7 +771,7 @@ static bool cg_log_waitpid_status(FILE *f,const unsigned int status,const char *
 }
 static int cg_waitpid_logtofile_return_exitcode(int pid,const char *err){
   log_entered_function("err=%s\n",err);
-  int status=-1;
+  int status=-1, res=0;
   FILE *f=NULL;
   const int ret=waitpid(pid,&status,0);
   if (ret==-1){
@@ -643,14 +781,16 @@ static int cg_waitpid_logtofile_return_exitcode(int pid,const char *err){
       fprint_strerror(f,errno);
       if (f) fclose(f);
     }
-    return -1;
+    res=-1;
   }
-  if (err && cg_log_waitpid_status(f,status,__func__) && !f) cg_log_waitpid_status(f=fopen(err,"a"),status,__func__);
-  if (f) fclose(f);
-  return WIFEXITED(status)?WEXITSTATUS(status):INT_MIN;
+  if (!res){
+    if (err && cg_log_waitpid_status(f,status,__func__) && !f) cg_log_waitpid_status(f=fopen(err,"a"),status,__func__);
+    if (f) fclose(f);
+    res=WIFEXITED(status)?WEXITSTATUS(status):INT_MIN;
+  }
+  log_exited_function("err: %s res: %d\n",err,res);
+  return res;
 }
-
-// #pragma GCC diagnostic ignored "-Wunused-variable" //__attribute__((unused));
 static void cg_exec(char * const env[],char *cmd[],const int fd_out,const int fd_err){
   if(fd_out>0) dup2(fd_out,STDOUT_FILENO);
   if(fd_err>0) dup2(fd_err,STDERR_FILENO);
@@ -698,15 +838,11 @@ static int differs_filecontent_from_string(const int opt,const char* path, const
 }
 #endif //CODE_NOT_NEEDED
 
-
-
 #endif // _cg_utils_dot_c
 // 1111111111111111111111111111111111111111111111111111111111111
 #if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
 int main(int argc, char *argv[]){
-
-  {  char m[10]; memset(m,9,10000); return 0;}
-  switch(8){
+  switch(9){
   case 0:{
     bool *ccpath=cg_validchars(VALIDCHARS_PATH);
     fprintf(stderr,"ccpath\n");
@@ -723,13 +859,13 @@ int main(int argc, char *argv[]){
     cg_file_set_atime(path,&stbuf,3600L*atoi(argv[2]));
   } break;
   case 2:{
-    char *h=malloc(9999);
+    char *h=malloc_untracked(9999);
     strcpy(h,argv[1]);
     int l1=cg_str_replace(OPT_STR_REPLACE_DRYRUN,h,0, argv[2],0,argv[3],0);
 
     int l2=cg_str_replace(0,h,0, argv[2],0,argv[3],0);
     printf("l1=%d l2=%d h=%s\n",l1,l2,h);
-    free(h);
+    free_untracked(h);
   } break;
   case 3:{
   } break;
@@ -747,7 +883,7 @@ int main(int argc, char *argv[]){
     }
   }
   case 5:{
-    char *s=strdup("hello");
+    char *s=strdup_untracked("hello");
     // CG_REALLOC(char *,s,10);
     char *tmp=realloc(s,10);
     if (!tmp){fprintf(stderr,"realloc failed.\n"); EXIT(1);};
@@ -758,17 +894,31 @@ int main(int argc, char *argv[]){
     int c=(2);
     printf("max(%d,%d)=%d\n",a,b,c);
   } break;
-    case 7:{
-      //    log_verbose("cg_find_invalidchar=%d\n",cg_find_invalidchar(VALIDCHARS_PATH,argv[1],strlen(argv[1])));    EXIT(1);
-      char *env[]={"a=1",NULL};
-      char *cmd[]={"ls","-l","space char","backslash\\","single'quote'",NULL};
-      cg_log_exec_fd(2,env,cmd);
-    } break;
-      case 8:{
-        printf("isqrt=%d\n",isqrt(atoi(argv[1])));
-      } break;
+  case 7:{
+    //    log_verbose("cg_find_invalidchar=%d\n",cg_find_invalidchar(VALIDCHARS_PATH,argv[1],strlen(argv[1])));    EXIT(1);
+    char *env[]={"a=1",NULL};
+    char *cmd[]={"ls","-l","space char","backslash\\","single'quote'",NULL};
+    cg_log_exec_fd(2,env,cmd);
+  } break;
+  case 8:{
+    printf("isqrt=%d\n",isqrt(atoi(argv[1])));
+  } break;
+  case 9:{
+    char *s=argv[1];
+    puts(s);
+    cg_path_expand_tilde(s,PATH_MAX,s);
+    puts(s);
 
-}
+  } break;
+  case 10:{
+    char m[10]; memset(m,9,10000);
+  } break;
+  case 11:        cg_symlink_overwrite_atomically(argv[1],argv[2]);
+
+    break;
+
+  }
+
 }
 
 #endif

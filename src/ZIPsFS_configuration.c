@@ -94,7 +94,7 @@ static int config_containing_zipfile_of_virtual_file(const int approach,const ch
 #undef C
 #undef A
 }
-static void config_containing_zipfile_of_virtual_file_test(){
+static void config_containing_zipfile_of_virtual_file_test(void){
   if (true) return; /* Remove to run tests */
   char *ff[]={
     "20230310_aaaaaaaaaaa.wiff",
@@ -214,6 +214,7 @@ static bool config_advise_not_cache_zipentry_in_ram(const char *path, const int 
 /// Certain files may be hidden in file listings         ///
 ////////////////////////////////////////////////////////////
 static bool config_do_not_list_file(const char *parent, const char *filename,const int filename_l){
+
 #define C(x) ENDSWITH(filename,filename_l,#x)
   return filename_l>12 && C(.md5) && (C(.Zip.md5) || C(.wiff.md5) || C(.wiff.scan.md5) || C(.raw.md5) || C(.rawIdx.md5));
 #undef C
@@ -273,20 +274,20 @@ static long config_search_file_which_roots(const char *virtualpath,const int vir
 #if WITH_AUTOGEN
   if (path_starts_with_autogen){
     const int vp_l=virtualpath_l-(ENDSWITH(virtualpath,virtualpath_l,".log")?4:0);
-    if (_config_ends_like_a_generated_file(virtualpath,vp_l)) return 1;
+    if (aimpl_ends_like_a_generated_file(virtualpath,vp_l)) return 1;
   }
 #endif //WITH_AUTOGEN
   return 0xFFFFffffFFFFffffL;
 }
 static bool config_readir_no_other_roots(const char *realpath,const int realpath_l){
 #define C(sfx) ENDSWITH(realpath,realpath_l,#sfx)
-    return C(.wiff2.Zip) || C(.wiff.Zip) || C(.rawIdx.Zip) || C(.raw.Zip) || C(.d.Zip);
+  return C(.wiff2.Zip) || C(.wiff.Zip) || C(.rawIdx.Zip) || C(.raw.Zip) || C(.d.Zip);
 #undef C
 }
 ////////////////////////////
 /// Retry on failure.    ///
 ////////////////////////////
-static long config_num_retries_getattr(const char *path, const int path_l,int *sleep_milliseconds){
+static long config_num_retries_getattr(const char *path, const int path_l, int *sleep_milliseconds){
   if (_is_tdf_or_tdf_bin(path)){
     *sleep_milliseconds=1000;
     return 3;
@@ -295,9 +296,39 @@ static long config_num_retries_getattr(const char *path, const int path_l,int *s
 }
 
 
-////////////////////////////
-/// File attributes      ///
-////////////////////////////
-  static bool configuration_file_is_readonly(const char *path, const int path_l){
-    return ENDSWITH(path,path_l,".tdf");
+//////////////////////////////////////////////
+/// File attributes                        ///
+// analysis.tdf is an SQLITE file.         ///
+/// The hope is that SQLITE will be faster ///
+//////////////////////////////////////////////
+static bool config_file_is_readonly(const char *path, const int path_l){
+  return ENDSWITH(path,path_l,"analysis.tdf");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Given the absolute path of the ZIP file or folder and the list of                                                               ///
+/// contained files, some may be excluded by setting the respective file name to NULL                                               ///
+/// For reading brukertimstof files with timsdata.dll, retaining only analysis.tdf and analysis.tdf_bin saves 15 seconds per record ///
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static void config_exclude_files(const char *path, const int path_l, const int num_files, char **files, const off_t *fsize){
+  /* If it is a Zip file ending with .d.Zip which has members analysis.tdf and analysis.tdf_bin, then keep only those two */
+  if (path_l>10  && !strcmp(".d.Zip",path+path_l-6)){
+    for(int i=path_l; --i>=0;){
+      if (path[i]=='/'){
+        if (path[i+1]=='2'){
+        int count=0;
+        for(int k=2; --k>=0;){ /* First round: look for analysis.tdf and .tdf_bin.   Second: set to NULL. */
+          for(int i=num_files; --i>=0;){
+            if (files[i] && *files[i]=='a' && (!strcmp("analysis.tdf",files[i])||!strcmp("analysis.tdf_bin",files[i]))){
+              if (k) count++;
+            }else if (count>1 && !k){
+              files[i]=NULL;
+            }
+          }
+        }
+        }
+        break;
+      }
+    }
   }
+}

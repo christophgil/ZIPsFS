@@ -30,11 +30,11 @@ static int _warning_count[1<<WARN_SHIFT_MAX];
 #define WARN_FLAG_ERROR (1<<25)
 static FILE *_fWarnErr[2];
 #define warning(...) _warning(__func__,__LINE__,__VA_ARGS__)
+static struct ht _ht_warning;
 static void _warning(const char *fn,int line,const uint32_t channel,const char* path,const char *format,...){
   const int e=errno;
   static pthread_mutex_t mutex;
   static bool initialized;
-  static struct ht ht;
   static int written;
   const bool iserror=(channel&(WARN_FLAG_ERROR|WARN_FLAG_MAYBE_EXIT));
   if (!channel){
@@ -42,12 +42,12 @@ static void _warning(const char *fn,int line,const uint32_t channel,const char* 
     assert(_fWarnErr[1]!=NULL);
     initialized=true;
     pthread_mutex_init(&mutex,NULL);
-    ht_init(&ht,7);
+    ht_init(&_ht_warning,"warning",7);
     return;
   }
   const int i=channel&((1<<WARN_SHIFT_MAX)-1);
-  if (!initialized){ log_error0("Initialization  with warning(0,NULL) required.\n");EXIT(1);}
-  if (!_warning_channel_name[i]){ log_error0("_log_channels not initialized: %d.\n");EXIT(1);}
+  if (!initialized){ log_error("Initialization  with warning(0,NULL) required.\n");EXIT(1);}
+  if (!_warning_channel_name[i]){ log_error("_log_channels not initialized:\n");EXIT(1);}
   const int mx=(channel>>WARN_SHIFT_MAX)&0xFFff;
   const char *p=path?path:"";
   bool toFile=true;
@@ -55,7 +55,7 @@ static void _warning(const char *fn,int line,const uint32_t channel,const char* 
       written>1000*1000*1000 ||
       ((channel&WARN_FLAG_ONCE) && _warning_count[i]) ||
 
-      ((channel&WARN_FLAG_ONCE_PER_PATH) && path && ht_only_once(&ht,path,0))) toFile=false;
+      ((channel&WARN_FLAG_ONCE_PER_PATH) && path && ht_only_once(&_ht_warning,path,0))) toFile=false;
   _warning_count[i]++;
   written+=strlen(format)+strlen(p);
 

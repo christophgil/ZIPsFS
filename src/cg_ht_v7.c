@@ -11,99 +11,93 @@
   Features:
   - Elememsts can be deleted.
   - High performance:
-  - Keys can be stored in a pool to reduce the number of malloc calls.
+  - Keys can be stored in a pool to reduce the number of Malloc calls.
   - Can be used as a hashmap char* -> void*  or     {int64,int64} -> int64
   - Iterator
   .
   Dependencies:
   - cg_mstore_v?.c
 */
-#ifndef _ht_dot_c
-#define _ht_dot_c
+#ifndef _cg_ht_dot_c
+#define _cg_ht_dot_c
 #include <assert.h>
 #include <stdint.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <inttypes.h>
 #include <stddef.h>
-//#include <malloc.h>
 #include <unistd.h>
+
+#include "cg_utils.h"
+#include "cg_ht_v7.h"
+
+#include "cg_utils.c"
 #include "cg_mstore_v2.c"
-#define HT_FLAG_NUMKEY (1U<<30)
-#define HT_FLAG_KEYS_ARE_STORED_EXTERN (1U<<29)
-#define HT_FLAG_BINARY_KEY (1U<<27)
-typedef uint32_t ht_keylen_t;
+#define HT_FLAG_KEYS_ARE_STORED_EXTERN (1U<<30)
+#define HT_FLAG_NUMKEY (1U<<29)
+#define HT_FLAG_BINARY_KEY  (1U<<27)
+#define HT_FLAG_COUNTMALLOC (1U<<26)
 #define HT_KEYLEN_MAX UINT32_MAX
 #define HT_KEYLEN_HASH(len,hash) ((((uint64_t)len)<<32)|hash)
 #define HT_KEYLEN_SHIFT 32
 #define HT_ENTRY_IS_EMPTY(e) (!(e)->key && !(e)->keylen_hash && !(e)->value)
 #define _HT_HASH() if (!hash) hash=hash32(key,key_l);
 #define HT_MEMALIGN_FOR_STRG 0
+#define _HT_IS_KEY_STRDUP(ht) (!(ht->flags&HT_FLAG_KEYS_ARE_STORED_EXTERN) && !ht->keystore)
 /* ********************************************************* */
-struct ht_entry{
-  uint64_t keylen_hash; /* upper 32 bits keylen  lower 32 bits hash */
-  const char* key;  /* key  and keylen_hash are NULL if this slot is empty */
-  void* value;
-};
-#define _HT_LDDIM 4
-#define _STACK_HT_ENTRY ULIMIT_S
-struct ht{
-  const char *name;
-  int id;
-  uint32_t flags,capacity,length;
-  struct ht_entry entry_zero,*entries,_stack_ht_entry[_STACK_HT_ENTRY];
 
-  struct mstore keystore_buf, *keystore, *value_store;
-#ifdef CG_THREAD_FIELDS
-  CG_THREAD_FIELDS;
-#endif
-
-  int client_value_int[3];
-  int debugid;
-};
-#ifdef CG_THREAD_METHODS_HT
-CG_THREAD_METHODS_HT(ht);
-#endif
+static void ht_set_mutex(const int mutex,struct ht *ht){
+ ht->mutex=mutex;
+ if (ht->keystore) ht->keystore->mutex=mutex;
+}
 
 /* **************************************************************************
    The keystore stores the files efficiently to reduce number of mallog
    This should be used if entries in the hashtable are not going to be removed
 *****************************************************************************/
-#define ht_init_interner(ht,flags_log2initalCapacity,mstore_dim)   _ht_init_with_keystore(ht,NULL,0,flags_log2initalCapacity|HT_FLAG_KEYS_ARE_STORED_EXTERN,NULL,mstore_dim)
-#define ht_init_interner_file(ht,name,instance,flags_log2initalCapacity,mstore_dim)   _ht_init_with_keystore(ht,name,instance,flags_log2initalCapacity|HT_FLAG_KEYS_ARE_STORED_EXTERN,NULL,mstore_dim|MSTORE_OPT_MMAP_WITH_FILE)
-#define ht_init_with_keystore_dim(ht,flags_log2initalCapacity,mstore_dim) _ht_init_with_keystore(ht,NULL,0,flags_log2initalCapacity,NULL,mstore_dim)
-#define ht_init_with_keystore_file(ht,name,instance,flags_log2initalCapacity,mstore_dim) _ht_init_with_keystore(ht,name,instance,flags_log2initalCapacity,NULL,mstore_dim|MSTORE_OPT_MMAP_WITH_FILE)
-#define ht_init_with_keystore(ht,flags_log2initalCapacity,m)              _ht_init_with_keystore(ht,NULL,0,flags_log2initalCapacity,m,0)
-#define ht_init(ht,flags_log2initalCapacity)                              _ht_init_with_keystore(ht,NULL,0,flags_log2initalCapacity,NULL,0)
-static struct ht *_ht_init_with_keystore(struct ht *ht,const char *name,  int id,uint32_t flags_log2initalCapacity, struct mstore *m, uint32_t mstore_dim){
+#define ht_init_interner(ht,name,flags_log2initalCapacity,mstore_dim)           _ht_init_with_keystore(ht,name,flags_log2initalCapacity|HT_FLAG_KEYS_ARE_STORED_EXTERN,NULL,mstore_dim)
+#define ht_init_interner_file(ht,name,flags_log2initalCapacity,mstore_dim)      _ht_init_with_keystore(ht,name,flags_log2initalCapacity|HT_FLAG_KEYS_ARE_STORED_EXTERN,NULL,mstore_dim|MSTORE_OPT_MMAP_WITH_FILE)
+#define ht_init_with_keystore_dim(ht,name,flags_log2initalCapacity,mstore_dim)  _ht_init_with_keystore(ht,name,flags_log2initalCapacity,NULL,mstore_dim)
+#define ht_init_with_keystore(ht,flags_log2initalCapacity,m)                    _ht_init_with_keystore(ht,NULL,flags_log2initalCapacity,m,0)
+#define ht_init(ht,name,flags_log2initalCapacity)                               _ht_init_with_keystore(ht,name,flags_log2initalCapacity,NULL,0)
+#ifdef MALLOC_HT
+#define _HT_MALLOC_ID(ht) ((ht->flags&HT_FLAG_COUNTMALLOC)?MALLOC_HT:MALLOC_HT_IMBALANCE)
+#define _HT_KEY_MALLOC_ID(ht) ((ht->flags&HT_FLAG_COUNTMALLOC)?MALLOC_HT_KEY:MALLOC_HT_KEY_IMBALANCE)
+#else
+#define _HT_MALLOC_ID(ht) 0
+#define _HT_KEY_MALLOC_ID(ht) 0
+#endif
+static struct ht *_ht_init_with_keystore(struct ht *ht,const char *name,uint32_t flags_log2initalCapacity, struct mstore *m, uint32_t mstore_dim){
   memset(ht,0,sizeof(struct ht));
+  const int mstore_opt=(ht->flags&HT_FLAG_COUNTMALLOC)?MSTORE_OPT_COUNTMALLOC:0;
   if (m){
-    ht->keystore=m;
-    if (!name) name=m->name;
-    if (!id) id=m->id;
+    (ht->keystore=m)->opt|=mstore_opt;
   }else if(mstore_dim){
     if (mstore_dim&MSTORE_OPT_MMAP_WITH_FILE) ASSERT(name!=NULL); /* Needed for file */
-    _mstore_init(ht->keystore=&ht->keystore_buf,name,id,mstore_dim);
+    _mstore_init(ht->keystore=m=&ht->keystore_buf,name,mstore_dim|mstore_opt);
   }
-  ht->name=name;
-  ht->id=id;
+  ht->name=name?name:"";
+  static atomic_int count; ht->iinstance=atomic_fetch_add(&count,1);
   ht->flags=(flags_log2initalCapacity&0xFF000000);
 #define C ht->capacity
   if ((C=(flags_log2initalCapacity&0xff)?(1<<(flags_log2initalCapacity&0xff)):0)>_STACK_HT_ENTRY/2){
-    if (!(ht->entries=calloc(C,sizeof(struct ht_entry)))){log_error0("ht.c: calloc ht->entries\n");return NULL;}
+    if (!(ht->entries=cg_calloc(_HT_MALLOC_ID(ht),C,sizeof(struct ht_entry)))){log_error("ht.c: cg_calloc ht->entries name: %s \n",ht->name);return NULL;}
   }else{
     memset(ht->entries=ht->_stack_ht_entry,0,sizeof(struct ht_entry)*_STACK_HT_ENTRY);
     C=_STACK_HT_ENTRY;
   }
+  assert(C>0);
+  assert(ht->entries!=NULL);
 #undef C
   return ht;
 }
 
 static void _ht_free_entries(struct ht *ht){
   if (ht && ht->entries!=ht->_stack_ht_entry){
-    free(ht->entries);
+    cg_free(_HT_MALLOC_ID(ht),ht->entries);
     ht->entries=NULL;
   }
 }
@@ -112,16 +106,16 @@ static void ht_destroy(struct ht *ht){
   CG_THREAD_OBJECT_ASSERT_LOCK(ht);
   if (ht->keystore && ht->keystore->capacity){ /* All keys are in the keystore */
     mstore_destroy(ht->keystore);
-  }else if (!(ht->flags&(HT_FLAG_NUMKEY|HT_FLAG_KEYS_ARE_STORED_EXTERN))){ /* Each key has been stored on the heap individually */
+  }else if (_HT_IS_KEY_STRDUP(ht)){ /* Each key has been stored on the heap individually */
     RLOOP(i,ht->capacity){
       struct ht_entry *e=ht->entries+i;
-      if (e){ free((void*)e->key); e->key=NULL;}
+      if (e->key) cg_free_null(_HT_KEY_MALLOC_ID(m),e->key);
     }
   }
   _ht_free_entries(ht);
-  struct mstore *m=ht->value_store;
+  struct mstore *m=ht->valuestore;
   if (m){
-    ht->value_store=NULL;
+    ht->valuestore=NULL;
     mstore_destroy(m);
   }
 }
@@ -133,8 +127,6 @@ static void ht_clear(struct ht *ht){
     mstore_clear(ht->keystore);
   }
 }
-
-
 static MAYBE_INLINE int debug_count_empty(struct ht_entry *ee, const uint32_t capacity){
   int c=0;
   RLOOP(i,capacity) if (HT_ENTRY_IS_EMPTY(ee+i)) c++;
@@ -150,7 +142,8 @@ static struct ht_entry* _ht_get_entry_ee(struct ht_entry *ee, const uint32_t cap
       _HT_AT_END_OF_ENTRIES_WRAP_AROUND();
     }
   }else{
-    ASSERT(key!=NULL);
+    ASSERT(key);
+    ASSERT(capacity);
     _HT_LOOP_TILL_EMPTY_ENTRY(){
       if (e->key && e->keylen_hash==keylen_hash && (key==e->key || !memcmp(e->key,key,keylen_hash>>HT_KEYLEN_SHIFT))) break;
       _HT_AT_END_OF_ENTRIES_WRAP_AROUND();
@@ -169,8 +162,8 @@ static int _ht_expand(struct ht *ht){
   if (ht->length<(ht->capacity>>1)) return 0;
   const uint32_t new_capacity=ht->capacity<<1;
   if (new_capacity<ht->capacity) return -1;  /* overflow (capacity would be too big) */
-  struct ht_entry* new_ee=calloc(new_capacity,sizeof(struct ht_entry));
-  if (!new_ee){ log_error0("ht.c: calloc new_ee\n"); return -1; }
+  struct ht_entry* new_ee=cg_calloc(_HT_MALLOC_ID(ht),new_capacity,sizeof(struct ht_entry));
+  if (!new_ee){ log_error("ht.c: cg_calloc new_ee\n"); return -1; }
   for(uint32_t i=0; i<ht->capacity; i++){
     const struct ht_entry *e=ht->entries+i;
     if (e->key || e->keylen_hash){
@@ -180,9 +173,10 @@ static int _ht_expand(struct ht *ht){
   _ht_free_entries(ht);
   ht->entries=new_ee;
   ht->capacity=new_capacity;
+    assert(ht->entries!=NULL);
+    assert(ht->capacity>0);
   return 1;
 }
-
 /**************************************************************************************** */
 /* ***                                                                                *** */
 /* ***  Functions where Strings as keys. This is the most comon usage.                *** */
@@ -191,12 +185,15 @@ static int _ht_expand(struct ht *ht){
 /**************************************************************************************** */
 #define _ht_get_entry_maybe_empty(ht,key,keylen_hash) _ht_get_entry_ee((ht)->entries,(ht)->capacity,0!=((ht)->flags&HT_FLAG_NUMKEY),(key),(keylen_hash))
 #define E() _ht_get_entry_maybe_empty(ht,key,keylen_hash)
-#define let_e_get_entry(ht,key,keylen_hash) CG_THREAD_OBJECT_ASSERT_LOCK(ht);ASSERT(key!=NULL); ASSERT(ht!=NULL); ASSERT(ht->entries!=NULL);_HT_HASH();  const uint64_t keylen_hash=HT_KEYLEN_HASH(key_l,hash);struct ht_entry *e=E()
+#define let_e_get_entry(ht,key,keylen_hash) CG_THREAD_OBJECT_ASSERT_LOCK(ht);ASSERT(key!=NULL); ASSERT(ht!=NULL); if (!ht->entries) DIE("ht->entries is NULL ht->name:%s",ht->name);_HT_HASH();  const uint64_t keylen_hash=HT_KEYLEN_HASH(key_l,hash);struct ht_entry *e=E()
+
+
 static const char* _newKey(struct ht *ht,const char *key,uint64_t keylen_hash){
   if (0!=(ht->flags&HT_FLAG_KEYS_ARE_STORED_EXTERN)) return key;
-  return ht->keystore?mstore_addstr(ht->keystore,key,keylen_hash>>HT_KEYLEN_SHIFT, ht->debugid,key):strdup(key);
+  if (ht->keystore) return mstore_addstr(ht->keystore,key,keylen_hash>>HT_KEYLEN_SHIFT);
+  return cg_strdup(_HT_KEY_MALLOC_ID(ht),key);
 }
-static struct ht_entry* ht_get_entry(struct ht *ht, const char* key,const ht_keylen_t key_l,ht_hash_t hash,const bool create){
+static struct ht_entry *PROFILED(ht_get_entry)(struct ht *ht, const char* key,const ht_keylen_t key_l,ht_hash_t hash,const bool create){
   let_e_get_entry(ht,key,keylen_hash);
   if (create && HT_ENTRY_IS_EMPTY(e)){
     if (_ht_expand(ht)==1) e=E();
@@ -207,7 +204,8 @@ static struct ht_entry* ht_get_entry(struct ht *ht, const char* key,const ht_key
 }
 static void ht_clear_entry(struct ht *ht,struct ht_entry *e){
   if (e){
-    if (!ht->keystore) free((char*)e->key);
+    CG_THREAD_OBJECT_ASSERT_LOCK(ht);
+    if (_HT_IS_KEY_STRDUP(ht)) cg_free(_HT_KEY_MALLOC_ID(ht),(char*)e->key);
     e->key=e->value=NULL;
     e->keylen_hash=0;
   }
@@ -220,7 +218,9 @@ static struct ht_entry* ht_remove(struct ht *ht,const char* key,const ht_keylen_
   }
   return e;
 }
-static void *ht_set(struct ht *ht,const char* key,const ht_keylen_t key_l,ht_hash_t hash, const void* value){
+static void *PROFILED(ht_set)(struct ht *ht,const char* key,const ht_keylen_t key_l,ht_hash_t hash, const void* value){
+  if (!key) {DIE("KKKKKKKKKKKKKKKKKKKKK");}
+  if (!key) {DIE("ht-> %s ",!ht?"ht is null":ht->name); return NULL;}
   let_e_get_entry(ht,key,keylen_hash);
   if (!e->key && !e->keylen_hash){ /* Didn't find key, allocate+copy if needed, then insert it. */
     if (_ht_expand(ht)==1) e=E();
@@ -239,7 +239,7 @@ static void *ht_set(struct ht *ht,const char* key,const ht_keylen_t key_l,ht_has
   return old;
 }
 static void* ht_get(struct ht *ht, const char* key,const ht_keylen_t key_l,ht_hash_t hash){
-  if (!key) return NULL;
+  if (!key || !ht) return NULL;
   const struct ht_entry *e=ht_get_entry(ht,key,key_l,hash,false);
   return e->key?e->value:NULL;
 }
@@ -254,42 +254,27 @@ static void* ht_get(struct ht *ht, const char* key,const ht_keylen_t key_l,ht_ha
    https://en.wikipedia.org/wiki/String_interning
 */
 const void *ht_intern(struct ht *ht,const void *bytes,const off_t bytes_l,ht_hash_t hash,const int memoryalign){
+  if (!ht->keystore) fprintf(stderr,"ht->name: %s\n",ht->name);
   ASSERT(ht->keystore!=NULL);
   if (!bytes || mstore_contains(ht->keystore,bytes)) return bytes;
   if (memoryalign==HT_MEMALIGN_FOR_STRG && !*(char*)bytes) return "";
   if (!hash) hash=hash32(bytes,bytes_l);
   struct ht_entry *e=ht_get_entry(ht,bytes,bytes_l,hash,true);
   if (!e->value){
-    e->key=e->value=(void*)(memoryalign==HT_MEMALIGN_FOR_STRG?mstore_addstr(ht->keystore,bytes,bytes_l,ht->debugid,""): mstore_add(ht->keystore,bytes,bytes_l,memoryalign, ht->debugid,""));
-
-    //log_debug(ANSI_MAGENTA"ht_internalize mstore_add %ld " ANSI_RESET " bytes: %p mstore_contains:%d\n",bytes_l,bytes,mstore_contains(ht->keystore,e->key));
-    //    ASSERT(e->value==ht_intern(ht,e->value,bytes_l,0,memoryalign));
-  }//else log_debug(ANSI_GREEN"ht_internalize %ld "ANSI_RESET,bytes_l);
-
+    e->key=e->value=(void*)(memoryalign==HT_MEMALIGN_FOR_STRG?mstore_addstr(ht->keystore,bytes,bytes_l): mstore_add(ht->keystore,bytes,bytes_l,memoryalign));
+  }
   return e->value;
 }
 /**************************************** */
 /* ***  Use struct ht to avoid dups   *** */
 /**************************************** */
-static bool ht_only_once(struct ht *ht,const char *s,int s_l){
+static bool PROFILED(ht_only_once)(struct ht *ht,const char *s,const int s_l_or_zero){
   if (!s) return false;
   if (!ht) return true;
-  //ASSERT(!(ht->flags&HT_FLAG_NUMKEY)); // DEBUG_NOW
-  if (!s_l) s_l=strlen(s);
-  return !ht_set(ht,s,s_l,0,"");
+  const int s_l=s_l_or_zero?s_l_or_zero:strlen(s);
+  ASSERT(!(ht->flags&HT_FLAG_NUMKEY));
+    return !ht_set(ht,s,s_l,0,"");
 }
-
-/* static bool ht_numkey_only_once(struct ht *ht,const char *s,int s_l){ */
-/*   if (!s) return false; */
-/*   if (!ht) return true; */
-/*   if (!s_l) s_l=strlen(s); */
-/*   return 0!=(ht->flags&HT_FLAG_NUMKEY)? */
-/*     !ht_numkey_set(ht,hash64(s,s_l),hash32_java(s,s_l)|(((long)s_l)<<32),""): /\* Accept very rare collision *\/ */
-/*     !ht_set(ht,s,s_l,0,""); */
-/* } */
-
-
-/* No need for strlen */
 /***************************************************************** */
 /* ***  Less parameters.  No need for strlen of key.           *** */
 /***************************************************************** */
@@ -305,9 +290,6 @@ static void *ht_sset(struct ht *ht,const char* key, const void* value){
 const void *ht_sinternalize(struct ht *ht,const char *key){
   return !key?NULL:ht_intern(ht,key,strlen(key),0,HT_MEMALIGN_FOR_STRG);
 }
-
-
-
 /***************************************************************** */
 /* ***  Functions with prefix ht_numkey_:                      *** */
 /* ***  A 64 bit value is assigned to two 64 bit numeric keys  *** */
@@ -338,9 +320,35 @@ static void *ht_numkey_set(struct ht *ht, uint64_t key_high_variability, const u
   return old;
 }
 
+/////////////////////////////
+/// Debugging             ///
+/////////////////////////////
 
-#endif
-#define _ht_dot_c_end
+
+static int ht_report_memusage_to_strg(char *strg,int max_bytes,struct ht *ht,const bool html){
+  int n=0;
+#define S(...) n+=PRINTF_STRG_OR_STDERR(strg,n,max_bytes,__VA_ARGS__)
+#define M(m) n+=mstore_report_memusage_to_strg(strg?strg+n:NULL,max_bytes-n,m)
+  if (!ht){
+    S("%s%36s %4s %10s %12s",strg||html?"":ANSI_UNDERLINE,  "HashTable-Name","ID","#Entries","Bytes");
+    M(NULL);
+    S(strg||html?"":ANSI_RESET);
+  }else{
+    S("%36s %4d %'10u %'12ld ",  snull(ht->name),ht->iinstance,ht->length,(long)(ht->capacity*sizeof(struct ht_entry)));
+    if (ht->keystore){ S("    Keystore: "); M(ht->keystore); }
+    if (ht->valuestore){ S("    Value-store: "); M(ht->valuestore); }
+  }
+  S("\n");
+  return n;
+#undef S
+#undef M
+}
+
+#define  ht_report_memusage(ht,is_html)  ht_report_memusage_to_strg(NULL,0,ht,is_html)
+
+
+
+#endif //_cg_ht_dot_c
 // 1111111111111111111111111111111111111111111111111111111111111
 #if __INCLUDE_LEVEL__ == 0
 static void debug_print_keys(struct ht *ht){
@@ -355,8 +363,8 @@ static void debug_print_keys(struct ht *ht){
 }
 static void test_ht_1(int argc,char *argv[]){
   struct ht ht;
-  ht_init_with_keystore_dim(&ht,7,65536);
-  // ht_init(&ht,0,7);
+  ht_init_with_keystore_dim(&ht,"test",7,65536);
+  // ht_init(&ht,"test",0,7);
   const char *VV[]={"A","B","C","D","E","F","G","H","I"};
   const int L=9;
   FOR(i,1,argc){
@@ -377,9 +385,10 @@ static void test_num_keys(int argc, char *argv[]){
     printf("Expected single argument. A decimal number denoting number of tests\n");
     return;
   }
+  fprintf(stderr,"A pair of numbers as key.  x*x+y*z assigned as value (3rd column).  The 3rd and 4th column should be identical.\n");
   const int n=atoi(argv[1]);
   struct ht ht;
-  ht_init(&ht,HT_FLAG_NUMKEY|9);
+  ht_init(&ht,"test",HT_FLAG_NUMKEY|9);
   printf(ANSI_UNDERLINE""ANSI_BOLD"Testing 0 keys"ANSI_RESET"\n");
   printf("ht_numkey_get(&ht,0,0): %p  ht.length: %u\n",ht_numkey_get(&ht,0,0),ht.length);
   ht_numkey_set(&ht,0,0,(void*)7);
@@ -410,9 +419,9 @@ static void test_num_keys(int argc, char *argv[]){
 static void test_internalize(int argc, char *argv[]){
   mstore_set_base_path("~/tmp/cache/test_internalize");
   struct ht ht;
-  ht_init_interner_file(&ht,"test_internalize",0,8,4096);
-  FOR(i,0,argc){
-    const char *s=argv[i];
+  ht_init_interner_file(&ht,"test_internalize",8,4096);
+  FOR(i,1,argc){
+const char *s=argv[i];
     assert(ht_sinternalize(&ht,s)==ht_sinternalize(&ht,s));
     assert(ht_sinternalize(&ht,s)==ht_sget(&ht,s));
     FOR(j,0,3){
@@ -422,18 +431,28 @@ static void test_internalize(int argc, char *argv[]){
     }
     printf("\n");
   }
-  printf("ht->length: %u\n",ht.length);
+  ht_report_memusage(NULL,false);
+  ht_report_memusage(&ht,false);
+  {
+    char strg[9999];
+    int n=0;
+    n+=ht_report_memusage_to_strg(strg+n,9999-1-n,NULL,false);
+    n+=ht_report_memusage_to_strg(strg+n,9999-1-n,&ht,false);
+    //      sprintf(strg,"Hello\n");
+    fprintf(stderr," \nVia strg n=%d \n%s\n",n,strg);
+
+  }
   ht_destroy(&ht);
 }
 
 
 static void test_intern_num(int argc, char *argv[]){
   struct ht ht;
-  #if 0
+#if 0
   struct mstore m={0};  mstore_init(&m,4096);  ht_init_with_keystore(&ht,HT_FLAG_KEYS_ARE_STORED_EXTERN|2,&m);
-  #else
-  ht_init_interner(&ht,2,4096);
-  #endif
+#else
+  ht_init_interner(&ht,"name",2,4096);
+#endif
   const int N=atoi(argv[1]);
   int data[N][10];
   int *intern[N];
@@ -442,7 +461,7 @@ static void test_intern_num(int argc, char *argv[]){
   const int SINT=sizeof(int);
   bool verbose=false;
   FOR(i,0,N) intern[i]=(int*)ht_intern(&ht,data[i],data_l,0,SINT);
-  int count_ok=0;
+  int count_ok=0, count_fail=0;
   FOR(i,0,N){
     bool  ok;
     ok=(intern[i]==(int*)ht_intern(&ht,intern[i],data_l,0,SINT));
@@ -458,16 +477,16 @@ static void test_intern_num(int argc, char *argv[]){
     ok=(intern[i]==(int*)ht_get(&ht,(char*)data[i],data_l,0));
     assert(ok); if (verbose) log_verbose("ok3 %d ",ok);
     if (verbose) putchar('\n');
-    if (ok) count_ok++;
+    if (ok) count_ok++; else count_fail++;
   }
   ht_destroy(&ht);
-  printf("count_ok=%d ht.length: %u \n",count_ok,ht.length);
+  printf("count_ok=%d count_fail=%d ht.length: %u \n",count_ok,count_fail,ht.length);
 }
 
 
 static void test_use_as_set(int argc, char *argv[]){
   struct ht ht;
-  ht_init(&ht,HT_FLAG_KEYS_ARE_STORED_EXTERN|8);
+  ht_init(&ht,"test",HT_FLAG_KEYS_ARE_STORED_EXTERN|8);
   printf("\x1B[1m\x1B[4m");
   printf("j\ti\ts\told\tSize\n"ANSI_RESET);
   FOR(j,0,5){
@@ -481,26 +500,31 @@ static void test_use_as_set(int argc, char *argv[]){
 }
 static void test_unique(int argc, char *argv[]){
   struct ht ht;
-  ht_init_with_keystore_dim(&ht,HT_FLAG_KEYS_ARE_STORED_EXTERN|8,4096);
+  ht_init_with_keystore_dim(&ht,"test",HT_FLAG_KEYS_ARE_STORED_EXTERN|8,4096);
   for(int i=1;i<argc && i<999;i++){
     if (ht_only_once(&ht,argv[i],0)) printf("%s\t",argv[i]);
   }
   printf("\n ht.length: %u \n",ht.length);
 }
+static  void test_no_dups(int argc,char *argv[]){
+  struct ht test_no_dups={0};
+  ht_init_with_keystore_dim(&test_no_dups,"test_no_dups",4,1024);
+  FOR(i,1,argc) if (ht_only_once(&test_no_dups,argv[i],0)) printf("%d %s ,ht.length: %u\n",i,argv[i],test_no_dups.length);
+}
 
-#include "cg_utils.c"
+
 static void test_mstore2(int argc,char *argv[]){
   mstore_set_base_path("/home/cgille/tmp/test/mstore_mstore1");
   struct ht ht_int,ht;
   struct mstore m;
   mstore_init(&m,"",1024*1024*1024);
   ht_init_with_keystore(&ht_int,HT_FLAG_KEYS_ARE_STORED_EXTERN|8,&m);
-  ht_init(&ht,16);
+  ht_init(&ht,"test",16);
   const int nLine=argc>2?atoi(argv[2]):INT_MAX;
   char value[99];
   size_t len=999;
   off_t n;
-  char *line=malloc(len);
+  char *line=malloc_untracked(len);
   FOR(pass,0,2){
     printf("\n pass=%d\n\n",pass);
     FILE *f=fopen(argv[1],"r");  assert(f!=NULL);
@@ -516,17 +540,11 @@ static void test_mstore2(int argc,char *argv[]){
           char line_on_stack[line_l+1];
           strcpy(line_on_stack,line);
           key=(char*)ht_intern(&ht_int,line_on_stack,line_l,0,HT_MEMALIGN_FOR_STRG);
-        }/* From here line_on_stack invalid */
-        //fputs("5)",stderr);
+        }/* From here line_on_stack invalid. Key is internalized string  */
         const int key_l=strlen(key);
-        const char *stored=mstore_addstr(&m,value,value_l, 0,"");
-        //fputc(',',stderr);
-
+        const char *stored=mstore_addstr(&m,value,value_l);
         ht_set(&ht,key,key_l,0,stored);
-
-        //printf(" l:%d ",ht.length);
-        //printf("key=%s  %s\n",key,ht_get(&ht,key,key_l,0));
-        if (is_square_number(iLine))          printf(" %d ",iLine);
+        if (is_square_number(iLine)) printf(" %d ",iLine);
       }else{
         const char *from_cache=ht_sget(&ht,line);
         if (is_square_number(iLine))  printf("(%4d) Line: %s  Length: %jd   hash: %s from_cache: %s \n",iLine, line,(intmax_t)n,value,from_cache);
@@ -535,7 +553,7 @@ static void test_mstore2(int argc,char *argv[]){
     }
     fclose(f);
   }
-  free(line);
+  free_untracked(line);
   ht_destroy(&ht);
   ht_destroy(&ht_int);
   printf("\n ht.length: %u \n",ht.length);
@@ -543,7 +561,7 @@ static void test_mstore2(int argc,char *argv[]){
 
 static void test_intern_substring(int argc,char *argv[]){
   struct ht ht;
-  ht_init_with_keystore_dim(&ht,HT_FLAG_KEYS_ARE_STORED_EXTERN|8,4096);
+  ht_init_with_keystore_dim(&ht,"test",HT_FLAG_KEYS_ARE_STORED_EXTERN|8,4096);
   FOR(i,1,argc){
     const char *a=argv[i];
     const int len2=strlen(a)/2;
@@ -553,23 +571,19 @@ static void test_intern_substring(int argc,char *argv[]){
   printf("\n ht.length: %u \n",ht.length);
 }
 
-static  void test_no_dups(int argc,char *argv[]){
-  struct ht no_dups={0};
-  ht_init_with_keystore_dim(&no_dups,4,1024);
-  FOR(i,1,argc) if (ht_only_once(&no_dups,argv[i],0)) printf("%d %s ,ht.length: %u\n",i,argv[i],no_dups.length);
-}
 
 
 int main(int argc,char *argv[]){
+  setlocale(LC_NUMERIC,""); /* Enables decimal grouping in fprintf */
   if (0){
     struct ht ht={0};
-    ht_init_interner(&ht,8,4096);
+    ht_init_interner(&ht,"name",8,4096);
     const char *key=ht_sinternalize(&ht,"key");
     printf("key: %s contains:%d  ht.length: %u\n",key,mstore_contains(ht.keystore,key),ht.length);
     return 1;
   }
 
-  switch(2){
+  switch(7){
   case 0:
     printf("ht_entry %zu bytes\n",sizeof(struct ht_entry));
     assert(false);break;

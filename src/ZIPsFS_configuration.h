@@ -5,15 +5,6 @@
 
 
 
-////////////////////////////////////
-/// GNU                          ///
-/// Can be activated with        ///
-///     #define _GNU_SOURCE      ///
-///                              ///
-// Conditional computation uses  ///
-///     WITH_GNU                 ///
-////////////////////////////////////
-#undef _GNU_SOURCE
 
 
 /////////////////////////////////
@@ -24,7 +15,7 @@
 /////////////////
 /// Debugging ///
 /////////////////
-#define WITH_ASSERT_LOCK 0 // Optional assertion
+#define WITH_ASSERT_LOCK  0 // Optional assertion
 #define WITH_EXTRA_ASSERT 0 // Optional assertion
 #define WITH_PTHREAD_LOCK 1 /*  Should always be true. Only if suspect deadlock set to 0 */
 
@@ -48,7 +39,7 @@
 // Currently, DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT is off as cache clearing is not yet fully tested.
 
 
-#define WITH_DIRCACHE 0
+#define WITH_DIRCACHE 1
 // This activates sorage of the ZIP file index and the file listing of rarely changing file directories in a cache.
 // The cache key is the filepath of the ZIP file or directory  plus the last-modified file  attribute.
 
@@ -64,7 +55,7 @@
 // This facilitates non-sequential file reading.
 // See man fseek
 // The virtual file paths are selected with the function config_advise_cache_zipentry_in_ram(). Also see CLI parameter -c.
-// Depending on the size, memory is reserved either with malloc() or with mmap().
+// Depending on the size, memory is reserved either with MALLOC() or with MMAP().
 // The memory address is kept int struct fhdata as long as the file is open.
 // When several threads are accessing the same file, then only one instance of struct fhdata has a reference to the RAM area with the file content.
 // This cache is used by all other instances of struct fhdata with the same file path.
@@ -77,6 +68,12 @@
 // While a tdf and tdf_bin file is open, thousands of redundant file system requests  occur.
 // For each open tdf and tdf_bin file, a cache is temporarily created for these  redundant requests.
 // Upon file close, these caches are disposed.
+
+
+
+#define RETRY_ZIP_FREAD 2
+// Repeat zip_fread on failure
+
 
 #define WITH_ZIPINLINE 1
 #define WITH_ZIPINLINE_CACHE 1
@@ -104,9 +101,9 @@
 /// Size ///
 ////////////
 #define LOG2_ROOTS 3  // How many file systems are combined. Less is better because then constructed inodes is more efficient.
-#define DIRECTORY_CACHE_SIZE (1L<<28) // Size of file of one cache segment for  directory listings file names and attributes.
+#define DIRECTORY_CACHE_SIZE (1L<<20) // Size of file of one cache segment for  directory listings file names and attributes.
 #if DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
-#define DIRECTORY_CACHE_SEGMENTS 4 // Number of segments. If Exceeded, the directory cache is cleared and filled again.
+#define DIRECTORY_CACHE_SEGMENTS 16 // Maximum number of blocks. If Exceeded, the directory cache is cleared and filled again.
 #endif
 #define MEMCACHE_READ_BYTES_NUM (64*1024*1024) // When storing zip entries in RAM, number of bytes read in one go
 #define SIZE_CUTOFF_MMAP_vs_MALLOC 100000
@@ -116,7 +113,7 @@
 /// Periodic probing remote roots ///
 /////////////////////////////////////
 
-#define ROOT_WARN_STATFS_TOOK_LONG_SECONDS 3 /* Remote roots are probed periodically using statfs() */
+#define ROOT_WARN_STATFS_TOOK_LONG_SECONDS 3 /* Remote roots are probed periodically using statvfs() */
 #define ROOT_LAST_RESPONSE_MUST_BE_WITHIN_SECONDS 6 /* Roots which have rosponded within the last n seconds are used. */
 #define ROOT_SKIP_UNLESS_RESPONDED_WITHIN_SECONDS 20 // Not responded within n seconds - skip this root
 
@@ -155,7 +152,7 @@
 
 
 
-#if 0 /* Deactivate all caches for testing */
+#if 0 /* Conveniently deactivate all caches for testing */
 #undef WITH_DIRCACHE
 #define WITH_DIRCACHE 0
 #undef WITH_MEMCACHE

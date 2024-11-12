@@ -2,24 +2,24 @@
 
 #ifndef _cg_debug_dot_c
 #define _cg_debug_dot_c
-#include "cg_utils.c"
+#include "cg_utils.h"
 #include "cg_stacktrace.c"
 #include <sys/resource.h>
 
 
-static char *path_of_this_executable(){
+static char *path_of_this_executable(void){
   static char* _p;
   if (!_p){
     char p[512];
     *p=0;
     if (has_proc_fs()) p[readlink("/proc/self/exe",p, 511)]=0;
-    _p=strdup(p);
+    _p=strdup_untracked(p);
   }
   return _p;
 }
 
 
-static void provoke_idx_out_of_bounds(){
+static void provoke_idx_out_of_bounds(void){
   char a[10];
   char *b=a;
   b[11]='x';
@@ -32,7 +32,7 @@ static void provoke_idx_out_of_bounds(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-static void enable_core_dumps(){
+static void enable_core_dumps(void){
  struct rlimit core_limit={RLIM_INFINITY,RLIM_INFINITY};
   setrlimit(RLIMIT_CORE,&core_limit); // enable core dumps
 }
@@ -48,6 +48,7 @@ static bool filepath_contains_blocking(const char *p){
 }
 
 static bool tdf_or_tdf_bin(const char *p){
+  if (!p) return false;
   const int p_l=cg_strlen(p);
   return cg_endsWith(p,p_l,".tdf",4) || cg_endsWith(p,p_l,".tdf_bin",8);
 }
@@ -98,7 +99,7 @@ static void assert_r_ok(const char *p, const struct stat *st){
 //////////////////////////////////
 /// Count function invocations ///
 //////////////////////////////////
-enum functions{xmp_open_,xmp_access_,xmp_getattr_,xmp_read_,xmp_readdir_,mcze_,functions_l};
+
 #if 0
 static int functions_count[functions_l];
 static int64_t functions_time[functions_l];
@@ -131,15 +132,33 @@ static void _log_count_e(enum functions f,const char *path){
 #define  log_count_e(f,path) ;
 #endif
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #endif // _cg_debug_dot_c
 // 1111111111111111111111111111111111111111111111111111111111111
 
 #if __INCLUDE_LEVEL__ == 0
-static void func3(){
+static void func3(void){
   raise(SIGSEGV);
 }
-static void func2(){ func3();}
-static void func1(){ func2();}
+static void func2(void){ func3();}
+static void func1(void){ func2();}
 int main(int argc, char *argv[]){
   func1();
 }

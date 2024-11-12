@@ -1,4 +1,5 @@
-/////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// COMPILE_MAIN=ZIPsFS                                                                                                          ///
 /// Temporary cache for file attributs (struct stat).
 /// The hashtable is a member of struct fhdata.
 /// The cache lives as long as the fhdata instance representing a virtual file stored as a ZIP entry.
@@ -11,8 +12,9 @@
 static struct ht* transient_cache_get_ht(struct fhdata *d){
   struct ht *ht=d->ht_transient_cache;
   if (!ht){
-    ht_set_mutex(mutex_fhdata,ht_init(ht=d->ht_transient_cache=calloc(1,sizeof(struct ht)),HT_FLAG_NUMKEY|5));
-    mstore_set_mutex(mutex_fhdata,mstore_init(ht->value_store=calloc(1,sizeof(struct mstore)),NULL,(SIZEOF_ZIPPATH*16)|MSTORE_OPT_MALLOC));
+    ht_set_mutex(mutex_fhdata,ht_init(ht=d->ht_transient_cache=calloc_untracked(1,sizeof(struct ht)),"transient_cache",HT_FLAG_NUMKEY|HT_FLAG_COUNTMALLOC|5));
+    ht_set_id(HT_MALLOC_transient_cache,ht);
+    mstore_set_mutex(mutex_fhdata,mstore_init(ht->valuestore=calloc_untracked(1,sizeof(struct mstore)),NULL,(SIZEOF_ZIPPATH*16)|MSTORE_OPT_MALLOC));
     //const ht_hash_t hash=d->zpath.virtualpath_without_entry_hash;
     foreach_fhdata(ie,e){
       if (!e->ht_transient_cache && FHDATA_BOTH_SHARE_TRANSIENT_CACHE(e,d)) e->ht_transient_cache=ht;
@@ -26,7 +28,7 @@ static struct ht* transient_cache_get_ht(struct fhdata *d){
    If no zpath entry  found, one is created and associated to the cache of one of the fhdata instances.
    The cache lives as long as the fhdata object.
    This function is not searching for realpath of path. It is just retrieving or creating struct zippath.
-   */
+*/
 static struct zippath *transient_cache_get_or_create_zpath(const bool create,const char *virtualpath,const int virtualpath_l){
   ASSERT_LOCKED_FHDATA();
   const ht_hash_t hash=hash32(virtualpath,virtualpath_l);
@@ -41,14 +43,16 @@ static struct zippath *transient_cache_get_or_create_zpath(const bool create,con
       struct ht_entry *e=ht_numkey_get_entry(ht,hash,virtualpath_l,create);
       if (e){
         const bool no_value=e->value==NULL;
-        if (no_value) e->value=mstore_malloc(ht->value_store,SIZEOF_ZIPPATH,8, MSTOREID(transient_cache_get_or_create_zpath),virtualpath);
+        if (no_value) e->value=mstore_malloc(ht->valuestore,SIZEOF_ZIPPATH,8);
         struct zippath *zpath=e->value;
         if (no_value || !zpath->virtualpath || strcmp(virtualpath,VP())){ /* Accept hash_collision */
           zpath_init(zpath,virtualpath);
         }else if (!create){
-          if (!maybe_same_zip && (zpath->flags&ZP_DOES_NOT_EXIST)) return NULL; /* Did not exist before. This  is taken as evidence that it is still absent. This is because  according to path is part of same zip */
-          if (zpath_exists(zpath) && (zpath->flags&ZP_DOES_NOT_EXIST)!=0){ log_zpath("ZP_DOES_NOT_EXIST???",zpath); DIE_DEBUG_NOW0("ZZZ");}
-          //          if (!zpath->realpath && (zpath->flags&ZP_DOES_NOT_EXIST)==0){ log_zpath("!ZP_DOES_NOT_EXIST???",zpath); DIE_DEBUG_NOW0("! ZZZ");}
+          // DEBUG_NOW  Used to be  (!maybe_same_zip which is  wrong AFAIK
+          if (maybe_same_zip && (zpath->flags&ZP_DOES_NOT_EXIST)){
+            return NULL; /* Did not exist before. This  is taken as evidence that it is still absent. This is because  according to path is part of same zip */
+          }
+          //if (!zpath->realpath && (zpath->flags&ZP_DOES_NOT_EXIST)==0){ log_zpath("!ZP_DOES_NOT_EXIST???",zpath); DIE_DEBUG_NOW("! ZZZ");}
           ht->client_value_int[zpath_exists(zpath)]++;
         }
         return zpath;

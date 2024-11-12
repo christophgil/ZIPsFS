@@ -1,0 +1,1 @@
+#define ZIPSFS_VERSION  "20241112"

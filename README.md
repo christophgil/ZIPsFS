@@ -140,9 +140,9 @@ Policy for ZIP entries  cached in RAM.
 
 |           |                                                                                  |
 |:---------:|----------------------------------------------------------------------------------|
-|    NEVER  | ZIP are never cached, even not in case of backward seek.                         |
+|   NEVER   | ZIP are never cached, even not in case of backward seek.                         |
 |           |                                                                                  |
-|    SEEK   | ZIP entries are cached if the file position jumps backward. This is the default  |
+|   SEEK    | ZIP entries are cached if the file position jumps backward. This is the default  |
 |           |                                                                                  |
 |   RULE    | ZIP entries are cached according to rules in **configuration.c**.                |
 |           |                                                                                  |
@@ -160,6 +160,12 @@ Consider a running  ZIPsFS instance which needs to be replaced by a newer one.  
 a different mount point. Both  instances work simultaneously. The symlink which used to point to the mount point of the old instance is now pointing to that of the new one.
 The old instance should be let running for an hour or so until no file handle is open any more.
 
+If the symlink is within an exported  SAMBA or NFS path, it should be relative.
+This is best achieved by changing into the parent path where the symlink will be created.
+Then give just the name and not the entire path of the symlink. In the /etc/samba/smb.conf give:
+
+   follow symlinks = yes
+
 
 Debug Options
 -------------
@@ -174,7 +180,6 @@ FUSE Options
 
 Run in foreground and display some logs at stdout. This mode is useful inside tmux.
 
-
 -s
 
 Disable multi-threaded operation to rescue ZIPsFS in case of threading related bugs.
@@ -184,8 +189,6 @@ Disable multi-threaded operation to rescue ZIPsFS in case of threading related b
 -o allow_other
 
 Other users can read the files
-
-
 
 
 ## Fault management
@@ -234,7 +237,7 @@ BUGS
 ====
 
 Current status: Testing and Bug fixing
-
+If ZIPsFS crashes, please send the stack-trace together with the version number.
 
 AUTHOR
 ======

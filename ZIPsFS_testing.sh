@@ -79,7 +79,10 @@ main(){
                 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}:/usr/pkg/lib
             fi
         fi
-        $exe  $BASE/writable $rr : -f  $m
+           local cmd="$exe  $BASE/writable $rr : -o allow_other -f  $m"
+           echo $cmd
+           $cmd
+
     fi
     return
 

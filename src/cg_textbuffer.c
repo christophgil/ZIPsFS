@@ -12,7 +12,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <inttypes.h>
-// #include <malloc.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
@@ -22,21 +21,9 @@
 #include <unistd.h>
 #include <pthread.h>
 #include "cg_utils.c"
-
+#include "cg_textbuffer.h"
 // vfork pthread_create
-#define TEXTBUFFER_DIM_STACK 64
-#define TEXTBUFFER_MMAP (1<<0)
-#define TEXTBUFFER_NEVER_DESTROY (1<<1)
-struct textbuffer{
-  int flags; /* Otherwise heap */
-  int n; /* Number segments contained */
-  int capacity; /* Number segments allocated */
-  off_t *segment_e, _onstack_segment_e[TEXTBUFFER_DIM_STACK]; /* Next  position after this segment */
-  char **segment,*_onstack_segment[TEXTBUFFER_DIM_STACK]; /* Segments */
-  off_t max_length;
-  int read_bufsize;
-};
-#define textbuffer_new() calloc(1,sizeof(struct textbuffer))
+#define textbuffer_new(malloc_id) cg_calloc(malloc_id,1,sizeof(struct textbuffer))
 #define TEXTBUFFER_MEMUSAGE_MMAP (1<<0)
 #define TEXTBUFFER_MEMUSAGE_PEAK (1<<1)
 #define TEXTBUFFER_MEMUSAGE_COUNT_ALLOC (1<<2)
@@ -88,7 +75,6 @@ static off_t _textbuffer_copy_to_or_compare(const bool isCopy,const struct textb
       if (f>=to) break;
       if (t>f){
         if (isCopy){
-          //log_debug_now("%d  memcpy(%ld,  %ld,  %ld)   f0: %ld  f: %ld t: %ld  e0: %ld  mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm .... \n",i, f-from, (f-f0),t-f ,  f0,f,t,e0);
           memcpy(dst+f-from,b->segment[i]+(f-f0),t-f);
         }else{
           if (memcmp(dst+f-from,b->segment[i]+(f-f0),t-f)) return 1;
@@ -117,7 +103,7 @@ static void textbuffer_add_segment(struct textbuffer *b, char *bytes, off_t size
       b->segment_e=b->_onstack_segment_e;
     }else{
       const int c=b->capacity=n?(n<<2):16;
-#define C(f,t) void* new_##f=calloc(1,c*sizeof(t));memcpy(new_##f,b->f,n*sizeof(t)); if (b->f!=b->_onstack_##f) free(b->f); b->f=new_##f;
+#define C(f,t) void* new_##f=cg_calloc(MALLOC_textbuffer, 1,c*sizeof(t));memcpy(new_##f,b->f,n*sizeof(t)); if (b->f!=b->_onstack_##f) cg_free(MALLOC_textbuffer,b->f); b->f=new_##f;
       C(segment,void*);
       C(segment_e,off_t);
 #undef C
@@ -131,8 +117,9 @@ static void textbuffer_add_segment(struct textbuffer *b, char *bytes, off_t size
   }
 }
 #define textbuffer_add_segment_const(b,txt) textbuffer_add_segment(b,txt,sizeof(txt)-1)
-#define malloc_or_mmap(is_mmap,size) (is_mmap?mmap(NULL,size,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,0,0):malloc(size))
-#define free_or_munmap(is_mmap,b,size) if (is_mmap) munmap(b,size); else free(b);
+#define malloc_or_mmap(is_mmap,size) (is_mmap?cg_mmap(MALLOC_textbuffer,size,0):cg_malloc(MALLOC_textbuffer,size))
+
+#define free_or_munmap(is_mmap,b,size) if (is_mmap) cg_munmap(MALLOC_textbuffer,b,size); else cg_free(MALLOC_textbuffer,b);
 static char *textbuffer_malloc(struct textbuffer *b, off_t size){
   char *buf=malloc_or_mmap(b->flags&TEXTBUFFER_MMAP,size);
   if (buf){
@@ -168,6 +155,7 @@ static int textbuffer_from_exec_output(struct textbuffer *b,char *cmd[],char *en
   if (!b || !cmd || !cmd[0]) return -1;
   int pipefd[2];
   const int fd=pipe(pipefd);
+
   const pid_t pid=fork();
   if (!cg_recursive_mk_parentdir(path_stderr)) path_stderr=NULL;
   if (pid<0){ log_errno("fork() returned %d",pid); return EIO;}
@@ -179,7 +167,7 @@ static int textbuffer_from_exec_output(struct textbuffer *b,char *cmd[],char *en
     close(pipefd[0]);
     cg_exec(env,cmd,pipefd[1],!path_stderr?-1:open(path_stderr,O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR));
   }
-  log_errno0("After execvp should not happen\n");
+  log_errno("After execvp should not happen\n");
   return -1;
 }
 static void textbuffer_reset(struct textbuffer *b){
@@ -208,7 +196,7 @@ static char *textbuffer_first_segment_with_min_capacity(struct textbuffer *b, of
 static void textbuffer_destroy(struct textbuffer *b){
   if (b){
     textbuffer_reset(b);
-#define C(f) if (b->f!=b->_onstack_##f) free(b->f);
+#define C(f) if (b->f!=b->_onstack_##f) cg_free(MALLOC_textbuffer,b->f);
     C(segment);
     C(segment_e);
 #undef C
@@ -240,7 +228,7 @@ static int textbuffer_differs_from_filecontent_fd(const struct textbuffer *b,con
   for(;(n=read(fd,buf,sizeof(buf)))>0;pos+=n){
     if (textbuffer_differs_from_string(b,pos,pos+n,buf)) return 1;
   }
-  if (n<0) log_errno0("read(fd,...)");
+  if (n<0) log_errno("read(fd,...)");
   return n<0||pos<textbuffer_length(b)?-1:0;
 }
 
@@ -277,8 +265,8 @@ static void test_write_bytes_block(const int fd,struct textbuffer *b){
   }
 #undef BUF
 }
-static void test_exec(){
-  char *cmd[]={"/usr/bin/seq","-s"," ","2000",NULL};
+static void test_exec(void){
+  char *cmd[]={"/usr/bin/seq","-s"," ","20",NULL};
   //char *cmd[]={"/usr/bin/ls","/",NULL};
   char *path_stderr="/home/cgille/tmp/test/cg_textbuffer_stderr.txt";
   struct textbuffer b={0};
@@ -297,13 +285,13 @@ int main(int argc,char *argv[]){
   /*
     struct textbuffer b={0};
     FOR(i,0,10){
-    char *buf=malloc(10);
+    char *buf=malloc_untracked(10);
     textbuffer_add_segment(&b,buf,10);
     }
     textbuffer_destroy(&b);
     return 0;
   */
-  switch(3){
+  switch(0){
   case 0: test_exec();break;
   case 1: test_ps_pid(getpid());break;
   case 2:{

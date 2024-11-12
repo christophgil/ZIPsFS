@@ -2,8 +2,6 @@
 
     pkg_add -u zip unzip libzip fuse-unionfs perfuse bash wget tmux lynx
 
-    U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
-    wget -N $U && unzip -o main.zip &&  ZIPsFS-main/src/ZIPsFS.compile.sh
 
 
 ## TroubleShooting

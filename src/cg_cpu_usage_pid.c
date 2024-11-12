@@ -1,5 +1,5 @@
-#ifndef _cg_cpuusage_pid
-#define _cg_cpuusage_pid
+#ifndef _cg_cpuusage_pid_c
+#define _cg_cpuusage_pid_c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,21 +7,8 @@
 /* https://github.com/RohitPanda/CPU_utilization/blob/master/main.c by Fabian Holler */
 
 
+#include "cg_cpu_usage_pid.h"
 
-#ifndef CG_PERROR
-#define CG_PERROR(msg) fprintf(stderr,"%s:%d ",__FILE__,__LINE__),perror(msg);
-#endif
-
-struct pstat {
-  long unsigned int utime_ticks;
-  long int cutime_ticks;
-  long unsigned int stime_ticks;
-  long int cstime_ticks;
-  long unsigned int vsize; // virtual memory size in bytes
-  long unsigned int rss; //Resident  Set  Size in bytes
-  long unsigned int cpu_total_time;
-  int ncpu;
-};
 static int cpuusage_read_proc(struct pstat* r,const pid_t pid){
   if (!has_proc_fs()) return 0;
   memset(r,0,sizeof(struct pstat));
@@ -31,7 +18,11 @@ static int cpuusage_read_proc(struct pstat* r,const pid_t pid){
      char p[30];
     sprintf(p,"/proc/%d/stat",pid);
     FILE *fpstat=fopen(p,"r");
-    if (fpstat==NULL){CG_PERROR("FOPEN ERROR ");pid_error=pid;return -1;}
+    if (fpstat==NULL){
+      //  CG_PERROR("FOPEN ERROR ");
+      pid_error=pid;
+      return -1;
+    }
     long int rss;
     if (fscanf(fpstat,"%*d %*s %*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %ld %ld %*d %*d %*d %*d %*u %lu %ld",
                &r->utime_ticks, &r->stime_ticks,&r->cutime_ticks, &r->cstime_ticks, &r->vsize,&rss)==EOF){
@@ -58,7 +49,7 @@ static int cpuusage_read_proc(struct pstat* r,const pid_t pid){
     for(ssize_t nread;(nread=getline(&line,&len,fstat))!=EOF;){
       if (*line=='c'&&line[1]=='p'&&line[2]=='u') ncpu=atoi(line+3)+1;
     }
-    free(line);
+    free_untracked(line);
   }
   r->ncpu=!ncpu?1:ncpu;
   fclose(fstat);

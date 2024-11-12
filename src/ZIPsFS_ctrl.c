@@ -184,11 +184,18 @@ read-host -Prompt 'Press Enter'\n");
 #undef P
 #undef B
 static bool trigger_files(const bool isGenerated,const char *path,const int path_l){
+#define STRCMP(a,constant) strncmp(a,constant,sizeof(constant))
+  if (!STRCMP(path,"/EeXxIiTt1234.txt")){
+    LOCK(mutex_special_file,make_info(0);fputs(_info,stderr));
+    IF1(WITH_PROFILER,print_profile());
+    DIE("%s",path);
+  }
   if (path_l>4 && strstr(path,BASH_SECRET)){
     const int z=path[path_l-1], t=z=='S'?PTHREAD_STATQUEUE: z=='M'?PTHREAD_MEMCACHE: z=='D'?PTHREAD_DIRCACHE: z=='R'?PTHREAD_RESPONDING:-1;
-    char *f=NULL;
+    char *f=0;
     for(int j=0;CTRL_FILES[j];j++) if (!memcmp(path,CTRL_FILES[j],strlen(CTRL_FILES[j])-1)) f=CTRL_FILES[j];
-    //if (strstr(path,"/ZIPsFS"))      log_entered_function("%s op=%c t=%d ",path,op?op:'0',t);
+    //if (strstr(path,"/ZIPsFS"))
+    log_entered_function("%s path  f:%s ",path,snull(f));
     if (f){
       warning(WARN_DEBUG,path,"Triggered '%s' %s",f,t>=0?PTHREAD_S[t]:"");
       foreach_root(i,r){
@@ -203,15 +210,14 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
           IF1(DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,dircache_clear_if_reached_limit_all(true,z=='0'?0xFFFF:(1<<(z-'0'))));
           return true;
         }else if (f==F_KILL_ZIPSFS){
-          //    char *memleak=malloc(100);        fprintf(stderr,"Going to run fusermount\n");    execlp("/usr/bin/fusermount","fusermount","-u",_mnt,NULL);
-          exit_ZIPsFS(0);
+          DIE("Killed due to "F_KILL_ZIPSFS);
           return true;
         }else if (f==F_BAD_LOCK || f==F_NO_LOCK){
-          if (!WITH_ASSERT_LOCK) log_warn0("WITH_ASSERT_LOCK is 0");
+          if (!WITH_ASSERT_LOCK) log_warn("WITH_ASSERT_LOCK is 0");
           else{
 #define p() log_strg("The following will pass ...\n")
 #define f() log_strg("The following will trigger assertion ...\n")
-#define e() log_error0("The previous line should have triggered assertion.\n");
+#define e() log_error("The previous line should have triggered assertion.\n");
 #if 1
 #define G() ht_get(&r->dircache_ht,"key",3,0)
 #else
@@ -249,7 +255,6 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
     char path2[MAX_PATHLEN+1];
     strncpy(path2,path,len)[len]=0;
     bool found;FIND_REALPATH(path2);
-    //log_debug_now("%s found=%d ",path2,found);
     if (found){
       cg_file_set_atime(RP(),&zpath->stat_rp,3600L*atoi(posHours));
       return true;
@@ -266,24 +271,26 @@ static int read_special_file(const int i, char *buf, const off_t size, const off
   const int l=textbuffer_length(&b);
   const int n=MIN_int(size,l-(int)offset);
   if (n>0 && buf){
-    log_debug_now("i=%d textbuffer_write_fd l=%d offset=%d n=%d ... ",i,l,(int)offset,n);
     textbuffer_copy_to(&b,offset,offset+n,buf);
   }
   //textbuffer_write_fd(&b,STDOUT_FILENO);
   unlock(mutex_special_file);
   return n<0?EOF:n;
 }
-static void make_info(){
+
+
+
+static void make_info(const int flags){
   cg_thread_assert_locked(mutex_special_file);
   int l;
 
-
-  while((l=print_all_info())>=_info_capacity){
+  _info=malloc_untracked(_info_capacity=9999);
+  while((l=print_all_info(flags))>=_info_capacity){
     //CG_REALLOC(char *,_info,_info_capacity=_info_capacity*2+0x100000+17);
     //    #define CG_REALLOC(type,pointer,expr) {type tmp=realloc(pointer,expr); if (!tmp){fprintf(stderr,"realloc failed.\n"); EXIT(1);};pointer=tmp;}
 
 
-    // heap use after free
+    // heap use after Free
     char * tmp=realloc(_info,_info_capacity=_info_capacity*2+0x100000+17);
 
 

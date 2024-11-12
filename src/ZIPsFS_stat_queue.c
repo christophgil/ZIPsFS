@@ -35,7 +35,7 @@ static int _stat_queue1(const bool verbose,const char *rp, const int rp_l,const 
     LOCK(mutex_statqueue, q=statqueue_add(verbose,stbuf,rp,rp_l,hash,r); if (q) q->refcount++);
     if (q) break;
     usleep(STATQUEUE_SLEEP_USECONDS);
-    if (is_square_number(j))  warning(WARN_STAT,rp,"No free slot in queue %d",j);
+    if (is_square_number(j))  warning(WARN_STAT,rp,"No empty slot in queue %d",j);
   }
   if (verbose) log_verbose("q->status=%d %s",q->status,rp);
   int sleep=STATQUEUE_SLEEP_USECONDS/8,sum=0, ok=0;
@@ -69,7 +69,7 @@ static bool stat_queue(const bool verbose,const char *rp, const int rp_l,const h
   }
   return false;
 }
-/* Queue for stat and cyclic statfs to check whether root is responding */
+/* Queue for stat and cyclic statvfs to check whether root is responding */
 static void *infloop_statqueue(void *arg){
   struct rootdata *r=arg;
   pthread_cleanup_push(infloop_statqueue_start,r);
