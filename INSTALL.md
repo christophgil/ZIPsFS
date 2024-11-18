@@ -17,6 +17,11 @@ Please visit the page for your OS.
    - [Omnios](./INSTALL_Omnios.md) Compiles. No files are seen at mount point.
    - [OpenIndiana](./INSTALL_OpenIndiana.md)  Works as root, but not as normal user.
 
+For the auto-generated files consider installing
+  - tesseract-ocr-eng
+  - imagemagick
+  - poppler-utils pdftotext
+
 If your OS is not listed, continue reading here.
 
 First install the required libraries.

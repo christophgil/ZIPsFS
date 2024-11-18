@@ -136,7 +136,7 @@
 /// Dynamically generated files ///
 ///////////////////////////////////
 
-#define WITH_AUTOGEN 0
+#define WITH_AUTOGEN 1
 /* WITH_AUTOGEN depends on WITH_MEMCACHE */
 #if ! WITH_MEMCACHE
 #undef WITH_AUTOGEN

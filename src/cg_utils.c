@@ -179,23 +179,25 @@ static int cg_idx_of_pointer(void **aa, void *a){
       if (!aa[i]) break;
     }
   }
-return -1;
-
+  return -1;
 }
-
-
 
 
 
 static const char* snull(const char *s){ return s?s:"Null";}
 static MAYBE_INLINE char *yes_no(int i){ return i?"Yes":"No";}
 
-static bool cg_endsWith(const char* s,int s_l,const char* e,int e_l){
+
+#define cg_endsWith(s,s_l,e,e_l) cg_endsWithIC(false,s,s_l,e,e_l)
+static bool cg_endsWithIC(const bool ic,const char* s,int s_l,const char* e,const int e_l_or_zero){
   if (!s || !e) return false;
   if (!s_l) s_l=strlen(s);
-  if (!e_l) e_l=strlen(e);
-  return e_l<=s_l && 0==memcmp(s+s_l-e_l,e,e_l);
+  const int e_l=e_l_or_zero?e_l_or_zero:strlen(e);
+  return e_l<=s_l && 0==(ic?strncasecmp(s+s_l-e_l,e,e_l): memcmp(s+s_l-e_l,e,e_l));
 }
+
+
+
 
 static bool cg_startsWith(const char* s,int s_l,const char* e,int e_l){
   if (!s || !e) return false;
@@ -212,6 +214,17 @@ static bool cg_endsWithDotD(const char *s, int len){
   if(!len)len=cg_strlen(s);
   return s && ENDSWITHI(s,len,".d");
 }
+
+#define FIND_SUFFIX_IC (1<<1)
+static int cg_find_suffix(const int opt,const char *s, const int s_l,const char **xx,const int *xx_l){
+  if (xx && s){
+    for(int i=0; xx[i]; i++){
+      if (cg_endsWithIC((opt&FIND_SUFFIX_IC)!=0, s,s_l,xx[i],xx_l?xx_l[i]:0)) return i;
+    }
+  }
+  return -1;
+}
+
 
 
 /*
@@ -272,10 +285,10 @@ static int cg_str_replace(int opt,char *haystack,  int h_l, const char *needle, 
 
 
 #define OPT_CG_STRSPLIT_WITH_EMPTY_TOKENS (1<<8)
-static int cg_strsplit(const int opt_and_sep, char *s, const int s_l, char *tokens[], int *tokens_l){
+static int cg_strsplit(const int opt_and_sep, const char *s, const int s_l, const char *tokens[], int *tokens_l){
   bool prev_sep=true;
   int count=0;
-  char *tok=NULL;
+  const char *tok=NULL;
   if (s){
     for(int i=0;;i++){
       const bool isend=s_l?(i>=s_l):!s[i];
@@ -306,7 +319,6 @@ static const char *rm_pfx_us(const char *s){
 /// time       ///
 ///////////////////
 
-
 static struct timeval _startTime;
 static int64_t currentTimeMillis(void){
   struct timeval tv={0};
@@ -319,6 +331,15 @@ static int deciSecondsSinceStart(void){
   gettimeofday(&now,NULL);
   return (int)((now.tv_sec-_startTime.tv_sec)*10+(now.tv_usec-_startTime.tv_usec)/100000);
 }
+
+static void cg_sleep_ms(const int millisec, char *msg){
+  if (millisec>0){
+    if (msg&&!*msg) log_verbose("Going sleep %d ms ...",millisec);
+    else if (msg) log_verbose("%s",msg);
+    usleep(millisec<<10);
+  }
+}
+
 
 ///////////////////
 /// file path   ///
@@ -563,19 +584,6 @@ static bool cg_file_set_atime(const char *path, struct stat *stbuf,long secondsF
   return !utime(path,&new_times);
 }
 
-static struct timespec cg_file_last_modified(const char *path){
-  struct stat st;
-  static struct timespec ZERO={0};
-  if (!path || !*path || PROFILED(stat)(path,&st)) return ZERO;
-  return st.ST_MTIMESPEC;
-}
-static bool  cg_file_is_newer_than(const char *path1,const char *path2){
-  struct timespec t1=cg_file_last_modified(path1);
-  struct timespec t2=cg_file_last_modified(path2);
-  if (!t1.tv_sec) return false;
-  if (!t2.tv_sec) return true;
-  return t1.tv_sec>t2.tv_sec || (t1.tv_sec==t2.tv_sec && t1.tv_nsec>t2.tv_nsec);
-}
 
 #define  cg_set_executable(path)  cg_set_st_mode_flag(path,S_IRWXU)
 static bool cg_set_st_mode_flag(const char *path, mode_t mode){
@@ -699,6 +707,18 @@ static double cg_timespec_diff(const struct timespec a, const struct timespec b)
 static bool cg_timespec_b_before_a(struct timespec a, struct timespec b) {  //Returns true if b happened first.
   return a.tv_sec==b.tv_sec ? a.tv_nsec>b.tv_nsec : a.tv_sec>b.tv_sec;
 }
+static struct timespec cg_file_last_modified(const char *path){
+  struct stat st;
+  static struct timespec ZERO={0};
+  if (!path || !*path || PROFILED(stat)(path,&st)) return ZERO;
+  return st.ST_MTIMESPEC;
+}
+static bool cg_file_is_newer_than(const char *path1,const char *path2){
+  struct timespec t1=cg_file_last_modified(path1);
+  struct timespec t2=cg_file_last_modified(path2);
+  return cg_timespec_b_before_a(t1,t2);
+}
+
 #define CG_TIMESPEC_EQ(a,b) (a.tv_sec==b.tv_sec && a.tv_nsec==b.tv_nsec)
 /////////////
 ////  id  ///
@@ -842,6 +862,11 @@ static int differs_filecontent_from_string(const int opt,const char* path, const
 // 1111111111111111111111111111111111111111111111111111111111111
 #if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
 int main(int argc, char *argv[]){
+
+  printf("cg_file_is_newer_than %d \n",cg_file_is_newer_than(argv[1],argv[2]));
+
+  return 0;
+
   switch(9){
   case 0:{
     bool *ccpath=cg_validchars(VALIDCHARS_PATH);
@@ -871,7 +896,7 @@ int main(int argc, char *argv[]){
   } break;
   case 4:{
     int tokens_l[99];
-    char *tokens[99];
+    const char *tokens[99];
     const int n=cg_strsplit(':',argv[1],0,NULL,NULL);
     cg_strsplit(':',argv[1],0,tokens,tokens_l);
     printf("n=%d\n",n);

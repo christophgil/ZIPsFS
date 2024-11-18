@@ -82,15 +82,13 @@ Normally, the folder name is formed by appending
 \[lq]\f[I].Content\f[R]\[rq] to the zip file name.
 This can be changed in \f[I]ZIPsFS_configuration.c\f[R].
 .PP
-For Sciex mass spectrometry files it is necessary that the containing
-files are shown directly in the file listing rather than in a
+For example Sciex mass spectrometry software requires that the
+containing files are shown directly in the file listing rather than in a
 sub-folder.
-The respective file extensions are specified in
-\f[I]ZIPsFS_configuration.c\f[R].
 .SS Cache
 .PP
-ZIPsFS can read certain ZIP entries entirely into RAM and provide the
-data from the RAM copy at higher speed.
+Optionally, ZIPsFS can read certain ZIP entries entirely into RAM and
+provide the data from the RAM copy at higher speed.
 This may improve performance for compressed ZIP entries that are read
 from varying positions in the file, so-called file file-seek.
 This concerns file entries with file name and size rules given in in
@@ -113,11 +111,12 @@ from the generated folder \f[B]ZIPsFS\f[R] in the virtual ZIPsFS file
 system.
 .SS Autogeneration of files
 .PP
-ZIPsFS offers files which do not yet exist, and will be generated when
-used.
-This option is available if the first file source is provided.
-Generally, the first file source is writable
-.PP
+ZIPsFS can display file names of files which do not yet exist, but which
+can be generated autopmatically.
+These files will be created when needed.
+This feature must be activated in ZIPsFS_configuration.h.
+The first file source needs to be provided.
+Generally, the first file source is writable.
 It will not be available, if an empty string is passed as the first root
 directory.
 .PP
@@ -125,29 +124,37 @@ The typical use-case are file conversions.
 Auto-generated files are displayed in the virtual file tree in
 \f[B]ZIPsFS/a/\f[R] and physically stored in the first source.
 .PP
-With the current setting, Mascot mass spectrometry files and msML files
-are generated.
-As a more popular example, down-scaled image files are offered for jpeg,
-jpg, png and gif files.
-The two scaling levels 50% and 25% demonstrate two different options:
-For size reduction to 50%, a file is generated and saved in the first
-file source in \f[I]ZIPsFS/a/\&...scale50%.jpg\f[R].
+The currently included examples can serve as a templated for own
+settings.
+.IP \[bu] 2
+For image files (jpg, jpeg, png and gif), smaller versions of 25 % and
+50 %
+.IP \[bu] 2
+For image files extracted text usign Optical Character Recognition
+.IP \[bu] 2
+For PDF files extracted ASCII text.
+.IP \[bu] 2
+For ZIP files the report of the consistency check including check-sums
+.IP \[bu] 2
+Mass spectrometry files: They are converted to Mascot and msML.
+For wiff files, the contained ASCII text is extracted.
+.PP
 When requested for the first time there will be some delay.
 When accessed a second time, the data comes without delay, because the
 file is already there.
-For down-scaling to 25%, the generated image data is not saved.
+When the upstream file changes or the last-modified attribute is
+updated, derived files will be generated again.
+.PP
+The image down-scaling to 25% illustrates an alternative notion.
+The generated image data is not saved.
 Instead it is kept in RAM as long as the file handle is active.
 After loading the image, the image data in the RAM is discarded.
 The advantage is that no HD space is used.
-The disadvantage is, that for a short time the entire data resides in
+The disadvantages are, that for a short time the entire data resides in
 RAM and that the data is generated each time the file data is read.
 .PP
-Users can use these Imagemagick based examples as a template for their
-own settings in \f[B]ZIPsFS_configuration_autogen.c\f[R].
-.PP
-Also see readme in the folder \f[B]ZIPsFS/a/\f[R].
-.PP
-Some exotic Windows executables do not work well within ZIPsFS.
+Some exotic Wine dependent Windows executables do not work well within
+ZIPsFS.
 As a work around, we developed the shell script
 \f[B]ZIPsFS_autogen_queue.sh\f[R].
 With each pass of an infinity loop one task is taken from a queue and

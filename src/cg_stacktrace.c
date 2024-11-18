@@ -1,4 +1,6 @@
 /* Compare https://raw.githubusercontent.com/Dexter9313/C-stacktrace/master/c-stacktrace.h by  Florian Cabot */
+/// COMPILE_MAIN=ZIPsFS                   ///
+
 #ifndef _cg_stacktrace_dot_c
 #define _cg_stacktrace_dot_c
 
@@ -140,8 +142,7 @@ static bool addr2line_no_shell(const char *addr,const int iLine){
 #undef A
   char cmd_flat[99];
   *cmd_flat=0;
-  for(char **s=aa; *s; s++){ strcat(cmd_flat,*s); strcat(cmd_flat," ");}
-
+  FOREACH_CSTRING(s,aa){ strcat(cmd_flat,*s); strcat(cmd_flat," ");}
   IF1(WITH_POPEN_NOSHELL,struct popen_noshell_pass_to_pclose pclose_arg={0});
   FILE *fp=IF1(WITH_POPEN_NOSHELL,popen_noshell("addr2line",(const char * const*)aa,"r",&pclose_arg,0))  IF0(WITH_POPEN_NOSHELL,popen(cmd_flat,"r"));
   bool ok=false;
@@ -202,8 +203,7 @@ static void cg_print_stacktrace(int calledFromSigInt){
     char addr[80];
     sprintf(addr,"%p",buffer[i]);
     const char *open=strchr(strings[i],'('), *close=strchr(strings[i],')');
-    if (open && close) snprintf(addr,close-open,"%s%c",open+1,0);
-    if (!addr2line_no_shell(addr, nptrs-2-i-1)){
+    if ( !(open && close && addr2line_no_shell(addr, nptrs-2-i-1))){
       fprintf(stckOut(), "! [%i] %s\n", nptrs-2-i-1, strings[i]);
     }
   }
@@ -234,7 +234,7 @@ static void cg_print_stacktrace_test(int what){
 
     char *s=NULL;
     strcpy(s,"Force nullPointer dereference");
-    #endif
+#endif
   } break;
   }
 }
@@ -243,12 +243,12 @@ static void my_signal_handler(int sig){
   signal(sig,SIG_DFL);
   fprintf(stckOut(),"\x1B[41mCaught signal %s\x1B[0m\n",strsignal(sig));
   cg_print_stacktrace(0);
-  #ifdef CLEANUP_BEFORE_EXIT
+#ifdef CLEANUP_BEFORE_EXIT
   CG_CLEANUP_BEFORE_EXIT();
-  #else
+#else
   fprintf(stckOut(),"Not defined: CG_CLEANUP_BEFORE_EXIT()\n");
-  #endif
-    fflush(stderr);
+#endif
+  fflush(stderr);
   _Exit(EXIT_FAILURE);
 }
 

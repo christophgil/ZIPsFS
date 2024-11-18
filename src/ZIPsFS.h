@@ -224,6 +224,7 @@ struct zippath{
 ///   Only one of all instances with a specific virtual path should store the cached zip entry
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 #define FINDRP_VERBOSE (1<<0)
+#define FINDRP_AUTOGEN_CUT (1<<1)
 #define FINDRP_AUTOGEN_CUT_NOT (1<<2)
 #define FINDRP_NOT_TRANSIENT_CACHE (1<<3)
 #define FILETYPEDATA_NUM 1024
@@ -296,7 +297,7 @@ struct statqueue_entry{
 
 struct rootdata{ /* Data for a source directory. ZIPsFS acts like an overlay FS. */
   char rootpath[MAX_PATHLEN+1];
-  int rootpath_l,root_idx;
+  int rootpath_l;
   uint32_t features;
   struct statvfs statvfs;
   uint32_t log_count_delayed,log_count_delayed_periods,log_count_restarted;

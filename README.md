@@ -62,14 +62,11 @@ If an   empty string "" or '' is given for the first source, no writable source 
 Let *file.zip* be a ZIP file in any of the source file systems. It will  appear in the virtual file system together with a folder *file.zip.Content*.
 Normally, the folder name is formed by appending "*.Content*" to the zip file name. This can be changed in *ZIPsFS_configuration.c*.
 
-For Sciex mass spectrometry files it is necessary that the containing files are shown directly in the file listing rather than in a sub-folder.
-The respective file extensions are specified in *ZIPsFS_configuration.c*.
-
-
+For example Sciex mass spectrometry software requires that the containing files are shown directly in the file listing rather than in a sub-folder.
 
 ## Cache
 
-ZIPsFS can read certain ZIP entries entirely into RAM and provide the data from the RAM copy  at higher speed.
+Optionally, ZIPsFS can read certain ZIP entries entirely into RAM and provide the data from the RAM copy  at higher speed.
 This may improve performance for compressed ZIP entries that are read from varying positions in the file, so-called file file-seek.
 This concerns file entries with file name and size rules given in  in *ZIPsFS_configuration.c*.
 Furthermore, compressed ZIP entries are cached in RAM if the reading position ever jumps backward.
@@ -90,30 +87,33 @@ An HTML file with status information is found in and are also accessible from th
 
 ## Autogeneration of files
 
-ZIPsFS offers  files which do not yet exist, and will be generated when used.
-This option is available if the first file source  is provided. Generally, the first file source is writable
-
+ZIPsFS can display file names of files which do not yet exist, but which can be generated autopmatically.
+These files will be created when needed.
+This feature must be activated in ZIPsFS_configuration.h.  The first file source needs to be provided. Generally, the first file source is writable.
 It will not be available, if an empty string is passed as the first root directory.
 
 The typical use-case are file conversions.
 Auto-generated files are displayed in the virtual file tree in **ZIPsFS/a/**  and physically stored in the first source.
 
+The currently included examples can serve as a templated for own settings.
 
-With the current setting, Mascot mass spectrometry files and msML files are generated.
-As a more popular example, down-scaled image files are offered for jpeg, jpg, png and gif files.
-The two scaling levels 50% and 25% demonstrate two different options:
-For size reduction to 50%, a file is generated and saved in the first file source in *ZIPsFS/a/...scale50%.jpg*.
+- For image files (jpg, jpeg, png and gif), smaller versions of 25 % and 50 %
+- For image files extracted text usign Optical Character Recognition
+- For PDF files extracted ASCII text.
+- For ZIP files the report of the consistency check including check-sums
+- Mass spectrometry files: They are converted to Mascot and msML.  For wiff files, the contained ASCII text is extracted.
+
 When requested for the first time there will be some delay.
 When accessed a second time, the data comes without delay, because the file is already there.
-For down-scaling to 25%, the generated image data is not saved. Instead it is kept in RAM as long as the file handle is active.
+When the upstream file changes or the last-modified attribute is updated, derived files will be generated again.
+
+
+The image down-scaling to 25% illustrates an alternative notion. The generated image data is not
+saved. Instead it is kept in RAM as long as the file handle is active.
 After loading the image, the image data in the RAM is discarded. The advantage is that no HD space is used.
-The disadvantage is, that for a short time the entire data resides in RAM and that the data is generated each time the file data is read.
+The disadvantages are, that for a short time the entire data resides in RAM and that the data is generated each time the file data is read.
 
-Users can use these Imagemagick based examples as a template for their own settings in **ZIPsFS_configuration_autogen.c**.
-
-Also see readme in the folder **ZIPsFS/a/**.
-
-Some exotic Windows executables do not work well within ZIPsFS.
+Some exotic Wine dependent  Windows executables do not work well within ZIPsFS.
 As a work around, we developed the shell script **ZIPsFS_autogen_queue.sh**.
 With each pass of an  infinity loop  one task is taken from a queue and processed. One file is converted at a time per script instance.
 Several instances of this shell script can run in parallel. In the settings, the symbol **PLACEHOLDER_EXTERNAL_QUEUE** is given instead of an executable program.
