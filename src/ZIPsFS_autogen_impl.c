@@ -134,8 +134,7 @@ static int aimpl_run(const char *virtual_outfile,const char *outfile,const char 
   char infile[MAX_PATHLEN+1], virtual_infile[MAX_PATHLEN+1];
   strcpy(virtual_infile,virtual_outfile);
   virtual_infile[strlen(virtual_outfile)-s->_ext_l]=0;
-
-  if (0!=(s->flags&_CA_FLAG_WITH_GENERATED_FILES_AS_INPUT_FILES)){  /* recursion */
+  if (0!=(s->flags&_CA_FLAG_WITH_GENERATED_FILES_AS_INPUT_FILES)){  /* recursion. experimental feature */
     bool found=false;FIND_REALPATH(virtual_infile);
     if (!found) return -ENOENT;
     strcpy(infile,RP());
