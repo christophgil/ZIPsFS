@@ -68,8 +68,6 @@ For example Sciex mass spectrometry software requires that the containing files 
 
 Optionally, ZIPsFS can read certain ZIP entries entirely into RAM and provide the data from the RAM copy  at higher speed.
 This may improve performance for compressed ZIP entries that are read from varying positions in the file, so-called file file-seek.
-This concerns file entries with file name and size rules given in  in *ZIPsFS_configuration.c*.
-Furthermore, compressed ZIP entries are cached in RAM if the reading position ever jumps backward.
 With the  option **-l** an upper limit of memory consumption for the ZIP  RAM cache is specified.
 
 Further caches aim at faster file listing of large directories.
@@ -77,25 +75,28 @@ Further caches aim at faster file listing of large directories.
 
 ## Logs
 
-Running ZIPsFS in the foreground with the option *-f*, allows to observe logs continuously at the console.
-It is convenient to run ZIPsFS in a terminal multiplexer like  *tmux*.
+
+It is recommended to run ZIPsFS in the foreground with option *-f* within a persistent terminal multiplexer like *tmux*.
+
 Log files are found in  **~/.ZIPsFS/**.
-An HTML file with status information is found in and are also accessible from the generated folder **ZIPsFS** in the virtual  ZIPsFS file system.
+
+An HTML file with status information is dynamically generated in  the generated folder **ZIPsFS** in the virtual  ZIPsFS file system.
 
 
 
 
 ## Autogeneration of files
 
-ZIPsFS can display file names of files which do not yet exist, but which can be generated autopmatically.
-These files will be created when needed.
-This feature must be activated in ZIPsFS_configuration.h.  The first file source needs to be provided. Generally, the first file source is writable.
-It will not be available, if an empty string is passed as the first root directory.
+ZIPsFS can display virtual files which do not  exist, but which can be generated automatically when opened.
+This feature must be activated in ZIPsFS_configuration.h.  The first file root is used to store the generated files.
 
-The typical use-case are file conversions.
-Auto-generated files are displayed in the virtual file tree in **ZIPsFS/a/**  and physically stored in the first source.
+A typical use-case are file conversions.
+Auto-generated files are displayed in the virtual file tree in **ZIPsFS/a/**.
+If they have not be used before, an estimated file size is reported as the real file size is not yet known.
 
-The currently included examples can serve as a templated for own settings.
+The currently included examples demonstrate this feature and can serve as a templated for own settings.
+For this purpose copy image or pdf files into one of the roots and visit the respective folder in the virtual file system.
+Prepend this folder with **ZIPsFS/a/** and you will see the generated files:
 
 - For image files (jpg, jpeg, png and gif), smaller versions of 25 % and 50 %
 - For image files extracted text usign Optical Character Recognition
@@ -103,15 +104,9 @@ The currently included examples can serve as a templated for own settings.
 - For ZIP files the report of the consistency check including check-sums
 - Mass spectrometry files: They are converted to Mascot and msML.  For wiff files, the contained ASCII text is extracted.
 
-When requested for the first time there will be some delay.
-When accessed a second time, the data comes without delay, because the file is already there.
+When opening these files  for the first time there will be some delay. This is because the files need to be generated.
+When accessed a second time, the data comes without delay, because the file is already there. Furthermore, the file size will be correct.
 When the upstream file changes or the last-modified attribute is updated, derived files will be generated again.
-
-
-The image down-scaling to 25% illustrates an alternative notion. The generated image data is not
-saved. Instead it is kept in RAM as long as the file handle is active.
-After loading the image, the image data in the RAM is discarded. The advantage is that no HD space is used.
-The disadvantages are, that for a short time the entire data resides in RAM and that the data is generated each time the file data is read.
 
 Some exotic Wine dependent  Windows executables do not work well within ZIPsFS.
 As a work around, we developed the shell script **ZIPsFS_autogen_queue.sh**.
