@@ -125,8 +125,18 @@ For this purpose copy image or pdf files into one of the roots and visit
 the respective folder in the virtual file system.
 Prepend this folder with \f[B]ZIPsFS/a/\f[R] and you will see the
 generated files:
-.PP
-mnt= mkdir $mnt/test cp file.png $mnt/test/ ls $mnt/ZIPsFS/a/test/
+.IP
+.nf
+\f[C]
+mnt=<path of mountpoint>
+
+mkdir $mnt/test
+
+cp file.png $mnt/test/
+
+ls $mnt/ZIPsFS/a/test/
+\f[R]
+.fi
 .IP \[bu] 2
 For image files (jpg, jpeg, png and gif), smaller versions of 25 % and
 50 %

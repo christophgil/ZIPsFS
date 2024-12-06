@@ -99,10 +99,13 @@ The currently included examples demonstrate this feature and can serve as a temp
 For this purpose copy image or pdf files into one of the roots and visit the respective folder in the virtual file system.
 Prepend this folder with **ZIPsFS/a/** and you will see the generated files:
 
-   mnt=<path of mountpoint>
-   mkdir $mnt/test
-   cp file.png $mnt/test/
-   ls $mnt/ZIPsFS/a/test/
+    mnt=<path of mountpoint>
+
+    mkdir $mnt/test
+
+    cp file.png $mnt/test/
+
+    ls $mnt/ZIPsFS/a/test/
 
 - For image files (jpg, jpeg, png and gif), smaller versions of 25 % and 50 %
 - For image files extracted text usign Optical Character Recognition
