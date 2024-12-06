@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 set -u
 ########################
 ### Please customize ###
@@ -155,7 +156,8 @@ else
 fi
 
 
-if [[ $WITH_RPATH == 0 && ( ${OSTYPE,,} == netbsd || ${OSTYPE,,} == solaris*) ]]; then
+ostype=$(echo $OSTYPE |tr '[:upper:]' '[:lower:]') # ${OSTYPE,,} not portable
+if [[ $WITH_RPATH == 0 && ( $ostype == netbsd || $ostype == solaris*) ]]; then
     WITH_RPATH=1
     echo -e  "\nNote: The command line option -R is automatically activated for $OSTYPE. Run $0 -h for help.\n"
     press_enter
@@ -232,7 +234,8 @@ main(){
     for lib in $LIBZIP $LIBFUSE; do
         [[ -n $lib && $lib != -*  ]] && ! ls -l -- $lib  && return 1
     done
-    local opts="$OPT_PROFILER" LL="-lpthread -lm -lzip  "     NOWARN="-Werror-implicit-function-declaration -Wno-format-overflow  -Wno-format-zero-length -Wno-string-compare -Wno-format-truncation" fuse_version
+    local opts="$OPT_PROFILER" LL="-lpthread -lm -lzip  "     NOWARN="-Werror-implicit-function-declaration -Wno-string-compare " fuse_version
+#    -Wno-format-overflow  -Wno-format-truncation   -Wno-format-zero-length
 
     ok=0; addr2line -H >/dev/null 2>/dev/null     && ok=1; opts+="${D}HAS_ADDR2LINE=$ok";
     ok=0; atos -h 2>/dev/null                     && ok=1; opts+="${D}HAS_ATOS=$ok"
@@ -247,6 +250,9 @@ main(){
     opts+="${D}HAS_DIRENT_D_TYPE=$(     try_compile dirent_d_type   '#include <dirent.h>'       'struct dirent *e; e->d_type=e->d_type     ;')"
     opts+="${D}HAS_RLIMIT=$(            try_compile rlimit          '#include <sys/resource.h>' 'getrlimit(RLIMIT_AS)     ;')"
     opts+="${D}HAS_NO_ATIME=$(          try_compile no_atime        $'#define _GNU_SOURCE\n#include <sys/statvfs.h>' 'struct statvfs s; int i=s.f_flag&ST_NOATIME;')"
+
+
+#    opts+="${D}FUSE3=$(          try_compile no_atime  fuse_unmount(fuse_get_context()->fuse)
     local x=${DIR%/*}/ZIPsFS
     rm  "$x" 2>/dev/null
     [[ -s $x ]] && echo "${ANSI_RED}Warning, $x exists $ANSI_RESET"
@@ -288,7 +294,7 @@ EOF
         [[ $OSTYPE == *freebsd* ]] && echo 'If ZIPsFS does not work, try as root'
 
         local pfx=''
-        if ((WITH_SANITIZER)) && pfx=$(uname -m);then
+        if ((WITH_SANITIZER))  && setarch -h >/dev/null 2>/dev/null && pfx=$(uname -m);then
             pfx="setarch $pfx -R"   # This prevents segmentation fault with sanitizer
             ! $pfx date && pfx=0
         fi

@@ -547,7 +547,7 @@ static void test_mstore2(int argc,char *argv[]){
         if (is_square_number(iLine)) printf(" %d ",iLine);
       }else{
         const char *from_cache=ht_sget(&ht,line);
-        if (is_square_number(iLine))  printf("(%4d) Line: %s  Length: %jd   hash: %s from_cache: %s \n",iLine, line,(intmax_t)n,value,from_cache);
+        if (is_square_number(iLine))  printf("(%4d) Line: %s  Length: %lld   hash: %s from_cache: %s \n",iLine, line,(LLD)n,value,from_cache);
         assert(!strcmp(value,from_cache));
       }
     }

@@ -42,8 +42,8 @@ static off_t textbuffer_memusage(const int flags,const off_t delta){
   if (_textbuffer_memusage_lock) pthread_mutex_unlock(_textbuffer_memusage_lock);
   return u;
 }
-static void textbuffer_memusage_change(struct textbuffer *b,const off_t delta){
-  textbuffer_memusage(((b->flags&TEXTBUFFER_MMAP)!=0)?TEXTBUFFER_MEMUSAGE_MMAP:0,delta);
+static void textbuffer_memusage_change(const uint8_t flags,struct textbuffer *b,const off_t delta){
+  textbuffer_memusage(((flags&TEXTBUFFER_MUNMAP)!=0)?TEXTBUFFER_MEMUSAGE_MMAP:0,delta);
 }
 
 static off_t textbuffer_length(const struct textbuffer *b){
@@ -91,9 +91,9 @@ static off_t _textbuffer_copy_to_or_compare(const bool isCopy,const struct textb
 
 #define textbuffer_copy_to(b,from,to,dst) _textbuffer_copy_to_or_compare(true,b,from,to,dst)
 #define textbuffer_differs_from_string(b,from,to,dst) (0!=_textbuffer_copy_to_or_compare(false,b,from,to,dst))
-static void textbuffer_add_segment(struct textbuffer *b, char *bytes, off_t size){
+static void textbuffer_add_segment(const u_int8_t flags,struct textbuffer *b, const char *bytes, const off_t size_or_zero){
   if (!b || !bytes) return;
-  if (!size) size=strlen(bytes);
+ off_t size=size_or_zero?size_or_zero:strlen(bytes);
   const int n=b->n++;
   if (n>=b->capacity){
     if (n<TEXTBUFFER_DIM_STACK){
@@ -101,11 +101,13 @@ static void textbuffer_add_segment(struct textbuffer *b, char *bytes, off_t size
       b->capacity=TEXTBUFFER_DIM_STACK;
       b->segment=b->_onstack_segment;
       b->segment_e=b->_onstack_segment_e;
+      b->segment_flags=b->_onstack_segment_flags;
     }else{
       const int c=b->capacity=n?(n<<2):16;
 #define C(f,t) void* new_##f=cg_calloc(MALLOC_textbuffer, 1,c*sizeof(t));memcpy(new_##f,b->f,n*sizeof(t)); if (b->f!=b->_onstack_##f) cg_free(MALLOC_textbuffer,b->f); b->f=new_##f;
       C(segment,void*);
       C(segment_e,off_t);
+            C(segment_flags,off_t);
 #undef C
     }
   }
@@ -113,45 +115,46 @@ static void textbuffer_add_segment(struct textbuffer *b, char *bytes, off_t size
   if (b->max_length && length+size>b->max_length) size=b->max_length-length;
   if (size>0){
     b->segment_e[n]=length+size;
-    b->segment[n]=bytes;
+    b->segment[n]=(char*)bytes;
+    b->segment_flags[n]=flags;
   }
 }
-#define textbuffer_add_segment_const(b,txt) textbuffer_add_segment(b,txt,sizeof(txt)-1)
+#define textbuffer_add_segment_const(b,txt) textbuffer_add_segment(TEXTBUFFER_NODESTROY,b,txt,sizeof(txt)-1)
 #define malloc_or_mmap(is_mmap,size) (is_mmap?cg_mmap(MALLOC_textbuffer,size,0):cg_malloc(MALLOC_textbuffer,size))
 
 #define free_or_munmap(is_mmap,b,size) if (is_mmap) cg_munmap(MALLOC_textbuffer,b,size); else cg_free(MALLOC_textbuffer,b);
-static char *textbuffer_malloc(struct textbuffer *b, off_t size){
-  char *buf=malloc_or_mmap(b->flags&TEXTBUFFER_MMAP,size);
+static char *textbuffer_malloc(const int flags,struct textbuffer *b, off_t size){
+  char *buf=malloc_or_mmap(flags&TEXTBUFFER_MUNMAP,size);
   if (buf){
-    textbuffer_add_segment(b,buf,size);
-    textbuffer_memusage_change(b,size);
+    textbuffer_add_segment(flags,b,buf,size);
+    textbuffer_memusage_change(flags,b,size);
   }
   return buf;
 }
 
 
-static off_t textbuffer_read(struct textbuffer *b,const int fd){
+static off_t textbuffer_read(const uint8_t flags,struct textbuffer *b,const int fd){
   const int blocksize=b->read_bufsize?b->read_bufsize:1024*1024;
   off_t count=0;
   while(true){
-    char *buf=malloc_or_mmap(b->flags&TEXTBUFFER_MMAP,blocksize);
+    char *buf=malloc_or_mmap(flags&TEXTBUFFER_MUNMAP,blocksize);
     assert(buf!=NULL);
     const ssize_t n=read(fd,buf,blocksize);
-    if (n<=0){ free_or_munmap(b->flags&TEXTBUFFER_MMAP,buf,blocksize); break;}
+    if (n<=0){ free_or_munmap(flags&TEXTBUFFER_MUNMAP,buf,blocksize); break;}
     count+=n;
     if (n!=blocksize){
-      char *buf2=malloc_or_mmap(b->flags&TEXTBUFFER_MMAP,n);
+      char *buf2=malloc_or_mmap(flags&TEXTBUFFER_MUNMAP,n);
       memcpy(buf2,buf,n);
-      free_or_munmap(b->flags&TEXTBUFFER_MMAP,buf,blocksize);
+      free_or_munmap(flags&TEXTBUFFER_MUNMAP,buf,blocksize);
       buf=buf2;
     }
-    textbuffer_add_segment(b,buf,n);
-    textbuffer_memusage_change(b,n);
+    textbuffer_add_segment(flags,b,buf,n);
+    textbuffer_memusage_change(flags,b,n);
   }
   close(fd);
   return count;
 }
-static int textbuffer_from_exec_output(struct textbuffer *b,char *cmd[],char *env[], const char *path_stderr){
+static int textbuffer_from_exec_output(const uint8_t flags,struct textbuffer *b,char *cmd[],char *env[], const char *path_stderr){
   if (!b || !cmd || !cmd[0]) return -1;
   int pipefd[2];
   const int fd=pipe(pipefd);
@@ -161,7 +164,7 @@ static int textbuffer_from_exec_output(struct textbuffer *b,char *cmd[],char *en
   if (pid<0){ log_errno("fork() returned %d",pid); return EIO;}
   if (pid){
     close(pipefd[1]);
-    textbuffer_read(b,pipefd[0]);
+    textbuffer_read(flags,b,pipefd[0]);
     return cg_waitpid_logtofile_return_exitcode(pid,path_stderr);
   }else{
     close(pipefd[0]);
@@ -172,25 +175,29 @@ static int textbuffer_from_exec_output(struct textbuffer *b,char *cmd[],char *en
 }
 static void textbuffer_reset(struct textbuffer *b){
   if (!b) return;
-  assert(!(b->flags&TEXTBUFFER_NEVER_DESTROY));
+
   char **ss=b->segment;
   off_t *ee=b->segment_e;
-  bool is_mmap=0!=(b->flags&TEXTBUFFER_MMAP);
+  u_int8_t *flags=b->segment_flags;
   RLOOP(i,b->n){
     if (ss && ss[i]){
       const off_t size=ee[i]-(i?ee[i-1]:0);
-      free_or_munmap(is_mmap,ss[i],size);
+      u_int8_t f=b->segment_flags[i];
+      if (0==(f&TEXTBUFFER_NODESTROY)){
+        free_or_munmap(f&TEXTBUFFER_MUNMAP,ss[i],size);
+      }
+
       ss[i]=NULL;
-      textbuffer_memusage_change(b,-size);
+      textbuffer_memusage_change(f,b,-size);
     }
   }
   b->capacity=0;
   b->n=0;
 }
-static char *textbuffer_first_segment_with_min_capacity(struct textbuffer *b, off_t min_size){
+static char *textbuffer_first_segment_with_min_capacity(const int flags,struct textbuffer *b, off_t min_size){
   assert(b!=NULL);
   if (b->n>0 && b->segment_e[0]<min_size) textbuffer_reset(b);
-  if (!b->n) textbuffer_malloc(b,min_size);
+  if (!b->n) textbuffer_malloc(flags,b,min_size);
   return b->segment[0];
 }
 static void textbuffer_destroy(struct textbuffer *b){
@@ -199,6 +206,7 @@ static void textbuffer_destroy(struct textbuffer *b){
 #define C(f) if (b->f!=b->_onstack_##f) cg_free(MALLOC_textbuffer,b->f);
     C(segment);
     C(segment_e);
+        C(segment_flags);
 #undef C
     memset(b,0,sizeof(struct textbuffer));
   }
@@ -241,8 +249,8 @@ static void test_ps_pid(const int pid){
   //char *cmd[]={"/usr/bin/ls","/",NULL};
   struct textbuffer b={0};
   textbuffer_reset(&b);
-  textbuffer_from_exec_output(&b,cmd,NULL,NULL);
-  fprintf(stderr," Read %jd bytes \n",(intmax_t)textbuffer_length(&b));
+  textbuffer_from_exec_output(0,&b,cmd,NULL,NULL);
+  fprintf(stderr," Read %lld bytes \n",(LLD)textbuffer_length(&b));
   textbuffer_write_fd(&b,STDOUT_FILENO);
   fprintf(stderr,"EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE  \n");
   textbuffer_destroy(&b);
@@ -273,9 +281,9 @@ static void test_exec(void){
   RLOOP(i,10){
     textbuffer_reset(&b);
     b.read_bufsize=5;
-    textbuffer_from_exec_output(&b,cmd,NULL,path_stderr);
+    textbuffer_from_exec_output(0,&b,cmd,NULL,path_stderr);
   }
-  fprintf(stderr," Read %jd bytes \n",(intmax_t)textbuffer_length(&b));
+  fprintf(stderr," Read %lld bytes \n",(LLD)textbuffer_length(&b));
   //  test_write_bytes_block(-1,&b);
   test_write_bytes_block(STDOUT_FILENO,&b);
   fprintf(stderr,"EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE  \n");
@@ -286,12 +294,12 @@ int main(int argc,char *argv[]){
     struct textbuffer b={0};
     FOR(i,0,10){
     char *buf=malloc_untracked(10);
-    textbuffer_add_segment(&b,buf,10);
+    textbuffer_add_segment(0,&b,buf,10);
     }
     textbuffer_destroy(&b);
     return 0;
   */
-  switch(0){
+  switch(4){
   case 0: test_exec();break;
   case 1: test_ps_pid(getpid());break;
   case 2:{
@@ -301,8 +309,15 @@ int main(int argc,char *argv[]){
   } break;
   case 3:{
     struct textbuffer b={0};
-    textbuffer_add_segment(&b,argv[1],strlen(argv[1]));
+    textbuffer_add_segment(0,&b,strdup(argv[1]),strlen(argv[1]));
     textbuffer_write_file(&b,"/home/cgille/tmp/t.txt",0644);
+    textbuffer_destroy(&b);
+  } break;
+  case 4:{
+    struct textbuffer b={0};
+    textbuffer_add_segment(TEXTBUFFER_NODESTROY,&b,argv[1],strlen(argv[1]));
+    textbuffer_write_file(&b,"/home/cgille/tmp/t.txt",0644);
+    textbuffer_destroy(&b);
   } break;
   }
   //log_list_filedescriptors(STDERR_FILENO);

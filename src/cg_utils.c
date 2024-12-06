@@ -150,6 +150,10 @@ static int _cg_munmap(const int id,const void *ptr,size_t length){
 //////////////
 /// String ///
 //////////////
+
+static const char *cg_str_lremove(const char *s, const char *pfx,const int  pfx_l){
+  return s+(strncmp(s,pfx,pfx_l)?0:pfx_l);
+}
 static int cg_empty_dot_dotdot(const char *s){
   return !s || !*s || (*s=='.' && (!s[1] || (s[1]=='.' && !s[2])));
 }
@@ -249,11 +253,11 @@ static int cg_last_slash(const char *path){
 
 #define OPT_STR_REPLACE_DRYRUN (1<<0)
 #define OPT_STR_REPLACE_ASSERT (1<<1)
-static int cg_str_replace(int opt,char *haystack,  int h_l, const char *needle,  int n_l, const char *replacement,  int r_l){
+static int cg_str_replace(const int opt,char *haystack, const int h_l_or_zero, const char *needle,  const int n_l_or_zero, const char *replacement,  const int r_l_or_zero){
   assert(haystack!=NULL);assert(needle!=NULL);assert(replacement!=NULL);
-  if (!h_l) h_l=strlen(haystack);
-  if (!r_l) r_l=strlen(replacement);
-  if (!n_l) n_l=strlen(needle);
+  int h_l=h_l_or_zero?h_l_or_zero:strlen(haystack);
+  const int r_l=r_l_or_zero?r_l_or_zero:strlen(replacement);
+  const int n_l=n_l_or_zero?n_l_or_zero:strlen(needle);
   const bool ends_null=haystack[h_l]==0;
   //fprintf(stderr,"lllllllllllllllllll h_l=%d  n_l=%d   r_l=%d  \n",h_l,n_l,r_l);
   assert(n_l>0);
@@ -285,7 +289,8 @@ static int cg_str_replace(int opt,char *haystack,  int h_l, const char *needle, 
 
 
 #define OPT_CG_STRSPLIT_WITH_EMPTY_TOKENS (1<<8)
-static int cg_strsplit(const int opt_and_sep, const char *s, const int s_l, const char *tokens[], int *tokens_l){
+#define OPT_CG_STRSPLIT_NO_HEAP (1<<9)
+static int cg_strsplit(int opt_and_sep, const char *s, const int s_l, const char *tokens[], int *tokens_l){
   bool prev_sep=true;
   int count=0;
   const char *tok=NULL;
@@ -295,10 +300,11 @@ static int cg_strsplit(const int opt_and_sep, const char *s, const int s_l, cons
       const bool issep=isend || s[i]==(opt_and_sep&0xff);
       if (prev_sep &&  ( (opt_and_sep&OPT_CG_STRSPLIT_WITH_EMPTY_TOKENS) || !issep)){
         tok=s+i;
-        if (tokens) tokens[count]=tok;
       }
       if (tok && issep){
-        if (tokens_l) tokens_l[count]=s+i-tokens[count];
+        const int l=s+i-tok;
+        if (tokens_l) tokens_l[count]=l;
+        if (tokens)   tokens[count]=((opt_and_sep&OPT_CG_STRSPLIT_NO_HEAP))?tok:strndup(tok,l);
         count++;
         tok=NULL;
       }
@@ -446,6 +452,17 @@ static void cg_print_path_for_fd(int fd){
 /// Arithmetics ///
 ///////////////////
 
+static int cg_array_length(const char **xx){
+  if (!xx) return 0;
+  int i=0;
+  while(xx[i]!=NULL) i++;
+  return i;
+}
+
+///////////////////
+/// Arithmetics ///
+///////////////////
+
 static int isPowerOfTwo(unsigned int n){
   return n && (n&(n-1))==0;
 }
@@ -492,7 +509,7 @@ static void cg_log_file_mode(mode_t m){
 ///////////////////
 /// file stat   ///
 ///////////////////
-
+static const struct stat EMPTY_STAT={0};
 #define cg_log_file_stat(...) _cg_log_file_stat(__func__,__VA_ARGS__)
 static void _cg_log_file_stat(const char *fn,const char * name,const struct stat *s){
   char *color=ANSI_FG_BLUE;
@@ -619,7 +636,7 @@ static int cg_symlink_overwrite_atomically(const char *src,const char *lnk){
   log_entered_function("src: %s lnk: %s \n",src,lnk);
   if (!cg_is_symlink(lnk)) unlink(lnk);
   char lnk_tmp[MAX_PATHLEN+1];
-  strcpy(lnk_tmp,lnk);strcat(lnk_tmp,".tmp");
+  strcpy(stpcpy(lnk_tmp,lnk),".tmp");
 
   unlink(lnk_tmp);
   symlink(src,lnk_tmp);
@@ -704,6 +721,7 @@ static double cg_timespec_diff(const struct timespec a, const struct timespec b)
   double v=(a.tv_sec-b.tv_sec)+(a.tv_nsec-b.tv_nsec)/(1000*1000*1000.0);
   return v;
 }
+#define CG_STAT_B_BEFORE_A(a,b) cg_timespec_b_before_a(a.ST_MTIMESPEC,b.ST_MTIMESPEC)
 static bool cg_timespec_b_before_a(struct timespec a, struct timespec b) {  //Returns true if b happened first.
   return a.tv_sec==b.tv_sec ? a.tv_nsec>b.tv_nsec : a.tv_sec>b.tv_sec;
 }
@@ -808,7 +826,7 @@ static int cg_waitpid_logtofile_return_exitcode(int pid,const char *err){
     if (f) fclose(f);
     res=WIFEXITED(status)?WEXITSTATUS(status):INT_MIN;
   }
-  log_exited_function("err: %s res: %d\n",err,res);
+  //log_exited_function("err: %s res: %d\n",err,res);
   return res;
 }
 static void cg_exec(char * const env[],char *cmd[],const int fd_out,const int fd_err){
@@ -863,11 +881,8 @@ static int differs_filecontent_from_string(const int opt,const char* path, const
 #if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
 int main(int argc, char *argv[]){
 
-  printf("cg_file_is_newer_than %d \n",cg_file_is_newer_than(argv[1],argv[2]));
 
-  return 0;
-
-  switch(9){
+  switch(4){
   case 0:{
     bool *ccpath=cg_validchars(VALIDCHARS_PATH);
     fprintf(stderr,"ccpath\n");
@@ -897,14 +912,15 @@ int main(int argc, char *argv[]){
   case 4:{
     int tokens_l[99];
     const char *tokens[99];
-    const int n=cg_strsplit(':',argv[1],0,NULL,NULL);
-    cg_strsplit(':',argv[1],0,tokens,tokens_l);
+    assert(argc==2);
+    const int n=cg_strsplit(':'|OPT_CG_STRSPLIT_NO_HEAP,   argv[1],0,NULL,NULL);
+    cg_strsplit(':'|OPT_CG_STRSPLIT_NO_HEAP,argv[1],0,tokens,tokens_l);
     printf("n=%d\n",n);
     char token[999];
     FOR(i,0,n){
-      strncpy(token,tokens[i],tokens_l[i]);
+      *stpncpy(token,tokens[i],tokens_l[i])=0;
       token[tokens_l[i]]=0;
-      printf("%d/%d %s  %d\n",i,n,token,tokens_l[i]);
+      printf("%d/%d %s  %d  %ld\n",i,n,token,tokens_l[i], strlen(tokens[i]));
     }
   }
   case 5:{
@@ -938,12 +954,27 @@ int main(int argc, char *argv[]){
   case 10:{
     char m[10]; memset(m,9,10000);
   } break;
-  case 11:        cg_symlink_overwrite_atomically(argv[1],argv[2]);
-
+  case 11:
+    cg_symlink_overwrite_atomically(argv[1],argv[2]);
+    break;
+  case 12:
+    //    static int cg_find_suffix(const int opt,const char *s, const int s_l,const char **xx,const int *xx_l){
+    {
+      assert(argc==2);
+      const char *ss[]={".jpeg",".png",".gif",NULL};
+      int x=cg_find_suffix(FIND_SUFFIX_IC,argv[1],strlen(argv[1]),ss,NULL);
+      printf("x=%d\n",x);
+    }
     break;
 
-  }
+  case 13:
+    assert(argc==3);
+    printf("cg_file_is_newer_than %d \n",cg_file_is_newer_than(argv[1],argv[2]));
 
+
+
+    break;
+  }
 }
 
 #endif

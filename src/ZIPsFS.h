@@ -81,9 +81,9 @@ enum enum_autogen_state{AUTOGEN_UNINITILIZED,AUTOGEN_SUCCESS,AUTOGEN_FAIL};
 ///////////////////////////////////////
 #define A1() C(HT_MALLOC_UNDEFINED)C(HT_MALLOC_warnings)C(HT_MALLOC_ht_count_getattr)C(HT_MALLOC_file_ext)C(HT_MALLOC_inodes)C(HT_MALLOC_transient_cache)C(HT_MALLOC_without_dups)C(HT_MALLOC_LEN)
 #define A2() C(MALLOC_UNDEFINED) C(MALLOC_TESTING) C(MALLOC_HT)C(MALLOC_HT_KEY)C(MALLOC_MSTORE) C(MALLOC_HT_IMBALANCE)C(MALLOC_HT_KEY_IMBALANCE)C(MALLOC_MSTORE_IMBALANCE)\
-       C(MALLOC_autogen_replacements) C(MALLOC_autogen_cmd) C(MALLOC_autogen_textbuffer)\
+       C(MALLOC_autogen_replacements) C(MALLOC_autogen_argv) C(MALLOC_autogen_textbuffer)\
        C(MALLOC_textbuffer) C(MALLOC_fhdata)\
-C(MALLOC_directory_field)C(MALLOC_dircachejobs)\
+       C(MALLOC_directory_field)C(MALLOC_dircachejobs)\
        C(MALLOC_memcache) C(MALLOC_memcache_textbuffer) C(MALLOC_transient_cache)\
        C(MALLOC_textbuffer_segments)C(MALLOC_textbuffer_segments_mmap)C(MALLOC_LEN)
 #define A3() C(WARN_INIT)C(WARN_MISC)C(WARN_STR)C(WARN_INODE)C(WARN_THREAD)C(WARN_MALLOC)C(WARN_ROOT)C(WARN_OPEN)C(WARN_READ)C(WARN_ZIP_FREAD)C(WARN_READDIR)C(WARN_SEEK)C(WARN_ZIP)C(WARN_GETATTR)C(WARN_STAT)C(WARN_FHDATA)C(WARN_DIRCACHE)C(WARN_MEMCACHE)C(WARN_FORMAT)C(WARN_DEBUG)C(WARN_CHARS)C(WARN_RETRY)C(WARN_AUTOGEN)C(WARN_LEN)
@@ -91,7 +91,7 @@ C(MALLOC_directory_field)C(MALLOC_dircachejobs)\
 #define A5() C(MEMCACHE_NEVER)C(MEMCACHE_SEEK)C(MEMCACHE_RULE)C(MEMCACHE_COMPRESSED)C(MEMCACHE_ALWAYS)
 #define A6(x) C(STATQUEUE_NIL)C(STATQUEUE_QUEUED)C(STATQUEUE_FAILED)C(STATQUEUE_OK)
 #define A7(x) C(PTHREAD_DIRCACHE)C(PTHREAD_MEMCACHE)C(PTHREAD_STATQUEUE)C(PTHREAD_RESPONDING)C(PTHREAD_MISC0)C(PTHREAD_LEN)
-#define A8(x) C(mutex_nil)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_fhdata)C(mutex_autogen)C(mutex_autogen_init)C(mutex_dircachejobs)C(mutex_log_count)C(mutex_crc)C(mutex_inode)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_statqueue)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_len) //* mutex_roots must be last */
+#define A8(x) C(mutex_nil)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_fhdata)C(mutex_autogen_init)C(mutex_dircachejobs)C(mutex_log_count)C(mutex_crc)C(mutex_inode)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_statqueue)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_len) //* mutex_roots must be last */
 #define C(a) a,
 enum mstoreid{A1()};
 enum mallocid{A2()};
@@ -129,6 +129,29 @@ struct counter_rootdata{
   clock_t wait;
 };
 typedef struct counter_rootdata counter_rootdata_t;
+
+#if WITH_AUTOGEN
+struct autogen_files{
+  const char *virtual_out, *out;
+  char tmpout[MAX_PATHLEN+1];
+  char log[MAX_PATHLEN+1];
+  char fail[MAX_PATHLEN+1];
+  char rinfiles[AUTOGEN_MAX_INFILES+1][MAX_PATHLEN+1];
+  struct autogen_config *config;
+  struct textbuffer *buf;
+};
+
+struct autogen_for_vgenfile{
+  struct autogen_config *config;
+  char vinfiles[AUTOGEN_MAX_INFILES+1][MAX_PATHLEN+1];
+  int vinfiles_n;
+};
+#define FOREACH_AUTOGEN(i,s)  struct autogen_config *s; for(int i=0;(s=config_autogen_rules()[i]);i++)
+
+#define autogen_filecontent_append_nodestroy(ff,s,s_l)  _autogen_filecontent_append(TEXTBUFFER_NODESTROY,ff,s,s_l)
+#define autogen_filecontent_append(ff,s,s_l)  _autogen_filecontent_append(0,ff,s,s_l)
+#define autogen_filecontent_append_munmap(ff,s,s_l)  _autogen_filecontent_append(TEXTBUFFER_MUNMAP,ff,s,s_l)
+#endif // WITH_AUTOGEN
 // ---
 #if ! WITH_DIRCACHE
 #undef WITH_DIRCACHE_OPTIMIZE_NAMES
@@ -258,7 +281,7 @@ struct fhdata{
   struct zippath zpath;
   volatile time_t accesstime;
   volatile int flags;
-  IF1(WITH_AUTOGEN,enum enum_autogen_state autogen_state);
+  IF1(WITH_AUTOGEN,enum enum_autogen_state autogen_state; int autogen_error);
   uint8_t already_logged;
   volatile int64_t offset,n_read;
   volatile atomic_int is_xmp_read; /* Increases when entering xmp_read. If greater 0 then the instance must not be destroyed. */
@@ -332,9 +355,3 @@ struct memcache{
   int id;
 };
 #endif // WITH_MEMCACHE
-
-#if WITH_AUTOGEN
-struct path_stat{
-  char path[MAX_PATHLEN]; struct stat stat;
-};
-#endif //WITH_AUTOGEN

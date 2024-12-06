@@ -105,10 +105,10 @@ Log files are found in \f[B]\[ti]/.ZIPsFS/\f[R].
 .PP
 An HTML file with status information is dynamically generated in the
 generated folder \f[B]ZIPsFS\f[R] in the virtual ZIPsFS file system.
-.SS Autogeneration of files
+.SS Plugins - Auto-generation of virtual files
 .PP
-ZIPsFS can display virtual files which do not exist, but which can be
-generated automatically when opened.
+ZIPsFS can display virtual files which do not exist, but which are
+generated automatically when used.
 This feature must be activated in ZIPsFS_configuration.h.
 The first file root is used to store the generated files.
 .PP
@@ -120,10 +120,13 @@ the real file size is not yet known.
 .PP
 The currently included examples demonstrate this feature and can serve
 as a templated for own settings.
+.PP
 For this purpose copy image or pdf files into one of the roots and visit
 the respective folder in the virtual file system.
 Prepend this folder with \f[B]ZIPsFS/a/\f[R] and you will see the
 generated files:
+.PP
+mnt= mkdir $mnt/test cp file.png $mnt/test/ ls $mnt/ZIPsFS/a/test/
 .IP \[bu] 2
 For image files (jpg, jpeg, png and gif), smaller versions of 25 % and
 50 %
@@ -133,6 +136,8 @@ For image files extracted text usign Optical Character Recognition
 For PDF files extracted ASCII text.
 .IP \[bu] 2
 For ZIP files the report of the consistency check including check-sums
+.IP \[bu] 2
+Decompression of .tsv.bz2 and .tsv.gz files
 .IP \[bu] 2
 Mass spectrometry files: They are converted to Mascot and msML.
 For wiff files, the contained ASCII text is extracted.
@@ -144,6 +149,11 @@ file is already there.
 Furthermore, the file size will be correct.
 When the upstream file changes or the last-modified attribute is
 updated, derived files will be generated again.
+.SS Problems/Limitations
+.PP
+The system does not know the file size of not-yet-generated files.
+It will report an upper limit of the expected file size.
+.SS ZIPsFS_autogen_queue.sh
 .PP
 Some exotic Wine dependent Windows executables do not work well within
 ZIPsFS.
@@ -155,10 +165,6 @@ One file is converted at a time per script instance.
 Several instances of this shell script can run in parallel.
 In the settings, the symbol \f[B]PLACEHOLDER_EXTERNAL_QUEUE\f[R] is
 given instead of an executable program.
-.PP
-Problems/Limitations: The system does not know the file size of
-not-yet-generated files.
-It will report an upper limit of the expected file size.
 .SS ZIPsFS Options
 .PP
 -h

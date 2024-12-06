@@ -99,8 +99,9 @@ static void rootdata_counter_inc(const char *path, enum enum_counter_rootdata f,
 #define sTDc(x) TDc("%s")
 #define dTD() TD("%'d")
 #define uTD() TD("%'u")
-#define lTD() TD("%'ld")
-#define zTD() TD("%'zu")
+#define lTD() TD("%'lld")
+#define luTD() TD("%'llu")
+
 static char **_fuse_argv;
 static int _fuse_argc;
 static void log_path(const char *f,const char *path){
@@ -251,7 +252,7 @@ static int log_print_roots(int n){
       PRINTINFO(TD("Local")TD(""));
     }
     uint64_t u=0; IF1(WITH_DIRCACHE,LOCK(mutex_dircache, u=mstore_usage(&r->dircache_mstore)/1024));
-    PRINTINFO(dTD()zTD()dTD()"</TR>\n",freeGB,u,IF1(WITH_STAT_SEPARATE_THREADS,debug_statqueue_count_entries(r))IF0(WITH_STAT_SEPARATE_THREADS,0));
+    PRINTINFO(dTD()luTD()dTD()"</TR>\n",freeGB,(LLU)u,IF1(WITH_STAT_SEPARATE_THREADS,debug_statqueue_count_entries(r))IF0(WITH_STAT_SEPARATE_THREADS,0));
   }
   PRINTINFO("</TABLE>\n");
   return n;
@@ -438,7 +439,7 @@ static int print_maps(int n){
           const int64_t size=end-begin;
           total+=size;
           if (!strchr(mapname,'/') && size>=SIZE_CUTOFF_MMAP_vs_MALLOC){
-            PRINTINFO("<TR>"TD("%08lx")sTDl()""lTD()"<TD>",(unsigned long)(begin>>12),mapname,size>>10);
+            PRINTINFO("<TR>"TD("%08llx")sTDl()""lTD()"<TD>",(LLU)(begin>>12),mapname,(LLD)(size>>10));
             n=repeat_chars_info(n,'-',MIN_int(L,(int)(3*log(size))));
             PRINTINFO("</TD></TR>\n");
           }
@@ -471,8 +472,8 @@ static int log_print_memory(int n){
     const uint64_t current=textbuffer_memusage_get(0)+textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP);
     const uint64_t peak=textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_PEAK)+textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_PEAK);
     PRINTINFO("<H2>Cache ZIP entries in RAM (WITH_MEMCACHE)</H2>\n<UL>");
-    PRINTINFO("<LI>Current anonymous MMAP usage %'ld MB of %'ld MB</LI>\n",current>>20,_memcache_maxbytes>>20); //n=print_bar(n,current/(float)_memcache_maxbytes);
-    PRINTINFO("<LI>Peak MMAP usage    %'ld MB of %'ld MB</LI>\n",peak>>20,_memcache_maxbytes>>20);   //n=print_bar(n,peak/(float)_memcache_maxbytes);
+    PRINTINFO("<LI>Current anonymous MMAP usage %'lld MB of %'lld MB</LI>\n",(LLD)(current>>20),(LLD)(_memcache_maxbytes>>20)); //n=print_bar(n,current/(float)_memcache_maxbytes);
+    PRINTINFO("<LI>Peak MMAP usage    %'lld MB of %'lld MB</LI>\n",(LLD)(peak>>20),(LLD)(_memcache_maxbytes>>20));   //n=print_bar(n,peak/(float)_memcache_maxbytes);
     PRINTINFO("</UL>\n");
   }
 #endif //WITH_MEMCACHE
@@ -483,7 +484,7 @@ static int log_print_memory(int n){
 #if ! defined(HAS_RLIMIT) || HAS_RLIMIT
     struct rlimit rl={0}; getrlimit(RLIMIT_AS,&rl);
     const bool rlset=rl.rlim_cur!=-1;
-    if(rlset) PRINTINFO(" / rlimit %ld MB<BR>\n",(long)(rl.rlim_cur>>20));
+    if(rlset) PRINTINFO(" / rlimit %lld MB<BR>\n",(LLD)(rl.rlim_cur>>20));
 #endif
   }
 
@@ -494,7 +495,7 @@ static int log_print_memory(int n){
 #else
 #define MALLINFO() mallinfo()
 #endif
-  PRINTINFO("uordblks: %'jd bytes (Total allocated heap space)\n",(intmax_t)MALLINFO().uordblks);
+  PRINTINFO("uordblks: %'lld bytes (Total allocated heap space)\n",(LLD)MALLINFO().uordblks);
 #endif // IS_LINUX
   if (has_proc_fs()){
     int val; n=print_proc_status(n,"VmRSS:|VmHWM:|VmSize:|VmPeak:",&val);
@@ -506,8 +507,8 @@ static int log_print_memory(int n){
     if (rl.rlim_cur!=-1) PRINTINFO("Rlim soft: %'lx MB   hard: %'lx MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
   }
 #endif
-  PRINTINFO("Number of calls to mmap: %'jd to munmap: %'jd<BR>\n",(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_FREE));
-  PRINTINFO("Number of calls to Malloc: %'jd to Free: %'jd<BR>\n",(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(intmax_t)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_FREE));
+  PRINTINFO("Number of calls to mmap: %'lld to munmap: %'lld<BR>\n",(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_FREE));
+  PRINTINFO("Number of calls to Malloc: %'lld to Free: %'lld<BR>\n",(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_FREE));
   return n;
 }
 
@@ -515,7 +516,7 @@ static int log_print_memory(int n){
 
 static int log_print_statistics_of_read(int n){
   PRINTINFO("Count events related to cache:\n<TABLE border=\"1\"><THEAD><TR>"TH("Event")TH("Count")"</TR></THEAD>\n");
-#define TABLEROW(a) { const char *us=strchr(#a,'_'); PRINTINFO("<TR>"sTDlb()lTD()"</TR>\n",us?us+1:"Null",a);}
+#define TABLEROW(a) { const char *us=strchr(#a,'_'); PRINTINFO("<TR>"sTDlb()lTD()"</TR>\n",us?us+1:"Null",(LLD)a);}
   TABLEROW(_count_readzip_memcache);
   TABLEROW(_count_readzip_memcache_because_seek_bwd);
   TABLEROW(_count_stat_from_cache);
@@ -549,7 +550,7 @@ static int print_fhdata(int n,const char *title){
 #if WITH_MEMCACHE
       struct memcache *m=d->memcache;
       if (m && m->txtbuf){
-        PRINTINFO(TD("%05x")zTD()zTD()lTD(),m->id,_kilo(m->memcache_already),_kilo(m->memcache_l),m->memcache_took_mseconds);
+        PRINTINFO(TD("%05x")luTD()luTD()lTD(),m->id,(LLU)_kilo(m->memcache_already),(LLU)_kilo(m->memcache_l),(LLD)m->memcache_took_mseconds);
       }else{
         PRINTINFO(TD("")TD("")TD("")TD(""));
       }
@@ -630,7 +631,7 @@ static const char *zip_fdopen_err(int err){
 static void fhdata_log_cache(const struct fhdata *d){
   if (!d){ log_char('\n');return;}
   struct memcache *m=d->memcache;
-  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %jd/%jd   hasc: %s\n",d,D_VP(d),yes_no(m && m->txtbuf),!m?0:MEMCACHE_STATUS_S[m->memcache_status],(intmax_t)(!m?-1:m->memcache_already),(intmax_t)(!m?-1:m->memcache_l),yes_no(m && m->memcache_l>0));
+  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %lld/%lld   hasc: %s\n",d,D_VP(d),yes_no(m && m->txtbuf),!m?0:MEMCACHE_STATUS_S[m->memcache_status],(LLD)(!m?-1:m->memcache_already),(LLD)(!m?-1:m->memcache_l),yes_no(m && m->memcache_l>0));
 }
 #endif //WITH_MEMCACHE
 static void _log_zpath(const char *fn,const int line,const char *msg, struct zippath *zpath){

@@ -84,8 +84,8 @@ static void special_file_content(struct textbuffer *b,const enum enum_special_fi
   }
   switch(i){
   case SFILE_CTRL:   case SFILE_DEBUG_CTRL:
-    textbuffer_add_segment_const(b,SHEBANG"readonly MNT=");textbuffer_add_segment(b,_mnt,0);
-    textbuffer_add_segment_const(b,"\nreadonly VERS=");textbuffer_add_segment(b,BASH_SECRET,strlen(BASH_SECRET));
+    textbuffer_add_segment_const(b,SHEBANG"readonly MNT=");textbuffer_add_segment(0,b,_mnt,0);
+    textbuffer_add_segment_const(b,"\nreadonly VERS=");textbuffer_add_segment(0,b,BASH_SECRET,strlen(BASH_SECRET));
     textbuffer_add_segment_const(b,SFILE_CTRL_TEXT_BEGIN);
     if (i==SFILE_DEBUG_CTRL) textbuffer_add_segment_const(b,SFILE_CTRL_TEXT_OPTIONAL);
     textbuffer_add_segment_const(b,"\n"SFILE_CTRL_TEXT_END);
@@ -102,7 +102,7 @@ This is necessary for  software that uses wrong flags for opening files for read
 <H2>Auto-generated files</H2>\n\
 This feature can be activated with the switch <b>WITH_AUTOGEN</b> in ZIPsFS_configuration.h. It is currently <B>" IF0(WITH_AUTOGEN,"de")"activated</B>.\n\
 Derived files are displayed in the file tree <B>");
-    textbuffer_add_segment(b,_mnt,0);
+    textbuffer_add_segment(0,b,_mnt,0);
     #if WITH_AUTOGEN
     textbuffer_add_segment_const(b, DIR_ZIPsFS"/"DIRNAME_AUTOGEN"</B>.\n\
 With <b>WITH_AUTOGEN_DIR_HIDDEN</b> set to <b>1</b>, the folder <B>"DIRNAME_AUTOGEN"</B> is not listed in its parent.\n\
@@ -113,7 +113,7 @@ They are generated when used for the first time.\n\
 On subsequent usage, the files are available without delay.\n\
 The generated files are disposed when they are not used within a customizeable number of days.\n\
 This can be prevented by updating the last-access-time with the scripts<B>");
-    textbuffer_add_segment(b,_mnt,0);
+    textbuffer_add_segment(0,b,_mnt,0);
     textbuffer_add_segment_const(b,DIR_ZIPsFS FN_SET_ATIME".*</B><BR><BR><BR>\n\
 When a file is accessed that is not yet generated, potentially two  problems may occur:<OL>\n\
 <LI>Since the file will be generated upon first usage, the reading software receives the file data with delay. It may be possible, that the respective software may not  cope with this delay. At system level, the call to  open() returns immediately, while, the first call to read() may take long.</LI>\n\
@@ -174,7 +174,7 @@ read-host -Prompt 'Press Enter'\n");
 #endif //WITH_AUTOGEN
   case SFILE_INFO:
 
-    textbuffer_add_segment(b,_info,_info_l);
+    textbuffer_add_segment(0,b,_info,_info_l);
   default:;
   }
 }
@@ -266,7 +266,6 @@ static int read_special_file(const int i, char *buf, const off_t size, const off
   const char *content;
   lock(mutex_special_file);
   struct textbuffer b={0};
-  b.flags|=TEXTBUFFER_NEVER_DESTROY;
   special_file_content(&b,i);
   const int l=textbuffer_length(&b);
   const int n=MIN_int(size,l-(int)offset);

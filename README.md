@@ -85,9 +85,9 @@ An HTML file with status information is dynamically generated in  the generated 
 
 
 
-## Autogeneration of files
+## Plugins - Auto-generation of virtual files
 
-ZIPsFS can display virtual files which do not  exist, but which can be generated automatically when opened.
+ZIPsFS can display virtual files which do not  exist, but which are generated automatically when used.
 This feature must be activated in ZIPsFS_configuration.h.  The first file root is used to store the generated files.
 
 A typical use-case are file conversions.
@@ -95,26 +95,39 @@ Auto-generated files are displayed in the virtual file tree in **ZIPsFS/a/**.
 If they have not be used before, an estimated file size is reported as the real file size is not yet known.
 
 The currently included examples demonstrate this feature and can serve as a templated for own settings.
+
 For this purpose copy image or pdf files into one of the roots and visit the respective folder in the virtual file system.
 Prepend this folder with **ZIPsFS/a/** and you will see the generated files:
+
+   mnt=<path of mountpoint>
+   mkdir $mnt/test
+   cp file.png $mnt/test/
+   ls $mnt/ZIPsFS/a/test/
 
 - For image files (jpg, jpeg, png and gif), smaller versions of 25 % and 50 %
 - For image files extracted text usign Optical Character Recognition
 - For PDF files extracted ASCII text.
 - For ZIP files the report of the consistency check including check-sums
+- Decompression of  .tsv.bz2 and .tsv.gz files
 - Mass spectrometry files: They are converted to Mascot and msML.  For wiff files, the contained ASCII text is extracted.
 
 When opening these files  for the first time there will be some delay. This is because the files need to be generated.
 When accessed a second time, the data comes without delay, because the file is already there. Furthermore, the file size will be correct.
 When the upstream file changes or the last-modified attribute is updated, derived files will be generated again.
 
+### Problems/Limitations
+
+The system does not know the file size of not-yet-generated files.
+It will report an upper limit of the expected   file size.
+
+
+### ZIPsFS_autogen_queue.sh
+
 Some exotic Wine dependent  Windows executables do not work well within ZIPsFS.
 As a work around, we developed the shell script **ZIPsFS_autogen_queue.sh**.
 With each pass of an  infinity loop  one task is taken from a queue and processed. One file is converted at a time per script instance.
 Several instances of this shell script can run in parallel. In the settings, the symbol **PLACEHOLDER_EXTERNAL_QUEUE** is given instead of an executable program.
 
-Problems/Limitations: The system does not know the file size of not-yet-generated files.
-It will report an upper limit of the expected   file size.
 
 ZIPsFS Options
 --------------

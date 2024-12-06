@@ -1,6 +1,6 @@
 #ifndef _cg_utils_dot_h
 #define _cg_utils_dot_h
-
+#include <string.h>
 #include <stdbool.h>
 ////////////////////////////////////////
 #ifdef __USE_GNU

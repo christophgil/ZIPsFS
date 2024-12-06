@@ -274,7 +274,7 @@ static long config_search_file_which_roots(const char *virtualpath,const int vir
 #if WITH_AUTOGEN
   if (path_starts_with_autogen){
     const int vp_l=virtualpath_l-(ENDSWITH(virtualpath,virtualpath_l,".log")?4:0);
-    if (aimpl_ends_like_a_generated_file(virtualpath,vp_l)) return 1;
+    if (autogen_for_vgenfile(NULL,virtualpath,vp_l)) return 1;
   }
 #endif //WITH_AUTOGEN
   return 0xFFFFffffFFFFffffL;

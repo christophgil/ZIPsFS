@@ -238,7 +238,7 @@ static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align){
     m->bytes_per_block=capacity*2;
   _mstore_block_init_with_capacity((m->data[ib]=block),capacity);
   if (!(dst=_mstore_block_try_allocate(m,block,bytes,align))){
-    log_error("dst is NULL.  block: %p bytes: %ld align: %d  ib: %d",block, bytes,align, ib);
+    log_error("dst is NULL.  block: %p bytes: %lld align: %d  ib: %d",block, (LLD)bytes,align, ib);
     cg_print_stacktrace(0);
   }
   m->_count_malloc++;

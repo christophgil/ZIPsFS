@@ -964,12 +964,10 @@ static bool debug_trigger_vp(const char *vp,const int vp_l){
 #else
 #define debug_trigger_vp(...) false
 #endif
-// #define debug_trigger_vp(...) false
-static bool find_realpath_any_root(int opt,struct zippath *zpath,const struct rootdata *onlyThisRoot){
-  //  if (onlyThisRoot && rootindex(onlyThisRoot)==0) DIE("00000000000000000000000000 %s ",rootpath(onlyThisRoot));
+static bool find_realpath_any_root(const int opt,struct zippath *zpath,const struct rootdata *onlyThisRoot){
   const char *vp=VP();
   const int vp_l=VP_L();
-  //if (debug_trigger_vp(vp,vp_l)) opt|=FINDRP_VERBOSE;
+  //log_entered_function("find_realpath_any_root %s ",VP());
   const bool path_starts_autogen=false IF1(WITH_AUTOGEN, || (0!=(zpath->flags&ZP_STARTS_AUTOGEN)));
   const long which_roots=config_search_file_which_roots(vp,vp_l,path_starts_autogen); /* Bit mask */
   if (opt&FINDRP_VERBOSE) log_entered_function("%s root: %s",vp,report_rootpath(onlyThisRoot));
@@ -1058,7 +1056,7 @@ static bool fhdata_can_destroy(struct fhdata *d){
 }
 
 static void fhdata_zip_close(struct fhdata *d){
-  // log_entered_function("%s",D_VP(d));
+  //log_entered_function("%s",D_VP(d));
   zip_file_t *z=d->zip_file;
   d->zip_file=NULL;
   if (z) zip_file_error_clear(z);
@@ -1180,8 +1178,6 @@ static struct fhdata* fhdata_get(const char *path,const uint64_t fh){
 /* ******************************************************************************** */
 #define FILLDIR_AUTOGEN (1<<0)
 #define FILLDIR_IS_DIR_ZIPsFS (1<<1)
-
-
 static void filldir(const int opt,fuse_fill_dir_t filler,void *buf, const char *name, const struct stat *stbuf,struct ht *no_dups){
 #if WITH_AUTOGEN
   if (_realpath_autogen && 0!=(opt&FILLDIR_AUTOGEN)){
@@ -1190,7 +1186,7 @@ static void filldir(const int opt,fuse_fill_dir_t filler,void *buf, const char *
   }
 #endif
   IF1(WITH_AUTOGEN_DIR_HIDDEN, if (0==(opt&FILLDIR_IS_DIR_ZIPsFS) || strcmp(DIRNAME_AUTOGEN,name)))
-  if (ht_only_once(no_dups,name,0))    filler(buf,name,stbuf,0 COMMA_FILL_DIR_PLUS);
+    if (ht_only_once(no_dups,name,0))    filler(buf,name,stbuf,0 COMMA_FILL_DIR_PLUS);
 }
 /* ******************************************************************************** */
 /* *** Inode *** */
@@ -1338,22 +1334,18 @@ static int realpath_mk_parent(char *realpath,const char *path){
   const int path_l=strlen(path), slash=cg_last_slash(path);
   if (config_not_overwrite(path,path_l)){
     bool found;FIND_REALPATH(path);
-    const bool exist=found && zpath->root>0;
-    if (exist){ warning(WARN_OPEN|WARN_FLAG_ONCE,RP(),"It is only allowed to overwrite files in root 0");return EACCES;}
+    if (found && zpath->root>0){ warning(WARN_OPEN|WARN_FLAG_ONCE,RP(),"It is only allowed to overwrite files in root 0");return EACCES;}
   }
+  assert(_root_writable->rootpath_l+path_l<MAX_PATHLEN);
   if (slash>0){
     char parent[MAX_PATHLEN+1];
     cg_strncpy(parent,path,slash);
     bool found;FIND_REALPATH(parent);
-    if (found){
-      strcpy(realpath,RP());
-      strncat(strcpy(realpath,_root_writable->rootpath),parent,MAX_PATHLEN);
-      cg_recursive_mkdir(realpath);
-    }
     if (!found) return ENOENT;
+    strcpy(stpcpy(realpath,_root_writable->rootpath),parent);
+    cg_recursive_mkdir(realpath);
   }
-  strncat(strcpy(realpath,_root_writable->rootpath),path,MAX_PATHLEN);
-  //log_exited_function("success realpath=%s \n",realpath);
+  strcpy(stpcpy(realpath,_root_writable->rootpath),path);
   return 0;
 }
 /********************************************************************************/
@@ -1381,8 +1373,7 @@ int xmp_getattr(const char *path, struct stat *stbuf){ return _xmp_getattr(path,
 static int PROFILED(_xmp_getattr)(const char *path, struct stat *stbuf){
   const int path_l=strlen(path);
   int err=0;
-  bool debug=false; //IF1(WITH_AUTOGEN,if(!strncmp(path,DIR_AUTOGEN,sizeof(DIR_AUTOGEN)-1)) debug=true);
-  //  if (ENDSWITH(path,path_l,"-journal") ||ENDSWITH(path,path_l,"-wal"))
+  bool debug=false;
   if (trigger_files(false,path,path_l)){
     stat_init(stbuf,0,NULL);
     return 0;
@@ -1415,7 +1406,7 @@ static int PROFILED(_xmp_getattr)(const char *path, struct stat *stbuf){
     *stbuf=zpath->stat_vp;
   }else{
     IF1(WITH_AUTOGEN,long size;
-        if(_realpath_autogen && (size=autogen_size_of_not_existing_file(path,path_l))>=0){
+        if(_realpath_autogen && (size=autogen_estimate_filesize(path,path_l))>=0){
           stat_init(stbuf,size,&zpath->stat_rp);
           stbuf->st_ino=inode_from_virtualpath(path,path_l);
           return 0;
@@ -1429,7 +1420,6 @@ static int PROFILED(_xmp_getattr)(const char *path, struct stat *stbuf){
   return -err;
 }
 static int PROFILED(xmp_access)(const char *path, int mask){
-  log_entered_function("%s",path);
   const int path_l=strlen(path);
   if (whatSpecialFile(path,path_l)>=SFILE_BEGIN_VIRTUAL) return 0;
   NEW_ZIPPATH(path);
@@ -1443,7 +1433,6 @@ static int PROFILED(xmp_access)(const char *path, int mask){
   return minus_val_or_errno(res);
 }
 static int xmp_readlink(const char *path, char *buf, size_t size){
-  log_entered_function("%s",path);
   bool found;FIND_REALPATH(path);
   if (!found) return -ENOENT;
   const int n=readlink(RP(),buf,size-1);
@@ -1462,8 +1451,8 @@ static int xmp_rmdir(const char *path){
 #define FHANDLE_FLAG_CHANGED_TO_WRITE (1<<(LOG2_FD_ZIP_MIN-1))
 static int PROFILED(xmp_open)(const char *path, struct fuse_file_info *fi){
   ASSERT(fi!=NULL);
-  //  log_entered_function("path=%s",path);
-  // if (tdf_or_tdf_bin(path)) log_entered_function("%s",path);
+  //log_entered_function("path=%s",path);
+  //if (tdf_or_tdf_bin(path))log_entered_function("%s",path);
   const int path_l=strlen(path);
   {
     const int i=whatSpecialFile(path,path_l);
@@ -1480,7 +1469,7 @@ static int PROFILED(xmp_open)(const char *path, struct fuse_file_info *fi){
   /*if (config_keep_file_attribute_in_cache(path)) fi->keep_cache=1;*/
   static uint64_t next_fh=FD_ZIP_MIN;
   bool found;FIND_REALPATH(path);
-    IF1(WITH_AUTOGEN, if (found && _realpath_autogen && (zpath->flags&ZP_STARTS_AUTOGEN) && autogen_remove_if_not_up_to_date(zpath)) found=false);
+  IF1(WITH_AUTOGEN, if (found && _realpath_autogen && (zpath->flags&ZP_STARTS_AUTOGEN) && autogen_remove_if_not_up_to_date(zpath)) found=false);
   if (found){
     if (ZPATH_IS_ZIP()){
       while(zpath){
@@ -1495,8 +1484,7 @@ static int PROFILED(xmp_open)(const char *path, struct fuse_file_info *fi){
     }
   }else{
 #if WITH_AUTOGEN
-    //    if (_realpath_autogen && (zpath->flags&ZP_STARTS_AUTOGEN) && autogen_size_of_not_existing_file(path,path_l)>=0){
-    if (_realpath_autogen && (zpath->flags&ZP_STARTS_AUTOGEN) && aimpl_struct_for_genfile(path,path_l)>=0){
+    if (_realpath_autogen && (zpath->flags&ZP_STARTS_AUTOGEN) && autogen_for_vgenfile(NULL,path,path_l)>=0){
       LOCK(mutex_fhdata,
            autogen_zpath_init(zpath,path);
            struct fhdata *d=fhdata_create(handle=next_fh++,zpath);
@@ -1537,6 +1525,8 @@ int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset
 #else
 int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi){ return _xmp_readdir(path,buf,filler,offset,fi);}
 #endif
+
+
 static int PROFILED(_xmp_readdir)(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi){
   (void)offset;(void)fi;
   struct ht no_dups_={0}, *xmp_readdir_no_dups=&no_dups_;
@@ -1545,7 +1535,6 @@ static int PROFILED(_xmp_readdir)(const char *path, void *buf, fuse_fill_dir_t f
   const int opt0=strcmp(path,DIR_ZIPsFS)?0:FILLDIR_IS_DIR_ZIPsFS;
   int opt=opt0;
   bool ok=false;
-  // DIR_ZIPsFS
   const int path_l=strlen(path);
   FOR(cut_autogen,0, (zpath->flags&ZP_STARTS_AUTOGEN)?2:1){
     foreach_root(ir,r){
@@ -1767,7 +1756,7 @@ static int PROFILED(xmp_read)(const char *path, char *buf, const size_t size, co
     if ((d->flags&FHDATA_FLAGS_IS_AUTOGEN) && _realpath_autogen && !d->fh_real){
       if (!d->autogen_state){autogen_run(d);m=d->memcache;}
       if (d->autogen_state!=AUTOGEN_SUCCESS){
-        res=-EPIPE;
+        res=-d->autogen_error;
       }else if (m && m->txtbuf){ /* Auto-generated data into cg_textbuffer */
         res=memcache_read(buf,d,offset,offset+size);
       }else{ /* Auto-generated data into plain file */
@@ -1799,7 +1788,7 @@ static int PROFILED(xmp_read)(const char *path, char *buf, const size_t size, co
     if (!fd){
       res=-errno;
     }else if (offset-lseek(fd,0,SEEK_CUR) && offset!=lseek(fd,offset,SEEK_SET)){
-      log_msg(ANSI_FG_RED""ANSI_YELLOW"SEEK_REG_FILE:"ANSI_RESET" offset: %'jd ",(intmax_t)offset),log_msg("Failed %s fd=%llu\n",path,(LLU)fd);
+      log_msg(ANSI_FG_RED""ANSI_YELLOW"SEEK_REG_FILE:"ANSI_RESET" offset: %'lld ",(LLD)offset),log_msg("Failed %s fd=%llu\n",path,(LLU)fd);
       res=-1;
     }else if ((res=pread(fd,buf,size,offset))==-1){
       res=-errno;
@@ -1810,7 +1799,7 @@ static int PROFILED(xmp_read)(const char *path, char *buf, const size_t size, co
 }
 static int PROFILED(xmp_release)(const char *path, struct fuse_file_info *fi){
   ASSERT(fi!=NULL);
-  // if (tdf_or_tdf_bin(path)) log_entered_function("%s",path);
+  //if (tdf_or_tdf_bin(path))log_entered_function("%s",path);
   const int path_l=strlen(path);
   const uint64_t fh=fi->fh;
   const int special=whatSpecialFile(path,path_l);
@@ -1833,7 +1822,11 @@ static int xmp_flush(const char *path,  struct fuse_file_info *fi){
 }
 static void exit_ZIPsFS(void){
   log_entered_function("");
+
+  /* osxfuse and netbsd needs two parameters:  void fuse_unmount(const char *mountpoint, struct fuse_chan *ch); */
+#if FUSE_MAJOR_V>=3
   if (fuse_get_context() && fuse_get_context()->fuse) fuse_unmount(fuse_get_context()->fuse);
+#endif
   fflush(stderr);
 }
 int main(int argc,char *argv[]){
@@ -1902,7 +1895,7 @@ int main(int argc,char *argv[]){
     case 'q': _logIsSilent=true; break;
     case 'k': _killOnError=true; break;
     case 'S': _pretendSlow=true; break;
-    case 's': strncpy(_mkSymlinkAfterStart,optarg,MAX_PATHLEN); break;
+    case 's': cg_strncpy(_mkSymlinkAfterStart,optarg,MAX_PATHLEN); break;
     case 'h': usage();
       return 0;
     case 'l':
@@ -1944,7 +1937,7 @@ int main(int argc,char *argv[]){
   if (!colon){ log_error("No single colon found in parameter list\n"); suggest_help(); return 1;}
   if (colon==argc-1){ log_error("Expect mount point after single colon\n"); suggest_help(); return 1;}
   ASSERT(MAX_PATHLEN<=PATH_MAX);
-  _mnt_l=cg_pathlen_ignore_trailing_slash(strncpy(_mnt,argv[argc-1],MAX_PATHLEN));
+  _mnt_l=cg_pathlen_ignore_trailing_slash(cg_strncpy(_mnt,argv[argc-1],MAX_PATHLEN));
   _mnt[_mnt_l]=0;
 
   {
@@ -1969,7 +1962,7 @@ int main(int argc,char *argv[]){
       snprintf(dirOldLogs,MAX_PATHLEN,"%s%s",dot_ZIPsFS,"/oldLogs");
       cg_recursive_mkdir(dirOldLogs);
       char fn[MAX_PATHLEN];
-      FILE *f=fopen(strcat(strcpy(fn,dot_ZIPsFS),"/pid.txt"),"w");
+      FILE *f=fopen(strcpy(stpcpy(fn,dot_ZIPsFS),"/pid.txt"),"w");
       if (f){
         fprintf(f,"%d\n",getpid());
         fclose(f);
@@ -2028,7 +2021,8 @@ int main(int argc,char *argv[]){
 
     if (!*p){ log_warn("Command line argument # %d is empty. %s\n",optind,i==optind?"Consequently, there will be no writable root.":"");  continue;}
     struct rootdata *r=_root+_root_n++;
-    if (i==optind) (_root_writable=r)->features|=ROOT_WRITABLE;
+    if (i==optind)  (_root_writable=r)->features|=ROOT_WRITABLE;
+
     {
       int slashes=-1;while(p[++slashes]=='/');
       if (slashes>1){ r->features|=ROOT_REMOTE; p+=(slashes-1); }
@@ -2129,7 +2123,8 @@ int main(int argc,char *argv[]){
 #if WITH_AUTOGEN
   char realpath_autogen_heap[MAX_PATHLEN+1];
   if (_root_writable){
-    strcat(strcpy(_realpath_autogen=realpath_autogen_heap,_root_writable->rootpath),DIR_AUTOGEN);
+    //    strcat(strcpy(_realpath_autogen=realpath_autogen_heap,_root_writable->rootpath),DIR_AUTOGEN);
+    stpcpy(stpcpy(_realpath_autogen=realpath_autogen_heap,_root_writable->rootpath),DIR_AUTOGEN);
     aimpl_init();
   }
 #endif
@@ -2161,4 +2156,5 @@ int main(int argc,char *argv[]){
 //
 // opendir  locked config_autogen_size_of_not_existing_file crc32
 // limits strtoOAk SIZE_POINTER   MALLOC_MSTORE_IMBALANCE
-// unlink
+// unlink   cg_waitpid_logtofile_return_exitcode
+// strncpy mempcpy strcat _thisPrg

@@ -2,22 +2,25 @@
 /// COMPILE_MAIN=ZIPsFS         ///
 /// Dynamically generated files ///
 ///////////////////////////////////
+
+/* These text patterns contained in the command line arguments will be replaced */
+
 #define PLACEHOLDER_INFILE "PLACEHOLDER_INFILEx"
-#define PLACEHOLDER_TMP_OUTFILE "PLACEHOLDER_TMP_OUTFILEx"
-#define PLACEHOLDER_OUTFILE "PLACEHOLDER_OUTFILEx" // e.g /slow3/Users/x/ZIPsFS/modifications/ZIPsFS/a/6600-tof3/Data/50-0086/20240229S_TOF3_FA_060_50-0086_OxoScan-MSBatch04_P08_H01.wiff.scan
-#define PLACEHOLDER_MNT "PLACEHOLDER_MNTx"
-#define PLACEHOLDER_TMP_DIR "PLACEHOLDER_TMP_DIRx"
-#define PLACEHOLDER_INFILE_NAME "PLACEHOLDER_INFILE_NAMEx"
+#define PLACEHOLDER_TMP_OUTFILE "PLACEHOLDER_TMP_OUTFILEx"           /* The real path of the generated file. It has a temporary name with will be renamed to PLACEHOLDER_OUTFILE on success. */
+#define PLACEHOLDER_OUTFILE "PLACEHOLDER_OUTFILEx"                   /* The real path of the generated file */
+#define PLACEHOLDER_MNT "PLACEHOLDER_MNTx"                           /* The mount point where ZIPsFS is mounted */
+#define PLACEHOLDER_TMP_DIR "PLACEHOLDER_TMP_DIRx"                   /* The real path of a directory to be used for temporary file */
+#define PLACEHOLDER_INFILE_NAME "PLACEHOLDER_INFILE_NAMEx"           /* The last path component of the input file */
 #define PLACEHOLDER_TMP_OUTFILE_NAME "PLACEHOLDER_TMP_OUTFILE_NAMEx"
 #define PLACEHOLDER_OUTFILE_NAME "PLACEHOLDER_OUTFILE_NAME"
 #define PLACEHOLDER_INFILE_PARENT "PLACEHOLDER_INFILE_PARENTx"
 #define PLACEHOLDER_OUTFILE_PARENT "PLACEHOLDER_OUTFILE_PARENTx"
-#define PLACEHOLDER_EXTERNAL_QUEUE  "PLACEHOLDER_EXTERNAL_QUEUEx"
-#define PLACEHOLDER_INFILE_EXT "PLACEHOLDER_INFILE_EXTx"
+#define PLACEHOLDER_EXTERNAL_QUEUE  "PLACEHOLDER_EXTERNAL_QUEUEx"   /* See ZIPsFS_autogen_queue.sh */
+
 static char *_realpath_autogen;
 const char *PLACEHOLDERS[]={
   PLACEHOLDER_EXTERNAL_QUEUE,
-  PLACEHOLDER_INFILE,PLACEHOLDER_TMP_OUTFILE,PLACEHOLDER_MNT,PLACEHOLDER_INFILE_NAME,PLACEHOLDER_TMP_OUTFILE_NAME,PLACEHOLDER_OUTFILE,PLACEHOLDER_OUTFILE_NAME,PLACEHOLDER_INFILE_PARENT,PLACEHOLDER_OUTFILE_PARENT,PLACEHOLDER_TMP_DIR,PLACEHOLDER_INFILE_EXT,NULL};
+  PLACEHOLDER_INFILE,PLACEHOLDER_TMP_OUTFILE,PLACEHOLDER_MNT,PLACEHOLDER_INFILE_NAME,PLACEHOLDER_TMP_OUTFILE_NAME,PLACEHOLDER_OUTFILE,PLACEHOLDER_OUTFILE_NAME,PLACEHOLDER_INFILE_PARENT,PLACEHOLDER_OUTFILE_PARENT,PLACEHOLDER_TMP_DIR,NULL};
 
 
 
@@ -31,91 +34,85 @@ static struct ht_entry *ht_entry_fsize(const char *vp,const int vp_l,const bool 
 
 static void autogen_run(struct fhdata *d){
   const char *rp=D_RP(d);
-  log_entered_function("%s D_RP=%s\n",D_VP(d),rp);
-  if (d->autogen_state) return;
-  cg_recursive_mk_parentdir(rp);
-  char tmp[MAX_PATHLEN+1];
-  char err[MAX_PATHLEN+1];
-  //snprintf(tmp,MAX_PATHLEN,"%s.%d.%ld.autogen.tmp",rp,getpid(),currentTimeMillis());
+  assert(strlen(rp)<MAX_PATHLEN-10);
+  struct autogen_files ff={0};
+  ff.virtual_out=D_VP(d);
+  cg_recursive_mk_parentdir(ff.out=rp);
+  stpcpy(stpcpy(ff.log,rp),".log");
+  stpcpy(stpcpy(ff.fail,rp),".fail.txt");
   {
     const int slash=cg_last_slash(rp);
-    memcpy(tmp,rp,slash+1);
-    snprintf(tmp+slash+1,MAX_PATHLEN,"autogen_tmp_%d_%lld_%s",getpid(),(LLU)currentTimeMillis(),rp+slash+1);
+    snprintf(stpncpy(ff.tmpout,rp,slash+1),MAX_PATHLEN,"autogen_tmp_%d_%llu_%s",getpid(),(LLU)currentTimeMillis(),rp+slash+1);
   }
-  snprintf(err,MAX_PATHLEN,"%s.log",rp);
-  struct textbuffer *buf=NULL;
   struct stat st={0};
-  const int run_err=aimpl_run(D_VP(d),rp,tmp,err,&buf);
-  if (run_err){
+  autogen_rinfiles_for_vgenfile(&ff,NULL,ff.virtual_out,true);
+  if ((d->autogen_error=-aimpl_run(&ff))){
     d->autogen_state=AUTOGEN_FAIL;
-  }else if (buf){
-    LOCK_N(mutex_fhdata, struct memcache *m=memcache_new(d);m->txtbuf=buf;m->memcache_already=m->memcache_l=textbuffer_length(buf));
+  }else if (ff.buf){ /* Result is in RAM */
+    LOCK_N(mutex_fhdata, struct memcache *m=memcache_new(d);m->txtbuf=ff.buf;m->memcache_already=m->memcache_l=textbuffer_length(ff.buf));
     d->memcache=m;
-    LOCK(mutex_fhdata,ht_entry_fsize(D_VP(d),D_VP_L(d),true)->value=(char*)textbuffer_length(buf));
-    d->autogen_state=run_err?AUTOGEN_FAIL:AUTOGEN_SUCCESS;
-  }else{
-    if (stat(tmp,&st)){
-      warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,tmp," size=%ld ino: %ld",st.st_size, st.st_ino);
+    LOCK(mutex_fhdata,ht_entry_fsize(D_VP(d),D_VP_L(d),true)->value=(char*)textbuffer_length(ff.buf));
+    d->autogen_state=AUTOGEN_SUCCESS;
+  }else{ /*Result is in file tmpout  */
+    if (stat(ff.tmpout,&st)){ /* Fail */
+      warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,ff.tmpout," size=%ld ino: %ld",st.st_size, st.st_ino);
       d->autogen_state=AUTOGEN_FAIL;
-    }else{
-      log_verbose("Size: %lld ino: %llu, Going to rename(%s,%s)\n",(LLD)st.st_size,(LLU)st.st_ino,tmp,rp);
-      if (strcmp(tmp,rp)){
-        if (rename(tmp,rp)) log_errno("rename(%s,%s)",tmp,rp);
+    }else{ /* tmpout success */
+      log_verbose("Size: %lld ino: %llu, Going to rename(%s,%s)\n",(LLD)st.st_size,(LLU)st.st_ino,ff.tmpout,rp);
+      if (strcmp(ff.tmpout,rp)){
+        if (rename(ff.tmpout,rp)) log_errno("rename(%s,%s)",ff.tmpout,rp); /* Atomic file creation */
         else if (chmod(rp,0777)) log_errno("chmod(%s,0777)",rp);
       }
       zpath_stat(false,&d->zpath,_root_writable);
       d->autogen_state=AUTOGEN_SUCCESS;
     }
   }
-  //log_exited_function("%s AUTOGEN_SUCCESS=%d  m=%p m->txtbuf=%p",path,d->autogen_state==AUTOGEN_SUCCESS,m,m?m->txtbuf:NULL);
 }
 static bool virtualpath_startswith_autogen(const char *vp, const int vp_l){
   return (vp_l==DIR_AUTOGEN_L || vp_l>DIR_AUTOGEN_L && vp[DIR_AUTOGEN_L]=='/') && !memcmp(vp,DIR_AUTOGEN,DIR_AUTOGEN_L);
 }
 
-static int autogen_find_sourcefiles(struct path_stat path_stat[AUTOGEN_MAX_DEPENDENCIES],const char *vp,const int vp_l/*, const bool filter_remember_size*/){ /*NOT_TO_HEADER*/
-  if (!virtualpath_startswith_autogen(vp,vp_l)) return 0;
-  //  log_entered_function("%s",vp); cg_print_stacktrace(0);
-  char autogen_from[MAX_PATHLEN+1];
-  struct zippath zp,*zpath=&zp;
-  int i=0;
-  for(;i<AUTOGEN_MAX_DEPENDENCIES;i++){
-    static struct stat empty_stat={0};
-    path_stat[i].path[0]=0;
-    path_stat[i].stat=empty_stat;
-
-    if (!aimpl_for_genfile_iterate_sourcefiles(i,vp,vp_l,autogen_from)) break;
-    if (*autogen_from && (zpath_init(zpath,autogen_from),find_realpath_any_root(0,zpath,NULL))){
-      strcpy(path_stat[i].path, RP());
-      path_stat[i].stat=zp.stat_rp;
+static int autogen_rinfiles_for_vgenfile(struct autogen_files *ff,struct stat stats[AUTOGEN_MAX_INFILES],const char *vgenerated,const bool only_first){
+  const int vgenerated_l=strlen(vgenerated);
+  int n=0;
+  if (virtualpath_startswith_autogen(vgenerated,vgenerated_l)){
+    struct autogen_for_vgenfile a={0};
+    struct autogen_config *s=autogen_for_vgenfile(&a,vgenerated,vgenerated_l);
+    if (ff) ff->config=s;
+    n=s?a.vinfiles_n:0;
+    FOR(i,0,n){
+      NEW_ZIPPATH(a.vinfiles[i]);
+      if (find_realpath_any_root(0,zpath,NULL)){
+        if (ff) strcpy(ff->rinfiles[i],RP());
+        if (stats) stats[i]=zpath->stat_rp;
+        //if (stats) log_debug_now(GREEN_SUCCESS"%s %s ino: %ld size: %ld ",vgenerated,a.vinfiles[i], stats[i].st_ino, stats[i].st_size);
+      }else{
+        //log_debug_now(RED_FAIL"%s %s ",vgenerated,a.vinfiles[i]);
+        if (stats) stats[i]=EMPTY_STAT;
+      }
+      if (only_first) break;
     }
   }
-  return i;
+  return n;
 }
-static bool autogen_not_up_to_date(struct timespec st_mtim,const char *vp,const int vp_l){
-  struct path_stat path_stat[AUTOGEN_MAX_DEPENDENCIES];
-  RLOOP(i,autogen_find_sourcefiles(path_stat,vp,vp_l)){
-    log_debug_now("vp: %s tv_sec: %ld  %ld    path_stat[%d]: %s  before: %d",vp, st_mtim.tv_sec,  path_stat[i].stat.ST_MTIMESPEC.tv_sec,   i,path_stat[i].path,     cg_timespec_b_before_a(st_mtim, path_stat[i].stat.ST_MTIMESPEC));
 
-    if (!cg_timespec_b_before_a(st_mtim, path_stat[i].stat.ST_MTIMESPEC)) return true;
+static bool autogen_not_up_to_date(struct timespec st_mtim,const char *vp,const int vp_l){
+  struct stat stats[AUTOGEN_MAX_INFILES];
+  RLOOP(i,autogen_rinfiles_for_vgenfile(NULL,stats,vp,false)){
+    if (!cg_timespec_b_before_a(st_mtim, stats[i].ST_MTIMESPEC)) return true;
   }
   return false;
 }
-
-
-static long autogen_size_of_not_existing_file(const char *vp,const int vp_l){
+static long autogen_estimate_filesize(const char *vp,const int vp_l){
   LOCK_N(mutex_fhdata,struct ht_entry *ht=ht_entry_fsize(vp,vp_l,false);long size=(long)ht->value);
   if (!size){
     bool cache_size=false;
-    size=config_autogen_estimated_filesize(vp,vp_l,&cache_size);
-    if (cache_size){
-      LOCK_N(mutex_fhdata,ht->value=(void*)size);
-    }
+    size=config_autogen_estimate_filesize(vp,vp_l,&cache_size);
+    if (cache_size){ LOCK_N(mutex_fhdata,ht->value=(void*)size);}
   }
   return size;
 }
 static bool autogen_remove_if_not_up_to_date(struct zippath *zpath){
-  log_entered_function("rp: %s vp:%s   %d ",RP(),VP(),cg_is_regular_file(RP()));
   if (autogen_not_up_to_date(zpath->stat_rp.ST_MTIMESPEC,VP(),VP_L()) || config_autogen_file_is_invalid(VP(),VP_L(),&zpath->stat_rp, _root_writable->rootpath)){
     unlink(RP());
     return true;
@@ -138,12 +135,12 @@ static void autogen_filldir(fuse_fill_dir_t filler,void *buf, const char *name, 
   const int name_l=strlen(name);
   if (ENDSWITH(name,name_l,EXT_CONTENT)) return;
   char generated[MAX_PATHLEN+1];
-  for(int i=0; aimpl_virtualpath_from_virtualpath(i,generated,name,name_l);i++){
-    //    if (ht_only_once(no_dups,generated,0)) filler(buf,generated,stbuf,0,fill_dir_plus);
-    filldir(0,filler,buf,generated,stbuf,no_dups);
+  //bool debug=strstr(name,"img_2");
+  FOREACH_AUTOGEN(is,s){
+    aimpl_vgenerated_from_vinfile(generated,name,name_l,s);
+    if (*generated) filldir(0,filler,buf,generated,stbuf,no_dups);
   }
   return;
-  //ht_only_once(no_dups,name,0);  filler(buf,name,stbuf,0,fill_dir_plus);
 }
 
 static bool autogen_cleanup_running;
@@ -151,7 +148,6 @@ static void *_autogen_cleanup_runnable(void *arg){
   if(_realpath_autogen){
     static int count;
     autogen_cleanup_running=true;
-    assert(strstr(_realpath_autogen,DIR_AUTOGEN));
     if (strstr(_realpath_autogen,DIR_AUTOGEN)) aimpl_cleanup(_realpath_autogen);
     autogen_cleanup_running=false;
   }
@@ -164,11 +160,11 @@ static void autogen_cleanup(void){
     pthread_create(&thread_cleanup,NULL,&_autogen_cleanup_runnable,NULL);
   }
 }
-static char *autogen_apply_replacements_for_cmd(const char *orig,const char *infile,const int infile_ext_len,const char *outfile, const char *tmpoutfile){
+static char *autogen_apply_replacements_for_argv(char *dst_or_NULL,const char *orig,const struct autogen_files *ff){
+  const char *rin=ff->rinfiles[0];
   char *c=(char*)orig;
-  for(int len=strlen(c),capacity=len,i=0;;i++){
+  for(int len=strlen(c),capacity=len,i=0;PLACEHOLDERS[i];i++){
     const char *placeholder=PLACEHOLDERS[i];
-    if (!placeholder) break;
     if (!strstr(c,placeholder)) continue;
     const int placeholder_l=strlen(placeholder);
     int replace_l=0;
@@ -178,39 +174,37 @@ static char *autogen_apply_replacements_for_cmd(const char *orig,const char *inf
       LOCK(mutex_autogen_init, if (!*q) strcpy(strcpy(q,_self_exe)+cg_last_slash(_self_exe)+1,"ZIPsFS_autogen_queue.sh"));
       replace=q;
     }else if (placeholder==PLACEHOLDER_INFILE){
-      replace=infile;
+      replace=rin;
     }else if (placeholder==PLACEHOLDER_OUTFILE){
-      replace=outfile;
+      replace=ff->out;
     }else if (placeholder==PLACEHOLDER_TMP_OUTFILE){
-      replace=tmpoutfile;
+      replace=ff->tmpout;
     }else if (placeholder==PLACEHOLDER_MNT){
       replace=_mnt;
     }else if (placeholder==PLACEHOLDER_TMP_DIR){
       static char t[MAX_PATHLEN+1];
       LOCK(mutex_autogen_init,if (!*t) snprintf(t,MAX_PATHLEN,"%s"DIR_AUTOGEN"/.tmp",_root_writable->rootpath);cg_recursive_mkdir(replace=t));
     }else if (placeholder==PLACEHOLDER_INFILE_NAME){
-      replace=infile+cg_last_slash(infile)+1;
+      replace=rin+cg_last_slash(rin)+1;
     }else if (placeholder==PLACEHOLDER_TMP_OUTFILE_NAME){
-      replace=tmpoutfile+cg_last_slash(tmpoutfile)+1;
+      replace=ff->tmpout+cg_last_slash(ff->tmpout)+1;
     }else if (placeholder==PLACEHOLDER_OUTFILE_NAME){
-      replace=outfile+cg_last_slash(outfile)+1;
+      replace=ff->out+cg_last_slash(ff->out)+1;
     }else if (placeholder==PLACEHOLDER_INFILE_PARENT){
-      replace=infile;
-      replace_l=MAX_int(0,cg_last_slash(infile));
+      replace=rin;
+      replace_l=MAX_int(0,cg_last_slash(rin));
     }else if (placeholder==PLACEHOLDER_OUTFILE_PARENT){
-      replace=outfile;
-      replace_l=MAX_int(0,cg_last_slash(outfile));
-    }else if (placeholder==PLACEHOLDER_INFILE_EXT){
-      replace=infile+strlen(infile)-infile_ext_len;;
-    }else assert(false);
+      replace=ff->out;
+      replace_l=MAX_int(0,cg_last_slash(ff->out));
+    }
     if (replace && strlen(c)==placeholder_l){
       c=(char*)replace;
-    }else{
+    }else if (replace){
       const int len2=cg_str_replace(OPT_STR_REPLACE_DRYRUN,c,len,placeholder,placeholder_l,replace,replace_l);
       if (len2>capacity){
         capacity=len2+333;
-        char *c2=strcpy(cg_malloc(MALLOC_autogen_cmd,capacity),c);
-        if (c!=orig) cg_free(MALLOC_autogen_cmd,c);
+        char *c2=strcpy(dst_or_NULL?dst_or_NULL:cg_malloc(MALLOC_autogen_argv,capacity),c);
+        if (c!=orig) cg_free(MALLOC_autogen_argv,c);
         c=c2;
       }
       len=cg_str_replace(0,c,len,placeholder,placeholder_l,replace,replace_l);
@@ -225,37 +219,10 @@ static bool _autogen_is_placeholder(const char *c){
   return false;
 }
 
-static void autogen_apply_replacements(char *cmd[],char *cmd_orig[], const char *infile,const int infile_ext_len, const char *outfile, const char *tmpoutfile){
+
+
+static void autogen_free_argv(char *cmd[],char *cmd_orig[]){
   for(int i=0;cmd_orig[i];i++){
-    cmd[i]=autogen_apply_replacements_for_cmd(cmd_orig[i],infile,infile_ext_len,outfile,tmpoutfile);
+    if (cmd[i]!=cmd_orig[i] && !_autogen_is_placeholder(cmd_orig[i])) cg_free_null(MALLOC_autogen_argv,cmd[i]);
   }
 }
-
-
-static void autogen_free_cmd(char *cmd[],char *cmd_orig[]){
-  for(int i=0;cmd_orig[i];i++){
-    if (cmd[i]!=cmd_orig[i] && !_autogen_is_placeholder(cmd_orig[i])) cg_free_null(MALLOC_autogen_cmd,cmd[i]);
-  }
-}
-
-
-
-
-/* static bool autogen_queue_is_running(void){ */
-/*     const pid_t pid=fork(); */
-/*     static char *cmd[]={"pgrep","-f",ZIPSFS_QUEUE,(char *)0}; */
-/*     if (pid<0){ log_errno("fork() waitpid 1 returned %d",pid);  return false;} */
-/*     if (!pid) cg_exec(NULL,cmd,-1,-1); */
-/*     return 0==cg_waitpid_logtofile_return_exitcode_f(pid,stderr); */
-/* } */
-
-
-/* static bool autogen_queue_and_wait(const char *infile, const char *outfile, const char *err){ */
-/*     const pid_t pid=fork(); */
-/*     static char *cmd[]={ZIPSFS_QUEUE,infile,outfile,(char *)0}; */
-/*     if (pid<0){ log_errno("fork() waitpid 1 returned %d",pid);  return false;} */
-/*     if (!pid) cg_exec(NULL,cmd,-1,-1); */
-/*     return 0==cg_waitpid_logtofile_return_exitcode(pid,err); */
-
-
-/* } */

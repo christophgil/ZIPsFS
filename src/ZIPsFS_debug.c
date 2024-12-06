@@ -21,7 +21,7 @@ static void _fhdataWithMemcachePrint(const char *func,int line,const char *path,
     if (D_VP_HASH(d)==h){
       struct memcache *m=d->memcache;
       if (m && (m->txtbuf||m->memcache_status) && !strcmp(path,D_VP(d))){
-        log_msg("%s:%d fhdataWithMemcachePrint: %d %s  memcache_status: %s memcache_l: %jd\n",func,line,id,path,MEMCACHE_STATUS_S[m->memcache_status],(intmax_t)m->memcache_l);
+        log_msg("%s:%d fhdataWithMemcachePrint: %d %s  memcache_status: %s memcache_l: %lld\n",func,line,id,path,MEMCACHE_STATUS_S[m->memcache_status],(LLD)m->memcache_l);
       }
     }
   }

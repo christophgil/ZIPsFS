@@ -82,12 +82,11 @@ bool memcache_fhdata_to_queue(struct fhdata *d){
   { /* Exceeding max bytes in RAM ? */
     const off_t u=textbuffer_memusage_get(0)+textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP);
     if (u+st_size>_memcache_maxbytes*((d->flags&FHDATA_FLAGS_URGENT)?3:2)){
-      log_warn("_memcache_maxbytes reached: currentMem=%'jd+%'jd  _memcache_maxbytes=%'jd \n",(intmax_t)u,(intmax_t)st_size,(intmax_t)_memcache_maxbytes);
+      log_warn("_memcache_maxbytes reached: currentMem=%'lld+%'lld  _memcache_maxbytes=%'lld \n",(LLD)u,(LLD)st_size,(LLD)_memcache_maxbytes);
       return false;
     }
   }
-  if (st_size>SIZE_CUTOFF_MMAP_vs_MALLOC) m->txtbuf->flags|=TEXTBUFFER_MMAP; /* Small: Malloc Big: Mmap */
-  char *bb=textbuffer_first_segment_with_min_capacity(m->txtbuf,st_size);
+  char *bb=textbuffer_first_segment_with_min_capacity(st_size>SIZE_CUTOFF_MMAP_vs_MALLOC?TEXTBUFFER_MUNMAP:0,m->txtbuf,st_size);
   if (!bb || bb==MAP_FAILED){
     warning(WARN_MALLOC|WARN_FLAG_ONCE,"Cache failed using %s",D_RP(d),(d->flags&FHDATA_FLAGS_HEAP)?"Malloc":"Mmap");
     return false;
@@ -144,7 +143,7 @@ static int memcache_store_try(struct fhdata *d){
       warning(WARN_MEMCACHE|WARN_FLAG_MAYBE_EXIT,rp,"memcache_zip_entry: Failed zip_fopen d=%p",d);
     }else{
       const int64_t start=currentTimeMillis();
-      char *buffer=textbuffer_first_segment_with_min_capacity(m->txtbuf,st_size);
+      char *buffer=textbuffer_first_segment_with_min_capacity(st_size>SIZE_CUTOFF_MMAP_vs_MALLOC?TEXTBUFFER_MUNMAP:0,m->txtbuf,st_size);
       for(zip_int64_t n;st_size>m->memcache_already_current;){
         if (d->flags&FHDATA_FLAGS_DESTROY_LATER){
           LOCK(mutex_fhdata, if (fhdata_can_destroy(d)) d->flags|=FHDATA_FLAGS_INTERRUPTED);
@@ -170,7 +169,7 @@ static int memcache_store_try(struct fhdata *d){
         if (fhdata_check_crc32(d)){
           fhdata_counter_inc(d,ZIP_READ_CACHE_CRC32_SUCCESS);
           LOCK(mutex_fhdata, A();m->memcache_took_mseconds=currentTimeMillis()-start;memcache_set_status(m,memcache_done));
-          log_succes("memcache_done  d= %p %s    in %'ld mseconds   ret: %d\n",d,path,currentTimeMillis()-start, ret);
+          log_succes("memcache_done  d= %p %s    in %'llu mseconds   ret: %d\n",d,path,(LLU)(currentTimeMillis()-start), ret);
           if (verbose) log_exited_function("%s  d->memcache_already_current==st_size  crc32 OK\n",D_RP(d));
         }else{
           LOCK(mutex_fhdata,A();memcache_set_status(m,m->memcache_already_current=0);m->memcache_already=0);

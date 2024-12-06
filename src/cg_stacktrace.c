@@ -43,6 +43,7 @@
 #endif // HAS_ATOS
 ////////////////////
 static char* _thisPrg;
+static struct stat _thisPrgStat;
 static FILE *_stckOut=NULL;
 FILE *stckOut(){ return _stckOut?_stckOut:stderr;}
 
@@ -127,7 +128,7 @@ static bool addr2line_output(FILE *f,char *line,int i){
 static bool addr2line_no_shell(const char *addr,const int iLine){
   if (!HAS_ATOS && !HAS_ADDR2LINE || !this_executable()) return false;
   char addr2line_cmd[512]={0},line[1035]={0};
-  char *aa[9]={0}, *a0;
+  const char *aa[9]={0}, *a0;
   int a=1;
 #define A(x) aa[a++]=x
 #if HAS_ADDR2LINE
@@ -271,7 +272,8 @@ static void my_signal_handler(int sig){
 static void init_sighandler(char* main_argv_0, uint64_t signals,FILE *out){
 
   _stckOut=out;
-  _thisPrg=main_argv_0;
+  stat(_thisPrg=main_argv_0,&_thisPrgStat);
+
 #if 0
   set_signal_handler(my_signal_handler,signals);
 #else
