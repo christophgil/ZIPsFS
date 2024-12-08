@@ -24,13 +24,12 @@ const char *PLACEHOLDERS[]={
 
 
 
-////////////////////////////////////////////////////////////
-/// To be implemented in ZIPsFS_configuration_autogen.c  ///
-////////////////////////////////////////////////////////////
-static struct ht_entry *ht_entry_fsize(const char *vp,const int vp_l,const bool create){
-  struct ht_entry *e=ht_numkey_get_entry(&ht_fsize,inode_from_virtualpath(vp,vp_l),0,create);
-  return e;
-}
+/////////////////////
+/// Size of file  ///
+/////////////////////
+
+//static struct ht_entry *autogen_ht_fsize(const char *vp,const int vp_l){return ht_numkey_get_entry(&ht_fsize,inode_from_virtualpath(vp,vp_l),0,true);}
+#define autogen_ht_fsize(vp,vp_l) ht_numkey_get_entry(&ht_fsize,inode_from_virtualpath(vp,vp_l),0,true)
 
 static void autogen_run(struct fhdata *d){
   const char *rp=D_RP(d);
@@ -51,7 +50,7 @@ static void autogen_run(struct fhdata *d){
   }else if (ff.buf){ /* Result is in RAM */
     LOCK_N(mutex_fhdata, struct memcache *m=memcache_new(d);m->txtbuf=ff.buf;m->memcache_already=m->memcache_l=textbuffer_length(ff.buf));
     d->memcache=m;
-    LOCK(mutex_fhdata,ht_entry_fsize(D_VP(d),D_VP_L(d),true)->value=(char*)textbuffer_length(ff.buf));
+    LOCK(mutex_fhdata,autogen_ht_fsize(D_VP(d),D_VP_L(d))->value=(char*)textbuffer_length(ff.buf));
     d->autogen_state=AUTOGEN_SUCCESS;
   }else{ /*Result is in file tmpout  */
     if (stat(ff.tmpout,&st)){ /* Fail */
@@ -68,13 +67,18 @@ static void autogen_run(struct fhdata *d){
     }
   }
 }
-static bool virtualpath_startswith_autogen(const char *vp, const int vp_l){
+static bool virtualpath_startswith_autogen(const char *vp, const int vp_l_or_zero){
+  if (!vp) return false;
+  const int vp_l=vp_l_or_zero?vp_l_or_zero:strlen(vp);
   return (vp_l==DIR_AUTOGEN_L || vp_l>DIR_AUTOGEN_L && vp[DIR_AUTOGEN_L]=='/') && !memcmp(vp,DIR_AUTOGEN,DIR_AUTOGEN_L);
 }
-
+static const char *vp_without_pfx_autogen(const char *vp,const int vp_l_or_zero){
+  return !vp?NULL:vp IF1(WITH_AUTOGEN, +(virtualpath_startswith_autogen(vp,vp_l_or_zero)?DIR_AUTOGEN_L:0));
+}
 static int autogen_rinfiles_for_vgenfile(struct autogen_files *ff,struct stat stats[AUTOGEN_MAX_INFILES],const char *vgenerated,const bool only_first){
   const int vgenerated_l=strlen(vgenerated);
   int n=0;
+  log_entered_function("%s",vgenerated);
   if (virtualpath_startswith_autogen(vgenerated,vgenerated_l)){
     struct autogen_for_vgenfile a={0};
     struct autogen_config *s=autogen_for_vgenfile(&a,vgenerated,vgenerated_l);
@@ -82,12 +86,20 @@ static int autogen_rinfiles_for_vgenfile(struct autogen_files *ff,struct stat st
     n=s?a.vinfiles_n:0;
     FOR(i,0,n){
       NEW_ZIPPATH(a.vinfiles[i]);
+      log_debug_now(" a.vinfiles: %s ",a.vinfiles[i]);
       if (find_realpath_any_root(0,zpath,NULL)){
-        if (ff) strcpy(ff->rinfiles[i],RP());
-        if (stats) stats[i]=zpath->stat_rp;
-        //if (stats) log_debug_now(GREEN_SUCCESS"%s %s ino: %ld size: %ld ",vgenerated,a.vinfiles[i], stats[i].st_ino, stats[i].st_size);
+        if (ff){
+          if ((zpath->flags&ZP_ZIP)){
+            strcpy(stpcpy(ff->rinfiles[i],_mnt),vp_without_pfx_autogen(VP(),VP_L()));
+          }else{
+            strcpy(ff->rinfiles[i],RP());
+            /* TODO recursion? */
+          }
+          if (stats) stats[i]=zpath->stat_vp;
+        }
+        if (stats) log_debug_now(GREEN_SUCCESS"%s %s ino: %ld size: %ld ",vgenerated,a.vinfiles[i], stats[i].st_ino, stats[i].st_size);
       }else{
-        //log_debug_now(RED_FAIL"%s %s ",vgenerated,a.vinfiles[i]);
+        log_debug_now(RED_FAIL"%s %s ",vgenerated,a.vinfiles[i]);
         if (stats) stats[i]=EMPTY_STAT;
       }
       if (only_first) break;
@@ -95,7 +107,6 @@ static int autogen_rinfiles_for_vgenfile(struct autogen_files *ff,struct stat st
   }
   return n;
 }
-
 static bool autogen_not_up_to_date(struct timespec st_mtim,const char *vp,const int vp_l){
   struct stat stats[AUTOGEN_MAX_INFILES];
   RLOOP(i,autogen_rinfiles_for_vgenfile(NULL,stats,vp,false)){
@@ -104,7 +115,7 @@ static bool autogen_not_up_to_date(struct timespec st_mtim,const char *vp,const 
   return false;
 }
 static long autogen_estimate_filesize(const char *vp,const int vp_l){
-  LOCK_N(mutex_fhdata,struct ht_entry *ht=ht_entry_fsize(vp,vp_l,false);long size=(long)ht->value);
+  LOCK_N(mutex_fhdata,struct ht_entry *ht=autogen_ht_fsize(vp,vp_l);long size=(long)ht->value);
   if (!size){
     bool cache_size=false;
     size=config_autogen_estimate_filesize(vp,vp_l,&cache_size);

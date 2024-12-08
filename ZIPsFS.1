@@ -134,7 +134,7 @@ mkdir $mnt/test
 
 cp file.png $mnt/test/
 
-ls $mnt/ZIPsFS/a/test/
+ls -l $mnt/ZIPsFS/a/test/
 \f[R]
 .fi
 .IP \[bu] 2
@@ -159,10 +159,25 @@ file is already there.
 Furthermore, the file size will be correct.
 When the upstream file changes or the last-modified attribute is
 updated, derived files will be generated again.
-.SS Problems/Limitations
+.SS Limitations - unknown file size
 .PP
 The system does not know the file size of not-yet-generated files.
-It will report an upper limit of the expected file size.
+This seems to be a common problem, see
+https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unknown-size.
+Any help is appreciated.
+.PP
+Currently, ZIPsFS reports an upper limit of the expected file size which
+is not really nice.
+.PP
+Why cannot it be done like in /proc files (e.g.\ /proc/
+.RS
+/\f[I]e\f[R]\f[I]n\f[R]\f[I]v\f[R]\f[I]i\f[R]\f[I]r\f[R]\f[I]o\f[R]\f[I]n\f[R])?\f[I]C\f[R]\f[I]a\f[R]\f[I]l\f[R]\f[I]l\f[R]\f[I]i\f[R]\f[I]n\f[R]\f[I]g\f[R]\f[I]s\f[R]\f[I]t\f[R]\f[I]a\f[R]\f[I]t\f[R]/\f[I]p\f[R]\f[I]r\f[R]\f[I]o\f[R]\f[I]c\f[R]/
+.RE/environ reports file size zero.
+If ZIPsFS returns zero, then the content of the files are not readable.
+.SS Limitations - nested, recursive
+.PP
+Currently, nesting (recursion) is not yet supported.
+A virtual file cannot be the basis for another virtual file.
 .SS ZIPsFS_autogen_queue.sh
 .PP
 Some exotic Wine dependent Windows executables do not work well within

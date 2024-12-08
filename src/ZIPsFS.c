@@ -1366,11 +1366,19 @@ void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_config *
 // Functions where Only single paths need to be  substituted
 // Release FUSE 2.9 The chmod, chown, truncate, utimens and getattr handlers of the high-level API now all receive an additional struct fuse_file_info pointer (which, however, may be NULL even if the file is currently open).
 #if FUSE_MAJOR_V>=2 && FUSE_MINOR_V>9
-int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi_or_null){  return _xmp_getattr(path,stbuf);}
+int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi_or_null){  return _xmp_getattr(path,stbuf,fi_or_null);}
+int unknown_filesize_to_zero(const long size,struct fuse_file_info *fi){
+  if (1){ /* Not working. */
+  if ( fi) fi->flags|=fi->direct_io;
+    return 0;
+  }
+  return size;
+}
 #else
-int xmp_getattr(const char *path, struct stat *stbuf){ return _xmp_getattr(path,stbuf);}
+#define unknown_filesize_to_zero(size,fi) fi
+int xmp_getattr(const char *path, struct stat *stbuf){ return _xmp_getattr(path,stbuf,NULL);}
 #endif
-static int PROFILED(_xmp_getattr)(const char *path, struct stat *stbuf){
+static int PROFILED(_xmp_getattr)(const char *path, struct stat *stbuf, void *fi_or_null){
   const int path_l=strlen(path);
   int err=0;
   bool debug=false;
@@ -1402,15 +1410,22 @@ static int PROFILED(_xmp_getattr)(const char *path, struct stat *stbuf){
   }
   //log_entered_function(ANSI_RED"journal and wal %s"ANSI_RESET,path);
   bool found;FIND_REALPATH(path);
+
   if (found){
     *stbuf=zpath->stat_vp;
+    if ((zpath->flags&ZP_ZIP)) log_debug_now("stat_vp size: %ld",zpath->stat_vp.st_size);;
   }else{
-    IF1(WITH_AUTOGEN,long size;
-        if(_realpath_autogen && (size=autogen_estimate_filesize(path,path_l))>=0){
-          stat_init(stbuf,size,&zpath->stat_rp);
-          stbuf->st_ino=inode_from_virtualpath(path,path_l);
-          return 0;
-        });
+#if WITH_AUTOGEN
+    long size=autogen_estimate_filesize(path,path_l);
+    if(_realpath_autogen && size>=0){
+      stat_init(stbuf,size,&zpath->stat_rp);
+      stat_init(stbuf,0,&zpath->stat_rp);
+      stbuf->st_size=unknown_filesize_to_zero(size,fi_or_null);
+      stbuf->st_ino=inode_from_virtualpath(path,path_l);
+      return 0;
+   }
+#endif //WITH_AUTOGEN
+
     err=ENOENT;
   }
   LOCK(mutex_fhdata,inc_count_getattr(path,err?COUNTER_GETATTR_FAIL:COUNTER_GETATTR_SUCCESS));
@@ -1489,6 +1504,7 @@ static int PROFILED(xmp_open)(const char *path, struct fuse_file_info *fi){
            autogen_zpath_init(zpath,path);
            struct fhdata *d=fhdata_create(handle=next_fh++,zpath);
            d->flags|=FHDATA_FLAGS_IS_AUTOGEN;
+           unknown_filesize_to_zero(0,fi);
            zpath=NULL;
            found=true);
     }

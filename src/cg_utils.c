@@ -214,6 +214,16 @@ static bool cg_endsWithZip(const char *s, int len){
   if(!len)len=cg_strlen(s);
   return s && ENDSWITHI(s,len,".zip");
 }
+
+
+/*
+static char *cg_remove_zipext(char *s,const int s_l_or_zero){
+  if (!s) return NULL;
+  const int s_l=s_l_or_zero?s_l_or_zero:strlen(s);
+  if (cg_endsWithZip(s,s_l)) s[s_l-4]=0;
+  return s;
+}
+*/
 static bool cg_endsWithDotD(const char *s, int len){
   if(!len)len=cg_strlen(s);
   return s && ENDSWITHI(s,len,".d");

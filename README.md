@@ -105,7 +105,7 @@ Prepend this folder with **ZIPsFS/a/** and you will see the generated files:
 
     cp file.png $mnt/test/
 
-    ls $mnt/ZIPsFS/a/test/
+    ls -l $mnt/ZIPsFS/a/test/
 
 - For image files (jpg, jpeg, png and gif), smaller versions of 25 % and 50 %
 - For image files extracted text usign Optical Character Recognition
@@ -118,11 +118,23 @@ When opening these files  for the first time there will be some delay. This is b
 When accessed a second time, the data comes without delay, because the file is already there. Furthermore, the file size will be correct.
 When the upstream file changes or the last-modified attribute is updated, derived files will be generated again.
 
-### Problems/Limitations
+### Limitations - unknown file size
 
-The system does not know the file size of not-yet-generated files.
-It will report an upper limit of the expected   file size.
+The system does not know the file size of not-yet-generated files.  This seems to be a common
+problem, see
+https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unknown-size.  Any help
+is appreciated.
 
+Currently, ZIPsFS reports an upper limit of the expected file size which is not really nice.
+
+Why cannot it be done like in /proc files (e.g.   /proc/$$/environ)?
+Calling stat /proc/$$/environ  reports file size zero.
+If ZIPsFS returns zero, then the content of the files are not readable.
+
+### Limitations - nested, recursive
+
+Currently, nesting (recursion) is not yet supported. A virtual file cannot be the basis for another
+virtual file.
 
 ### ZIPsFS_autogen_queue.sh
 

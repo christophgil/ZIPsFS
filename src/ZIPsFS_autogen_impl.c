@@ -181,15 +181,15 @@ static int aimpl_run(struct autogen_files *ff){
   struct autogen_config *s=ff->config;
   bool debug=strstr(ff->virtual_out,"img_2.scale")  && s && (s->flags&CA_FLAG_GENERATED_FILE_INHERITS_INFILE_EXT);
   const char *rin=*ff->rinfiles;
-  // TODO consider recursion ???
   int res=0;
   struct stat st_fail={0},st_in={0};
   if (rin) stat(rin,&st_in);
   const bool stdout_to_ram=(s->out==STDOUT_TO_MALLOC||s->out==STDOUT_TO_MMAP);
   const bool is_outfile=s->out==STDOUT_TO_OUTFILE ||  stdout_to_ram && s->max_infilesize_for_stdout_in_RAM<st_in.st_size;
+  log_entered_function("res=%d  rin: %s size: %ld",res,rin, st_in.st_size);
   {
     aimpl_wait_concurrent(s,1); /* No return statement up from here. !!*/
-    if (rin && !st_in.st_ino){ /* No rin */
+    if (rin && !st_in.st_size){ /* No rin */
       res=errno;
       warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,rin,"aimpl_run");
     }else if (0==(s->flags&CA_FLAG_IGNORE_ERRFILE) && !stat(ff->fail,&st_fail) && CG_STAT_B_BEFORE_A(st_fail,_thisPrgStat)){ /* Previously failed */
@@ -206,6 +206,8 @@ static int aimpl_run(struct autogen_files *ff){
     if (!res){
       if (fd_err && s->info){ cg_fd_write_str(fd_err,s->info);cg_fd_write_str(fd_err,"\n");}
       char *cmd[AUTOGEN_ARGV_MAX+1]={0};
+
+      log_debug_now(" Going aimpl_apply_replacements_for_argv ");
       aimpl_apply_replacements_for_argv(cmd,ff,s);
       cg_log_exec_fd(STDERR_FILENO,NULL,cmd);
       if (stdout_to_ram && !is_outfile){   /* Make virtual file by putting output of external prg  into textbuffer */
