@@ -1368,8 +1368,8 @@ void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_config *
 #if FUSE_MAJOR_V>=2 && FUSE_MINOR_V>9
 int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi_or_null){  return _xmp_getattr(path,stbuf,fi_or_null);}
 int unknown_filesize_to_zero(const long size,struct fuse_file_info *fi){
-  if (1){ /* Not working. */
-  if ( fi) fi->flags|=fi->direct_io;
+  if (0){ /* Not working. */
+  if (fi) fi->flags|=fi->direct_io;
     return 0;
   }
   return size;
