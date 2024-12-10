@@ -180,7 +180,7 @@ static int aimpl_run(struct autogen_files *ff){
   //  struct autogen_for_vgenfile *a;
   struct autogen_config *s=ff->config;
   bool debug=strstr(ff->virtual_out,"img_2.scale")  && s && (s->flags&CA_FLAG_GENERATED_FILE_INHERITS_INFILE_EXT);
-  const char *rin=*ff->rinfiles;
+  const char *rin=ff->rinfiles[0];
   int res=0;
   struct stat st_fail={0},st_in={0};
   if (rin) stat(rin,&st_in);

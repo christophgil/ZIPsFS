@@ -85,7 +85,7 @@ static char _self_exe[PATH_MAX+1];//,static char _initial_cwd[PATH_MAX+1];
 static int _fhdata_n=0,_mnt_l=0;
 IF1(WITH_MEMCACHE,static enum when_memcache_zip _memcache_policy=MEMCACHE_SEEK);
 static bool _pretendSlow=false;
-static char _mkSymlinkAfterStart[MAX_PATHLEN+1]={0},_mnt[MAX_PATHLEN+1];
+static char _mkSymlinkAfterStart[MAX_PATHLEN+1]={0},_mnt[PATH_MAX+1];
 static struct ht *ht_set_id(const int id,struct ht *ht){
 #if WITH_DEBUG_MALLOC
   if (!ht) return NULL;
@@ -1455,6 +1455,7 @@ static int xmp_readlink(const char *path, char *buf, size_t size){
 }
 static int xmp_unlink(const char *path){
   bool found;FIND_REALPATH(path);
+  log_debug_now("uuuuuuuuuuuuuuuuuuuuuuuuuu %s  %s",path,RP());
   return !ZPATH_ROOT_WRITABLE()?-EACCES: !found?-ENOENT: minus_val_or_errno(unlink(RP()));
 }
 static int xmp_rmdir(const char *path){
@@ -1953,9 +1954,7 @@ int main(int argc,char *argv[]){
   if (!colon){ log_error("No single colon found in parameter list\n"); suggest_help(); return 1;}
   if (colon==argc-1){ log_error("Expect mount point after single colon\n"); suggest_help(); return 1;}
   ASSERT(MAX_PATHLEN<=PATH_MAX);
-  _mnt_l=cg_pathlen_ignore_trailing_slash(cg_strncpy(_mnt,argv[argc-1],MAX_PATHLEN));
-  _mnt[_mnt_l]=0;
-
+  _mnt_l=strlen(realpath(argv[argc-1],_mnt));
   {
     struct stat st;
     if (PROFILED(stat)(_mnt,&st)){
