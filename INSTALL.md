@@ -29,10 +29,6 @@ First install the required libraries.
  - libfuse3
  - libzip
 
-A ready-to-use executable for Linux (amd64) is found in the folder
-[RELEASE](./RELEASE/). It may or may not work on your system.
-
-
 
 
 
@@ -51,11 +47,6 @@ First install the required libraries and packages.
  - It does not need the GNU extensions
 
 
-
-
-
-
-# Quick installation
 
 
 Alternatively, consider  [installation with autotools](./INSTALL_autotools.md) on Linux
