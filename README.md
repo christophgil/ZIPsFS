@@ -15,7 +15,7 @@ See [Installation](./INSTALL.md)
 NAME
 ====
 
-**ZIPsFS** — FUSE-based  overlay union file system which expands ZIP files
+**ZIPsFS** — FUSE-based  overlay union file system expanding ZIP files
 
 SYNOPSIS
 ========
