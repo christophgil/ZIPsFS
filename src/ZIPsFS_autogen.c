@@ -75,7 +75,7 @@ static bool virtualpath_startswith_autogen(const char *vp, const int vp_l_or_zer
 static const char *vp_without_pfx_autogen(const char *vp,const int vp_l_or_zero){
   return !vp?NULL:vp IF1(WITH_AUTOGEN, +(virtualpath_startswith_autogen(vp,vp_l_or_zero)?DIR_AUTOGEN_L:0));
 }
-static int autogen_rinfiles_for_vgenfile(struct autogen_files *ff,struct stat stats[AUTOGEN_MAX_INFILES],const char *vgenerated,const bool only_first){
+static int autogen_rinfiles_for_vgenfile(struct autogen_files *ff,struct stat stats[AUTOGEN_MAX_INFILES],const char *vgenerated,const bool only_first){ /*NOT_TO_GENERATED_HEADER*/
   const int vgenerated_l=strlen(vgenerated);
   int n=0;
   log_entered_function("%s",vgenerated);
@@ -171,7 +171,7 @@ static void autogen_cleanup(void){
     pthread_create(&thread_cleanup,NULL,&_autogen_cleanup_runnable,NULL);
   }
 }
-static char *autogen_apply_replacements_for_argv(char *dst_or_NULL,const char *orig,const struct autogen_files *ff){
+static char *autogen_apply_replacements_for_argv(char *dst_or_NULL,const char *orig,const struct autogen_files *ff){ /* NOT_TO_GENERATED_HEADER */
   const char *rin=ff->rinfiles[0];
   char *c=(char*)orig;
   for(int len=strlen(c),capacity=len,i=0;PLACEHOLDERS[i];i++){

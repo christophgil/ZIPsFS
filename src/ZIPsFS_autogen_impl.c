@@ -101,7 +101,7 @@ static void aimpl_vgenerated_from_vinfile(char *generated,const char *vp,const i
 /// This is the only method to load struct autogen_for_vgenfile    ///
 /// a may be NULL                                                  ///
 //////////////////////////////////////////////////////////////////////
-static struct autogen_config *autogen_for_vgenfile(struct autogen_for_vgenfile *a, const char *generated,const int generated_l){
+static struct autogen_config *autogen_for_vgenfile(struct autogen_for_vgenfile *a, const char *generated,const int generated_l){ /* NOT_TO_GENERATED_HEADER */
   FOREACH_AUTOGEN(i,s){
     //bool debug=strstr(generated,"img_2.scale")  && s &&  (s->flags&CA_FLAG_GENERATED_FILE_INHERITS_INFILE_EXT);
     const int x_l=s->_ext_l;
@@ -164,7 +164,7 @@ static bool aimpl_sufficient_diskspace(const struct autogen_config *s, const cha
 /// Replace the placeholders int the command line parameters ///
 ////////////////////////////////////////////////////////////////
 
-static void aimpl_apply_replacements_for_argv(char *cmd[], struct autogen_files *ff,struct autogen_config *s){
+static void aimpl_apply_replacements_for_argv(char *cmd[], struct autogen_files *ff,struct autogen_config *s){ /* NOT_TO_GENERATED_HEADER */
   const char *rin=ff->rinfiles[0];
   const int infile_ext_len=cg_strlen(aimpl_fileext(rin,strlen(rin),s));
   for(int i=0;s->cmd[i];i++) cmd[i]=autogen_apply_replacements_for_argv(NULL,s->cmd[i],ff);
@@ -175,7 +175,7 @@ static void aimpl_apply_replacements_for_argv(char *cmd[], struct autogen_files 
 /// The calling function will rename tmpoutfile to virtual_outfile accroding to  atomic file creation. ///
 /// ff->out is not writen here. It will be created atomically from tmpoutfile elsewhere.               ///
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
-static int aimpl_run(struct autogen_files *ff){
+static int aimpl_run(struct autogen_files *ff){ /* NOT_TO_GENERATED_HEADER */
   if (!_realpath_autogen) return -EACCES;
   //  struct autogen_for_vgenfile *a;
   struct autogen_config *s=ff->config;
@@ -261,7 +261,7 @@ static void aimpl_cleanup(const char *root){
   }
 }
 
-static void _autogen_filecontent_append(const int flags, struct autogen_files *ff, const char *s,const long s_l){
+static void _autogen_filecontent_append(const int flags, struct autogen_files *ff, const char *s,const long s_l){ /* NOT_TO_GENERATED_HEADER */
   if (!ff->buf) ff->buf=textbuffer_new(MALLOC_autogen_textbuffer);
   textbuffer_add_segment(flags,ff->buf,s,s_l);
 }

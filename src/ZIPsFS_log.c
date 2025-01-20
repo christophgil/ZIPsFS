@@ -345,7 +345,7 @@ static int log_memusage_ht(int n,const bool html){
       if (ht) R(ht);
     }
     PRINTINFO("\n");
-    n+=mstore_report_memusage_to_strg(_info+n,_info_capacity-n,&r->dircache_mstore);
+    IF1(WITH_DIRCACHE,    n+=mstore_report_memusage_to_strg(_info+n,_info_capacity-n,&r->dircache_mstore));
   }
   PRINTINFO("\n%sMemory storages%s\n",BEGIN_B(html),END_B(html));
   n+=mstore_report_memusage_to_strg(_info+n,_info_capacity-n, &mstore_persistent);

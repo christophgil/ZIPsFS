@@ -81,7 +81,7 @@
 #define _IF0_IS_1(...)
 #define IF1(zeroorone,...) CONCAT(_IF1_IS_,zeroorone)(__VA_ARGS__)
 #define IF0(zeroorone,...) CONCAT(_IF0_IS_,zeroorone)(__VA_ARGS__)
-#define EXIT(e) fprintf(stderr,"Going to exit %s  "__FILE__":%d\n",__func__,__LINE__),exit(e)
+#define EXIT(e) fprintf(stderr,"Going to exit %s  "__FILE_NAME__":%d\n",__func__,__LINE__),exit(e)
 
 
 #define ANSI_RED "\x1B[41m"
@@ -128,12 +128,17 @@ M(MAX,long)
 #define CODE_NOT_NEEDED 0
 //static void cg_print_stacktrace(int calledFromSigInt);
 
-//#define DIE(format,...)   do{ fprintf(stderr,format,__VA_ARGS__);fprintf(stderr,ANSI_RED" (in %s at %s:%i)"ANSI_RESET"\n",__func__,__FILE__,__LINE__);if (*format=='!') perror("");  exit(EXIT_FAILURE); }while(0)
+//#define DIE(format,...)   do{ fprintf(stderr,format,__VA_ARGS__);fprintf(stderr,ANSI_RED" (in %s at %s:%i)"ANSI_RESET"\n",__func__,__FILE_NAME__,__LINE__);if (*format=='!') perror("");  exit(EXIT_FAILURE); }while(0)
 
 //https://gustedt.wordpress.com/2023/08/08/the-new-__va_opt__-feature-in-c23/
+
+ #ifndef __FILE_NAME__
+#define __FILE_NAME__ __FILE__
+#endif
+
 #define log_strg(s)  fputs(s,stderr)
 #define log_char(c)  fputc(c,stderr)
-#define CG_PERROR(msg) fprintf(stderr,"%s:%d ",__FILE__,__LINE__),perror(msg)
+#define CG_PERROR(msg) fprintf(stderr,"%s:%d ",__FILE_NAME__,__LINE__),perror(msg)
 #define cg_free_null(id,x) {cg_free(id,(void*)x),x=NULL;}
 
 

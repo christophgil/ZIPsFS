@@ -2,7 +2,7 @@
 #define _cg_cpuusage_pid_h
 
 #ifndef CG_PERROR
-#define CG_PERROR(msg) fprintf(stderr,"%s:%d ",__FILE__,__LINE__),perror(msg);
+#define CG_PERROR(msg) fprintf(stderr,"%s:%d ",__FILE_NAME__,__LINE__),perror(msg);
 #endif
 
 struct pstat {

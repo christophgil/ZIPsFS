@@ -114,7 +114,7 @@ static void config_containing_zipfile_of_virtual_file_test(void){
       fprintf(stderr,"%d  approach=%d %s\n",i,len,str);
     }
   }
-  fprintf(stderr,"Going to EXIT from "__FILE__":%d\n",__LINE__);
+  fprintf(stderr,"Going to EXIT from "__FILE_NAME__":%d\n",__LINE__);
   EXIT(0);
 }
 #endif //WITH_ZIPINLINE

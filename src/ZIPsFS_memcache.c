@@ -6,11 +6,11 @@
 //#define memcache_set_status(m,status) {m->memcache_status=(status);}
 
 
-static bool  memcache_is_queued(struct memcache *m){
+static bool  memcache_is_queued(struct memcache *m){ /* NOT_TO_GENERATED_HEADER */
   return (m && m->memcache_l && m->memcache_status==memcache_queued);
     }
 
-static void memcache_set_status(struct memcache *m,const int status){
+static void memcache_set_status(struct memcache *m,const int status){ /* NOT_TO_GENERATED_HEADER */
   ASSERT_LOCKED_FHDATA();
   if (m) m->memcache_status=status;
 }

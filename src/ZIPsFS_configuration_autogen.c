@@ -141,7 +141,7 @@ static long config_autogen_estimate_filesize(const char *vp,const int vp_l, bool
 /////////////////////////////////////////////////////////////////////////
 /// The argv for  execl()  could be modified here                     ///
 /////////////////////////////////////////////////////////////////////////
-static void config_autogen_modify_exec_args(char *cmd[],struct autogen_files *ff,const struct autogen_config *s){
+static void config_autogen_modify_exec_args(char *cmd[],struct autogen_files *ff,const struct autogen_config *s){ /* NOT_TO_GENERATED_HEADER */
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////

@@ -136,19 +136,21 @@
 /// Dynamically generated files ///
 ///////////////////////////////////
 
-#define WITH_AUTOGEN 1
+#define WITH_AUTOGEN 0
+
 /* WITH_AUTOGEN depends on WITH_MEMCACHE */
 #if ! WITH_MEMCACHE
 #undef WITH_AUTOGEN
 #define WITH_AUTOGEN 0
 #endif // WITH_MEMCACHE
 
-#if WITH_AUTOGEN
+
+#define AUTOGEN_MAX_INFILES 5 /*  Dynamically generated file can depend on n input files.  Prevents runaway loop */
+
 #define WITH_AUTOGEN_DIR_HIDDEN 0  /* Hide the directory a in ZIPsFS to avoid recursive searches. */
 /* Unfortunately, Windows will not be able to open folder a when it is not shown in the parent file listing. */
 #define AUTOGEN_DELETE_FILES_AFTER_DAYS "99"
-#define AUTOGEN_MAX_INFILES 5 /*  Dynamically generated file can depend on n input files.  Prevents runaway loop */
-#endif
+
 
 
 
