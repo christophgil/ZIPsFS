@@ -39,9 +39,7 @@
 #define FN_SET_ATIME "/ZIPsFS_set_file_access_time"
 static const char *SPECIAL_FILES[]={"/warnings.log","/errors.log","/file_system_info.html","/ZIPsFS.command","",FN_SET_ATIME".command",FN_SET_ATIME".ps1",FN_SET_ATIME".bat","/Readme.html",NULL};  /* SPECIAL_FILES[SFILE_LOG_WARNINGS] is first!*/
 #define SFILE_BEGIN_VIRTUAL SFILE_INFO
-#define EXT_CONTENT  ".Content"
 #define PLACEHOLDER_NAME 0x07
-#define SIZE_CUTOFF_MMAP_vs_MALLOC 100000
 #define DEBUG_ABORT_MISSING_TDF 1
 #define IS_STAT_READONLY(st) !(st.st_mode&(S_IWUSR|S_IWGRP|S_IWOTH))
 
@@ -82,16 +80,16 @@ enum enum_autogen_state{AUTOGEN_UNINITILIZED,AUTOGEN_SUCCESS,AUTOGEN_FAIL};
 #define A1() C(HT_MALLOC_UNDEFINED)C(HT_MALLOC_warnings)C(HT_MALLOC_ht_count_getattr)C(HT_MALLOC_file_ext)C(HT_MALLOC_inodes)C(HT_MALLOC_transient_cache)C(HT_MALLOC_without_dups)C(HT_MALLOC_LEN)
 #define A2() C(MALLOC_UNDEFINED) C(MALLOC_TESTING) C(MALLOC_HT)C(MALLOC_HT_KEY)C(MALLOC_MSTORE) C(MALLOC_HT_IMBALANCE)C(MALLOC_HT_KEY_IMBALANCE)C(MALLOC_MSTORE_IMBALANCE)\
        C(MALLOC_autogen_replacements) C(MALLOC_autogen_argv) C(MALLOC_autogen_textbuffer)\
-       C(MALLOC_textbuffer) C(MALLOC_fhdata)\
+       C(MALLOC_textbuffer) C(MALLOC_fhandle)\
        C(MALLOC_directory_field)C(MALLOC_dircachejobs)\
        C(MALLOC_memcache) C(MALLOC_memcache_textbuffer) C(MALLOC_transient_cache)\
        C(MALLOC_textbuffer_segments)C(MALLOC_textbuffer_segments_mmap)C(MALLOC_LEN)
-#define A3() C(WARN_INIT)C(WARN_MISC)C(WARN_STR)C(WARN_INODE)C(WARN_THREAD)C(WARN_MALLOC)C(WARN_ROOT)C(WARN_OPEN)C(WARN_READ)C(WARN_ZIP_FREAD)C(WARN_READDIR)C(WARN_SEEK)C(WARN_ZIP)C(WARN_GETATTR)C(WARN_STAT)C(WARN_FHDATA)C(WARN_DIRCACHE)C(WARN_MEMCACHE)C(WARN_FORMAT)C(WARN_DEBUG)C(WARN_CHARS)C(WARN_RETRY)C(WARN_AUTOGEN)C(WARN_LEN)
+#define A3() C(WARN_INIT)C(WARN_MISC)C(WARN_STR)C(WARN_INODE)C(WARN_THREAD)C(WARN_MALLOC)C(WARN_ROOT)C(WARN_OPEN)C(WARN_READ)C(WARN_ZIP_FREAD)C(WARN_READDIR)C(WARN_SEEK)C(WARN_ZIP)C(WARN_GETATTR)C(WARN_STAT)C(WARN_FHANDLE)C(WARN_DIRCACHE)C(WARN_MEMCACHE)C(WARN_FORMAT)C(WARN_DEBUG)C(WARN_CHARS)C(WARN_RETRY)C(WARN_AUTOGEN)C(WARN_LEN)
 #define A4(x) C(memcache_nil)C(memcache_queued)C(memcache_reading)C(memcache_done)
 #define A5() C(MEMCACHE_NEVER)C(MEMCACHE_SEEK)C(MEMCACHE_RULE)C(MEMCACHE_COMPRESSED)C(MEMCACHE_ALWAYS)
 #define A6(x) C(STATQUEUE_NIL)C(STATQUEUE_QUEUED)C(STATQUEUE_FAILED)C(STATQUEUE_OK)
 #define A7(x) C(PTHREAD_DIRCACHE)C(PTHREAD_MEMCACHE)C(PTHREAD_STATQUEUE)C(PTHREAD_RESPONDING)C(PTHREAD_MISC0)C(PTHREAD_LEN)
-#define A8(x) C(mutex_nil)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_fhdata)C(mutex_autogen_init)C(mutex_dircachejobs)C(mutex_log_count)C(mutex_crc)C(mutex_inode)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_statqueue)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_len) //* mutex_roots must be last */
+#define A8(x) C(mutex_nil)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_fhandle)C(mutex_autogen_init)C(mutex_dircachejobs)C(mutex_log_count)C(mutex_crc)C(mutex_inode)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_statqueue)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_len) //* mutex_roots must be last */
 #define C(a) a,
 enum mstoreid{A1()};
 enum mallocid{A2()};
@@ -130,28 +128,12 @@ struct counter_rootdata{
 };
 typedef struct counter_rootdata counter_rootdata_t;
 
-#if WITH_AUTOGEN
-struct autogen_files{
-  const char *virtual_out, *out;
-  char tmpout[MAX_PATHLEN+1];
-  char log[MAX_PATHLEN+1];
-  char fail[MAX_PATHLEN+1];
-  char rinfiles[AUTOGEN_MAX_INFILES+1][MAX_PATHLEN+1];
-  struct autogen_config *config;
-  struct textbuffer *buf;
-};
 
-struct autogen_for_vgenfile{
-  struct autogen_config *config;
-  char vinfiles[AUTOGEN_MAX_INFILES+1][MAX_PATHLEN+1];
-  int vinfiles_n;
-};
-#define FOREACH_AUTOGEN(i,s)  struct autogen_config *s; for(int i=0;(s=config_autogen_rules()[i]);i++)
+struct autogen_files;
 
-#define autogen_filecontent_append_nodestroy(ff,s,s_l)  _autogen_filecontent_append(TEXTBUFFER_NODESTROY,ff,s,s_l)
-#define autogen_filecontent_append(ff,s,s_l)  _autogen_filecontent_append(0,ff,s,s_l)
-#define autogen_filecontent_append_munmap(ff,s,s_l)  _autogen_filecontent_append(TEXTBUFFER_MUNMAP,ff,s,s_l)
-#endif // WITH_AUTOGEN
+#define INIT_STRUCT_AUTOGEN_FILES(ff,vp,vp_l)  struct autogen_files ff={0}; cg_stpncpy0(ff.virtualpath,vp,ff.virtualpath_l=vp_l)
+
+
 // ---
 #if ! WITH_DIRCACHE
 #undef WITH_DIRCACHE_OPTIMIZE_NAMES
@@ -241,8 +223,8 @@ struct zippath{
 #define NEW_ZIPPATH(virtpath)  struct zippath __zp={0},*zpath=&__zp;zpath_init(zpath,virtpath)
 #define FIND_REALPATH(virtpath)    NEW_ZIPPATH(virtpath);  found=find_realpath_any_root(0,zpath,NULL);
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-///   The struct fhdata "file handle data" holds data associated with a file descriptor.
-///   Stored in a linear list _fhdata. The list may have holes.
+///   The struct fhandle "file handle" holds data associated with a file descriptor.
+///   They are stored in the linear list _fhandle. The list may have holes.
 ///   Memcache: It may also contain the cached file content of the zip entry.
 ///   Only one of all instances with a specific virtual path should store the cached zip entry
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -252,29 +234,34 @@ struct zippath{
 #define FINDRP_NOT_TRANSIENT_CACHE (1<<3)
 #define FILETYPEDATA_NUM 1024
 #define FILETYPEDATA_FREQUENT_NUM 64
-#define FHDATA_FLAGS_ACTIVE (1<<0)
-#define FHDATA_FLAGS_DESTROY_LATER (1<<1)
-#define FHDATA_FLAGS_INTERRUPTED (1<<2)
-#define FHDATA_FLAGS_HEAP (1<<3) /* memcache heap instead of MMAP */
-#define FHDATA_FLAGS_URGENT (1<<4) /* memcache heap instead of MMAP */
-#define FHDATA_FLAGS_WITH_TRANSIENT_ZIPENTRY_CACHES (1<<5) /* Can attach ht_transient_cache */
-#define FHDATA_FLAGS_IS_AUTOGEN (1<<6)
-#define foreach_fhdata_also_emty(id,d) int id=_fhdata_n;for(struct fhdata *d;--id>=0 && ((d=fhdata_at_index(id))||true);)
-#define foreach_fhdata(id,d)  foreach_fhdata_also_emty(id,d) if (d->flags)
-#define fhdata_path_eq(d,path,hash) d->zpath.virtualpath_hash==hash && !strcmp(D_VP(d),path)
-#define find_realpath_again_fhdata(d) zpath_reset_keep_VP(&d->zpath),find_realpath_any_root(0,&d->zpath,NULL)
-#define SIZEOF_FHDATA sizeof(struct fhdata)
+#define FHANDLE_FLAGS_ACTIVE (1<<0)
+#define FHANDLE_FLAGS_DESTROY_LATER (1<<1)
+#define FHANDLE_FLAGS_INTERRUPTED (1<<2)
+#define FHANDLE_FLAGS_SEEK_FW_FAIL (1<<3)
+#define FHANDLE_FLAGS_SEEK_BW_FAIL (1<<4)
+#define FHANDLE_FLAGS_WITH_TRANSIENT_ZIPENTRY_CACHES (1<<5) /* Can attach ht_transient_cache */
+#define FHANDLE_FLAGS_IS_AUTOGEN (1<<6)
+#define FHANDLE_FLAGS_WITH_MEMCACHE (1<<7)
+#define FHANDLE_FLAGS_WITHOUT_MEMCACHE  (1<<8)
+// #define foreach_fhandle_also_emty(id,d) int id=_fhandle_n;for(struct fhandle *d;--id>=0 && ((d=fhandle_at_index(id))||true);)
+
+#define foreach_fhandle_also_emty(id,d) struct fhandle *d; for(int id=_fhandle_n;--id>=0 && ((d=fhandle_at_index(id))||true);)
+// cppcheck-suppress-macro constVariablePointer
+#define foreach_fhandle(id,d)  foreach_fhandle_also_emty(id,d) if (d->flags)
+#define fhandle_path_eq(d,path,hash) d->zpath.virtualpath_hash==hash && !strcmp(D_VP(d),path)
+#define find_realpath_again_fhandle(d) zpath_reset_keep_VP(&d->zpath),find_realpath_any_root(0,&d->zpath,NULL)
+#define SIZEOF_FHANDLE sizeof(struct fhandle)
 #define SIZEOF_ZIPPATH sizeof(struct zippath)
-#define FHDATA_LOG2_BLOCK_SIZE 5
-#define FHDATA_BLOCKS 512
-#define FHDATA_BLOCK_SIZE (1<<FHDATA_LOG2_BLOCK_SIZE)
-#define FHDATA_MAX (FHDATA_BLOCKS*FHDATA_BLOCK_SIZE)
+#define FHANDLE_LOG2_BLOCK_SIZE 5
+#define FHANDLE_BLOCKS 512
+#define FHANDLE_BLOCK_SIZE (1<<FHANDLE_LOG2_BLOCK_SIZE)
+#define FHANDLE_MAX (FHANDLE_BLOCKS*FHANDLE_BLOCK_SIZE)
 #define STATQUEUE_ENTRY_N 128
 #define STATQUEUE_FLAGS_VERBOSE (1<<1)
 #define STAT_ALSO_SYSCALL (1<<1)
 #define STAT_USE_CACHE (1<<2)
 #define STAT_USE_CACHE_FOR_ROOT(r) (r!=_root_writable?STAT_USE_CACHE:0)
-struct fhdata{
+struct fhandle{
   uint64_t fh IF1(WITH_AUTOGEN,,fh_real);
   struct zip *zarchive;
   zip_file_t *zip_file;
@@ -289,6 +276,7 @@ struct fhdata{
   counter_rootdata_t *filetypedata;
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,struct ht *ht_transient_cache);
   bool debug_not_yet_read;
+  off_t zip_fread_position;
 #if WITH_MEMCACHE
   struct memcache *memcache;
   int is_memcache_store;
@@ -311,7 +299,10 @@ struct statqueue_entry{
 ///  ZIPsFS is a union file system and combines all source directories
 //////////////////////////////////////////////////////////////////////////
 #define is_last_root_or_null(r)  (!r||r==_root+_root_n-1)
-#define foreach_root(ir,r)    int ir=0;for(struct rootdata *r=_root; ir<_root_n; r++,ir++)
+//#define foreach_root(ir,r)    int ir=0;for(struct rootdata *r=_root; ir<_root_n; r++,ir++)
+// #define foreach_root(ir,r)    struct rootdata *r=_root; for(int ir=0; ir<_root_n; r++,ir++)
+#define foreach_root1(r)    for(struct rootdata *r=_root; r<_root+_root_n; r++)
+
 #define ROOT_WRITABLE (1<<1)
 #define ROOT_REMOTE (1<<2)
 
@@ -337,7 +328,8 @@ struct rootdata{ /* Data for a source directory. ZIPsFS acts like an overlay FS.
   int pthread_when_canceled_deciSec[PTHREAD_LEN];
   IF1(WITH_STAT_SEPARATE_THREADS,struct statqueue_entry statqueue[STATQUEUE_ENTRY_N]);
   bool debug_pretend_blocked[PTHREAD_LEN];
-  IF1(WITH_MEMCACHE,struct fhdata *memcache_d);
+  IF1(WITH_MEMCACHE,struct fhandle *memcache_d);
+  //pthread_mutex_t  mutex_zip_fread;
   counter_rootdata_t filetypedata_dummy,filetypedata_all, filetypedata[FILETYPEDATA_NUM],filetypedata_frequent[FILETYPEDATA_FREQUENT_NUM];
   bool filetypedata_initialized, blocked;
 };
@@ -347,11 +339,13 @@ struct rootdata{ /* Data for a source directory. ZIPsFS acts like an overlay FS.
 
 
 #if WITH_MEMCACHE
+#define ADVISE_CACHE_IS_CMPRESSED (1<<1)
+  #define ADVISE_CACHE_IS_SEEK_BW (1<<2)
 struct memcache{
   volatile enum memcache_status memcache_status;
   struct textbuffer *txtbuf;
   volatile off_t memcache_l,memcache_already_current,memcache_already;
-  int64_t memcache_took_mseconds;
+  int64_t memcache_took_mseconds, memcache_took_mseconds_in_lock;
   int id;
 };
 #endif // WITH_MEMCACHE

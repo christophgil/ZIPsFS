@@ -7,19 +7,19 @@
 /////////////////////////////////////
 
 //enum memusage{memusage_mmap,memusage_malloc,memusage_n,memusage_get_curr,memusage_get_peak};
-
-
+// cppcheck-suppress-file unusedFunction
+static int64_t _log_memcache_took_mseconds_in_lock;
 static void init_count_getattr(void){
   static bool initialized;
   if (!initialized){
     initialized=true;
-    ht_set_mutex(mutex_fhdata,ht_init_with_keystore(&ht_count_getattr,11,&mstore_persistent)); ht_set_id(HT_MALLOC_ht_count_getattr,&ht_count_getattr);
+    ht_set_mutex(mutex_fhandle,ht_init_with_keystore(&ht_count_getattr,11,&mstore_persistent)); ht_set_id(HT_MALLOC_ht_count_getattr,&ht_count_getattr);
   }
 }
 static void inc_count_getattr(const char *path,enum enum_count_getattr field){
   init_count_getattr();
   if (path && ht_count_getattr.length<1024){
-    char *ext=strrchr(path+cg_last_slash(path)+1,'.');
+    const char *ext=strrchr(path+cg_last_slash(path)+1,'.');
     if (!ext || !*ext) ext="-No extension-";
     struct ht_entry *e=ht_sget_entry(&ht_count_getattr,ext,true);
     assert(e!=NULL);assert(e->key!=NULL);
@@ -43,14 +43,14 @@ static const char *fileExtension(const char *path,const int len){
 }
 static struct rootdata root_dummy;
 static counter_rootdata_t *filetypedata_for_ext(const char *path,struct rootdata *r){
-  ASSERT_LOCKED_FHDATA();
+  ASSERT_LOCKED_FHANDLE();
   assert(r>=_root);
   if (!r) r=&root_dummy;
   if(!r->filetypedata_initialized){
     assert(FILETYPEDATA_FREQUENT_NUM>_FILE_EXT_TO-_FILE_EXT_FROM);
     init_count_getattr();
     r->filetypedata_initialized=true;
-    ht_set_mutex(mutex_fhdata,ht_init_with_keystore(&r->ht_filetypedata,10,&mstore_persistent)); ht_set_id(HT_MALLOC_file_ext,&r->ht_filetypedata);
+    ht_set_mutex(mutex_fhandle,ht_init_with_keystore(&r->ht_filetypedata,10,&mstore_persistent)); ht_set_id(HT_MALLOC_file_ext,&r->ht_filetypedata);
     ht_sset(&r->ht_filetypedata, r->filetypedata_all.ext=".*",&r->filetypedata_all);
     ht_sset(&r->ht_filetypedata, r->filetypedata_dummy.ext="*",&r->filetypedata_dummy);
   }
@@ -58,15 +58,16 @@ static counter_rootdata_t *filetypedata_for_ext(const char *path,struct rootdata
   counter_rootdata_t *d=NULL;
   const char *ext;
   if (len){
-    static int return_i,i;
+    static int return_i;
     if ((ext=(char*)config_some_file_path_extensions(path,len,&return_i))){
       d=r->filetypedata_frequent+return_i;
       if (!d->ext) ht_sset(&r->ht_filetypedata, d->ext=ext,d);
     }
     if(!d && (ext=(char*)fileExtension(path,len))){
+      static int i;
       struct ht_entry *e=ht_sget_entry(&r->ht_filetypedata,ext, i<FILETYPEDATA_NUM);
       if (!(d=e->value) && i<FILETYPEDATA_NUM  && (d=e->value=r->filetypedata+i++)){
-        d->ext=e->key=ext=ht_sinternalize(&ht_intern_fileext,ext);
+        d->ext=e->key=ht_sinternalize(&ht_intern_fileext,ext);
       }
     }
   }
@@ -75,11 +76,10 @@ static counter_rootdata_t *filetypedata_for_ext(const char *path,struct rootdata
 static void _rootdata_counter_inc(counter_rootdata_t *c, enum enum_counter_rootdata f){
   if (c->counts[f]<UINT32_MAX) atomic_fetch_add(c->counts+f,1);
 }
-static void fhdata_counter_inc( struct fhdata* d, enum enum_counter_rootdata f){
-  if (d->zpath.root>=0){
+static void fhandle_counter_inc( struct fhandle* d, enum enum_counter_rootdata f){
     if (!d->filetypedata) d->filetypedata=filetypedata_for_ext(D_VP(d),d->zpath.root);
     _rootdata_counter_inc(d->filetypedata,f);
-  }
+
 }
 static void rootdata_counter_inc(const char *path, enum enum_counter_rootdata f, struct rootdata* r){
   _rootdata_counter_inc(filetypedata_for_ext(path,r),f);
@@ -102,12 +102,12 @@ static void rootdata_counter_inc(const char *path, enum enum_counter_rootdata f,
 #define lTD() TD("%'lld")
 #define luTD() TD("%'llu")
 
-static char **_fuse_argv;
+static const char **_fuse_argv;
 static int _fuse_argc;
 static void log_path(const char *f,const char *path){
   log_msg("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,cg_strlen(path));
 }
-static void log_fh(char *title,long fh){
+static void log_fh(const char *title,const long fh){
   char p[MAX_PATHLEN+1];
   cg_path_for_fd(title,p,fh);
   log_msg("%s  fh: %ld %s \n",title?title:"", fh,p);
@@ -133,7 +133,7 @@ static int counts_by_filetype_row0(const char *ext,int n){
   return n;
 }
 static int counts_by_filetype_r(int n,struct rootdata *r, int *count_explain){
-  ASSERT_LOCKED_FHDATA();
+  ASSERT_LOCKED_FHANDLE();
   struct ht_entry *ee=r->ht_filetypedata.entries;
   int count=0;
   FOR(pass,0,r->ht_filetypedata.capacity){
@@ -191,7 +191,7 @@ static int counts_by_filetype_r(int n,struct rootdata *r, int *count_explain){
   if (count) PRINTINFO("</TABLE>\n");
   return n;
 }
-static long counter_getattr_rank(struct ht_entry *e){
+static long counter_getattr_rank(const struct ht_entry *e){
   const int *vv=e->value;
   return !vv?0:
     ((vv[COUNTER_GETATTR_FAIL]+vv[COUNTER_READDIR_FAIL]+vv[COUNTER_ACCESS_FAIL])<<10L)+
@@ -203,12 +203,13 @@ static long counter_getattr_rank(struct ht_entry *e){
 static int counts_by_filetype(int n){
   const int c=ht_count_getattr.capacity;
   int count_explain=0;
-  foreach_root(ir,r) n=counts_by_filetype_r(n,r,&count_explain);
+  foreach_root1(r) n=counts_by_filetype_r(n,r,&count_explain);
   int count=0;
   bool done[c];
   memset(done,0,sizeof(done));
   FOR(pass,0,c){
-    struct ht_entry *x=NULL, *ee=ht_count_getattr.entries;
+    const struct ht_entry *x=NULL;
+    struct ht_entry *ee=ht_count_getattr.entries;
     RLOOP(i,c){
       if (!done[i] && ee[i].key && (!x || counter_getattr_rank(ee+i) < counter_getattr_rank(x))) x=ee+i;
     }
@@ -225,8 +226,8 @@ static int counts_by_filetype(int n){
 #undef SF
     }
     done[x-ht_count_getattr.entries]=true;
-    const int *vv=x->value;
     n=counts_by_filetype_row0(x->key,n);
+    const int *vv=x->value; // cppcheck-suppress variableScope
 #define C(counter) vv[COUNTER_##counter##_SUCCESS],vv[COUNTER_##counter##_FAIL]
     PRINTINFO(dTD()dTDfail() dTD()dTDfail() dTD()dTDfail() dTD()dTDfail() dTD()dTDfail() dTD()dTDfail()"</TR>\n",C(GETATTR),C(READDIR),C(ACCESS),C(STAT),C(OPENDIR),C(ZIPOPEN));
 #undef C
@@ -242,8 +243,8 @@ static int log_print_fuse_argv(int n){
 }
 static int log_print_roots(int n){
   PRINTINFO("<H1>Roots</H1>\n<TABLE border=\"1\"><THEAD><TR>"TH("Path")TH("Writable")TH("Last response")TH("Blocked")TH("Free[GB]")TH("Dir-Cache[kB]")TH("# entries in stat queue ")"</TR></THEAD>\n");
-  foreach_root(i,r){
-    const int f=r->features, freeGB=(int)((r->statvfs.f_bsize*r->statvfs.f_bfree)>>30), last_response=deciSecondsSinceStart()-r->pthread_when_loop_deciSec[PTHREAD_RESPONDING];
+  foreach_root1(r){
+    const int f=r->features, freeGB=(int)((r->statvfs.f_frsize*r->statvfs.f_bfree)>>30), last_response=deciSecondsSinceStart()-r->pthread_when_loop_deciSec[PTHREAD_RESPONDING];
     //10L*(last_response>ROOT_OBSERVE_EVERY_MSECONDS_RESPONDING*10/1000*3?last_response:r->statfs_took_deciseconds)
     PRINTINFO("<TR>"sTDl()sTDc(),rootpath(r),yes_no(f&ROOT_WRITABLE));
     if (f&ROOT_REMOTE){
@@ -279,10 +280,7 @@ static int print_bar(int n,float rel){
 //////////////////
 
 static int print_proc_status(int n,char *filter,int *val){
-
-
-  if (n>0) PRINTINFO("<B>/proc/%ld/status</B>\n<PRE>\n", (long)getpid());
-
+  if (n>0) PRINTINFO("<B>/proc/%'ld/status</B>\n<PRE>\n", (long)getpid());
   if (!has_proc_fs()){
     PRINTINFO(ERROR_MSG_NO_PROC_FS"\n");
   }else{
@@ -326,7 +324,7 @@ static int log_memusage_ht(int n,const bool html){
       NULL;
     if (ht) R(ht);
   }
-  foreach_root(ir,r){
+  foreach_root1(r){
     PRINTINFO("\n%sRoot %s%s\n",BEGIN_B(html),r->rootpath,END_B(html));
     R(NULL);
     FOR(i,0,12){
@@ -397,7 +395,7 @@ static int log_print_open_files(int n, int *fd_count){
       PRINTINFO(ERROR_MSG_NO_PROC_FS"\n");
     }else{
       static char path[256];
-      struct dirent *dp;
+      const struct dirent *dp;
       DIR *dir=opendir("/proc/self/fd/");
       PRINTINFO("<OL>\n");
       for(int i=0;(dp=readdir(dir));i++){
@@ -531,16 +529,16 @@ static int log_print_statistics_of_read(int n){
 static size_t _kilo(size_t x){
   return ((1<<10)-1+x)>>10;
 }
-static int print_fhdata(int n,const char *title){
-  PRINTINFO("<H1>Data associated to file descriptors (struct fhdata)</H1>\n_fhdata_n: %d (Maximum %d)<BR>\n",n,FHDATA_MAX);
-  if (!_fhdata_n){
+static int print_fhandle(int n,const char *title){
+  PRINTINFO("<H1>Data associated to file descriptors (struct fhandle)</H1>\n_fhandle_n: %d (Maximum %d)<BR>\n",n,FHANDLE_MAX);
+  if (!_fhandle_n){
     PRINTINFO("The cache is empty which is good. It means that no entry is locked or leaked.<BR>\n");
   }else{
     PRINTINFO("Table should be empty when idle.<BR>Column <I><B>fd</B></I> file descriptor. Column <I><B>Last-access</B></I>:    Column <I><B>Millisec</B></I>:  time to read entry en bloc into cache.  Column <I><B>R</B></I>: number of threads in currently in xmp_read().\
               Column <I><B>F</B></I>: flags. (D)elete indicates that it is marked for closing and (K)eep indicates that it can currently not be closed. Two possible reasons why data cannot be released: (I)  xmp_read() is currently run (II) the cached zip entry is needed by another file descriptor  with the same virtual path. Column <I><B>Tansient cache: Hex address, number of cached paths, count fetched non-existing paths, count fetched existing</B><BR>\n\
-              <TABLE border=\"1\">\n<THEAD><TR>"TH("Path")TH("Last-access")IF1(WITH_MEMCACHE,TH("Cache-ID")TH("Cache-read-kB")TH("Entry-kB")TH("Millisec"))TH(" F")TH("R")IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,TH("Transient-cache"))"</TR></THEAD>\n");
+              <TABLE border=\"1\">\n<THEAD><TR>"TH("Path")TH("Last-access")IF1(WITH_MEMCACHE,TH("Cache-ID")TH("Cache-read-kB")TH("Entry-kB")TH("Millisec")TH("MillisecWaitLock"))TH(" F")TH("R")IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,TH("Transient-cache"))"</TR></THEAD>\n");
     const time_t t0=time(NULL);
-    foreach_fhdata(id,d){
+    foreach_fhandle(id,d){
       PRINTINFO("<TR>"sTDl(),snull(D_VP(d)));
       if (d->accesstime){
         PRINTINFO(TD("%'ld s"),t0-d->accesstime);
@@ -548,20 +546,24 @@ static int print_fhdata(int n,const char *title){
         PRINTINFO(TD("Never"));
       }
 #if WITH_MEMCACHE
-      struct memcache *m=d->memcache;
+      const struct memcache *m=d->memcache;
       if (m && m->txtbuf){
-        PRINTINFO(TD("%05x")luTD()luTD()lTD(),m->id,(LLU)_kilo(m->memcache_already),(LLU)_kilo(m->memcache_l),(LLD)m->memcache_took_mseconds);
+        PRINTINFO(TD("%05x")luTD()luTD()lTD()lTD(),m->id,(LLU)_kilo(m->memcache_already),(LLU)_kilo(m->memcache_l),(LLD)m->memcache_took_mseconds,(LLD)m->memcache_took_mseconds_in_lock);
       }else{
-        PRINTINFO(TD("")TD("")TD("")TD(""));
+        PRINTINFO(TD("")TD("")TD("")TD("")TD(""));
       }
 #endif //WITH_MEMCACHE
 
-      PRINTINFO(TD("%c%c")dTD(),(d->flags&FHDATA_FLAGS_DESTROY_LATER)?'D':' ', fhdata_can_destroy(d)?' ':'K',d->is_xmp_read);
+      PRINTINFO(TD("%c%c")dTD(),(d->flags&FHANDLE_FLAGS_DESTROY_LATER)?'D':' ', fhandle_can_destroy(d)?' ':'K',d->is_xmp_read);
+      {
+        // cppcheck-suppress variableScope
       IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,const struct ht *ht=d->ht_transient_cache;PRINTINFO(TD("%0lx %d %d %d"),(long)ht,!ht?-1: (int)ht->length, !ht?-1:ht->client_value_int[0],!ht?-1:ht->client_value_int[1]));
+      }
       PRINTINFO("</TR>\n");
     }
     PRINTINFO("</TABLE>");
   }
+  PRINTINFO("Max MillisecWaitLock: %ld\n",_log_memcache_took_mseconds_in_lock);
   return n;
 }
 #define MAKE_INFO_HTML (1<<1)
@@ -597,14 +599,14 @@ TD {text-align:right;}\n\
     n=log_print_open_files(n,NULL);
     n=log_print_memory(n);
     n=log_print_CPU(n);
-    LOCK(mutex_fhdata,n=print_fhdata(n,""));
+    LOCK(mutex_fhandle,n=print_fhandle(n,""));
     PRINTINFO("<H1>Inodes</H1>\nCreated sequentially: %'ld\n",_count_SeqInode);
     //n=print_maps(n);
     PRINTINFO("<H1>Cache</H1>");
     PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",  IF1(WITH_MEMCACHE,WHEN_MEMCACHE_S[_memcache_policy])IF0(WITH_MEMCACHE,"!WITH_MEMCACHE"));
     n=log_print_statistics_of_read(n);
     //  PRINTINFO("_cumul_time_store=%lf\n<BR>",((double)_cumul_time_store)/CLOCKS_PER_SEC);
-    LOCK(mutex_fhdata,n=counts_by_filetype(n));
+    LOCK(mutex_fhandle,n=counts_by_filetype(n));
   }
   n=log_memusage_ht(n,html);
   n=log_malloc(n,html);
@@ -628,9 +630,9 @@ static const char *zip_fdopen_err(int err){
 #undef ZIP_FDOPEN_ERR
 }
 #if WITH_MEMCACHE
-static void fhdata_log_cache(const struct fhdata *d){
+static void fhandle_log_cache(const struct fhandle *d){
   if (!d){ log_char('\n');return;}
-  struct memcache *m=d->memcache;
+  const struct memcache *m=d->memcache;
   log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %lld/%lld   hasc: %s\n",d,D_VP(d),yes_no(m && m->txtbuf),!m?0:MEMCACHE_STATUS_S[m->memcache_status],(LLD)(!m?-1:m->memcache_already),(LLD)(!m?-1:m->memcache_l),yes_no(m && m->memcache_l>0));
 }
 #endif //WITH_MEMCACHE
@@ -653,9 +655,9 @@ static void _log_zpath(const char *fn,const int line,const char *msg, struct zip
 }
 #define log_zpath(...) _log_zpath(__func__,__LINE__,__VA_ARGS__) /*TO_HEADER*/
 
-#define FHDATA_ALREADY_LOGGED_VIA_ZIP (1<<0)
-#define FHDATA_ALREADY_LOGGED_FAILED_DIFF (1<<1)
-static bool fhdata_not_yet_logged(unsigned int flag,struct fhdata *d){
+#define FHANDLE_ALREADY_LOGGED_VIA_ZIP (1<<0)
+#define FHANDLE_ALREADY_LOGGED_FAILED_DIFF (1<<1)
+static bool fhandle_not_yet_logged(unsigned int flag,struct fhandle *d){
   if (d->already_logged&flag) return false;
   d->already_logged|=flag;
   return true;
@@ -663,7 +665,7 @@ static bool fhdata_not_yet_logged(unsigned int flag,struct fhdata *d){
 static void log_fuse_process(void){
   if (!has_proc_fs()) return;
 
-  struct fuse_context *fc=fuse_get_context();
+  const struct fuse_context *fc=fuse_get_context();
   const int BUF=333;
   char buf[BUF+1];
   snprintf(buf,BUF-1,"/proc/%d/cmdline",fc->pid);
@@ -680,7 +682,7 @@ static void suggest_help(void){
   fprintf(stderr,"For help run\n   %s -h\n\n",_thisPrg);
   exit(1);
 }
-static void usage(void){
+static void ZIPsFS_usage(void){
   puts_stderr(ANSI_INVERSE"ZIPsFS"ANSI_RESET"\n\nCompiled: "__DATE__"  "__TIME__"\n\n");
   puts_stderr(ANSI_UNDERLINE"Usage:"ANSI_RESET"  ZIPsFS [options]  root-dir1 root-dir2 ... root-dir-n : [libfuse-options]  mount-Point\n\n"
               ANSI_UNDERLINE"Example:"ANSI_RESET"  ZIPsFS -l 2GB  ~/tmp/ZIPsFS/writable  ~/local/folder //computer/pub :  -f -o allow_other  ~/tmp/ZIPsFS/mnt\n\n\

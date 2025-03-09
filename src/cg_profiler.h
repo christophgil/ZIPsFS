@@ -20,7 +20,7 @@ enum ENUM_PROFILE_FN{
 #undef C
 // ---
 static long _clock_fn[PROFILE_LENGTH], _count_fn[PROFILE_LENGTH];
-void print_profile(){
+void print_profile(void){
   fprintf(stderr,"\n"ANSI_INVERSE"Profiling functions"ANSI_RESET"\nCLOCKS_PER_SEC: %'ld\n\n",CLOCKS_PER_SEC);
   fprintf(stderr,ANSI_UNDERLINE"%42s   # Calls   Time-Sum[s] "ANSI_RESET"\n","Function");
 #define C(f) fprintf(stderr, "%42s %'9ld  %'12.1f\n\n",#f,_count_fn[PROFILE_##f],((float)_clock_fn[PROFILE_##f])/CLOCKS_PER_SEC);

@@ -2,26 +2,25 @@
 /// COMPILE_MAIN=ZIPsFS                                     ///
 /// Debugging ZIPsFS                                          ///
 /////////////////////////////////////////////////////////////////
-
-static int countFhdataWithMemcache(const char *path, int len,int h){
+// cppcheck-suppress-file unusedFunction
+static int countFhandleWithMemcache(const char *path, int len,int h){
   if (!len) len=strlen(path);
   if (!h) h=hash32(path,len);
   int count=0;
-  IF1(WITH_MEMCACHE,foreach_fhdata(id,d)     if (D_VP_HASH(d)==h && d->memcache && d->memcache->txtbuf && !strcmp(path,D_VP(d))) count++);
+  IF1(WITH_MEMCACHE,foreach_fhandle(id,d)     if (D_VP_HASH(d)==h && d->memcache && d->memcache->txtbuf && !strcmp(path,D_VP(d))) count++);
   return count;
 }
 
-#define fhdataWithMemcachePrint(...) _fhdataWithMemcachePrint(__func__,__LINE__,__VA_ARGS__)
-static void _fhdataWithMemcachePrint(const char *func,int line,const char *path, int len,int h){
+#define fhandleWithMemcachePrint(...) _fhandleWithMemcachePrint(__func__,__LINE__,__VA_ARGS__)
+static void _fhandleWithMemcachePrint(const char *func,int line,const char *path, int len,int h){
 #if WITH_MEMCACHE
   if (!len) len=strlen(path);
   if (!h) h=hash32(path,len);
-  int count=0;
-  foreach_fhdata(id,d){
+  foreach_fhandle(id,d){
     if (D_VP_HASH(d)==h){
-      struct memcache *m=d->memcache;
+      const struct memcache *m=d->memcache;
       if (m && (m->txtbuf||m->memcache_status) && !strcmp(path,D_VP(d))){
-        log_msg("%s:%d fhdataWithMemcachePrint: %d %s  memcache_status: %s memcache_l: %lld\n",func,line,id,path,MEMCACHE_STATUS_S[m->memcache_status],(LLD)m->memcache_l);
+        log_msg("%s:%d fhandleWithMemcachePrint: %d %s  memcache_status: %s memcache_l: %lld\n",func,line,id,path,MEMCACHE_STATUS_S[m->memcache_status],(LLD)m->memcache_l);
       }
     }
   }
@@ -33,6 +32,7 @@ static void _fhdataWithMemcachePrint(const char *func,int line,const char *path,
 #define debugSpecificPath_tdf(path,path_l) _debugSpecificPath(1,path,path_l)
 #define debugSpecificPath_tdf_bin(path,path_l) _debugSpecificPath(2,path,path_l)
 #define debugSpecificPath_d(path,path_l) _debugSpecificPath(3,path,path_l)
+
 static bool _debugSpecificPath(int mode, const char *path, int path_l){
   if (!path) return false;
   if (!path_l) path_l=strlen(path);
@@ -44,10 +44,10 @@ static bool _debugSpecificPath(int mode, const char *path, int path_l){
       case 3: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d");break;
   }
   if (b){
-    const int n=countFhdataWithMemcache(path,path_l,0);
+    const int n=countFhandleWithMemcache(path,path_l,0);
     if (n>1){
-      log_error("path=%s   countFhdataWithMemcache=%d\n",path,n);
-      fhdataWithMemcachePrint(path,path_l,0);
+      log_error("path=%s   countFhandleWithMemcache=%d\n",path,n);
+      fhandleWithMemcachePrint(path,path_l,0);
     }
     return true;
   }
@@ -64,6 +64,7 @@ static bool _debugSpecificPath(int mode, const char *path, int path_l){
 
 static void _assert_validchars(enum validchars t,const char *s,int len,const char *msg,const char *fn){
   static bool initialized;
+  // cppcheck-suppress duplicateConditionalAssign
   if (!initialized) initialized=cg_validchars(VALIDCHARS_PATH)[PLACEHOLDER_NAME]=cg_validchars(VALIDCHARS_FILE)[PLACEHOLDER_NAME]=true;
   const int pos=cg_find_invalidchar(t,s,len);
   if (pos>=0){
@@ -74,7 +75,6 @@ static void _assert_validchars(enum validchars t,const char *s,int len,const cha
 #define  assert_validchars_direntries(t,dir) _assert_validchars_direntries(t,dir,__func__)
 static void _assert_validchars_direntries(enum validchars t,const struct directory *dir,const char *fn){
   if (dir){
-    bool ok=true;
     RLOOP(i,dir->core.files_l){
       const char *s=dir->core.fname[i];
       if (s) _assert_validchars(VALIDCHARS_PATH,s,cg_strlen(s),dir->dir_realpath,fn);
@@ -101,7 +101,7 @@ static void _debug_directory_print(const struct directory *dir,const char *fn,co
 const char *ss[]={"/mypath/subdir/file.txt", "file_no_path.txt", "/mypath/subdir/file_no_ext","","file.wiff.scan","file.wiff", "file.extension_is_too_long",NULL};
 const uint64_t wiff=(uint64_t)".wiff";
 for(int i=0; ss[i];i++){
-  LOCK(mutex_fhdata,
+  LOCK(mutex_fhandle,
        const char *e=fileExtension(ss[i],cg_strlen(ss[i]));
        fprintf(stderr,"Testing  fileExtension()%40s %10s   is .wiff: %s\n",ss[i],e,yes_no(((uint64_t)e)==wiff));
        );
@@ -153,12 +153,12 @@ static bool debug_path(const char *vp){
 
 
 
-static bool debug_fhdata(const struct fhdata *d){
+static bool debug_fhandle(const struct fhandle *d){
   return d && !d->n_read && tdf_or_tdf_bin(D_VP(d));
 }
-static void debug_fhdata_listall(void){
+static void debug_fhandle_listall(void){
   log_msg(ANSI_INVERSE"%s"ANSI_RESET"\n",__func__);
-  foreach_fhdata(id,d){
+  foreach_fhandle(id,d){
     log_msg("d %p path: %s fh: %llu\n",d,D_VP(d),(LLU)d->fh);
   }
 }

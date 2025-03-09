@@ -2,7 +2,7 @@
 /// COMPILE_MAIN=ZIPsFS                                     ///
 /// Controling ZIPsFS by the user accessing magic file names  ///
 /////////////////////////////////////////////////////////////////
-
+// cppcheck-suppress-file literalWithCharPtrCompare
 #define SHEBANG "#!/usr/bin/env bash\nset -u\n"
 #define MAGIC_SFX_SET_ATIME  ".magicSfxSetAccessTime"
 #define F_CLEAR_CACHE     "/ZIPsFS_CLEAR+"
@@ -76,7 +76,7 @@ echo 'If no command line arguments are given, the script will process the files 
 
 
 static void special_file_content(struct textbuffer *b,const enum enum_special_files i){
-  char *a=STRINGIZE(CLEAR_DIRCACHE);
+  //char *a=STRINGIZE(CLEAR_DIRCACHE);
   if (!*BASH_SECRET){
     struct timespec t;
     timespec_get(&t,TIME_UTC);
@@ -173,7 +173,6 @@ read-host -Prompt 'Press Enter'\n");
     break;
 #endif //WITH_AUTOGEN
   case SFILE_INFO:
-
     textbuffer_add_segment(0,b,_info,_info_l);
   default:;
   }
@@ -194,11 +193,10 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
     const int z=path[path_l-1], t=z=='S'?PTHREAD_STATQUEUE: z=='M'?PTHREAD_MEMCACHE: z=='D'?PTHREAD_DIRCACHE: z=='R'?PTHREAD_RESPONDING:-1;
     char *f=0;
     for(int j=0;CTRL_FILES[j];j++) if (!memcmp(path,CTRL_FILES[j],strlen(CTRL_FILES[j])-1)) f=CTRL_FILES[j];
-    //if (strstr(path,"/ZIPsFS"))
-    log_entered_function("%s path  f:%s ",path,snull(f));
+    // log_entered_function("%s path  f:%s ",path,snull(f));
     if (f){
       warning(WARN_DEBUG,path,"Triggered '%s' %s",f,t>=0?PTHREAD_S[t]:"");
-      foreach_root(i,r){
+      foreach_root1(r){
         if (f==F_BLOCK_THREAD){
           if (t>=0) r->debug_pretend_blocked[t]=true;
         }else if (f==F_UNBLOCK_THREAD){
@@ -231,10 +229,10 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
               e();
             }else{
               p();
-              cg_thread_assert_not_locked(mutex_fhdata);
+              cg_thread_assert_not_locked(mutex_fhandle);
               log_strg(GREEN_SUCCESS"\n");
               f();
-              LOCK(mutex_fhdata,cg_thread_assert_not_locked(mutex_fhdata));
+              LOCK(mutex_fhandle,cg_thread_assert_not_locked(mutex_fhandle));
               e();
             }
           }/* !WITH_ASSERT_LOCK */
@@ -253,7 +251,7 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
     const int len=(int)(posHours-path);
     posHours+=sizeof(MAGIC_SFX_SET_ATIME)-1;
     char path2[MAX_PATHLEN+1];
-    strncpy(path2,path,len)[len]=0;
+    cg_stpncpy0(path2,path,len);
     bool found;FIND_REALPATH(path2);
     if (found){
       cg_file_set_atime(RP(),&zpath->stat_rp,3600L*atoi(posHours));
@@ -263,7 +261,6 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
   return false;
 }/*trigger_files()*/
 static int read_special_file(const int i, char *buf, const off_t size, const off_t offset){
-  const char *content;
   lock(mutex_special_file);
   struct textbuffer b={0};
   special_file_content(&b,i);
@@ -282,8 +279,8 @@ static int read_special_file(const int i, char *buf, const off_t size, const off
 static void make_info(const int flags){
   cg_thread_assert_locked(mutex_special_file);
   int l;
-
-  _info=malloc_untracked(_info_capacity=9999);
+  _info_capacity=9999;
+  _info=malloc_untracked(_info_capacity);
   while((l=print_all_info(flags))>=_info_capacity){
     //CG_REALLOC(char *,_info,_info_capacity=_info_capacity*2+0x100000+17);
     //    #define CG_REALLOC(type,pointer,expr) {type tmp=realloc(pointer,expr); if (!tmp){fprintf(stderr,"realloc failed.\n"); EXIT(1);};pointer=tmp;}

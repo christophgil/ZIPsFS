@@ -1,3 +1,4 @@
+// cppcheck-suppress-file unusedFunction
 #ifndef _cg_cpuusage_pid_c
 #define _cg_cpuusage_pid_c
 #include <stdio.h>
@@ -67,10 +68,12 @@ static void cpuusage_calc_pct(const struct pstat* cur_usage,const struct pstat* 
   }
 }
 /* calculates the elapsed CPU usage between 2 measuring points in ticks */
-static void cpuusage_calc(const struct pstat* cur_usage,const struct pstat* last_usage,long unsigned int* ucpu_usage,long unsigned int* scpu_usage){
+
+static void cpuusage_calc(const struct pstat* cur_usage,const struct pstat* last_usage,long unsigned int* ucpu_usage,long unsigned int* scpu_usage){ // cppcheck-suppress unusedFunction
   U();
   S();
 }
+
 #undef U
 #undef S
 #endif //_cg_cpuusage_pid

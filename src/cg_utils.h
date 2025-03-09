@@ -1,3 +1,4 @@
+// cppcheck-suppress-file unusedFunction
 #ifndef _cg_utils_dot_h
 #define _cg_utils_dot_h
 #include <string.h>
@@ -73,7 +74,6 @@
 #define STRINGIZE_INNER(x) #x
 
 //#define NAME_LINE(base) CONCAT(base, __LINE__)
-//#define FREE2(a) { void *NAME_LINE(tmp)=(void*)a; a=NULL;free(NAME_LINE(tmp));}
 
 #define _IF1_IS_1(...) __VA_ARGS__
 #define _IF1_IS_0(...)
@@ -142,7 +142,7 @@ M(MAX,long)
 #define cg_free_null(id,x) {cg_free(id,(void*)x),x=NULL;}
 
 
-#define PRINT_PFX_FUNC_MSG(pfx1,pfx2,sfx,...)  fprintf(stderr,pfx1"%d s  %s():%i)"pfx2,deciSecondsSinceStart()/10,__func__,__LINE__),fprintf(stderr,__VA_ARGS__),puts_stderr(sfx)
+#define PRINT_PFX_FUNC_MSG(pfx1,pfx2,sfx,...)  fprintf(stderr,pfx1"%d %s():%i "pfx2,deciSecondsSinceStart()/10,__func__,__LINE__),fprintf(stderr,__VA_ARGS__),puts_stderr(sfx)
 
 #define log_entered_function(...)     PRINT_PFX_FUNC_MSG(ANSI_INVERSE" > > > "ANSI_RESET,"\n","\n",__VA_ARGS__)
 #define log_exited_function(...)      PRINT_PFX_FUNC_MSG(ANSI_INVERSE" < < < "ANSI_RESET,"\n","\n",__VA_ARGS__)

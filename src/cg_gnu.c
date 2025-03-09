@@ -1,6 +1,7 @@
 // ############################################################
 // ### Reimplementation of some non-portable GNU functions  ###
 // ############################################################
+// cppcheck-suppress-file unusedFunction
 #ifndef _cg_gnu_dot_c
 #include <string.h>
 #include <stdlib.h>

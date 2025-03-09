@@ -143,14 +143,16 @@ For image files (jpg, jpeg, png and gif), smaller versions of 25 % and
 .IP \[bu] 2
 For image files extracted text usign Optical Character Recognition
 .IP \[bu] 2
-For PDF files extracted ASCII text.
+For PDF files extracted ASCII text
 .IP \[bu] 2
 For ZIP files the report of the consistency check including check-sums
 .IP \[bu] 2
 Decompression of .tsv.bz2 and .tsv.gz files
 .IP \[bu] 2
-Mass spectrometry files: They are converted to Mascot and msML.
+Mass spectrometry files: They are converted to mgf (Mascot) and msML.
 For wiff files, the contained ASCII text is extracted.
+.IP \[bu] 2
+Apache Parquet files are converted to tsv and tsv.bz2
 .PP
 When opening these files for the first time there will be some delay.
 This is because the files need to be generated.
@@ -159,6 +161,9 @@ file is already there.
 Furthermore, the file size will be correct.
 When the upstream file changes or the last-modified attribute is
 updated, derived files will be generated again.
+.PP
+Users can deactivate or add conversions by editing
+ZIPsFS_configuration_autogen.c.
 .SS Limitations - unknown file size
 .PP
 The system does not know the file size of not-yet-generated files.

@@ -21,7 +21,7 @@ static pthread_mutex_t _mutex[NUM_MUTEX];
 void destroy_thread_data(void *x){
 }
 /* Count recursive locks with (_mutex+mutex). Maybe inc or dec. */
-static int cg_mutex_count(int mutex,int inc){ /*NOT_TO_HEADER*/
+static int cg_mutex_count(int mutex,int inc){
   pthread_mutex_lock(_mutex+mutex_mutex_count);
   static pthread_key_t _pthread_key;
   static bool initialized=false;
@@ -38,6 +38,7 @@ static int cg_mutex_count(int mutex,int inc){ /*NOT_TO_HEADER*/
 /// Lock / unlock ///
 /////////////////////
 // See pthread_cancel
+//static int64_t _wait_lock_ms[mutex_len]; //mutex_len
 #define lock_ncancel(mutex) pthread_setcancelstate(PTHREAD_CANCEL_DISABLE,&_lock_oldstate_unused);lock(mutex)
 #define unlock_ncancel(mutex) unlock(mutex);pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&_lock_oldstate_unused)
 #define LOCK_NCANCEL_N(mutex,code) pthread_setcancelstate(PTHREAD_CANCEL_DISABLE,&_lock_oldstate_unused);lock(mutex);code;unlock(mutex);pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&_lock_oldstate_unused)
@@ -76,7 +77,7 @@ static void unlock(int mutex){
 #define cg_thread_assert_locked(mutex)
 #define assert_not_locked(mutex)
 #endif // !WITH_ASSERT_LOCK
-#define ASSERT_LOCKED_FHDATA() cg_thread_assert_locked(mutex_fhdata)
+#define ASSERT_LOCKED_FHANDLE() cg_thread_assert_locked(mutex_fhandle)
 
 
 /////////////////
@@ -85,21 +86,21 @@ static void unlock(int mutex){
 #if WITH_ASSERT_LOCK
 static void cg_mutex_test_1(void){
   log_entered_function("");
-  LOCK(mutex_fhdata,
-       //ASSERT_LOCKED_FHDATA();
-       log_verbose("Within mutex_fhdata");
-       log_verbose("count=%d",cg_mutex_count(mutex_fhdata,0));
-       LOCK(mutex_fhdata,log_verbose("count2=%d",cg_mutex_count(mutex_fhdata,0)));
-       ASSERT_LOCKED_FHDATA();
+  LOCK(mutex_fhandle,
+       //ASSERT_LOCKED_FHANDLE();
+       log_verbose("Within mutex_fhandle");
+       log_verbose("count=%d",cg_mutex_count(mutex_fhandle,0));
+       LOCK(mutex_fhandle,log_verbose("count2=%d",cg_mutex_count(mutex_fhandle,0)));
+       ASSERT_LOCKED_FHANDLE();
        );
-  log_msg("count2=%d",cg_mutex_count(mutex_fhdata,0));
-  ASSERT_LOCKED_FHDATA();
+  log_msg("count2=%d",cg_mutex_count(mutex_fhandle,0));
+  ASSERT_LOCKED_FHANDLE();
 }
 static void cg_mutex_test_2(void){
   log_entered_function("");
-  LOCK(mutex_fhdata,
+  LOCK(mutex_fhandle,
 
-cg_thread_assert_not_locked(mutex_fhdata);
+cg_thread_assert_not_locked(mutex_fhandle);
        );
 }
 #endif // !WITH_ASSERT_LOCK

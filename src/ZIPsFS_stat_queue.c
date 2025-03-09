@@ -42,7 +42,6 @@ static int _stat_queue1(const bool verbose,const char *rp, const int rp_l,const 
   while((sum+=sleep)<STATQUEUE_TIMEOUT_SECONDS*1000*1000){
     usleep(sleep);
     sleep+=(sleep>>3);
-    enum statqueue_status status=0;
     if (STATQUEUE_DONE(q->status)){ u=q; break;}
   }
   LOCK(mutex_statqueue,
@@ -85,7 +84,7 @@ static void *infloop_statqueue(void *arg){
         LOCK_NCANCEL(mutex_statqueue,if (q->status==STATQUEUE_QUEUED){ memcpy(rp,q->rp,(rp_l=q->rp_l)+1);hash=q->rp_hash;});
         rp[rp_l]=0;
         if (rp_l){
-          const bool ok=stat_maybe_cache(false,STAT_ALSO_SYSCALL|STAT_USE_CACHE_FOR_ROOT(r),rp,rp_l,hash,&stbuf);
+          const bool ok=stat_maybe_cache(STAT_ALSO_SYSCALL|STAT_USE_CACHE_FOR_ROOT(r),rp,rp_l,hash,&stbuf);
           if (q->flags&STATQUEUE_FLAGS_VERBOSE) log_verbose("stat_maybe_cache(STATQUEUE_FLAGS_VERBOSE,%s  %s",rp,success_or_fail(ok));
           LOCK_NCANCEL(mutex_statqueue,
                        if (q->status==STATQUEUE_QUEUED && E(q)){

@@ -6,6 +6,7 @@
 
 
 
+#define EXT_CONTENT  ".Content"                    /* ZIP files appear as folders. This is appended to form the folder name. */
 
 /////////////////////////////////
 /// Limitations of pathlength ///
@@ -56,10 +57,10 @@
 // See man fseek
 // The virtual file paths are selected with the function config_advise_cache_zipentry_in_ram(). Also see CLI parameter -c.
 // Depending on the size, memory is reserved either with MALLOC() or with MMAP().
-// The memory address is kept int struct fhdata as long as the file is open.
-// When several threads are accessing the same file, then only one instance of struct fhdata has a reference to the RAM area with the file content.
-// This cache is used by all other instances of struct fhdata with the same file path.
-// Upon close, such struct fhdata instance is kept alive as long as  there are still instances with the same path. Instead, it is marked for  deletion at a later time.
+// The memory address is kept int struct fhandle as long as the file is open.
+// When several threads are accessing the same file, then only one instance of struct fhandle has a reference to the RAM area with the file content.
+// This cache is used by all other instances of struct fhandle with the same file path.
+// Upon close, such struct fhandle instance is kept alive as long as  there are still instances with the same path. Instead, it is marked for  deletion at a later time.
 
 
 
@@ -106,7 +107,7 @@
 #define DIRECTORY_CACHE_SEGMENTS 16 // Maximum number of blocks. If Exceeded, the directory cache is cleared and filled again.
 #endif
 #define MEMCACHE_READ_BYTES_NUM (64*1024*1024) // When storing zip entries in RAM, number of bytes read in one go
-#define SIZE_CUTOFF_MMAP_vs_MALLOC 100000
+#define SIZE_CUTOFF_MMAP_vs_MALLOC (1<<16)
 
 
 /////////////////////////////////////
@@ -136,7 +137,7 @@
 /// Dynamically generated files ///
 ///////////////////////////////////
 
-#define WITH_AUTOGEN 0
+#define WITH_AUTOGEN 1
 
 /* WITH_AUTOGEN depends on WITH_MEMCACHE */
 #if ! WITH_MEMCACHE
@@ -145,11 +146,6 @@
 #endif // WITH_MEMCACHE
 
 
-#define AUTOGEN_MAX_INFILES 5 /*  Dynamically generated file can depend on n input files.  Prevents runaway loop */
-
-#define WITH_AUTOGEN_DIR_HIDDEN 0  /* Hide the directory a in ZIPsFS to avoid recursive searches. */
-/* Unfortunately, Windows will not be able to open folder a when it is not shown in the parent file listing. */
-#define AUTOGEN_DELETE_FILES_AFTER_DAYS "99"
 
 
 

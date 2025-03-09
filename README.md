@@ -109,14 +109,17 @@ Prepend this folder with **ZIPsFS/a/** and you will see the generated files:
 
 - For image files (jpg, jpeg, png and gif), smaller versions of 25 % and 50 %
 - For image files extracted text usign Optical Character Recognition
-- For PDF files extracted ASCII text.
+- For PDF files extracted ASCII text
 - For ZIP files the report of the consistency check including check-sums
 - Decompression of  .tsv.bz2 and .tsv.gz files
-- Mass spectrometry files: They are converted to Mascot and msML.  For wiff files, the contained ASCII text is extracted.
+- Mass spectrometry files: They are converted to mgf (Mascot)  and msML.  For wiff files, the contained ASCII text is extracted.
+- Apache Parquet files are converted to tsv and tsv.bz2
 
 When opening these files  for the first time there will be some delay. This is because the files need to be generated.
 When accessed a second time, the data comes without delay, because the file is already there. Furthermore, the file size will be correct.
 When the upstream file changes or the last-modified attribute is updated, derived files will be generated again.
+
+Users can deactivate or add conversions by editing ZIPsFS_configuration_autogen.c.
 
 ### Limitations - unknown file size
 

@@ -26,7 +26,7 @@ static bool stat_from_cache(struct stat *stbuf,const char *path,const int path_l
   if (0<config_file_attribute_valid_seconds(true,path,path_l)){
     const int now=deciSecondsSinceStart();
     struct cached_stat st={0};
-    LOCK(mutex_dircache,struct cached_stat *c=ht_get(&stat_ht,path,path_l,hash);if (c) st=*c);
+    LOCK(mutex_dircache,const struct cached_stat *c=ht_get(&stat_ht,path,path_l,hash);if (c) st=*c);
     if (st.st_ino){
       if (now-st.when_read_decisec<10L*config_file_attribute_valid_seconds(IS_STAT_READONLY(st),path,path_l)){
 #define C(f) stbuf->f=st.f
@@ -40,7 +40,7 @@ static bool stat_from_cache(struct stat *stbuf,const char *path,const int path_l
   return false;
 }
 
-static void stat_to_cache(struct stat *stbuf,const char *path,const int path_l,const ht_hash_t hash){
+static void stat_to_cache(const struct stat *stbuf,const char *path,const int path_l,const ht_hash_t hash){
 #define C(f) st->f=stbuf->f
   LOCK(mutex_dircache,
        struct cached_stat *st=ht_get(&stat_ht,path,path_l,hash);
@@ -78,7 +78,7 @@ static void dircache_clear_if_reached_limit_all(const bool always,const int mask
 #define C(m) 0==(mask&(1<<m))?"":#m
   if (always) log_verbose("%s %s %s\n",C(CLEAR_DIRCACHE),C(CLEAR_STATCACHE),C(CLEAR_ZIPINLINE_CACHE));
 #undef C
-  LOCK(mutex_dircache,foreach_root(i,r) dircache_clear_if_reached_limit(always,mask,r,0));
+  LOCK(mutex_dircache,foreach_root1(r) dircache_clear_if_reached_limit(always,mask,r,0));
 }
 static void dircache_clear_if_reached_limit(const bool always,const int mask,struct rootdata *r,const off_t limit){
   if (!DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT && !always || !r) return;
@@ -91,7 +91,7 @@ static void dircache_clear_if_reached_limit(const bool always,const int mask,str
         ht_clear(&r->dircache_ht);
         IF1(WITH_DIRCACHE,  ht_clear(&r->dircache_ht_fname); mstore_clear(r->dircache_mstore));
       }
-    if (r==_root){
+    if (!rootindex(r)){
       IF1(WITH_ZIPINLINE_CACHE, if M(CLEAR_ZIPINLINE_CACHE) ht_clear(&ht_zinline_cache_vpath_to_zippath));
       IF1(WITH_STAT_CACHE, if M(CLEAR_STATCACHE) ht_clear(&stat_ht));
       //ht_clear(&ht_internalize_mutex_dircache);
@@ -121,7 +121,6 @@ static void debug_assert_crc32_not_null(const struct directory *dir){
 static void dircache_directory_to_cache(const struct directory *dir){
   cg_thread_assert_locked(mutex_dircache);
   debug_assert_crc32_not_null(dir);
-  // log_entered_function("%s ",dir->dir_realpath);
   struct rootdata *r=dir->root;
   IF1(DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,dircache_clear_if_reached_limit(false,0xFFFF,r,DIRECTORY_CACHE_BLOCKS));
   assert_validchars_direntries(VALIDCHARS_PATH,dir);
@@ -146,7 +145,7 @@ static void dircache_directory_to_cache(const struct directory *dir){
     static char u[PATH_MAX+1], vp_entry[PATH_MAX+1];
     const char *vp=rp+r->rootpath_l;
     const int slash1=cg_last_slash(vp)+1;//,vp_l=dir->dir_realpath_l-r->rootpath_l;
-    strncpy(vp_entry,vp,slash1);/* First copy parent dir */
+    stpncpy(vp_entry,vp,slash1);/* First copy parent dir */
     RLOOP(i,src.files_l){
       if (!d->fname[i]) continue;
       unsimplify_fname(strcpy(u,d->fname[i]),rp);

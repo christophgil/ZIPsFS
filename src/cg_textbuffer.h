@@ -6,7 +6,12 @@
 
 #define TEXTBUFFER_NODESTROY (1<<1) /* The destructor will not free the text segment. See ->segment_flags */
 #define TEXTBUFFER_MUNMAP (1<<2)    /* The destructor will  free the text segment with munmap() rather than free(). */
+
+
+#define TEXTBUFFER_ENOMEM (1<<1)
+#define TEXTBUFFER_SET_ENOMEM(b) b->flags|=TEXTBUFFER_ENOMEM
 struct textbuffer{
+  int flags;
   int n; /* Number segments contained */
   int capacity; /* Number segments allocated */
   off_t *segment_e, _onstack_segment_e[TEXTBUFFER_DIM_STACK]; /* Next  position after this segment */

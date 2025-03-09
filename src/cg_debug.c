@@ -1,5 +1,5 @@
 /*  Copyright (C) 2023   christoph Gille   This program can be distributed under the terms of the GNU GPLv3. */
-
+// cppcheck-suppress-file unusedFunction
 #ifndef _cg_debug_dot_c
 #define _cg_debug_dot_c
 #include "cg_utils.h"
@@ -140,8 +140,11 @@ static void _log_count_e(enum functions f,const char *path){
 
 
 
-
-
+/*
+extern char edata, etext, end;
+#define IS_LITERAL_STRING(b) ((b)>=&etext && (b)<&edata)
+MacOSX: get_etext());get_edata());get_end());
+*/
 
 
 
@@ -159,7 +162,7 @@ static void func3(void){
 }
 static void func2(void){ func3();}
 static void func1(void){ func2();}
-int main(int argc, char *argv[]){
+int main(int argc, const char *argv[]){
   func1();
 }
 #endif

@@ -147,9 +147,9 @@ static char *config_zipfilename_to_virtual_dirname(char *dirname,const char *zip
 }
 #if WITH_ZIPINLINE
 static bool config_skip_zipfile_show_zipentries_instead(const char *zipfile,const int zipfile_l){
-  static const char *WITHOUT_PARENT[]={".wiff.Zip",".wiff2.Zip",".rawIdx.Zip",".raw.Zip",NULL};
-  static int WITHOUT_PARENT_LEN[10];
   if(zipfile_l>20 && _is_Zip(zipfile+zipfile_l-4)){
+    static int WITHOUT_PARENT_LEN[10];
+    static const char *WITHOUT_PARENT[]={".wiff.Zip",".wiff2.Zip",".rawIdx.Zip",".raw.Zip",NULL};
     if (!WITHOUT_PARENT_LEN[0]){
       for(int i=0;WITHOUT_PARENT[i];i++) WITHOUT_PARENT_LEN[i]=strlen(WITHOUT_PARENT[i]);
     }
@@ -172,21 +172,52 @@ static bool config_not_report_stat_error(const char *path,const int path_l){
   return I(/analysis.tdf-wal)  I(/analysis.tdf-journal)   I(/.ciopfs)  I(.quant)  I(/autorun.inf)  I(/.xdg-volume-info) I(/.Trash) !strncmp(path,"/ZIPsFS_",8);
 #undef I
 }
-////////////////////////////////////////////////////
-/// Rules which zip entries are cached into RAM  ///
-/// This is active when started with option      ///
-///      -c rule                                 ///
-////////////////////////////////////////////////////
 #if WITH_MEMCACHE
-static bool config_advise_cache_zipentry_in_ram(long filesize,const char *path,const int path_l,bool is_compressed){
+////////////////////////////////////////////////////////////////////////////////
+/// Rules which zip entries are cached into RAM                              ///
+/// This is active when started with option                                  ///
+///      -c rule                                                             ///
+////////////////////////////////////////////////////////////////////////////////
+static bool config_advise_cache_zipentry_in_ram(const char *virtualpath,const char *realpath,const off_t filesize, const int flags){
+  const bool isCompressed=flags&ADVISE_CACHE_IS_CMPRESSED;
+  const bool isSeek=flags&ADVISE_CACHE_IS_SEEK_BW;
+  const off_t m=ramUsageForFilecontentMax();
+  off_t u=ramUsageForFilecontent();
+  const int vp_l=strlen(virtualpath);
+  if (isCompressed && isSeek && u<m) return true;
+  if (ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin")) return true;
+  if (ENDSWITH(virtualpath,vp_l,"analysis.tdf")){ /* Note: timsdata.dll opens analysis.tdf first  and then analysis.tdf_bin */
+    if (vp_l+4>=MAX_PATHLEN) return false;
+    char tdf_bin[MAX_PATHLEN]; stpcpy(stpcpy(tdf_bin,virtualpath),"_bin");
+    struct stat st_tdf_bin;
+    if (!virtualpathStat(&st_tdf_bin,tdf_bin)){
+      fprintf(stderr,"%s:%d Warning: Missing file %s\n",__func__,__LINE__,tdf_bin);
+      return false;
+    }
+    while((u=ramUsageForFilecontent()+st_tdf_bin.st_size+filesize>m)){
+      usleep((1<<20));
+      fprintf(stderr,"%s:%d:  Waiting RAM usage too high for  %s  tdf:%'ld +  tdf_bin:%'ld + u:%'ld > %'ld \n",__func__,__LINE__,virtualpath,filesize,st_tdf_bin.st_size,u,m);
+    }
 
-  return
-
-    //        ENDSWITH(path,path_l,".wiff2") ||        ENDSWITH(path,path_l,".raw") ||
-    _is_tdf_or_tdf_bin(path);
+    return true;
+  }
+  return false;
+}
+/////////////////////////////////////////////////////////////////////////////////////////
+/// Windows will read the beginning of exe files to get the icon                      ///
+/// With the rule  -c always, all .exe files would be loaded into RAM                 ///
+/// when a file listing is displayed in File Explorerer.                              ///
+/// Add here exceptions in case of MEMCACHE_ALWAYS selected with CLI Option -c ALWAYS ///
+/////////////////////////////////////////////////////////////////////////////////////////
+static bool config_advise_cache_zipentry_in_ram_never(const char *virtualpath,const char *realpath,const off_t filesize, const int flags){
+  const int vp_l=strlen(virtualpath);
+  const char *e=virtualpath+vp_l;
+  return vp_l>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e';
 }
 #endif //WITH_MEMCACHE
-static bool config_advise_evict_from_filecache(const char *realpath,const int realpath_l, const char *zipentryOrNull, const int zipentry_l){
+
+
+static bool config_advise_evict_from_filecache(const char *realpath,const int realpath_l, const char *zipentryOrNull, const off_t filesize){
   return _is_tdf_or_tdf_bin(zipentryOrNull) || _is_tdf_or_tdf_bin(realpath);
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -199,16 +230,6 @@ static bool config_advise_transient_cache_for_zipentries(const char *path, const
   return _is_tdf_or_tdf_bin(path);
 }
 #endif //WITH_TRANSIENT_ZIPENTRY_CACHES
-/////////////////////////////////////////////////////////////////////////////////////////
-/// Windows will read the beginning of exe files to get the icon                      ///
-/// With the rule  -c always, all .exe files would be loaded into RAM                 ///
-/// when a file listing is displayed in File Explorerer.                              ///
-/// Add here exceptions in case of MEMCACHE_ALWAYS selected with CLI Option -c ALWAYS ///
-/////////////////////////////////////////////////////////////////////////////////////////
-static bool config_advise_not_cache_zipentry_in_ram(const char *path, const int path_l){
-  const char *e=path+path_l;
-  return path_l>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e';
-}
 
 ////////////////////////////////////////////////////////////
 /// Certain files may be hidden in file listings         ///
@@ -270,13 +291,7 @@ const int _FILE_EXT_TO=__COUNTER__;
 ////////////////////////////////////////////////////////////////////
 /// Restrict search for certain files to improve performance.    ///
 ////////////////////////////////////////////////////////////////////
-static long config_search_file_which_roots(const char *virtualpath,const int virtualpath_l,const bool path_starts_with_autogen){
-#if WITH_AUTOGEN
-  if (path_starts_with_autogen){
-    const int vp_l=virtualpath_l-(ENDSWITH(virtualpath,virtualpath_l,".log")?4:0);
-    if (autogen_for_vgenfile(NULL,virtualpath,vp_l)) return 1;
-  }
-#endif //WITH_AUTOGEN
+static long config_search_file_which_roots(const char *virtualpath,const int virtualpath_l){
   return 0xFFFFffffFFFFffffL;
 }
 static bool config_readir_no_other_roots(const char *realpath,const int realpath_l){
@@ -308,27 +323,58 @@ static bool config_file_is_readonly(const char *path, const int path_l){
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Given the absolute path of the ZIP file or folder and the list of                                                               ///
 /// contained files, some may be excluded by setting the respective file name to NULL                                               ///
-/// For reading brukertimstof files with timsdata.dll, retaining only analysis.tdf and analysis.tdf_bin saves 15 seconds per record ///
+/// For Zip files with brukertimstof files, retaining only analysis.tdf and analysis.tdf_bin saves 15 seconds per record            ///
+/// For brukertimstof dot-d folders  the files analysis.tdf-wal and analysis.tdf-shm may cause page faults / segfaults. Hide them   ///
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void config_exclude_files(const char *path, const int path_l, const int num_files, char **files, const off_t *fsize){
   /* If it is a Zip file ending with .d.Zip which has members analysis.tdf and analysis.tdf_bin, then keep only those two */
-  if (path_l>10  && !strcmp(".d.Zip",path+path_l-6)){
+  const bool is_dotd=path_l>10  && ENDSWITH(path,path_l,".d") && !strncmp(path,_root_writable->rootpath,_root_writable->rootpath_l);
+  const bool is_dotd_Zip=(path_l>10  && ENDSWITH(path,path_l,".d.Zip"));
+
+
+
+  if (is_dotd_Zip || is_dotd){
+    //  if (path_l>10  && !strcmp(".d.Zip",path+path_l-6)){
     for(int i=path_l; --i>=0;){
       if (path[i]=='/'){
         if (path[i+1]=='2'){
-        int count=0;
-        for(int k=2; --k>=0;){ /* First round: look for analysis.tdf and .tdf_bin.   Second: set to NULL. */
-          for(int i=num_files; --i>=0;){
-            if (files[i] && *files[i]=='a' && (!strcmp("analysis.tdf",files[i])||!strcmp("analysis.tdf_bin",files[i]))){
-              if (k) count++;
-            }else if (count>1 && !k){
-              files[i]=NULL;
+          if (is_dotd){
+            for(int j=num_files; --j>=0;){
+              if (files[j] && (!strcmp("analysis.tdf-wal",files[j])||!strcmp("analysis.tdf-shm",files[j]))){
+                //log_debug_now("files[%d]: %s\n" ,j,files[j]);
+                files[j]=NULL;
+              }
+            }
+          }
+          if (is_dotd_Zip){
+            int count=0;
+            for(int k=2; --k>=0;){ /* First round: look for analysis.tdf and .tdf_bin.   Second: set to NULL. */
+              for(int j=num_files; --j>=0;){
+                if (files[j] && *files[j]=='a' && (!strcmp("analysis.tdf",files[j])||!strcmp("analysis.tdf_bin",files[j]))){
+                  if (k) count++;
+                }else if (count>1 && !k){
+                  files[j]=NULL;
+                }
+              }
             }
           }
         }
-        }
         break;
-      }
+      } /* '/' */
     }
   }
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////////
+/// Files are generally stored in the first root whenever                        ///
+/// files are copied into the virtual file systems or                            ///
+/// when files are autmotically generated like tsv from parquet                  ///
+///                                                                              ///
+/// If false is returned, then the error message will be                         ///
+///     No space left on device                                                  ///
+////////////////////////////////////////////////////////////////////////////////////
+static bool config_has_sufficient_storage_space(const char *realpath, const long availableBytes, const long totalBytes){
+  return availableBytes<totalBytes*0.75;
 }

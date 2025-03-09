@@ -1,5 +1,6 @@
 /* Compare https://raw.githubusercontent.com/Dexter9313/C-stacktrace/master/c-stacktrace.h by  Florian Cabot */
 /// COMPILE_MAIN=ZIPsFS                   ///
+// cppcheck-suppress-file unusedFunction
 
 #ifndef _cg_stacktrace_dot_c
 #define _cg_stacktrace_dot_c
@@ -42,10 +43,10 @@
 #endif // __APPLE__
 #endif // HAS_ATOS
 ////////////////////
-static char* _thisPrg;
+static const char* _thisPrg;
 static struct stat _thisPrgStat;
 static FILE *_stckOut=NULL;
-FILE *stckOut(){ return _stckOut?_stckOut:stderr;}
+static FILE *stckOut(void){ return _stckOut?_stckOut:stderr;}
 
 ////////////////////////////////////////////////////////////////////////
 #if 0
@@ -72,11 +73,12 @@ static void cg_print_stacktrace_using_debugger(void){
   }
 }
 #endif
-static char *this_executable(void){
+static const char *this_executable(void){
   if (_thisPrg && *_thisPrg=='/') return _thisPrg;
   static bool already;
-  static char thisPrgRP[PATH_MAX+1]={0}, tmp[PATH_MAX+1];
+  static char thisPrgRP[PATH_MAX+1]={0};
   if (!already){
+static char tmp[PATH_MAX+1];
     if (!has_proc_fs()){
       static int reported;
       if (!reported++) log_error("For symbolizing the stack trace, please call the program %s with absolute path.\n", snull(_thisPrg));
@@ -114,11 +116,11 @@ static char *this_executable(void){
 #endif
 
 
-static bool addr2line_output(FILE *f,char *line,int i){
+static bool addr2line_output(FILE *f,const char *line,int i){
   if (*line=='?') return false;//if symbols are readable
   char *eol=strchr(line,'\r');
   if (eol || (eol=strchr(line,'\n'))) *eol=0;
-  char *slash=strrchr(line,'/');
+  // char *slash=strrchr(line,'/');
   //  fprintf(f,"[%i] %p in %s at "ANSI_FG_BLUE"%s"ANSI_RESET,i,line, slash?slash+1:line);
   fprintf(f,"[%i] %s\n",i,line);
   fflush(f);
@@ -127,7 +129,7 @@ static bool addr2line_output(FILE *f,char *line,int i){
 
 static bool addr2line_no_shell(const char *addr,const int iLine){
   if (!HAS_ATOS && !HAS_ADDR2LINE || !this_executable()) return false;
-  char addr2line_cmd[512]={0},line[1035]={0};
+  char line[1035]={0};
   const char *aa[9]={0}, *a0;
   int a=1;
 #define A(x) aa[a++]=x
@@ -158,7 +160,7 @@ static bool addr2line_no_shell(const char *addr,const int iLine){
 
 
 
-static bool addr2line(const char *addr, int lineNb){
+static bool addr2line(const char *addr, int lineNb){ // cppcheck-suppress unusedFunction
 
   if (!HAS_ATOS && !HAS_ADDR2LINE || !this_executable()) return false;
   char addr2line_cmd[512]={0},line1[1035]={0}, line2[1035]={0};
@@ -177,9 +179,10 @@ static bool addr2line(const char *addr, int lineNb){
       if((ok=(line2[0]!='?'))){ //if symbols are readable
         char *eol=strchr(line1,'\r');
         if (eol || (eol=strchr(line1,'\n'))) *eol=0;
-        char *slash=strrchr(line2,'/');
-        slash=0;
-        fprintf(stckOut(),"[%i] %p in %s at "ANSI_FG_BLUE"%s"ANSI_RESET,lineNb,addr,line1, slash?slash+1:line2);
+        /*        char *slash=strrchr(line2,'/');*/
+
+        //        fprintf(stckOut(),"[%i] %p in %s at "ANSI_FG_BLUE"%s"ANSI_RESET,lineNb,addr,line1, slash?slash+1:line2);
+                fprintf(stckOut(),"[%i] %p in %s at "ANSI_FG_BLUE"%s"ANSI_RESET,lineNb,addr,line1, line2);
         fflush(stckOut());
       }
     }
@@ -269,7 +272,7 @@ static void my_signal_handler(int sig){
 
 
 
-static void init_sighandler(char* main_argv_0, uint64_t signals,FILE *out){
+static void init_sighandler(const char* main_argv_0, uint64_t signals,FILE *out){
 
   _stckOut=out;
   stat(_thisPrg=main_argv_0,&_thisPrgStat);

@@ -1,3 +1,4 @@
+// cppcheck-suppress-file unusedFunction
 #ifndef _cg_mstore_dot_c
 #define _cg_mstore_dot_c
 #include <sys/mman.h>
@@ -34,7 +35,6 @@ static uint32_t hash32(const char* key, const uint32_t len){
     hash*=16777619U;
   }
   return !hash?1:hash; /* Zero often means that hash still needs to be computed */
-  return hash;
 }
 static uint64_t hash64(const char* key, const off_t len){
   uint64_t hash64=14695981039346656037UL;
@@ -97,11 +97,11 @@ static off_t _mstore_common(struct mstore *m,int opt,const void *pointer){
       case _mstore_usage: sum+=BLOCK_OFFSET_NEXT_FREE(d); break;
       case _mstore_blocks:  if (BLOCK_OFFSET_NEXT_FREE(d)>_MSTORE_LEADING) sum++;  break;
       case _mstore_clear:
-        BLOCK_OFFSET_NEXT_FREE(d)=_MSTORE_LEADING;
+        BLOCK_OFFSET_NEXT_FREE(d)=_MSTORE_LEADING; // cppcheck-suppress unreadVariable
         //memset(d+_MSTORE_LEADING,0,BLOCK_CAPACITY(d)*SIZEOF_OFF_T);
         // fprintf(stderr," xxxxxxxx BLOCK_OFFSET_NEXT_FREE(d)=%ld   BLOCK_CAPACITY(d)=%ld",BLOCK_OFFSET_NEXT_FREE(d),BLOCK_CAPACITY(d));
         //memset(d+_MSTORE_LEADING,0,BLOCK_CAPACITY(d));
-        break;
+        break          ;
       case _mstore_contains:{
         if (d+_MSTORE_LEADING<=(char*)pointer && (char*)pointer<d+BLOCK_CAPACITY(d)){
          sum=1;
@@ -140,7 +140,7 @@ static const char *mstore_set_base_path(const char *f){
     DIR *dir=PROFILED(opendir)(base);
     if (dir){
       char fn[MAX_PATHLEN+1];
-      struct dirent *de;
+      const struct dirent *de;
       while((de=readdir(dir))){
         snprintf(fn,MAX_PATHLEN,"%s/%s",base,de->d_name);
         unlink(fn);
@@ -160,6 +160,7 @@ static const char *mstore_set_base_path(const char *f){
 #define mstore_init_file(m,name,size_and_opt) _mstore_init(m,name,size_and_opt|MSTORE_OPT_MMAP_WITH_FILE)
 #define mstore_init(m,name,size_and_opt) _mstore_init(m,name,size_and_opt)
 static struct mstore *_mstore_init(struct mstore *m,const char *name, const int size_and_opt){
+assert(m);
   memset(m,0,sizeof(struct mstore));
   m->data=m->pointers_data_on_stack;
   m->name=name;
@@ -326,7 +327,7 @@ static void test_mstore2(int argc, char *argv[]){
   mstore_destroy(&ms);
 }
 
-static void test_duplicate_name(){
+static void test_duplicate_name(void){
   struct mstore m1,m2;
   mstore_init(&m1,"test",MSTORE_OPT_MMAP_WITH_FILE|10);
   mstore_init(&m2,"test",MSTORE_OPT_MMAP_WITH_FILE|10);

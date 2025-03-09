@@ -1,4 +1,5 @@
 /*  Copyright (C) 2023   christoph Gille   This program can be distributed under the terms of the GNU GPLv3. */
+// cppcheck-suppress-file unusedFunction
 #ifndef _cg_utils_dot_c
 #define _cg_utils_dot_c
 #include "cg_gnu.c"
@@ -41,9 +42,6 @@
 #ifndef PROFILED
 #define PROFILED(function) function
 #endif
-
-
-
 
 /*********************************************************************************/
 static bool has_proc_fs(void){
@@ -151,6 +149,13 @@ static int _cg_munmap(const int id,const void *ptr,size_t length){
 /// String ///
 //////////////
 
+static char *cg_stpncpy0(char *dst,const char *src,const int n){
+  if (!dst) return NULL;
+   char *ret=stpncpy(dst,src,n);
+  *ret=0;
+  return ret;
+}
+
 static const char *cg_str_lremove(const char *s, const char *pfx,const int  pfx_l){
   return s+(strncmp(s,pfx,pfx_l)?0:pfx_l);
 }
@@ -175,17 +180,16 @@ static int cg_sum_strlen(const char **ss, const int n){
   return sum;
 }
 
-#define cg_idx_of_NULL(aa) cg_idx_of_pointer(aa,NULL)
-static int cg_idx_of_pointer(void **aa, void *a){
+#define cg_idx_of_NULL(aa,n) cg_idx_of_pointer(aa,n,NULL)
+static int cg_idx_of_pointer(void **aa, const int n, const void *a){
   if (aa){
-    for(int i=0; ;i++){
+    FOR(i,0,n){
       if (aa[i]==a) return i;
       if (!aa[i]) break;
     }
   }
   return -1;
 }
-
 
 
 static const char* snull(const char *s){ return s?s:"Null";}
@@ -199,7 +203,6 @@ static bool cg_endsWithIC(const bool ic,const char* s,int s_l,const char* e,cons
   const int e_l=e_l_or_zero?e_l_or_zero:strlen(e);
   return e_l<=s_l && 0==(ic?strncasecmp(s+s_l-e_l,e,e_l): memcmp(s+s_l-e_l,e,e_l));
 }
-
 
 
 
@@ -217,12 +220,12 @@ static bool cg_endsWithZip(const char *s, int len){
 
 
 /*
-static char *cg_remove_zipext(char *s,const int s_l_or_zero){
+  static char *cg_remove_zipext(char *s,const int s_l_or_zero){
   if (!s) return NULL;
   const int s_l=s_l_or_zero?s_l_or_zero:strlen(s);
   if (cg_endsWithZip(s,s_l)) s[s_l-4]=0;
   return s;
-}
+  }
 */
 static bool cg_endsWithDotD(const char *s, int len){
   if(!len)len=cg_strlen(s);
@@ -261,6 +264,7 @@ static int cg_last_slash(const char *path){
 
 
 
+
 #define OPT_STR_REPLACE_DRYRUN (1<<0)
 #define OPT_STR_REPLACE_ASSERT (1<<1)
 static int cg_str_replace(const int opt,char *haystack, const int h_l_or_zero, const char *needle,  const int n_l_or_zero, const char *replacement,  const int r_l_or_zero){
@@ -269,20 +273,21 @@ static int cg_str_replace(const int opt,char *haystack, const int h_l_or_zero, c
   const int r_l=r_l_or_zero?r_l_or_zero:strlen(replacement);
   const int n_l=n_l_or_zero?n_l_or_zero:strlen(needle);
   const bool ends_null=haystack[h_l]==0;
-  //fprintf(stderr,"lllllllllllllllllll h_l=%d  n_l=%d   r_l=%d  \n",h_l,n_l,r_l);
+  //fprintf(stderr,"literal %d dyr: %d assert: %d  h %s %d     n %s n_l=%d   r %s r_l=%d  \n",IS_LITERAL_STRING(haystack),0!=(opt&OPT_STR_REPLACE_DRYRUN),0!=(opt&OPT_STR_REPLACE_ASSERT),haystack,h_l,needle,n_l,replacement,r_l);
   assert(n_l>0);
   bool replaced=false;
   RLOOP(h,h_l-n_l+1){
-    if (haystack[h]!=needle[0] || memcmp(haystack+h,needle,n_l)) continue;
+    if (haystack[h]!=*needle || memcmp(haystack+h,needle,n_l)) continue;
     replaced=true;
-    const int diff=r_l-n_l;
-    h_l+=diff;
+    const int dl=r_l-n_l;
+    h_l+=dl;
     if (0==(opt&OPT_STR_REPLACE_DRYRUN)){
-      if (diff<0){ /* Shift left, gets-smaller */
-        FOR(p,h+r_l,h_l) haystack[p]=haystack[p-diff];
-      }else if (diff>0){ /* Shift right */
-        for(int p=h_l; --p>=h+r_l;) haystack[p]=haystack[p-diff];
+      if (dl<0){ /* Shift left, gets-smaller */
+        FOR(p,h+r_l,h_l) haystack[p]=haystack[p-dl];
+      }else if (dl>0){ /* Shift right */
+        for(int p=h_l; --p>=h+r_l;) haystack[p]=haystack[p-dl];
       }
+      //fprintf(stderr,"haystack: %s  h: %d  replacement: %s r_l: %d ",haystack,h,replacement,r_l);
       memcpy(haystack+h,replacement,r_l);
     }
   }
@@ -301,10 +306,10 @@ static int cg_str_replace(const int opt,char *haystack, const int h_l_or_zero, c
 #define OPT_CG_STRSPLIT_WITH_EMPTY_TOKENS (1<<8)
 #define OPT_CG_STRSPLIT_NO_HEAP (1<<9)
 static int cg_strsplit(int opt_and_sep, const char *s, const int s_l, const char *tokens[], int *tokens_l){
-  bool prev_sep=true;
   int count=0;
   const char *tok=NULL;
   if (s){
+      bool prev_sep=true;
     for(int i=0;;i++){
       const bool isend=s_l?(i>=s_l):!s[i];
       const bool issep=isend || s[i]==(opt_and_sep&0xff);
@@ -348,7 +353,7 @@ static int deciSecondsSinceStart(void){
   return (int)((now.tv_sec-_startTime.tv_sec)*10+(now.tv_usec-_startTime.tv_usec)/100000);
 }
 
-static void cg_sleep_ms(const int millisec, char *msg){
+static void cg_sleep_ms(const int millisec, const char *msg){
   if (millisec>0){
     if (msg&&!*msg) log_verbose("Going sleep %d ms ...",millisec);
     else if (msg) log_verbose("%s",msg);
@@ -376,7 +381,7 @@ static bool *cg_validchars(enum validchars type){
   static bool initialized;
   if (!initialized){
     if (type==VALIDCHARS_FILE||type==VALIDCHARS_PATH||type==VALIDCHARS_NOQUOTE){
-      for(int t=VALIDCHARS_NUM;--t>=0;){
+      RLOOP(t,VALIDCHARS_NUM){
         bool *cc=ccc[t];
         FOR(i,'A','Z'+1) cc[i|32]=cc[i]=true;
         FOR(i,'0','9'+1) cc[i]=true;
@@ -444,10 +449,10 @@ static bool cg_check_path_for_fd(const char *title, const char *path, int fd){
 }
 
 static void cg_print_path_for_fd(int fd){
-  char buf[99],path[512];
   if (!has_proc_fs()){
     fprintf(stderr,ERROR_MSG_NO_PROC_FS"\n");
   }else{
+      char buf[99],path[512];
     sprintf(buf,"/proc/self/fd/%d",fd);
     const ssize_t n=readlink(buf,path,511);
     if (n<0){
@@ -479,9 +484,9 @@ static int isPowerOfTwo(unsigned int n){
 
 /* Integer sqrt from https://en.wikipedia.org/wiki/Integer_square_root */
 static unsigned int isqrt(unsigned int y){
-  unsigned int L=0,M,R=y+1;
+  unsigned int L=0,R=y+1;
   while(L!=R-1){
-    M=(L+R)/2;
+    const unsigned int M=(L+R)/2;
     if (M*M<=y) L=M; else R=M;
   }
   return L;
@@ -519,10 +524,19 @@ static void cg_log_file_mode(mode_t m){
 ///////////////////
 /// file stat   ///
 ///////////////////
-static const struct stat EMPTY_STAT={0};
+
+static const struct stat empty_stat={0};
+static long cg_file_size(const char *path){
+  if (!path) return -1;
+  struct stat st;
+  return stat(path,&st)?-1:st.st_size;
+}
+#define cg_file_exists(path) (cg_file_size(path)>=0)
+
+
 #define cg_log_file_stat(...) _cg_log_file_stat(__func__,__VA_ARGS__)
 static void _cg_log_file_stat(const char *fn,const char * name,const struct stat *s){
-  char *color=ANSI_FG_BLUE;
+  const char *color=ANSI_FG_BLUE;
 #ifdef SHIFT_INODE_ROOT
   if (s->st_ino>(1L<<SHIFT_INODE_ROOT)) color=ANSI_FG_MAGENTA;
 #endif
@@ -564,11 +578,12 @@ static void cg_log_open_flags(int flags){
 
 
 static void cg_clear_stat(struct stat *st){ if(st) memset(st,0,sizeof(struct stat));}
-static bool cg_stat_differ(const char *title,struct stat *s1,struct stat *s2){
+static bool cg_stat_differ(const char *title,const struct stat *s1,const struct stat *s2){
   if (!s1||!s2) return false; // memcmp would lead to false positives
-  char *wrong=NULL;
+  const char *wrong=NULL;
 #define C(f) (wrong=#f,s1->f!=s2->f)
-  if (C(st_ino)||C(st_mode)||C(st_uid)||C(st_gid)||C(st_size)||C(st_blksize)||C(st_blocks)||C(st_mtime)||C(st_ctime)||(wrong=NULL,false)){
+  //  if (C(st_ino)||C(st_mode)||C(st_uid)||C(st_gid)||C(st_size)||C(st_blksize)||C(st_blocks)||C(st_mtime)||C(st_ctime)||(wrong=NULL,false)){  knownConditionTrueFalse
+    if (C(st_ino)||C(st_mode)||C(st_uid)||C(st_gid)||C(st_size)||C(st_blksize)||C(st_blocks)||C(st_mtime)||C(st_ctime)){
     log_warn("stat_t.%s\n",wrong);
     cg_log_file_stat(title,s1);
     cg_log_file_stat(title,s2);
@@ -603,7 +618,7 @@ static bool cg_access_from_stat(const struct stat *stats,int mode){ // equivalet
     granted=(stats->st_mode&mode);
   return granted==mode;
 }
-static bool cg_file_set_atime(const char *path, struct stat *stbuf,long secondsFuture){
+static bool cg_file_set_atime(const char *path, struct stat *stbuf,long secondsFuture){ // cppcheck-suppress constParameterPointer
   struct stat st;
   if (!stbuf && PROFILED(stat)(path,stbuf=&st)) return false;
   log_verbose("secondsFuture=%ld\n",secondsFuture);
@@ -627,7 +642,7 @@ static int cg_getc_tty(void){
 }
 
 /* write() may be write only part of the data */
-static bool cg_fd_write(int fd,char *t,const off_t size0){
+static bool cg_fd_write(const int fd,const char *t,const off_t size0){
   for(off_t size=size0; size>0;){
     off_t n=write(fd,t,size);
     if (n<0) return false;
@@ -637,7 +652,7 @@ static bool cg_fd_write(int fd,char *t,const off_t size0){
   return true;
 }
 
-static bool cg_fd_write_str(int fd,char *t){
+static bool cg_fd_write_str(const int fd,const char *t){
   return t && cg_fd_write(fd,t,strlen(t));
 }
 
@@ -704,8 +719,9 @@ static char* cg_path_expand_tilde(char *dst, const int dst_max, const char *path
     if (path){
       const char *s=path;
       if (*path=='~'){
-        const char *h;
-        assert((h=getenv("HOME")));
+        const char *h=getenv("HOME");
+        assert(h!=NULL);
+
         if (h){
           const int hl=strlen(h),path_l=strlen(path);
           assert(hl+path_l<=(dst_max?dst_max:PATH_MAX));
@@ -772,7 +788,7 @@ static bool cg_is_member_of_group_docker(void){
 ///////////////////
 ///  process    ///
 ///////////////////
-static bool cg_log_exec_fd(const int fd,  char * const env[],  char * const cmd[]){
+static bool cg_log_exec_fd(const int fd, char const * const * const env, char const * const * const cmd){
   RLOOP(j,2){
     char **s=(char**)(j?env:cmd);
     if (s){
@@ -823,11 +839,10 @@ static int cg_waitpid_logtofile_return_exitcode(int pid,const char *err){
   FILE *f=NULL;
   const int ret=waitpid(pid,&status,0);
   if (ret==-1){
-    if (!f) f=fopen(err,"a");
-    if (f){
+    if ((f=fopen(err,"a"))){
       fputs("waitpid() failed.\n",f);
       fprint_strerror(f,errno);
-      if (f) fclose(f);
+      fclose(f);
     }
     res=-1;
   }
@@ -836,10 +851,9 @@ static int cg_waitpid_logtofile_return_exitcode(int pid,const char *err){
     if (f) fclose(f);
     res=WIFEXITED(status)?WEXITSTATUS(status):INT_MIN;
   }
-  //log_exited_function("err: %s res: %d\n",err,res);
   return res;
 }
-static void cg_exec(char * const env[],char *cmd[],const int fd_out,const int fd_err){
+static void cg_exec(char const * const * const env,char const * const * const cmd,const int fd_out,const int fd_err){
   if(fd_out>0) dup2(fd_out,STDOUT_FILENO);
   if(fd_err>0) dup2(fd_err,STDERR_FILENO);
   if(fd_out>0) close(fd_out);
@@ -850,13 +864,12 @@ static void cg_exec(char * const env[],char *cmd[],const int fd_out,const int fd
 #elif ! defined(HAS_UNDERSCORE_ENVIRON) || HAS_UNDERSCORE_ENVIRON
   extern char **_environ; /* default */
   if (env) _environ=(char**)env;
-  execvp(cmd[0],cmd);
+  execvp(cmd[0],(char *const *)cmd);
 #else
   execvp(cmd[0],cmd);
 #endif
   EXIT(EPIPE);
 }
-
 
 //////////////////////////////////////////////////////////////////////
 // Compare text and file content
@@ -890,9 +903,17 @@ static int differs_filecontent_from_string(const int opt,const char* path, const
 // 1111111111111111111111111111111111111111111111111111111111111
 #if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
 int main(int argc, char *argv[]){
+  char s[PATH_MAX];
+  cg_stpncpy0(s,argv[1],10);
+  printf("s='%s'\n",s);
+  return 0;
 
 
-  switch(4){
+ /*  char *h=strdup("/data/PLACEHOLDER_INFILE_NAMEx"); */
+ /*  cg_str_replace(0,h,0,"PLACEHOLDER_INFILE_NAMEx",0, "report.parquet",0); */
+ /*  fprintf(stderr,"h: %s\n",h); */
+ /* return 0; */
+  switch(13){
   case 0:{
     bool *ccpath=cg_validchars(VALIDCHARS_PATH);
     fprintf(stderr,"ccpath\n");
@@ -928,7 +949,7 @@ int main(int argc, char *argv[]){
     printf("n=%d\n",n);
     char token[999];
     FOR(i,0,n){
-      *stpncpy(token,tokens[i],tokens_l[i])=0;
+      cg_stpncpy0(token,tokens[i],tokens_l[i]);
       token[tokens_l[i]]=0;
       printf("%d/%d %s  %d  %ld\n",i,n,token,tokens_l[i], strlen(tokens[i]));
     }
@@ -947,8 +968,8 @@ int main(int argc, char *argv[]){
   } break;
   case 7:{
     //    log_verbose("cg_find_invalidchar=%d\n",cg_find_invalidchar(VALIDCHARS_PATH,argv[1],strlen(argv[1])));    EXIT(1);
-    char *env[]={"a=1",NULL};
-    char *cmd[]={"ls","-l","space char","backslash\\","single'quote'",NULL};
+    char const * const  env[]={"a=1",NULL};
+    char const * const  cmd[]={"ls","-l","space char","backslash\\","single'quote'",NULL};
     cg_log_exec_fd(2,env,cmd);
   } break;
   case 8:{
@@ -980,10 +1001,14 @@ int main(int argc, char *argv[]){
   case 13:
     assert(argc==3);
     printf("cg_file_is_newer_than %d \n",cg_file_is_newer_than(argv[1],argv[2]));
-
-
-
     break;
+  /* case 14:{ */
+  /*   char *aa[99]; */
+  /*   FOR(i,0,argc) aa[i]=*argv[i]?argv[i]:NULL; */
+  /*   const int n=cg_array_remove_null_pointer(aa,argc); */
+  /*   FOR(i,0,n) printf("%d '%s'\n",i,(char*)aa[i]); */
+  /*   fprintf(stderr,"idx 0: %d\n",cg_idx_of_NULL(aa,argc)); */
+  /* } */
   }
 }
 
