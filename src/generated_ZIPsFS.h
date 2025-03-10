@@ -351,7 +351,6 @@ static int filler_readdir_zip(const int opt,struct zippath *zpath,void *buf, fus
 static int filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_fill_dir_t filler,struct ht *no_dups);
 static int has_sufficient_storage_space(const char *path);
 static int realpath_mk_parent(char *realpath,const char *path);
-static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi_or_null);
 static int unknown_filesize_to_zero(const long size,struct fuse_file_info *fi);
 static int PROFILED(_xmp_getattr)(const char *path, struct stat *stbuf, void *fi_or_null);
 static int PROFILED(xmp_access)(const char *path, int mask);
@@ -360,6 +359,7 @@ static int xmp_unlink(const char *path);
 static int xmp_rmdir(const char *path);
 static int PROFILED(xmp_open)(const char *path, struct fuse_file_info *fi);
 static int xmp_truncate(const char *path, off_t size IF1(WITH_FUSE_3,,struct fuse_file_info *fi));
+static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi,enum fuse_readdir_flags flags);
 static int PROFILED(_xmp_readdir)(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi);
 static int xmp_mkdir(const char *path, mode_t mode);
 static int create_or_open(const char *path, mode_t mode, struct fuse_file_info *fi);

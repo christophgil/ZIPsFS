@@ -1290,8 +1290,6 @@ static int filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_f
 
 
 
-
-
 static int minus_val_or_errno(int res){ return res==-1?-errno:-res;}
 static int xmp_releasedir(const char *path, struct fuse_file_info *fi){ return 0;} // cppcheck-suppress [constParameterCallback]
 static int xmp_statfs(const char *path, struct statvfs *stbuf){ return minus_val_or_errno(statvfs(_root->rootpath,stbuf));}
@@ -1350,13 +1348,16 @@ void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_config *
 #endif
   return NULL;
 }
+#define LOG_FUSE(path) IF1(LOG_ALL_FUSE_FUNC,log_entered_function("%s",path))
+#define LOG_FUSE_RES(path,res) IF1(LOG_ALL_FUSE_FUNC,log_entered_function("%s res:%d",path,res))
+
 /////////////////////////////////////////////////
 // Functions where Only single paths need to be  substituted
 // Release FUSE 2.9 The chmod, chown, truncate, utimens and getattr handlers of the high-level API now all receive an additional struct fuse_file_info pointer (which, however, may be NULL even if the file is currently open).
 #if FUSE_MAJOR_V>=2 && FUSE_MINOR_V>9
-static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi_or_null){
+static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi_or_null){ /* NOT_TO_GENERATED_HEADER */
   const int res=_xmp_getattr(path,stbuf,fi_or_null);
-  //log_debug_now("%s res: %d",path,res);
+  LOG_FUSE_RES(path,res);
   return res;
 }
 static int unknown_filesize_to_zero(const long size,struct fuse_file_info *fi){
@@ -1368,7 +1369,11 @@ static int unknown_filesize_to_zero(const long size,struct fuse_file_info *fi){
 }
 #else
 #define unknown_filesize_to_zero(size,fi) fi
-static int xmp_getattr(const char *path, struct stat *stbuf){ return _xmp_getattr(path,stbuf,NULL);}
+static int xmp_getattr(const char *path, struct stat *stbuf){ /* NOT_TO_GENERATED_HEADER */
+  const int res=_xmp_getattr(path,stbuf,NULL);
+  LOG_FUSE_RES(path,res);
+  return res;
+}
 #endif
 static int PROFILED(_xmp_getattr)(const char *path, struct stat *stbuf, void *fi_or_null){
   const int path_l=strlen(path);
@@ -1422,6 +1427,7 @@ static int PROFILED(_xmp_getattr)(const char *path, struct stat *stbuf, void *fi
   return -err;
 }
 static int PROFILED(xmp_access)(const char *path, int mask){
+  LOG_FUSE(path);
   const int path_l=strlen(path);
   if (whatSpecialFile(path,path_l)>=SFILE_BEGIN_VIRTUAL) return 0;
   NEW_ZIPPATH(path);
@@ -1436,22 +1442,26 @@ static int PROFILED(xmp_access)(const char *path, int mask){
 }
 static int xmp_readlink(const char *path, char *buf, size_t size){
   bool found;FIND_REALPATH(path);
+  LOG_FUSE_RES(path,found);
   if (!found) return -ENOENT;
   const int n=readlink(RP(),buf,size-1);
   return n==-1?-errno: (buf[n]=0);
 }
 static int xmp_unlink(const char *path){
   bool found;FIND_REALPATH(path);
+  LOG_FUSE_RES(path,found);
   return !ZPATH_ROOT_WRITABLE()?-EACCES: !found?-ENOENT: minus_val_or_errno(unlink(RP()));
 }
 static int xmp_rmdir(const char *path){
   bool found;FIND_REALPATH(path);
+  LOG_FUSE_RES(path,found);
   return !ZPATH_ROOT_WRITABLE()?-EACCES: !found?-ENOENT: minus_val_or_errno(rmdir(RP()));
 }
 #define LOG2_FD_ZIP_MIN 20
 #define FD_ZIP_MIN (1<<LOG2_FD_ZIP_MIN)
 //#define FHANDLE_FLAG_CHANGED_TO_WRITE (1<<(LOG2_FD_ZIP_MIN-1))
 static int PROFILED(xmp_open)(const char *path, struct fuse_file_info *fi){
+  LOG_FUSE(path);
   ASSERT(fi!=NULL);
   //log_entered_function("path=%s",path);
   //if (tdf_or_tdf_bin(path))log_entered_function("%s",path);
@@ -1513,6 +1523,7 @@ static int PROFILED(xmp_open)(const char *path, struct fuse_file_info *fi){
 
 
 static int xmp_truncate(const char *path, off_t size IF1(WITH_FUSE_3,,struct fuse_file_info *fi)){
+  LOG_FUSE(path);
   int res;
   IF1(WITH_FUSE_3,if (fi)    res=ftruncate(fi->fh,size); else)
     {
@@ -1526,7 +1537,11 @@ static int xmp_truncate(const char *path, off_t size IF1(WITH_FUSE_3,,struct fus
 /////////////////////////////////
 /** unsigned int cache_readdir:1; FOPEN_CACHE_DIR Can be filled in by opendir. It signals the kernel to  enable caching of entries returned by readdir(). */
 #if FUSE_MAJOR_V>=3 && FUSE_MINOR_V>5 /* FUSE 3.5 Added a new cache_readdir flag to fuse_file_info to enable caching of readdir results. */
-static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi,enum fuse_readdir_flags flags){ return _xmp_readdir(path,buf,filler,offset,fi);}
+static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi,enum fuse_readdir_flags flags){
+  const int res=_xmp_readdir(path,buf,filler,offset,fi);
+  LOG_FUSE_RES(path,res);
+  return res;
+}
 #else
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi){ return _xmp_readdir(path,buf,filler,offset,fi);}
 #endif
@@ -1587,9 +1602,12 @@ static int create_or_open(const char *path, mode_t mode, struct fuse_file_info *
   return 0;
 }
 static int xmp_create(const char *path, mode_t mode,struct fuse_file_info *fi){ /* O_CREAT|O_RDWR goes here */
-  return create_or_open(path,mode,fi);
+  const int res=create_or_open(path,mode,fi);
+  LOG_FUSE_RES(path,res);
+  return res;
 }
 static int xmp_write(const char *path, const char *buf, size_t size,off_t offset, struct fuse_file_info *fi){ // cppcheck-suppress [constParameterCallback]
+  LOG_FUSE(path);
   if (!_root_writable) return -EACCES;
   int res=0;
   uint64_t fd;
@@ -1610,6 +1628,7 @@ static int xmp_write(const char *path, const char *buf, size_t size,off_t offset
 // Functions with two paths ///
 ///////////////////////////////
 static int xmp_symlink(const char *target, const char *path){ // target,link
+  LOG_FUSE(path);
   if (!_root_writable) return -EACCES;
   char real_path[MAX_PATHLEN+1];
   if (!(realpath_mk_parent(real_path,path)) && symlink(target,real_path)==-1) return -errno;
@@ -1617,7 +1636,8 @@ static int xmp_symlink(const char *target, const char *path){ // target,link
 }
 
 static int xmp_rename(const char *old_path, const char *neu_path IF1(WITH_FUSE_3,, const uint32_t flags)){
-  bool eexist=false;
+  IF1(LOG_ALL_FUSE_FUNC,log_entered_function("%s -> %s",old_path, neu_path));
+    bool eexist=false;
 #if WITH_GNU && WITH_FUSE_3
   if (flags&RENAME_NOREPLACE){
     bool found;FIND_REALPATH(neu_path);
@@ -1638,6 +1658,7 @@ static int xmp_rename(const char *old_path, const char *neu_path IF1(WITH_FUSE_3
 //////////////////////////////////
 #if FUSE_MAJOR_V>2
 static off_t xmp_lseek(const char *path, const off_t off, const int whence, struct fuse_file_info *fi){ // cppcheck-suppress [constParameterCallback]
+  LOG_FUSE(path);
   ASSERT(fi!=NULL);
   int ret=off;
   lock(mutex_fhandle);
@@ -1753,8 +1774,8 @@ static off_t fhandle_read_zip(const char *path, char *buf, const off_t size, con
   if (offset<pos){ /* Worst case=seek backward - need reopen zip file */
     warning(WARN_SEEK,path,ANSI_FG_RED"fhandle_zip_ftell() - going to reopen zip"ANSI_RESET);
     fhandle_zip_close(d);
-    fhandle_zip_open(d,"SEEK-BW");
-    if (!fhandle_zip_fseek(d,offset,"SEEK-BW")) return -1;
+    fhandle_zip_open(d,"REWIND");
+    if (!fhandle_zip_fseek(d,offset,"REWIND")) return -1;
   }else if (offset>pos){
     warning(WARN_SEEK,D_VP(d),"should not happen offset=%ld > pos=%ld ",offset,pos);
     return -1;
@@ -1868,6 +1889,7 @@ static int PROFILED(xmp_release)(const char *path, struct fuse_file_info *fi){ /
   return 0;
 }
 static int xmp_flush(const char *path,  struct fuse_file_info *fi){
+  LOG_FUSE(path);
   const int path_l=strlen(path);
   return whatSpecialFile(path,path_l)>=SFILE_BEGIN_VIRTUAL?0:
     fi->fh<FD_ZIP_MIN?fsync(fi->fh):
@@ -1936,7 +1958,7 @@ int main(const int argc,const char *argv[]){
   for(int c;(c=getopt_long(argc,(char**)argv,"+aAqT:nkhVs:c:S:l:L:",l_option,NULL))!=-1;){  /* The initial + prevents permutation of argv */
     switch(c){
     case 'a':
-    case 'A':  if (WITH_AUTOGEN==(c=='a')) DIE("Macro WITH_AUTOGEN should be %d due to option -%c\n",!WITH_AUTOGEN,c);break;
+    case 'A':  if (WITH_AUTOGEN==(c=='a') || LOG_ALL_FUSE_FUNC==(c=='a')) DIE("Macro WITH_AUTOGEN should be %d due to option -%c\n",!WITH_AUTOGEN,c);break;
     case 'V': exit(0);break;
     case 'T':{
       const int i=atoi(optarg);
@@ -2216,4 +2238,4 @@ int main(const int argc,const char *argv[]){
 //  statvfs    f_bsize  f_frsize  f_blocks f_bfree f_bavail
 // config_autogen_estimate_filesize   autogen_rinfiles
 // stat foreach_fhandle EIO local  fseek seek open
-// fhandle fdescriptor fdscrptr fhandle fhandle_read_zip
+// fhandle fdescriptor fdscrptr fhandle fhandle_read_zip  #include "generated_profiler_names.c"

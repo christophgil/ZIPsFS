@@ -136,7 +136,7 @@
 ///////////////////////////////////
 /// Dynamically generated files ///
 ///////////////////////////////////
-
+#define LOG_ALL_FUSE_FUNC 1
 #define WITH_AUTOGEN 1
 
 /* WITH_AUTOGEN depends on WITH_MEMCACHE */

@@ -86,7 +86,7 @@ static void dircache_clear_if_reached_limit(const bool always,const int mask,str
   IF1(WITH_DIRCACHE,const off_t ss=mstore_count_blocks(&r->dircache_mstore));
 #define M(x) (0!=(mask&(1<<x)))
   if (always IF1(WITH_DIRCACHE,|| ss>=limit)){
-    IF1(WITH_DIRCACHE,if (!always)  warning(WARN_DIRCACHE,r->rootpath,"Clearing directory cache. Cached segments: %zu (%zu) bytes: %zu. %s",ss,limit,mstore_usage(&r->dircache_mstore),always?"":"Consider to increase DIRECTORY_CACHE_BLOCKS"));
+    IF1(WITH_DIRCACHE,warning(WARN_DIRCACHE,r->rootpath,"Clearing directory cache. Cached segments: %zu (%zu) bytes: %zu. %s",ss,limit,mstore_usage(&r->dircache_mstore),!limit?"":"Consider to increase DIRECTORY_CACHE_BLOCKS"));
     if M(CLEAR_DIRCACHE){
         ht_clear(&r->dircache_ht);
         IF1(WITH_DIRCACHE,  ht_clear(&r->dircache_ht_fname); mstore_clear(r->dircache_mstore));

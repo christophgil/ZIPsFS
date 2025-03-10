@@ -135,7 +135,7 @@ IS_CG=0; [[ $(hostname). == s-mcpb-ms0* && $USER == cgille ]] && IS_CG=1 && echo
 if ((IS_CG));then
     export PATH=/usr/lib/llvm-13/bin:/usr/lib/llvm-14/bin/:$PATH
     WITH_SANITIZER=1
-    WITH_PROFILER=1
+    # WITH_PROFILER=1
 fi
 
 

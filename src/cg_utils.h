@@ -144,8 +144,8 @@ M(MAX,long)
 
 #define PRINT_PFX_FUNC_MSG(pfx1,pfx2,sfx,...)  fprintf(stderr,pfx1"%d %s():%i "pfx2,deciSecondsSinceStart()/10,__func__,__LINE__),fprintf(stderr,__VA_ARGS__),puts_stderr(sfx)
 
-#define log_entered_function(...)     PRINT_PFX_FUNC_MSG(ANSI_INVERSE" > > > "ANSI_RESET,"\n","\n",__VA_ARGS__)
-#define log_exited_function(...)      PRINT_PFX_FUNC_MSG(ANSI_INVERSE" < < < "ANSI_RESET,"\n","\n",__VA_ARGS__)
+#define log_entered_function(...)     PRINT_PFX_FUNC_MSG(ANSI_INVERSE" > > > "ANSI_RESET," ","\n",__VA_ARGS__)
+#define log_exited_function(...)      PRINT_PFX_FUNC_MSG(ANSI_INVERSE" < < < "ANSI_RESET," ","\n",__VA_ARGS__)
 #define log_error(...)                PRINT_PFX_FUNC_MSG(RED_ERROR,"\n","\n",__VA_ARGS__)
 #define log_warn(...)                 PRINT_PFX_FUNC_MSG(RED_WARNING,"\n","\n",__VA_ARGS__)
 #define log_debug(...)                PRINT_PFX_FUNC_MSG(ANSI_FG_MAGENTA" Debug "ANSI_RESET," ","\n",__VA_ARGS__)
