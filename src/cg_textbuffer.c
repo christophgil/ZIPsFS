@@ -186,14 +186,15 @@ static int textbuffer_from_exec_output(const uint8_t flags,struct textbuffer *b,
     return (b->flags&TEXTBUFFER_ENOMEM)?ENOMEM:cg_waitpid_logtofile_return_exitcode(pid,path_stderr);
   }else{
     close(pipefd[0]);
-    cg_exec(env,cmd,pipefd[1],!path_stderr?-1:open(path_stderr,O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR));
+    const int fd_err=!path_stderr?-1:open(path_stderr,O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR);
+    cg_exec(env,cmd,pipefd[1],fd_err);
+    if (fd_err>0) close(fd_err);
   }
   log_errno("After execvp should not happen\n");
   return -1;
 }
 static void textbuffer_reset(struct textbuffer *b){
   if (!b) return;
-
   char **ss=b->segment;
   off_t *ee=b->segment_e;
   RLOOP(i,b->n){
@@ -324,7 +325,7 @@ int main(int argc,char *argv[]){
   } break;
   case 3:{
     struct textbuffer b={0};
-    textbuffer_add_segment(0,&b,strdup(argv[1]),strlen(argv[1]));
+    textbuffer_add_segment(0,&b,strdup_untracked(argv[1]),strlen(argv[1]));
     textbuffer_write_file(&b,"/home/cgille/tmp/t.txt",0644);
     textbuffer_destroy(&b);
   } break;

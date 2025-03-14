@@ -33,12 +33,17 @@ static void aimpl_wait_concurrent(const struct autogen_rule *ac, const int inc){
     else pthread_mutex_unlock(&ALOCK(ac));
   }
 }
-
+#ifdef __cppcheck__
+#define aimpl_wait_concurrent_begin(ac)  FILE *_wait_concurrent=fopen("abc","r")
+#define aimpl_wait_concurrent_end(ac)    close(_wait_concurrent)
+#else
+#define aimpl_wait_concurrent_begin(ac) aimpl_wait_concurrent(ac,1)
+#define aimpl_wait_concurrent_end(ac) aimpl_wait_concurrent(ac,-1)
+#endif
 //////////////////////////////////////////////////////////////////////
 /// This is run once when ZIPsFS is started.                       ///
 //////////////////////////////////////////////////////////////////////
 static void aimpl_init(void){
-  //  struct autogen_rule *ac;  for(int idx=1;(ac=config_autogen_rules()[idx]);idx++){
   FOREACH_AUTOGEN_RULE(idx,ac){
     assert(idx<AUTOGEN_MAX_RULES);
     ac->_seqnum=idx;
@@ -46,34 +51,32 @@ static void aimpl_init(void){
     assert(cg_idx_of_NULL((void*)ac->cmd,0xFFFF)<AUTOGEN_MAX_RULES);
     if (ac->ext) ac->_ext_l=strlen(ac->ext);
     if (!ac->concurrent_computations) ac->concurrent_computations=*ac->cmd==PLACEHOLDER_EXTERNAL_QUEUE?32:1;
-    if (ac->concurrent_computations<2)      pthread_mutex_init(&ALOCK(ac),NULL);
-    assert(!(ac->cmd[0]=="bash" && ac->cmd[1]=="-c" && 0==(ac->flags&CA_FLAG_SECURITY_CHECK_FILENAME)));
+    if (ac->concurrent_computations<2)   pthread_mutex_init(&ALOCK(ac),NULL);
+    assert(!(ac->cmd[0]=="bash" && ac->cmd[1]=="-c" && !ac->security_check_filename));
     FOR(i,0,AUTOGEN_FILENAME_PATTERNS){
-      if (ac->patterns[i]){
-        const int n=cg_strsplit(':',ac->patterns[i],0,NULL,NULL);
-        cg_strsplit(':',ac->patterns[i],0,ac->_patterns[i]=calloc_untracked(n+1,sizeof(char*)),ac->_patterns_l[i]=calloc_untracked(n+1,sizeof(int)));
-      }
+#define S(s,ss,ll) if (s){ const int n=cg_strsplit(':',s,0,NULL,NULL); cg_strsplit(':',s,0,ss=calloc_untracked(n+1,sizeof(char*)),ll=calloc_untracked(n+1,sizeof(int))); }
+      S(ac->patterns[i],ac->_patterns[i],ac->_patterns_l[i]);
+      S(ac->exclude_patterns[i],ac->_xpatterns[i],ac->_xpatterns_l[i]);
+#undef S
     }
+
 #define C(e)\
     if (ac->e){\
       if (strchr(ac->e,' ')) warning(WARN_AUTOGEN,ac->e,"Please use colon ':' and not space to separate file extensions");\
       const int n=cg_strsplit(':',ac->e,0,NULL,NULL);\
-      cg_strsplit(':',ac->e,0,ac->_##e=calloc(n+1,sizeof(char*)),ac->_##e##_ll=calloc(n+1,sizeof(int)));\
+      cg_strsplit(':',ac->e,0,ac->_##e=calloc_untracked(n+1,sizeof(char*)),ac->_##e##_ll=calloc_untracked(n+1,sizeof(int)));\
     }
     C(ends);
     C(ends_ic);
-    if ((ac->flags&(CA_FLAG_GENERATED_FILE_HASNOT_INFILE_EXT|CA_FLAG_GENERATED_FILE_INHERITS_INFILE_EXT))==(CA_FLAG_GENERATED_FILE_HASNOT_INFILE_EXT|CA_FLAG_GENERATED_FILE_INHERITS_INFILE_EXT)){
-      DIE("autogen_rule %d: CA_FLAG_GENERATED_FILE_HASNOT_INFILE_EXT and CA_FLAG_GENERATED_FILE_INHERITS_INFILE_EXT are mutual exclusive !",idx);
-    }
+    if (ac->generated_file_hasnot_infile_ext && ac->generated_file_inherits_infile_ext)  DIE("autogen_rule %d: generated_file_hasnot_infile_ext and generated_file_inherits_infile_ext are mutual exclusive",idx);
 #undef C
-    if ((ac->flags&CA_FLAG_GENERATED_FILE_HASNOT_INFILE_EXT)){
-      if (ac->ends_ic) DIE("autogen_rule %d:   With option CA_FLAG_GENERATED_FILE_HASNOT_INFILE_EXT, use .ends and not .ends_ic.",idx);
+    if (ac->generated_file_hasnot_infile_ext){
+      if (ac->ends_ic) DIE("autogen_rule %d:   With option generated_file_hasnot_infile_ext, use field ends and not ends_ic.",idx);
       const int n=cg_array_length(ac->_ends);
-      if (n!=1) DIE("autogen_rule %d:   There are %d file endings. However, with option CA_FLAG_GENERATED_FILE_HASNOT_INFILE_EXT, there must be exactly one file ending.",idx,n);
+      if (n!=1) DIE("autogen_rule %d: There are %d file endings. However, with option generated_file_hasnot_infile_ext, there must be exactly one.",idx,n);
     }
   }
   autogen_cleanup();
-  log_exited_function("");
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -95,16 +98,23 @@ static const char *aimpl_fileext(const char *vp, const int vp_l,const struct aut
 /// Does the virtual path match the rule?  ///
 /// Applied to infile and genfile paths      ///
 ////////////////////////////////////////////////
-static bool _aimpl_matches(const char *vp, const int vp_l,const struct autogen_rule *ac){
-  if (!ac) return false;
-  for(int i=0;i<AUTOGEN_FILENAME_PATTERNS && ac->patterns[i]; i++){ /* Logical AND */
-    bool ok=false;
-    for(int j=0,l; (l=ac->_patterns_l[i][j]);j++){ /* Logical or. One match is enough */
-      if ((ok=(vp_l>=l && 0!=cg_memmem(vp,vp_l,ac->_patterns[i][j],l)))) break;
+static bool _aimpl_patterns_match(const char *vp, const int vp_l,const char ** const patterns[], int * const patterns_l[], int *count){ // cppcheck-suppress [constParameterPointer,constParameter]
+  for(int i=0;i<AUTOGEN_FILENAME_PATTERNS && patterns[i]; i++){
+    bool ok=true;
+    for(int j=0,l; (l=patterns_l[i][j]);j++){ /* These are separated by colon : and must match all */
+      count++;
+      if (!(ok=(vp_l>=l && 0!=cg_memmem(vp,vp_l,patterns[i][j],l)))) break;
     }
-    if (!ok) return false;
+    if (ok) return true;
   }
-  return true;
+  return false;
+
+}
+
+static bool _aimpl_matches(const char *vp, const int vp_l,const struct autogen_rule *ac){
+  int count=0;
+  const bool match=_aimpl_patterns_match(vp,vp_l,ac->_patterns, ac->_patterns_l,&count);
+  return (!count||match) && !_aimpl_patterns_match(vp,vp_l,ac->_xpatterns,ac->_xpatterns_l,&count);
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// What files can be computed from given virtual path                                                 ///
@@ -114,12 +124,13 @@ static bool _aimpl_matches(const char *vp, const int vp_l,const struct autogen_r
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void aimpl_vgenerated_from_vinfile(char *generated,const char *vp,const int vp_l, const struct autogen_rule *ac){
   *generated=0;
+  assert(ac!=NULL);
   const int infile_ext_l=_aimpl_matches(vp,vp_l,ac)?cg_strlen(aimpl_fileext(vp,vp_l,ac)):0;
   if (infile_ext_l){
-    const int vp_l_maybe_no_ext=vp_l-((ac->flags&(CA_FLAG_GENERATED_FILE_HASNOT_INFILE_EXT|CA_FLAG_GENERATED_FILE_INHERITS_INFILE_EXT))?infile_ext_l:0);
+    const int vp_l_maybe_no_ext=vp_l-((ac->generated_file_hasnot_infile_ext||ac->generated_file_inherits_infile_ext)?infile_ext_l:0);
     assert(vp_l_maybe_no_ext>0);
     char *e=cg_stpncpy0(stpncpy(generated,vp,vp_l_maybe_no_ext),  ac->ext,ac->_ext_l);
-    if ((ac->flags&CA_FLAG_GENERATED_FILE_INHERITS_INFILE_EXT)) strcpy(e,vp+vp_l-infile_ext_l);
+    if (ac->generated_file_inherits_infile_ext) strcpy(e,vp+vp_l-infile_ext_l);
   }
 }
 /////////////////////////////////////////////////////////////
@@ -129,18 +140,20 @@ static void aimpl_vgenerated_from_vinfile(char *generated,const char *vp,const i
 /////////////////////////////////////////////////////////////
 
 static bool _autogen_rule_matches(struct autogen_files *ff){
-  //bool debug=strstr(ff->virtualpath,"img_2.scale")  && ff->rule &&  (ff->rule->flags&CA_FLAG_GENERATED_FILE_INHERITS_INFILE_EXT);
-  const int x_l=ff->rule->_ext_l;
+  //bool debug=strstr(ff->virtualpath,"img_2.scale")  && ac &&  ac->generated_file_inherits_infile_ext;
+  const struct autogen_rule *ac=ff->rule;
+
+  const int x_l=ac->_ext_l;
   int g_l=ff->virtualpath_l;
   const char *ext_inherit=NULL;
-  if ((ff->rule->flags&CA_FLAG_GENERATED_FILE_INHERITS_INFILE_EXT)){
-    if (!(ext_inherit=aimpl_fileext(ff->virtualpath,ff->virtualpath_l,ff->rule))) return false;
+  if (ac->generated_file_inherits_infile_ext){
+    if (!(ext_inherit=aimpl_fileext(ff->virtualpath,ff->virtualpath_l,ac))) return false;
     g_l-=strlen(ext_inherit);
   }
-  if (g_l>x_l && !memcmp(ff->virtualpath+g_l-x_l,ff->rule->ext,x_l) && _aimpl_matches(ff->virtualpath,ff->virtualpath_l-x_l,ff->rule) &&
-      ((ff->rule->flags&(CA_FLAG_GENERATED_FILE_HASNOT_INFILE_EXT|CA_FLAG_GENERATED_FILE_INHERITS_INFILE_EXT)) ||  aimpl_fileext(ff->virtualpath,g_l-x_l,ff->rule))){
-    char *e=cg_stpncpy0(ff->vinfiles[0],ff->virtualpath,g_l-ff->rule->_ext_l);
-    if (ff->rule->flags&CA_FLAG_GENERATED_FILE_HASNOT_INFILE_EXT) strcpy(e,ff->rule->ends);
+  if (g_l>x_l && !memcmp(ff->virtualpath+g_l-x_l,ac->ext,x_l) && _aimpl_matches(ff->virtualpath,ff->virtualpath_l-x_l,ac) &&
+      (ac->generated_file_hasnot_infile_ext||ac->generated_file_inherits_infile_ext || aimpl_fileext(ff->virtualpath,g_l-x_l,ac))){
+    char *e=cg_stpncpy0(ff->vinfiles[0],ff->virtualpath,g_l-ac->_ext_l);
+    if (ac->generated_file_hasnot_infile_ext) strcpy(e,ac->ends);
     if (ext_inherit) strcpy(e,ext_inherit);
     ff->infiles_n=config_autogen_add_virtual_infiles(ff);
     *ff->vinfiles[ff->infiles_n]=0;
@@ -157,9 +170,8 @@ static int _autogen_realinfiles(struct autogen_files *ff,const struct autogen_ru
       ff->infiles_size_sum=0;
       FOR(i,0,n){
         const char *vin=ff->vinfiles[i];
-        if ((ac->flags&CA_FLAG_SECURITY_CHECK_FILENAME) && (strchr(vin,'\\')||strchr(vin,'\'')||strchr(vin,'"'))){
+        if (ac->security_check_filename && (strchr(vin,'\\')||strchr(vin,'\'')||strchr(vin,'"'))){
           FILE *f=fopen(ff->fail,"w"); if (f) fputs("Illegal file name\n",f),fclose(f);
-          n=0;
           goto end;
         }
         NEW_ZIPPATH(vin);
@@ -174,7 +186,6 @@ static int _autogen_realinfiles(struct autogen_files *ff,const struct autogen_ru
           }
           ff->infiles_size_sum+=(ff->infiles_stat[i]=zpath->stat_vp).st_size;
         }else{
-          n=0;
           goto end;
         }
       }
@@ -196,12 +207,23 @@ static int autogen_realinfiles(struct autogen_files *ff){
   return num_infiles;
 }
 
-
-
-
-
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Setting  atime into the future is a method to protect generated files from being  automatically deleted ///
+/// When these files are read, their atime  should not be set to now.                                       ///
+/// O_NOATIME can not be used.  It is Linux specific                                                        ///
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static void aimpl_maybe_reset_atime_in_future(const struct fhandle *d){
+  if (d && d->zpath.flags&ZP_STARTS_AUTOGEN){
+    const struct stat *st=&d->zpath.stat_rp;
+    //log_debug_now("atime %'ld ",st->st_atime);log_debug_now("now   %'ld ",currentTimeMillis()/1000);
+    if (st->st_atime>currentTimeMillis()/1000+(3600*24)){ /* future + one day */
+      //log_debug_now("Reset atime for %s atime",D_RP(d));
+      struct utimbuf new_times={.actime=st->st_atime,.modtime=st->st_mtime};
+      if (utime(D_RP(d),&new_times)) warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,D_RP(d),"Setting atime");
+    }
+  }
+}
 //////////////////////////////////////////////////////////
-
 static int _aimpl_fd_open(const char *path, int *fd){
   if (path && (*fd=open(path,O_RDWR|O_CREAT,S_IRUSR|S_IWUSR))<0){
     warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,path,"open failed");
@@ -209,8 +231,6 @@ static int _aimpl_fd_open(const char *path, int *fd){
   }
   return 0;
 }
-
-
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Generate the file.  Either write tmpoutfile or fill buf.                                           ///
 /// The calling function will rename tmpoutfile to virtual_outfile accroding to  atomic file creation. ///
@@ -227,17 +247,16 @@ static int aimpl_run(struct autogen_files *ff){
 #define isRAM  (ff->out==STDOUT_TO_MALLOC||isMMAP)
 #define isOUTF (ff->out==STDOUT_TO_OUTFILE)
   if (isRAM &&  ac->max_infilesize_for_RAM && ac->max_infilesize_for_RAM<ff->infiles_stat[0].st_size || ramUsageForFilecontent()>ramUsageForFilecontentMax()) ff->out=STDOUT_TO_OUTFILE;
-  log_entered_function("ff->rinfiles[0]: %s size: %ld  ac->out:%d ff->out:%d",snull(ff->rinfiles[0]), ff->infiles_stat[0].st_size,ac->out,ff->out);
   {
     struct stat st_fail={0},st_out={0};
-    if (0==(ac->flags&CA_FLAG_IGNORE_ERRFILE) && !stat(ff->fail,&st_fail) && CG_STAT_B_BEFORE_A(st_fail,_thisPrgStat)){ /* Previously failed */
+    if (!ac->ignore_errfile && !stat(ff->fail,&st_fail) && CG_STAT_B_BEFORE_A(st_fail,_thisPrgStat)){ /* Previously failed */
       if (isOUTF && !stat(ff->grealpath,&st_out) && CG_STAT_B_BEFORE_A(st_fail,st_out)  || ff->rinfiles[0] && CG_STAT_B_BEFORE_A(st_fail,ff->infiles_stat[0])) return EPIPE;
     }
   }
-    unlink(ff->log);
-    unlink(ff->fail);
-  aimpl_wait_concurrent(ac,1); /* No return statement up from here. !!*/
-  warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,ff->rinfiles[0],"aimpl_run '%s'",ff->grealpath);
+    log_verbose("ff->rinfiles[0]: %s size: %ld  ac->out:%d ff->out:%d",snull(ff->rinfiles[0]), ff->infiles_stat[0].st_size,ac->out,ff->out);
+  unlink(ff->log);
+  unlink(ff->fail);
+  aimpl_wait_concurrent_begin(ac);
   assert(AUTOGEN_RUN_SUCCESS==0);
   if (!res &&  (res=config_autogen_run(ff))==AUTOGEN_RUN_NOT_APPLIED){
     res=isOUTF?has_sufficient_storage_space(ff->grealpath):0;
@@ -245,8 +264,10 @@ static int aimpl_run(struct autogen_files *ff){
     if (!res && !ac->no_redirect) res=_aimpl_fd_open(ff->log,&fd_err);
     if (!res){
       if (fd_err>=0 && ac->info){ cg_fd_write_str(fd_err,ac->info);cg_fd_write_str(fd_err,"\n");}
-      char *cmd[AUTOGEN_ARGV_MAX+1];
-      FOR(i,0,AUTOGEN_ARGV_MAX) if (!(cmd[i]=autogen_apply_replacements_for_argv(NULL,ff->rule->cmd[i],ff))) break;
+      char *cmd[AUTOGEN_ARGV+1]={0};
+      FOR(i,0,AUTOGEN_ARGV){
+        if (!(cmd[i]=autogen_apply_replacements_for_argv(NULL,ff->rule->cmd[i],ff))) break;
+      }
       config_autogen_modify_exec_args(cmd,ff);
       cg_log_exec_fd(STDERR_FILENO,NULL,(char const*const*)cmd);
       if (isRAM){   /* Output of external prg  into textbuffer */
@@ -275,14 +296,20 @@ static int aimpl_run(struct autogen_files *ff){
             cg_exec(ac->env,(char const*const*)cmd,ac->no_redirect?-1:ff->out==STDOUT_MERGE_WITH_STDERR?fd_err:fd_out,ac->no_redirect?-1:fd_err);
           }else{
             if (!(res=cg_waitpid_logtofile_return_exitcode(pid,ff->log)) && !cg_is_regular_file(ff->tmpout))  res=EIO;
+            if (ff->out!=STDOUT_MERGE_WITH_STDERR && fd_err>0){
+              if (ff->grealpath){ cg_fd_write_str(fd_err,"File: ");  cg_fd_write_str(fd_err,ff->grealpath); cg_fd_write_str(fd_err,"\n");}
+              close(fd_err);
+            }
           }
         }
       }
       autogen_free_argv((char const*const*)cmd,ac->cmd);
     }
   }/* if (!res) */
-  aimpl_wait_concurrent(ac,-1);
+  aimpl_wait_concurrent_end(ac);
+  //log_debug_now("ff->log: %s exists: %d",ff->log,cg_file_exists(ff->log));
   if (res && cg_file_exists(ff->log) && rename(ff->log,ff->fail)) log_errno("rename(%s,%s)",ff->log,ff->fail);
+
   return -res;
 #undef isRAM
 #undef isMMAP

@@ -39,7 +39,6 @@ static bool stat_from_cache(struct stat *stbuf,const char *path,const int path_l
   }
   return false;
 }
-
 static void stat_to_cache(const struct stat *stbuf,const char *path,const int path_l,const ht_hash_t hash){
 #define C(f) st->f=stbuf->f
   LOCK(mutex_dircache,
@@ -73,15 +72,17 @@ static const char *zinline_cache_vpath_to_zippath(const char *vp,const int vp_l)
 #define CLEAR_DIRCACHE 1
 #define CLEAR_ZIPINLINE_CACHE 2
 #define CLEAR_STATCACHE 3
-#if DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
+
+#if WITH_CLEAR_CACHE
 static void dircache_clear_if_reached_limit_all(const bool always,const int mask){
+  if (always) log_entered_function("");
 #define C(m) 0==(mask&(1<<m))?"":#m
   if (always) log_verbose("%s %s %s\n",C(CLEAR_DIRCACHE),C(CLEAR_STATCACHE),C(CLEAR_ZIPINLINE_CACHE));
 #undef C
   LOCK(mutex_dircache,foreach_root1(r) dircache_clear_if_reached_limit(always,mask,r,0));
 }
 static void dircache_clear_if_reached_limit(const bool always,const int mask,struct rootdata *r,const off_t limit){
-  if (!DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT && !always || !r) return;
+  if (!WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT && !always || !r) return;
   cg_thread_assert_locked(mutex_dircache);
   IF1(WITH_DIRCACHE,const off_t ss=mstore_count_blocks(&r->dircache_mstore));
 #define M(x) (0!=(mask&(1<<x)))
@@ -89,7 +90,7 @@ static void dircache_clear_if_reached_limit(const bool always,const int mask,str
     IF1(WITH_DIRCACHE,warning(WARN_DIRCACHE,r->rootpath,"Clearing directory cache. Cached segments: %zu (%zu) bytes: %zu. %s",ss,limit,mstore_usage(&r->dircache_mstore),!limit?"":"Consider to increase DIRECTORY_CACHE_BLOCKS"));
     if M(CLEAR_DIRCACHE){
         ht_clear(&r->dircache_ht);
-        IF1(WITH_DIRCACHE,  ht_clear(&r->dircache_ht_fname); mstore_clear(r->dircache_mstore));
+        IF1(WITH_DIRCACHE,  ht_clear(&r->dircache_ht_fname); mstore_clear(&r->dircache_mstore));
       }
     if (!rootindex(r)){
       IF1(WITH_ZIPINLINE_CACHE, if M(CLEAR_ZIPINLINE_CACHE) ht_clear(&ht_zinline_cache_vpath_to_zippath));
@@ -99,7 +100,7 @@ static void dircache_clear_if_reached_limit(const bool always,const int mask,str
   }
 #undef M
 }
-#endif //DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
+#endif //WITH_CLEAR_CACHE
 static void debug_assert_crc32_not_null(const struct directory *dir){
   if (!dir || !(dir->dir_flags&DIRECTORY_IS_ZIPARCHIVE)) return;
   RLOOP(i,dir->core.files_l){
@@ -122,7 +123,7 @@ static void dircache_directory_to_cache(const struct directory *dir){
   cg_thread_assert_locked(mutex_dircache);
   debug_assert_crc32_not_null(dir);
   struct rootdata *r=dir->root;
-  IF1(DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,dircache_clear_if_reached_limit(false,0xFFFF,r,DIRECTORY_CACHE_BLOCKS));
+  IF1(WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,dircache_clear_if_reached_limit(false,0xFFFF,r,DIRECTORY_CACHE_BLOCKS));
   assert_validchars_direntries(VALIDCHARS_PATH,dir);
   struct directory_core src=dir->core, *d=mstore_add(&r->dircache_mstore,&src,sizeof(struct directory_core),SIZEOF_POINTER);
   if (src.files_l){

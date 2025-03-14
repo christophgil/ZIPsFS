@@ -288,7 +288,7 @@ static struct ht_entry* ht_sget_entry(struct ht *ht, const char* key,const bool 
 static void *ht_sset(struct ht *ht,const char* key, const void* value){
   return !key?NULL:ht_set(ht,key,strlen(key),0,value);
 }
-const void *ht_sinternalize(struct ht *ht,const char *key){
+static const void *ht_sinternalize(struct ht *ht,const char *key){
   return !key?NULL:ht_intern(ht,key,strlen(key),0,HT_MEMALIGN_FOR_STRG);
 }
 /***************************************************************** */
@@ -362,7 +362,7 @@ static void debug_print_keys(const struct ht *ht){
     }
   }
 }
-static void test_ht_1(int argc,char *argv[]){
+static void test_ht_1(int argc, const char *argv[]){
   struct ht ht;
   ht_init_with_keystore_dim(&ht,"test",7,65536);
   // ht_init(&ht,"test",0,7);
@@ -499,7 +499,7 @@ static void test_use_as_set(int argc, const char *argv[]){
   }
   printf("ht.length: %u \n",ht.length);
 }
-static void test_unique(int argc, char *argv[]){
+static void test_unique(int argc, const char *argv[]){
   struct ht ht;
   ht_init_with_keystore_dim(&ht,"test",HT_FLAG_KEYS_ARE_STORED_EXTERN|8,4096);
   for(int i=1;i<argc && i<999;i++){
@@ -507,7 +507,7 @@ static void test_unique(int argc, char *argv[]){
   }
   printf("\n ht.length: %u \n",ht.length);
 }
-static  void test_no_dups(int argc,char *argv[]){
+static  void test_no_dups(int argc,const char *argv[]){
   struct ht test_no_dups={0};
   ht_init_with_keystore_dim(&test_no_dups,"test_no_dups",4,1024);
   FOR(i,1,argc) if (ht_only_once(&test_no_dups,argv[i],0)) printf("%d %s ,ht.length: %u\n",i,argv[i],test_no_dups.length);
@@ -574,7 +574,7 @@ static void test_intern_substring(int argc, const char *argv[]){
 
 
 
-int main(int argc,char *argv[]){
+int main(int argc,const char *argv[]){
   setlocale(LC_NUMERIC,""); /* Enables decimal grouping in fprintf */
   if (0){
     struct ht ht={0};

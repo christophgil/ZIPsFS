@@ -82,7 +82,11 @@ Log files are found in  **~/.ZIPsFS/**.
 
 An HTML file with status information is dynamically generated in  the generated folder **ZIPsFS** in the virtual  ZIPsFS file system.
 
+## Real file location
 
+To see the real file path i.e. the file path where a file is physically stored,
+append **@SOURCE.TXT** to the virtual file path. If imported as SAMBA, these virtual files may not be accessible on a Windows PC.
+It seems that Windows can not access files that are not listed in the containing folder.
 
 
 ## Plugins - Auto-generation of virtual files
@@ -128,11 +132,17 @@ problem, see
 https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unknown-size.  Any help
 is appreciated.
 
-Currently, ZIPsFS reports an upper limit of the expected file size which is not really nice.
+Initially, ZIPsFS reports an upper estimate of the expected file size. This breaks programs that need to know
+the file size such as /usr/bin/tail.
 
-Why cannot it be done like in /proc files (e.g.   /proc/$$/environ)?
-Calling stat /proc/$$/environ  reports file size zero.
-If ZIPsFS returns zero, then the content of the files are not readable.
+How is this problem solved in the virtual file systems /proc annd /sys?
+Calling stat /proc/$$/environ. Consider
+
+    ls -l /proc/self/environ
+
+The reported  file size is zero. Nevertheless, *cat*, *more*  and even *tail* work.
+If the FUSE file system  returns zero for a file, the content of the files are not readable.
+Any suggested appreciated.
 
 ### Limitations - nested, recursive
 
@@ -258,6 +268,11 @@ Files can only be deleted when their physical location is in the first source.
 Conversely, in the FUSE file systems  unionfs-fuse and fuse-overlayfs, files can be always deleted irrespectively of their physical location.
 They are canceled out without actually deleting them from their physical location.
 If you need the same behaviour please drop a request-for-feature.
+
+## Reading and writing
+
+Simultaneous Reading and writing of files with the same file descriptor will only work
+for files exclusively in the writable source.
 
 BUGS
 ====

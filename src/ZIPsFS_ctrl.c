@@ -30,7 +30,7 @@ my_stat(){\n\
     local what=\"$1\" f=\"$2\" ask=${3:-0} p=${4:-0}\n\
     [[ $p == ~ ]] && p=$(askWhichThread)\n\
     ((ask)) && ! yes_no \"$what\" && return\n\
-    set -x;stat \"$MNT/$f$VERS$p\" 2>/dev/null|grep -F 'File:';set +x\n\
+    set -x;stat \"$MNT/$f$VERS-$p\" 2>/dev/null|grep -F 'File:';set +x\n\
     echo;echo \"$what  done.\"\n\
 }\n\
 debug_cases(){ :; }\n\
@@ -83,7 +83,10 @@ static void special_file_content(struct textbuffer *b,const enum enum_special_fi
     sprintf(BASH_SECRET,"%d",(int)((t.tv_sec+t.tv_nsec)&0xFFFFFF));
   }
   switch(i){
-  case SFILE_CTRL:   case SFILE_DEBUG_CTRL:
+  case SFILE_CTRL:
+    IF0(WITH_CLEAR_CACHE, return);
+
+  case SFILE_DEBUG_CTRL:
     textbuffer_add_segment_const(b,SHEBANG"readonly MNT=");textbuffer_add_segment(0,b,_mnt,0);
     textbuffer_add_segment_const(b,"\nreadonly VERS=");textbuffer_add_segment(0,b,BASH_SECRET,strlen(BASH_SECRET));
     textbuffer_add_segment_const(b,SFILE_CTRL_TEXT_BEGIN);
@@ -103,7 +106,7 @@ This is necessary for  software that uses wrong flags for opening files for read
 This feature can be activated with the switch <b>WITH_AUTOGEN</b> in ZIPsFS_configuration.h. It is currently <B>" IF0(WITH_AUTOGEN,"de")"activated</B>.\n\
 Derived files are displayed in the file tree <B>");
     textbuffer_add_segment(0,b,_mnt,0);
-    #if WITH_AUTOGEN
+#if WITH_AUTOGEN
     textbuffer_add_segment_const(b, DIR_ZIPsFS"/"DIRNAME_AUTOGEN"</B>.\n\
 With <b>WITH_AUTOGEN_DIR_HIDDEN</b> set to <b>1</b>, the folder <B>"DIRNAME_AUTOGEN"</B> is not listed in its parent.\n\
 The prevents recursive file searches to enter this tree.\n\
@@ -191,11 +194,16 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
   }
   if (path_l>4 && strstr(path,BASH_SECRET)){
     const int z=path[path_l-1], t=z=='S'?PTHREAD_STATQUEUE: z=='M'?PTHREAD_MEMCACHE: z=='D'?PTHREAD_DIRCACHE: z=='R'?PTHREAD_RESPONDING:-1;
-    char *f=0;
-    for(int j=0;CTRL_FILES[j];j++) if (!memcmp(path,CTRL_FILES[j],strlen(CTRL_FILES[j])-1)) f=CTRL_FILES[j];
-    // log_entered_function("%s path  f:%s ",path,snull(f));
+    const char *f=NULL;
+    for(int j=0;CTRL_FILES[j];j++){
+      log_debug_now("path: '%s'   CTRL_FILES[%d]: %s  memcmp: %d ",path,j,CTRL_FILES[j],strncmp(path,CTRL_FILES[j],strlen(CTRL_FILES[j])-1));
+      if (!strncmp(path,CTRL_FILES[j],strlen(CTRL_FILES[j])-1)){
+        f=CTRL_FILES[j];
+        break;
+      }
+    }
+    warning(WARN_DEBUG,path,"Triggered '%s' '%s'",f,t>=0?PTHREAD_S[t]:"");
     if (f){
-      warning(WARN_DEBUG,path,"Triggered '%s' %s",f,t>=0?PTHREAD_S[t]:"");
       foreach_root1(r){
         if (f==F_BLOCK_THREAD){
           if (t>=0) r->debug_pretend_blocked[t]=true;
@@ -205,7 +213,8 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
         } if (f==F_CANCEL_THREAD){
           if (t>=0) pthread_cancel(r->pthread[t]);
         }else if (f==F_CLEAR_CACHE){
-          IF1(DO_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,dircache_clear_if_reached_limit_all(true,z=='0'?0xFFFF:(1<<(z-'0'))));
+          log_debug_now("Ccccccc %s  %c ",f,z);
+          IF1(WITH_CLEAR_CACHE, dircache_clear_if_reached_limit_all(true,z=='0'?0xFFFF:(1<<(z-'0'))));
           return true;
         }else if (f==F_KILL_ZIPSFS){
           DIE("Killed due to "F_KILL_ZIPSFS);
@@ -282,17 +291,8 @@ static void make_info(const int flags){
   _info_capacity=9999;
   _info=malloc_untracked(_info_capacity);
   while((l=print_all_info(flags))>=_info_capacity){
-    //CG_REALLOC(char *,_info,_info_capacity=_info_capacity*2+0x100000+17);
-    //    #define CG_REALLOC(type,pointer,expr) {type tmp=realloc(pointer,expr); if (!tmp){fprintf(stderr,"realloc failed.\n"); EXIT(1);};pointer=tmp;}
-
-
-    // heap use after Free
     char * tmp=realloc(_info,_info_capacity=_info_capacity*2+0x100000+17);
-
-
     if (!tmp){ fprintf(stderr,"realloc failed.\n"); EXIT(1);};
-
-
     _info=tmp;
   }
   _info_l=l;

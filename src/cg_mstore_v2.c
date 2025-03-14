@@ -78,7 +78,8 @@ static void _mstore_block_init_with_capacity(const char *d,const off_t capacity)
   BLOCK_CAPACITY(d)=capacity;
 }
 static off_t _mstore_common(struct mstore *m,int opt,const void *pointer){
-  if (m->mutex) lock(m->mutex);
+  if (!m) return 0;
+  lock(m->mutex);
   //  CG_THREAD_OBJECT_ASSERT_LOCK(m);
   off_t sum=0;
   RLOOP(block,m->capacity){
@@ -111,7 +112,7 @@ static off_t _mstore_common(struct mstore *m,int opt,const void *pointer){
       }
     }
   }
-    if (m->mutex) unlock(m->mutex);
+  unlock(m->mutex);
   return sum;
 }
 
@@ -187,8 +188,7 @@ static int _mstore_openfile(struct mstore *m,const uint32_t block,const off_t ad
   assert(m->name);
   snprintf(path,PATH_MAX-1,"%s/%03d_%s_%02u.cache",mstore_base_path(),m->iinstance,m->name,block);
   /* Note, there might be several with same name. Unique file names by adding iinstance to the file name */
-  log_entered_function("path: %s",path);
-
+  //log_entered_function("path: %s",path);
   const int fd=open(path,O_RDWR|O_CREAT|O_TRUNC,0640);
   if (fd<2) DIE("Open failed: %s fd: %d\n",path,fd);
   //  struct stat st; if (fstat(fd,&st)<0) log_error("fstat failed: %s\n",path);
@@ -216,7 +216,7 @@ static void _mstore_double_capacity(struct mstore *m){
   m->data=dd;
 }
 static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align){
-  //if (m->opt&MSTORE_OPT_MMAP_WITH_FILE) log_entered_function("name: %s %ld ",m->name,(long)bytes);
+  //if (m->opt&MSTORE_OPT_MMAP_WITH_FILE) log_entered_function("name: %s %lld ",m->name,(LLD)bytes);
   CG_THREAD_OBJECT_ASSERT_LOCK(m);  assert(align==1||align==2||align==4||align==8);
   char *dst;
   if ((dst=_mstore_block_try_allocate(m,m->_block_on_stack,bytes,align))) return dst;
@@ -234,7 +234,7 @@ static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align){
   }else{
     const int fd=(m->opt&MSTORE_OPT_MMAP_WITH_FILE)?_mstore_openfile(m,ib,capacity+_MSTORE_LEADING):0;
     if (MAP_FAILED==(block=cg_mmap(_MSTORE_MALLOC_ID(m),capacity+_MSTORE_LEADING,fd))) block=NULL;
-    if (!block) DIE("MMAP failed %ld  fd: %d",(long)(capacity+_MSTORE_LEADING),fd);
+    if (!block) DIE("MMAP failed %lld  fd: %d",(LLD)(capacity+_MSTORE_LEADING),fd);
   }
     m->bytes_per_block=capacity*2;
   _mstore_block_init_with_capacity((m->data[ib]=block),capacity);
@@ -343,7 +343,7 @@ int main(int argc,char *argv[]){
     printf("mstore_base_path %s\n",mstore_base_path());
     struct mstore m={0};
     mstore_init(&m,"test",MSTORE_OPT_MMAP_WITH_FILE|1024);
-    fprintf(stderr,"m->bytes_per_block: %ld\n",(long)m.bytes_per_block);
+    fprintf(stderr,"m->bytes_per_block: %lld\n",(LLD)m.bytes_per_block);
     FOR(i,0,8){
       char *s=mstore_malloc(&m,1024,4);
       fprintf(stderr,"%d) s: %p\n",i,s);

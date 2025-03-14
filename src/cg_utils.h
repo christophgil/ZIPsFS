@@ -35,10 +35,6 @@
 #define WITH_DEBUG_MALLOC 0
 #endif
 ////////////////////////////////////////
-#ifndef WITH_ASSERT_LOCK
-#define WITH_ASSERT_LOCK 0
-#endif
-////////////////////////////////////////
 /* Could be changed to "inline" */
 #define MAYBE_INLINE
 ////////////////////////////////////////
@@ -156,6 +152,9 @@ M(MAX,long)
 #define log_verbose(...)              PRINT_PFX_FUNC_MSG(ANSI_FG_MAGENTA""ANSI_YELLOW" verbose "ANSI_RESET," ","\n",__VA_ARGS__)
 #define DIE_WITHOUT_STACKTRACE(...)   PRINT_PFX_FUNC_MSG(ANSI_FG_RED"DIE"ANSI_RESET,"\n","\n",__VA_ARGS__),exit(EXIT_FAILURE)
 #define DIE(...)                      PRINT_PFX_FUNC_MSG(ANSI_FG_RED"DIE"ANSI_RESET,"\n","\n",__VA_ARGS__),cg_print_stacktrace(0),perror("\n"),exit(EXIT_FAILURE)
+
+#define Assert(...) assert(__VA_ARGS__)  // cppcheck-suppress-macro knownConditionTrueFalse
+
 #define log_errno(...)     log_error(__VA_ARGS__),perror("")
 
 
@@ -169,11 +168,7 @@ M(MAX,long)
 #define ASSERT(...) assert(__VA_ARGS__)
 #endif
 // ---
-#define calloc_untracked(...) calloc(__VA_ARGS__)
-#define malloc_untracked(x) malloc(x)
 #define free_untracked(x) free(x)
-#define strdup_untracked(x) strdup(x)
-
 #define PRINTF_STRG_OR_STDERR(strg,n,N,...) (strg && N>n?snprintf(strg+n,N-n,__VA_ARGS__):fprintf(stderr,__VA_ARGS__))
 // ---
 

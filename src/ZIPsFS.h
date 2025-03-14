@@ -44,7 +44,7 @@ static const char *SPECIAL_FILES[]={"/warnings.log","/errors.log","/file_system_
 #define IS_STAT_READONLY(st) !(st.st_mode&(S_IWUSR|S_IWGRP|S_IWOTH))
 
 
-enum functions{xmp_open_,xmp_access_,xmp_getattr_,xmp_read_,xmp_readdir_,mcze_,functions_l}; // DEBUG_NOW
+enum functions{xmp_open_,xmp_access_,xmp_getattr_,xmp_read_,xmp_readdir_,functions_l};
 enum enum_count_getattr{
   COUNTER_STAT_FAIL,COUNTER_STAT_SUCCESS,
   COUNTER_OPENDIR_FAIL,COUNTER_OPENDIR_SUCCESS,
@@ -69,8 +69,12 @@ enum enum_counter_rootdata{
   COUNT_MEMCACHE_INTERRUPT,
   //
   counter_rootdata_num};
+
+
 enum enum_special_files{SFILE_LOG_WARNINGS,SFILE_LOG_ERRORS,SFILE_INFO,SFILE_CTRL,SFILE_DEBUG_CTRL,
-                        IF1(WITH_AUTOGEN,SFILE_SET_ATIME_SH,SFILE_SET_ATIME_PS,SFILE_SET_ATIME_BAT,)
+#if WITH_AUTOGEN
+                        SFILE_SET_ATIME_SH,SFILE_SET_ATIME_PS,SFILE_SET_ATIME_BAT,
+#endif
                         SFILE_README,SFILE_L};
 
 enum enum_autogen_state{AUTOGEN_UNINITILIZED,AUTOGEN_SUCCESS,AUTOGEN_FAIL};
@@ -89,13 +93,15 @@ enum enum_autogen_state{AUTOGEN_UNINITILIZED,AUTOGEN_SUCCESS,AUTOGEN_FAIL};
 #define A5() C(MEMCACHE_NEVER)C(MEMCACHE_SEEK)C(MEMCACHE_RULE)C(MEMCACHE_COMPRESSED)C(MEMCACHE_ALWAYS)
 #define A6(x) C(STATQUEUE_NIL)C(STATQUEUE_QUEUED)C(STATQUEUE_FAILED)C(STATQUEUE_OK)
 #define A7(x) C(PTHREAD_DIRCACHE)C(PTHREAD_MEMCACHE)C(PTHREAD_STATQUEUE)C(PTHREAD_RESPONDING)C(PTHREAD_MISC0)C(PTHREAD_LEN)
-#define A8(x) C(mutex_nil)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_fhandle)C(mutex_autogen_init)C(mutex_dircachejobs)C(mutex_log_count)C(mutex_crc)C(mutex_inode)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_statqueue)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_len) //* mutex_roots must be last */
+#define A8(x) C(mutex_nil)C(mutex_fhandle)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_autogen_init)C(mutex_dircachejobs)C(mutex_log_count)C(mutex_crc)C(mutex_inode)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_statqueue)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_len) //* mutex_roots must be last */
 #define C(a) a,
 enum mstoreid{A1()};
 enum mallocid{A2()};
 enum warnings{A3()};
-IF1(WITH_MEMCACHE,enum memcache_status{A4()});
-IF1(WITH_MEMCACHE,enum when_memcache_zip{A5()});
+#if WITH_MEMCACHE
+ enum memcache_status{A4()};
+ enum when_memcache_zip{A5()};
+#endif //WITH_MEMCACHE
 enum statqueue_status{A6()};
 enum root_thread{A7()};
 enum mutex{A8()};
@@ -234,15 +240,17 @@ struct zippath{
 #define FINDRP_NOT_TRANSIENT_CACHE (1<<3)
 #define FILETYPEDATA_NUM 1024
 #define FILETYPEDATA_FREQUENT_NUM 64
-#define FHANDLE_FLAGS_ACTIVE (1<<0)
-#define FHANDLE_FLAGS_DESTROY_LATER (1<<1)
-#define FHANDLE_FLAGS_INTERRUPTED (1<<2)
-#define FHANDLE_FLAGS_SEEK_FW_FAIL (1<<3)
-#define FHANDLE_FLAGS_SEEK_BW_FAIL (1<<4)
-#define FHANDLE_FLAGS_WITH_TRANSIENT_ZIPENTRY_CACHES (1<<5) /* Can attach ht_transient_cache */
-#define FHANDLE_FLAGS_IS_AUTOGEN (1<<6)
-#define FHANDLE_FLAGS_WITH_MEMCACHE (1<<7)
-#define FHANDLE_FLAGS_WITHOUT_MEMCACHE  (1<<8)
+#define FHANDLE_FLAG_ACTIVE (1<<0)
+#define FHANDLE_FLAG_DESTROY_LATER (1<<1)
+#define FHANDLE_FLAG_INTERRUPTED (1<<2)
+#define FHANDLE_FLAG_SEEK_FW_FAIL (1<<3)
+#define FHANDLE_FLAG_SEEK_BW_FAIL (1<<4)
+#define FHANDLE_FLAG_WITH_TRANSIENT_ZIPENTRY_CACHES (1<<5) /* Can attach ht_transient_cache */
+#define FHANDLE_FLAG_IS_AUTOGEN (1<<6)
+#define FHANDLE_FLAG_WITH_MEMCACHE (1<<7)
+#define FHANDLE_FLAG_WITHOUT_MEMCACHE  (1<<8)
+#define FHANDLE_FLAG_MEMCACHE_COMPLETE (1<<9)
+#define FHANDLE_FLAG_OPEN_LATER_IN_READ_OR_WRITE (1<<10)
 // #define foreach_fhandle_also_emty(id,d) int id=_fhandle_n;for(struct fhandle *d;--id>=0 && ((d=fhandle_at_index(id))||true);)
 
 #define foreach_fhandle_also_emty(id,d) struct fhandle *d; for(int id=_fhandle_n;--id>=0 && ((d=fhandle_at_index(id))||true);)
@@ -262,7 +270,7 @@ struct zippath{
 #define STAT_USE_CACHE (1<<2)
 #define STAT_USE_CACHE_FOR_ROOT(r) (r!=_root_writable?STAT_USE_CACHE:0)
 struct fhandle{
-  uint64_t fh IF1(WITH_AUTOGEN,,fh_real);
+  uint64_t fh, fh_real;
   struct zip *zarchive;
   zip_file_t *zip_file;
   struct zippath zpath;
@@ -271,7 +279,7 @@ struct fhandle{
   IF1(WITH_AUTOGEN,enum enum_autogen_state autogen_state; int autogen_error);
   uint8_t already_logged;
   volatile int64_t offset,n_read;
-  volatile atomic_int is_xmp_read; /* Increases when entering xmp_read. If greater 0 then the instance must not be destroyed. */
+  volatile atomic_int is_busy; /* Increases when entering xmp_read. If greater 0 then the instance must not be destroyed. */
   pthread_mutex_t mutex_read; /* Costs 40 Bytes */
   counter_rootdata_t *filetypedata;
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,struct ht *ht_transient_cache);
@@ -340,7 +348,7 @@ struct rootdata{ /* Data for a source directory. ZIPsFS acts like an overlay FS.
 
 #if WITH_MEMCACHE
 #define ADVISE_CACHE_IS_CMPRESSED (1<<1)
-  #define ADVISE_CACHE_IS_SEEK_BW (1<<2)
+#define ADVISE_CACHE_IS_SEEK_BW (1<<2)
 struct memcache{
   volatile enum memcache_status memcache_status;
   struct textbuffer *txtbuf;

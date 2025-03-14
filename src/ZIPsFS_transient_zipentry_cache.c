@@ -34,7 +34,7 @@ static struct zippath *transient_cache_get_or_create_zpath(const bool create,con
   const ht_hash_t hash=hash32(virtualpath,virtualpath_l);
   if (*virtualpath) assert(virtualpath_l>0);
   foreach_fhandle(id,d){
-    if (!(d->flags&FHANDLE_FLAGS_WITH_TRANSIENT_ZIPENTRY_CACHES)) continue;
+    if (!(d->flags&FHANDLE_FLAG_WITH_TRANSIENT_ZIPENTRY_CACHES)) continue;
     const char *vp=D_VP(d);
     if (!vp || !*vp || !zpath_exists(&d->zpath) || !(d->zpath.flags&ZP_ZIP)) continue;
     const bool maybe_same_zip=cg_path_equals_or_is_parent(vp,D_VP_L(d)-D_EP_L(d)-1,virtualpath,virtualpath_l); /* (VP_L-EP_L) is the part of vp that specifies the ZIP file */

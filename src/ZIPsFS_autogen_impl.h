@@ -14,13 +14,6 @@
 #define autogen_filecontent_append_munmap(ff,s,s_l)  _autogen_filecontent_append(TEXTBUFFER_MUNMAP,ff,s,s_l)
 
 
-#define CA_FLAG_FSIZE_NOT_REMEMBER                  (1<<25) /* The file size is normally saved in a hashmap and reused. */
-#define CA_FLAG_FSIZE_IS_MULTIPLE_OF_INFILE         (1<<26) /* Guessed file size is    struct autogen_rule.estimated_filesize  multiplied with file size of input file */
-#define CA_FLAG_IGNORE_ERRFILE                      (1<<27) /* Ignore outputfile.fail.txt  from previous failure and do not return EPIPE. Instead try computation again. */
-#define CA_FLAG_GENERATED_FILE_HASNOT_INFILE_EXT    (1<<28) /* Strip file ext from the infile and append the ext for the output file. */
-#define CA_FLAG_GENERATED_FILE_INHERITS_INFILE_EXT  (1<<29) /* Strip file ext from the infile and append the ext for the output file. */
-#define CA_FLAG_SECURITY_CHECK_FILENAME             (1<<30) /* Prevent code injection by funny file names */
-#define CA_FLAG_WITH_GENERATED_FILES_AS_INPUT_FILES (1<<31) /* Experimental. Under construction */
 
 
 enum _autogen_capture_output{STDOUT_DROP,              /* Ignore standard output stream of the external app */
@@ -29,34 +22,41 @@ enum _autogen_capture_output{STDOUT_DROP,              /* Ignore standard output
                              STDOUT_TO_MMAP,           /* Same.  STDOUT_TO_MALLOC uses the application heap which has a limited size. Use STDOUT_TO_MALLOC for larger outputs. */
                              STDOUT_MERGE_WITH_STDERR};/* Both  output streams of the external app go to the outputfile-dot-log  file. */
 
-
-
-/* IMPORTANT:  Do not forget the terminal NULL in arrays of Strings !! */
 struct autogen_rule{
   AUTOGEN_RULE_CUSTOM_FIELDS;
   /* internal start fields start with underscore */
   int _seqnum;                            /* 0, 1, 2, 3 ... */
-  const char **_patterns[AUTOGEN_FILENAME_PATTERNS];     /* ->patterns  splitted at space */
-  int *_patterns_l[AUTOGEN_FILENAME_PATTERNS];           /* Number of ->patterns  splitted at space */
+  const char **_patterns[AUTOGEN_FILENAME_PATTERNS+1];     /* From patterns  splitted at colon */
+  int *_patterns_l[AUTOGEN_FILENAME_PATTERNS+1];           /* Number of ->patterns  splitted at colon */
+  const char **_xpatterns[AUTOGEN_FILENAME_PATTERNS+1];     /* From exclude_patterns  splitted at colon */
+  int *_xpatterns_l[AUTOGEN_FILENAME_PATTERNS+1];
+
   const char **_ends, **_ends_ic;         /* ends splitted at space */
   int *_ends_ll, *_ends_ic_ll;            /* String lengths */
   int _ext_l;
   /* -------------------------------------------- */
   enum _autogen_capture_output out;   /* Where should the Standard output of the called command go to */
-  double estimated_filesize;          /* File size is guessed for not yet generated files. See  CA_FLAG_FSIZE_IS_MULTIPLE_OF_INFILE. */
+  double estimated_filesize;          /* File size is guessed for not yet generated files. See  CA_FLAG_fsize_is_multiple_of_infile. */
   int concurrent_computations;        /* If 0 or 1 (recommended), it will be computed in a locked code block such that only one computation is performed at a time */
   int min_free_diskcapacity_gb;       /* If the free disk  capacity is below, no files are created. Error ENOSPC is returned. If zero, DEFAULT_MIN_FREE_DISKCAPACITY_GB is used. */
   int max_infilesize_for_RAM;         /* If not 0 and if exceeded by size of infile, then treat like .out=STDOUT_TO_OUTFILE */
   bool no_redirect;                   /* Do not redirect the stdout / stderr. Was required for one Windows executable under wine. The process freezes when stdout st redirected. */
-  int flags;                          /* Bitmask of bits  named  CA_FLAG_.. Can be 0. */
-  const char *patterns[AUTOGEN_FILENAME_PATTERNS+1]; /* Filter files with literal strings (No regex!). The patterns[0], [1], [2], ... are AND-ed and the colon ":" separated within patterns[i] are OR-ed.*/
-  const char *ends;                   /* Any ending must match. Can be NULL if treted in config_autogen_run().  */
+  const char *patterns[AUTOGEN_FILENAME_PATTERNS], *exclude_patterns[AUTOGEN_FILENAME_PATTERNS];
+  /* Filter files with literal strings (No regex!). At least one of  patterns[0], [1], [2], must match.
+     Each string can contain several patterns separated by colon ":" which must all match (logical AND).*/
+  const char *ends;                   /* Any ending must match. Omitted if processed in config_autogen_run().  */
   const char *ends_ic;                /* Same, ignore case. */
   const char *ext;                    /* Extension of generated file.  The extension is appended at the input file to form the out-file. */
-  const char *info;                         /* Will be printed into the logs. Can be NULL */
-  const char **env;                         /* Environment. See execle(). Can be NULL. */
-  const char *cmd[];                        /* Command line parameters.   Can be NULL. */
+  const char *info;                   /* Will be printed into the logs. Optional. */
+  const char **env;                   /* Environment. Optional NULL terminated string array like .env={MY_PATH="/local/app/lib",NULL}. See execle(). */
+  const char *cmd[AUTOGEN_ARGV];      /* Command line parameters. */
 
+  bool fsize_not_remember;                  /* The file size is normally saved in a hashmap and reused. */
+  bool fsize_is_multiple_of_infile;         /* Guessed file size is    struct autogen_rule.estimated_filesize  multiplied with file size of input file */
+  bool ignore_errfile;                      /* Ignore outputfile.fail.txt  from previous failure and do not return EPIPE. Instead try computation again. */
+  bool generated_file_hasnot_infile_ext;    /* Strip file ext from the infile and append the ext for the output file. */
+  bool generated_file_inherits_infile_ext;  /* Strip file ext from the infile and append the ext for the output file. */
+  bool security_check_filename;             /* Prevent code injection by funny file names */
 };
 
 struct autogen_files{

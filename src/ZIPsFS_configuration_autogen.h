@@ -6,7 +6,7 @@
 #define AUTOGEN_MMAP_MAX_BYTES (1<<30)                    /* For option STDOUT_TO_MMAP. If exceeded then create file as fall-back  */
 #define AUTOGEN_MALLOC_MAX_BYTES (1<<20)                  /* For option STDOUT_TO_MALLOC. If exceeded then create file as fall-back  */
 #define AUTOGEN_MAX_RULES 100                             /* Increase if there are more  returned by config_autogen_rules()  */
-#define AUTOGEN_ARGV_MAX 100                              /* The command line is a NULL terminated String array, Max number of Strings. */
+#define AUTOGEN_ARGV 100                              /* The command line is a NULL terminated String array, Max number of Strings. */
 #define AUTOGEN_FILENAME_PATTERNS 9                       /* Max number of file patterns. */
 #define DEFAULT_MIN_FREE_DISKCAPACITY_GB 100              /* Valid if min_free_diskcapacity_gb is unset */
 #define DEFAULT_CONCURRENT_COMPUTATIONS_EXTERNAL_QUEUE 32 /* See PLACEHOLDER_EXTERNAL_QUEUE ZIPsFS_autogen_queue.sh */

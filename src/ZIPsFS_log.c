@@ -44,7 +44,7 @@ static const char *fileExtension(const char *path,const int len){
 static struct rootdata root_dummy;
 static counter_rootdata_t *filetypedata_for_ext(const char *path,struct rootdata *r){
   ASSERT_LOCKED_FHANDLE();
-  assert(r>=_root);
+  assert(!r || r>=_root);
   if (!r) r=&root_dummy;
   if(!r->filetypedata_initialized){
     assert(FILETYPEDATA_FREQUENT_NUM>_FILE_EXT_TO-_FILE_EXT_FROM);
@@ -77,8 +77,8 @@ static void _rootdata_counter_inc(counter_rootdata_t *c, enum enum_counter_rootd
   if (c->counts[f]<UINT32_MAX) atomic_fetch_add(c->counts+f,1);
 }
 static void fhandle_counter_inc( struct fhandle* d, enum enum_counter_rootdata f){
-    if (!d->filetypedata) d->filetypedata=filetypedata_for_ext(D_VP(d),d->zpath.root);
-    _rootdata_counter_inc(d->filetypedata,f);
+  if (!d->filetypedata) d->filetypedata=filetypedata_for_ext(D_VP(d),d->zpath.root);
+  _rootdata_counter_inc(d->filetypedata,f);
 
 }
 static void rootdata_counter_inc(const char *path, enum enum_counter_rootdata f, struct rootdata* r){
@@ -347,7 +347,7 @@ static int log_memusage_ht(int n,const bool html){
   }
   PRINTINFO("\n%sMemory storages%s\n",BEGIN_B(html),END_B(html));
   n+=mstore_report_memusage_to_strg(_info+n,_info_capacity-n, &mstore_persistent);
-      PRINTINFO("\n\n%s",END_PRE(html));
+  PRINTINFO("\n\n%s",END_PRE(html));
   PRINTINFO("\n");
   return n;
 #undef R
@@ -364,7 +364,7 @@ static int log_mutex_locks(int n,const bool html){
   PRINTINFO("\n%s",END_PRE(html));
 #endif //WITH_ASSERT_LOCK
   return n;
-    }
+}
 
 
 static int log_malloc(int n,const bool html){
@@ -380,7 +380,7 @@ static int log_malloc(int n,const bool html){
       }
     }
   }
-    PRINTINFO("\n%s",END_PRE(html));
+  PRINTINFO("\n%s",END_PRE(html));
 #endif //WITH_DEBUG_MALLOC
   return n;
 }
@@ -536,7 +536,7 @@ static int print_fhandle(int n,const char *title){
   }else{
     PRINTINFO("Table should be empty when idle.<BR>Column <I><B>fd</B></I> file descriptor. Column <I><B>Last-access</B></I>:    Column <I><B>Millisec</B></I>:  time to read entry en bloc into cache.  Column <I><B>R</B></I>: number of threads in currently in xmp_read().\
               Column <I><B>F</B></I>: flags. (D)elete indicates that it is marked for closing and (K)eep indicates that it can currently not be closed. Two possible reasons why data cannot be released: (I)  xmp_read() is currently run (II) the cached zip entry is needed by another file descriptor  with the same virtual path. Column <I><B>Tansient cache: Hex address, number of cached paths, count fetched non-existing paths, count fetched existing</B><BR>\n\
-              <TABLE border=\"1\">\n<THEAD><TR>"TH("Path")TH("Last-access")IF1(WITH_MEMCACHE,TH("Cache-ID")TH("Cache-read-kB")TH("Entry-kB")TH("Millisec")TH("MillisecWaitLock"))TH(" F")TH("R")IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,TH("Transient-cache"))"</TR></THEAD>\n");
+              <TABLE border=\"1\">\n<THEAD><TR>"TH("Path")TH("Last-access")IF1(WITH_MEMCACHE,TH("Cache-ID")TH("Cache-read-kB")TH("Entry-kB")TH("Millisec")TH("MillisecWaitLock"))TH("Locked")TH(" F")TH("R")IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,TH("Transient-cache"))"</TR></THEAD>\n");
     const time_t t0=time(NULL);
     foreach_fhandle(id,d){
       PRINTINFO("<TR>"sTDl(),snull(D_VP(d)));
@@ -547,17 +547,18 @@ static int print_fhandle(int n,const char *title){
       }
 #if WITH_MEMCACHE
       const struct memcache *m=d->memcache;
+
       if (m && m->txtbuf){
         PRINTINFO(TD("%05x")luTD()luTD()lTD()lTD(),m->id,(LLU)_kilo(m->memcache_already),(LLU)_kilo(m->memcache_l),(LLD)m->memcache_took_mseconds,(LLD)m->memcache_took_mseconds_in_lock);
       }else{
-        PRINTINFO(TD("")TD("")TD("")TD("")TD(""));
+        PRINTINFO(TD("")TD("")TD("")TD("")TD("")TD(""));
       }
 #endif //WITH_MEMCACHE
-
-      PRINTINFO(TD("%c%c")dTD(),(d->flags&FHANDLE_FLAGS_DESTROY_LATER)?'D':' ', fhandle_can_destroy(d)?' ':'K',d->is_xmp_read);
+      const char *locked="!Locked"; if (pthread_mutex_trylock(&d->mutex_read)) locked="Locked"; else pthread_mutex_unlock(&d->mutex_read);
+      PRINTINFO(TD("%s")TD("%c%c")dTD(),locked,(d->flags&FHANDLE_FLAG_DESTROY_LATER)?'D':' ', fhandle_can_destroy(d)?' ':'K',d->is_busy);
       {
         // cppcheck-suppress variableScope
-      IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,const struct ht *ht=d->ht_transient_cache;PRINTINFO(TD("%0lx %d %d %d"),(long)ht,!ht?-1: (int)ht->length, !ht?-1:ht->client_value_int[0],!ht?-1:ht->client_value_int[1]));
+        IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,const struct ht *ht=d->ht_transient_cache;PRINTINFO(TD("%0lx %d %d %d"),(long)ht,!ht?-1: (int)ht->length, !ht?-1:ht->client_value_int[0],!ht?-1:ht->client_value_int[1]));
       }
       PRINTINFO("</TR>\n");
     }

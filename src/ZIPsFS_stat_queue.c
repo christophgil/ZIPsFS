@@ -56,11 +56,11 @@ static int _stat_queue1(const bool verbose,const char *rp, const int rp_l,const 
 }
 
 static bool stat_queue(const bool verbose,const char *rp, const int rp_l,const ht_hash_t hash,struct stat *stbuf,struct rootdata *r){
-  FOR(try,0,4){
+  FOR(iTry,0,4){
     int ok=_stat_queue1(verbose,rp,rp_l,hash,stbuf,r);
     if (ok){
-      if (try){
-        warning(WARN_RETRY,rp,"stat_queue succeeded on attempt %d\n",try);
+      if (iTry){
+        warning(WARN_RETRY,rp,"stat_queue succeeded on attempt %d\n",iTry);
         rootdata_counter_inc(rp,COUNT_RETRY_STAT,r);
       }
       return ok==1;

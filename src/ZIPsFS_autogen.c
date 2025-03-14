@@ -32,6 +32,7 @@ const char *PLACEHOLDERS[]={
 #define autogen_ht_fsize(vp,vp_l) ht_numkey_get_entry(&ht_fsize,inode_from_virtualpath(vp,vp_l),0,true)
 
 static void autogen_run(struct fhandle *d){
+  log_verbose("%s",D_VP(d));
   const char *rp=D_RP(d);
   assert(strlen(rp)<MAX_PATHLEN-10);
   INIT_STRUCT_AUTOGEN_FILES(ff,D_VP(d),D_VP_L(d));
@@ -44,14 +45,17 @@ static void autogen_run(struct fhandle *d){
     snprintf(stpncpy(ff.tmpout,rp,slash+1),MAX_PATHLEN,"autogen_tmp_%d_%llu_%s",getpid(),(LLU)currentTimeMillis(),rp+slash+1);
   }
   struct stat st={0};
-  if (autogen_realinfiles(&ff)<0 || (d->autogen_error=-aimpl_run(&ff))){
+  if (autogen_realinfiles(&ff)<0){
     d->autogen_state=AUTOGEN_FAIL;
+    log_debug_now("AUTOGEN_FAIL autogen_realinfiles(ff)");
+  }else if ((d->autogen_error=-aimpl_run(&ff))){
+    d->autogen_state=AUTOGEN_FAIL;
+    log_debug_now("AUTOGEN_FAIL aimpl_run");
   }else if (ff.buf){ /* Result is in RAM */
-    LOCK_N(mutex_fhandle, struct memcache *m=memcache_new(d);m->txtbuf=ff.buf;m->memcache_already=m->memcache_l=textbuffer_length(ff.buf));
-    d->memcache=m;
-    LOCK(mutex_fhandle,autogen_ht_fsize(D_VP(d),D_VP_L(d))->value=(char*)textbuffer_length(ff.buf));
-    d->autogen_state=AUTOGEN_SUCCESS;
+        log_debug_now("ff.buf");
+    LOCK(mutex_fhandle, fhandle_set_text(d,ff.buf); autogen_ht_fsize(D_VP(d),D_VP_L(d))->value=(char*)textbuffer_length(ff.buf);d->autogen_state=AUTOGEN_SUCCESS);
   }else{ /*Result is in file tmpout  */
+    log_debug_now("ff.tmpout=%s  %d ",ff.tmpout,cg_file_exists(ff.tmpout));
     if (stat(ff.tmpout,&st)){ /* Fail */
       warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,ff.tmpout," size=%ld ino: %ld",st.st_size, st.st_ino);
       d->autogen_state=AUTOGEN_FAIL;

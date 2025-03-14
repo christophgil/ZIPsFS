@@ -252,7 +252,7 @@ main(){
     opts+="${D}HAS_NO_ATIME=$(          try_compile no_atime        $'#define _GNU_SOURCE\n#include <sys/statvfs.h>' 'struct statvfs s; int i=s.f_flag&ST_NOATIME;')"
 
 
-#    opts+="${D}FUSE3=$(          try_compile no_atime  fuse_unmount(fuse_get_context()->fuse)
+##    opts+="${D}FUSE3=$(          try_compile no_atime  fuse_unmount(fuse_get_context()->fuse)
     local x=${DIR%/*}/ZIPsFS
     rm  "$x" 2>/dev/null
     [[ -s $x ]] && echo "${ANSI_RED}Warning, $x exists $ANSI_RESET"

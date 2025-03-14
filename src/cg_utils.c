@@ -42,6 +42,28 @@
 #ifndef PROFILED
 #define PROFILED(function) function
 #endif
+#ifndef WITH_ASSERT_LOCK
+#define WITH_ASSERT_LOCK 0
+#endif
+////////////////////////////////////////
+
+
+
+static void *malloc_untracked(const size_t size){
+  void *m=malloc(size);
+  if (!m){ fprintf(stderr,RED_ERROR" malloc(%'lld)\n",(LLD)size); perror(""); exit(ENOMEM); }
+  return m;
+}
+static void *calloc_untracked(const size_t nmemb,const size_t size){
+  void *m=calloc(nmemb,size);
+  if (!m){ fprintf(stderr,RED_ERROR" calloc(%'lld,%'lld)\n",(LLD)nmemb,(LLD)size); perror(""); exit(ENOMEM); }
+  return m;
+}
+static char *strdup_untracked(const char *s){
+  char *m=strdup(s);
+  if (!m){ fprintf(stderr,RED_ERROR" strdup()\n"); perror(""); exit(ENOMEM); }
+  return m;
+}
 
 /*********************************************************************************/
 static bool has_proc_fs(void){
@@ -111,6 +133,7 @@ static atomic_long _malloc_count[MALLOC_ID_COUNT],_free_count[MALLOC_ID_COUNT], 
 #define cg_mmap(...) _cg_mmap(__VA_ARGS__)
 #define cg_munmap(...) _cg_munmap(__VA_ARGS__)
 
+
 static bool _malloc_is_count_mstore[MALLOC_ID_COUNT];
 static void *cg_malloc(const int id, const size_t size){
   MALLOC_INC(id);
@@ -118,11 +141,11 @@ static void *cg_malloc(const int id, const size_t size){
 }
 static void *cg_calloc(const int id,size_t nmemb, size_t size){
   MALLOC_INC(id);
-  return calloc(nmemb,size);
+  return calloc_untracked(nmemb,size);
 }
 static char *cg_strdup(const int id,const char *s){
   MALLOC_INC(id);
-  return strdup(s);
+  return strdup_untracked(s);
 }
 static void cg_free(const int id,const void *ptr){
   if (!ptr) return;
@@ -151,7 +174,7 @@ static int _cg_munmap(const int id,const void *ptr,size_t length){
 
 static char *cg_stpncpy0(char *dst,const char *src,const int n){
   if (!dst) return NULL;
-   char *ret=stpncpy(dst,src,n);
+  char *ret=stpncpy(dst,src,n);
   *ret=0;
   return ret;
 }
@@ -309,7 +332,7 @@ static int cg_strsplit(int opt_and_sep, const char *s, const int s_l, const char
   int count=0;
   const char *tok=NULL;
   if (s){
-      bool prev_sep=true;
+    bool prev_sep=true;
     for(int i=0;;i++){
       const bool isend=s_l?(i>=s_l):!s[i];
       const bool issep=isend || s[i]==(opt_and_sep&0xff);
@@ -452,7 +475,7 @@ static void cg_print_path_for_fd(int fd){
   if (!has_proc_fs()){
     fprintf(stderr,ERROR_MSG_NO_PROC_FS"\n");
   }else{
-      char buf[99],path[512];
+    char buf[99],path[512];
     sprintf(buf,"/proc/self/fd/%d",fd);
     const ssize_t n=readlink(buf,path,511);
     if (n<0){
@@ -583,7 +606,7 @@ static bool cg_stat_differ(const char *title,const struct stat *s1,const struct 
   const char *wrong=NULL;
 #define C(f) (wrong=#f,s1->f!=s2->f)
   //  if (C(st_ino)||C(st_mode)||C(st_uid)||C(st_gid)||C(st_size)||C(st_blksize)||C(st_blocks)||C(st_mtime)||C(st_ctime)||(wrong=NULL,false)){  knownConditionTrueFalse
-    if (C(st_ino)||C(st_mode)||C(st_uid)||C(st_gid)||C(st_size)||C(st_blksize)||C(st_blocks)||C(st_mtime)||C(st_ctime)){
+  if (C(st_ino)||C(st_mode)||C(st_uid)||C(st_gid)||C(st_size)||C(st_blksize)||C(st_blocks)||C(st_mtime)||C(st_ctime)){
     log_warn("stat_t.%s\n",wrong);
     cg_log_file_stat(title,s1);
     cg_log_file_stat(title,s2);
@@ -618,9 +641,9 @@ static bool cg_access_from_stat(const struct stat *stats,int mode){ // equivalet
     granted=(stats->st_mode&mode);
   return granted==mode;
 }
-static bool cg_file_set_atime(const char *path, struct stat *stbuf,long secondsFuture){ // cppcheck-suppress constParameterPointer
-  struct stat st;
-  if (!stbuf && PROFILED(stat)(path,stbuf=&st)) return false;
+static bool cg_file_set_atime(const char *path, const struct stat *stbuf,long secondsFuture){ // cppcheck-suppress constParameterPointer
+  const struct stat st;
+  if (!stbuf && PROFILED(stat)(path, (struct stat*)(stbuf=&st))) return false;
   log_verbose("secondsFuture=%ld\n",secondsFuture);
   struct utimbuf new_times={.actime=time(NULL)+secondsFuture,.modtime=stbuf->st_mtime};
   return !utime(path,&new_times);
@@ -658,7 +681,7 @@ static bool cg_fd_write_str(const int fd,const char *t){
 
 
 static int cg_symlink_overwrite_atomically(const char *src,const char *lnk){
-  log_entered_function("src: %s lnk: %s \n",src,lnk);
+  log_verbose("src: %s lnk: %s \n",src,lnk);
   if (!cg_is_symlink(lnk)) unlink(lnk);
   char lnk_tmp[MAX_PATHLEN+1];
   strcpy(stpcpy(lnk_tmp,lnk),".tmp");
@@ -834,7 +857,7 @@ static bool cg_log_waitpid_status(FILE *f,const unsigned int status,const char *
   return logged;
 }
 static int cg_waitpid_logtofile_return_exitcode(int pid,const char *err){
-  log_entered_function("err=%s\n",err);
+  log_verbose("err=%s\n",err);
   int status=-1, res=0;
   FILE *f=NULL;
   const int ret=waitpid(pid,&status,0);
@@ -843,6 +866,7 @@ static int cg_waitpid_logtofile_return_exitcode(int pid,const char *err){
       fputs("waitpid() failed.\n",f);
       fprint_strerror(f,errno);
       fclose(f);
+      f=NULL;
     }
     res=-1;
   }
@@ -857,7 +881,7 @@ static void cg_exec(char const * const * const env,char const * const * const cm
   if(fd_out>0) dup2(fd_out,STDOUT_FILENO);
   if(fd_err>0) dup2(fd_err,STDERR_FILENO);
   if(fd_out>0) close(fd_out);
-  if(fd_err>0 && fd_err!=fd_out) close(fd_err);
+  //  if(fd_err>0 && fd_err!=fd_out) close(fd_err);
   cg_log_exec_fd(STDERR_FILENO,env,cmd);
 #if defined(HAS_EXECVPE) && HAS_EXECVPE
   execvpe(cmd[0],cmd,env);
@@ -909,10 +933,10 @@ int main(int argc, char *argv[]){
   return 0;
 
 
- /*  char *h=strdup("/data/PLACEHOLDER_INFILE_NAMEx"); */
- /*  cg_str_replace(0,h,0,"PLACEHOLDER_INFILE_NAMEx",0, "report.parquet",0); */
- /*  fprintf(stderr,"h: %s\n",h); */
- /* return 0; */
+  /*  char *h=strdup("/data/PLACEHOLDER_INFILE_NAMEx"); */
+  /*  cg_str_replace(0,h,0,"PLACEHOLDER_INFILE_NAMEx",0, "report.parquet",0); */
+  /*  fprintf(stderr,"h: %s\n",h); */
+  /* return 0; */
   switch(13){
   case 0:{
     bool *ccpath=cg_validchars(VALIDCHARS_PATH);
@@ -1002,13 +1026,13 @@ int main(int argc, char *argv[]){
     assert(argc==3);
     printf("cg_file_is_newer_than %d \n",cg_file_is_newer_than(argv[1],argv[2]));
     break;
-  /* case 14:{ */
-  /*   char *aa[99]; */
-  /*   FOR(i,0,argc) aa[i]=*argv[i]?argv[i]:NULL; */
-  /*   const int n=cg_array_remove_null_pointer(aa,argc); */
-  /*   FOR(i,0,n) printf("%d '%s'\n",i,(char*)aa[i]); */
-  /*   fprintf(stderr,"idx 0: %d\n",cg_idx_of_NULL(aa,argc)); */
-  /* } */
+    /* case 14:{ */
+    /*   char *aa[99]; */
+    /*   FOR(i,0,argc) aa[i]=*argv[i]?argv[i]:NULL; */
+    /*   const int n=cg_array_remove_null_pointer(aa,argc); */
+    /*   FOR(i,0,n) printf("%d '%s'\n",i,(char*)aa[i]); */
+    /*   fprintf(stderr,"idx 0: %d\n",cg_idx_of_NULL(aa,argc)); */
+    /* } */
   }
 }
 

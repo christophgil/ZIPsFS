@@ -43,19 +43,29 @@ static int cg_mutex_count(int mutex,int inc){
 #define unlock_ncancel(mutex) unlock(mutex);pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&_lock_oldstate_unused)
 #define LOCK_NCANCEL_N(mutex,code) pthread_setcancelstate(PTHREAD_CANCEL_DISABLE,&_lock_oldstate_unused);lock(mutex);code;unlock(mutex);pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&_lock_oldstate_unused)
 #define LOCK_NCANCEL(mutex,code) {LOCK_NCANCEL_N(mutex,code);}
-#define LOCK(mutex,code) {lock(mutex);code;unlock(mutex);}
-#define LOCK_N(mutex,code) lock(mutex);code;unlock(mutex)
-static long _log_count_pthread_lock=0;
+#define LOCK_N(mutex,code) lock(mutex); code;  unlock(mutex)
 
-#if ! defined(WITH_PTHREAD_LOCK) || WITH_PTHREAD_LOCK
+#define LOCK(mutex,code) { LOCK_N(mutex,code);}
+static long _log_count_pthread_lock=0;
+#ifdef __cppcheck__
+#define lock(mutex) FILE *_cppcheck_rsc_leak_##mutex=fopen("mutex","r")
+#define unlock(mutex) if (_cppcheck_rsc_leak_##mutex) fclose(_cppcheck_rsc_leak_##mutex)
+#define continue return
+#define continue return
+#define goto     return
+#elif ! defined(WITH_PTHREAD_LOCK) || WITH_PTHREAD_LOCK
 static MAYBE_INLINE void lock(int mutex){
-  _log_count_pthread_lock++;
-  pthread_mutex_lock(_mutex+mutex);
-  IF1(WITH_ASSERT_LOCK,cg_mutex_count(mutex,1));
+  if (mutex){
+    _log_count_pthread_lock++;
+    pthread_mutex_lock(_mutex+mutex);
+    IF1(WITH_ASSERT_LOCK,cg_mutex_count(mutex,1));
+  }
 }
-static void unlock(int mutex){
-  IF1(WITH_ASSERT_LOCK,cg_mutex_count(mutex,-1));
-  pthread_mutex_unlock(_mutex+mutex);
+static MAYBE_INLINE void unlock(int mutex){
+  if (mutex){
+    IF1(WITH_ASSERT_LOCK,cg_mutex_count(mutex,-1));
+    pthread_mutex_unlock(_mutex+mutex);
+  }
 }
 #else
 #define lock(mutex) {}
@@ -85,30 +95,41 @@ static void unlock(int mutex){
 /////////////////
 #if WITH_ASSERT_LOCK
 static void cg_mutex_test_1(void){
-  log_entered_function("");
-  LOCK(mutex_fhandle,
-       //ASSERT_LOCKED_FHANDLE();
-       log_verbose("Within mutex_fhandle");
-       log_verbose("count=%d",cg_mutex_count(mutex_fhandle,0));
-       LOCK(mutex_fhandle,log_verbose("count2=%d",cg_mutex_count(mutex_fhandle,0)));
-       ASSERT_LOCKED_FHANDLE();
-       );
+  log_verbose("");
+  lock(mutex_fhandle);
+  log_verbose("Within mutex_fhandle");
+  log_verbose("count=%d",cg_mutex_count(mutex_fhandle,0));
+  LOCK_N(mutex_fhandle,log_verbose("count2=%d",cg_mutex_count(mutex_fhandle,0)));
+  ASSERT_LOCKED_FHANDLE();
+  unlock(mutex_fhandle);
   log_msg("count2=%d",cg_mutex_count(mutex_fhandle,0));
   ASSERT_LOCKED_FHANDLE();
 }
 static void cg_mutex_test_2(void){
-  log_entered_function("");
+  log_verbose("");
   LOCK(mutex_fhandle,
 
-cg_thread_assert_not_locked(mutex_fhandle);
+       cg_thread_assert_not_locked(mutex_fhandle);
        );
 }
 #endif // !WITH_ASSERT_LOCK
 
 #endif //_cg_pthread_dot_c
 /////////////////////////////////////////////////////////////////////////////////
-#if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
-int main(int argc, char *argv[]){
+
+
+/////////////////////////////////////////////////////////////////////////////////
+#if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0 || defined(__cppcheck__)
+
+
+
+
+int main(int argc, const char *argv[]){
   IF1(WITH_ASSERT_LOCK,cg_mutex_count_test());
+#ifdef __cppcheck__
+  cppcheck_lock_challenge();
+#endif
 }
+
+
 #endif

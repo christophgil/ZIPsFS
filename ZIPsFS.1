@@ -105,6 +105,14 @@ Log files are found in \f[B]\[ti]/.ZIPsFS/\f[R].
 .PP
 An HTML file with status information is dynamically generated in the
 generated folder \f[B]ZIPsFS\f[R] in the virtual ZIPsFS file system.
+.SS Real file location
+.PP
+To see the real file path i.e.\ the file path where a file is physically
+stored, append \f[B]\[at]SOURCE.TXT\f[R] to the virtual file path.
+If imported as SAMBA, these virtual files may not be accessible on a
+Windows PC.
+It seems that Windows can not access files that are not listed in the
+containing folder.
 .SS Plugins - Auto-generation of virtual files
 .PP
 ZIPsFS can display virtual files which do not exist, but which are
@@ -171,14 +179,26 @@ This seems to be a common problem, see
 https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unknown-size.
 Any help is appreciated.
 .PP
-Currently, ZIPsFS reports an upper limit of the expected file size which
-is not really nice.
+Initially, ZIPsFS reports an upper estimate of the expected file size.
+This breaks programs that need to know the file size such as
+/usr/bin/tail.
 .PP
-Why cannot it be done like in /proc files (e.g.\ /proc/
-.RS
-/\f[I]e\f[R]\f[I]n\f[R]\f[I]v\f[R]\f[I]i\f[R]\f[I]r\f[R]\f[I]o\f[R]\f[I]n\f[R])?\f[I]C\f[R]\f[I]a\f[R]\f[I]l\f[R]\f[I]l\f[R]\f[I]i\f[R]\f[I]n\f[R]\f[I]g\f[R]\f[I]s\f[R]\f[I]t\f[R]\f[I]a\f[R]\f[I]t\f[R]/\f[I]p\f[R]\f[I]r\f[R]\f[I]o\f[R]\f[I]c\f[R]/
-.RE/environ reports file size zero.
-If ZIPsFS returns zero, then the content of the files are not readable.
+How is this problem solved in the virtual file systems /proc annd /sys?
+Calling stat /proc/$$/environ.
+Consider
+.IP
+.nf
+\f[C]
+ls -l /proc/self/environ
+\f[R]
+.fi
+.PP
+The reported file size is zero.
+Nevertheless, \f[I]cat\f[R], \f[I]more\f[R] and even \f[I]tail\f[R]
+work.
+If the FUSE file system returns zero for a file, the content of the
+files are not readable.
+Any suggested appreciated.
 .SS Limitations - nested, recursive
 .PP
 Currently, nesting (recursion) is not yet supported.
@@ -357,6 +377,10 @@ files can be always deleted irrespectively of their physical location.
 They are canceled out without actually deleting them from their physical
 location.
 If you need the same behaviour please drop a request-for-feature.
+.SS Reading and writing
+.PP
+Simultaneous Reading and writing of files with the same file descriptor
+will only work for files exclusively in the writable source.
 .SH BUGS
 .PP
 Current status: Testing and Bug fixing If ZIPsFS crashes, please send
