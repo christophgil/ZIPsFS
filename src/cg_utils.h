@@ -167,6 +167,7 @@ M(MAX,long)
 #ifndef ASSERT
 #define ASSERT(...) assert(__VA_ARGS__)
 #endif
+#define Assert(...) assert(__VA_ARGS__)  // cppcheck-suppress-macro knownConditionTrueFalse
 // ---
 #define free_untracked(x) free(x)
 #define PRINTF_STRG_OR_STDERR(strg,n,N,...) (strg && N>n?snprintf(strg+n,N-n,__VA_ARGS__):fprintf(stderr,__VA_ARGS__))

@@ -18,7 +18,7 @@
 #define ROOTS (1<<LOG2_ROOTS)
 static pthread_mutex_t _mutex[NUM_MUTEX];
 #if WITH_ASSERT_LOCK
-void destroy_thread_data(void *x){
+static void destroy_thread_data(void *x){
 }
 /* Count recursive locks with (_mutex+mutex). Maybe inc or dec. */
 static int cg_mutex_count(int mutex,int inc){
@@ -101,14 +101,13 @@ static void cg_mutex_test_1(void){
   log_verbose("count=%d",cg_mutex_count(mutex_fhandle,0));
   LOCK_N(mutex_fhandle,log_verbose("count2=%d",cg_mutex_count(mutex_fhandle,0)));
   ASSERT_LOCKED_FHANDLE();
-  unlock(mutex_fhandle);
   log_msg("count2=%d",cg_mutex_count(mutex_fhandle,0));
+  unlock(mutex_fhandle);
   ASSERT_LOCKED_FHANDLE();
 }
 static void cg_mutex_test_2(void){
   log_verbose("");
   LOCK(mutex_fhandle,
-
        cg_thread_assert_not_locked(mutex_fhandle);
        );
 }

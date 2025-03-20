@@ -69,8 +69,8 @@ file tree (in the example \f[I]~/tmp/ZIPsFS/writable\f[R]).
 If files exist in two locations, the left most source file system takes
 precedence.
 .PP
-New files are created in the first file tree, while the following file
-trees are not modified.
+New files are created in the first file tree, while the other file
+sources are never modified.
 If an empty string \[lq]\[rq] or \[cq]\[cq] is given for the first
 source, no writable source is used.
 .SS ZIP files
@@ -85,44 +85,60 @@ This can be changed in \f[I]ZIPsFS_configuration.c\f[R].
 For example Sciex mass spectrometry software requires that the
 containing files are shown directly in the file listing rather than in a
 sub-folder.
+Bruker mass spectrometry software expects folder names ending with
+\f[I].d\f[R] rather than \f[I].d.Zip.Content\f[R].
 .SS Cache
 .PP
 Optionally, ZIPsFS can read certain ZIP entries entirely into RAM and
 provide the data from the RAM copy at higher speed.
 This may improve performance for compressed ZIP entries that are read
-from varying positions in the file, so-called file file-seek.
+from varying positions in a file, so-called file file-seek.
+This is particularly important, when the ZIP files reside in a remote
+file system.
 With the option \f[B]-l\f[R] an upper limit of memory consumption for
 the ZIP RAM cache is specified.
+There are customizeable rules for the case that the limit is reached.
 .PP
 Further caches aim at faster file listing of large directories.
+A file listing of the Sciex style where all ZIP entries of many ZIP
+files are shown would require to read the entry index of many ZIP files
+which takes about 15 ms per ZIP file.
+A file listing of several thousands of files would take several seconds
+without a cache.
+.PP
+When the cache size exceeds a limit, it is cleared.
 .SS Logs
 .PP
-It is recommended to run ZIPsFS in the foreground with option
+It is convenient to run ZIPsFS in the foreground with option
 \f[I]-f\f[R] within a persistent terminal multiplexer like
 \f[I]tmux\f[R].
+This allows to observe all messages and to search back in the scroll
+buffer.
 .PP
-Log files are found in \f[B]\[ti]/.ZIPsFS/\f[R].
+In addition, log files are found in \f[B]\[ti]/.ZIPsFS/\f[R].
 .PP
 An HTML file with status information is dynamically generated in the
-generated folder \f[B]ZIPsFS\f[R] in the virtual ZIPsFS file system.
+generated folder \f[B]/ZIPsFS/\f[R] in the virtual ZIPsFS file system.
 .SS Real file location
 .PP
 To see the real file path i.e.\ the file path where a file is physically
 stored, append \f[B]\[at]SOURCE.TXT\f[R] to the virtual file path.
-If imported as SAMBA, these virtual files may not be accessible on a
-Windows PC.
-It seems that Windows can not access files that are not listed in the
-containing folder.
+From a Windows client, these files are not accessible.
+In Windows, files are generally not accessible, when they are not listed
+in the parent folder.
 .SS Plugins - Auto-generation of virtual files
 .PP
 ZIPsFS can display virtual files which do not exist, but which are
 generated automatically when used.
-This feature must be activated in ZIPsFS_configuration.h.
-The first file root is used to store the generated files.
+This feature is activated when \f[B]WITH_AUTOGEN\f[R] is set to
+\f[B]1\f[R] in \f[I]ZIPsFS_configuration.h\f[R].
+The first file root may be used to store the generated files.
+Alternatively, the file data is computed and kept in RAM for the time of
+file access.
 .PP
 A typical use-case are file conversions.
 Auto-generated files are displayed in the virtual file tree in
-\f[B]ZIPsFS/a/\f[R].
+\f[B]/ZIPsFS/a/\f[R].
 If they have not be used before, an estimated file size is reported as
 the real file size is not yet known.
 .PP
@@ -131,7 +147,7 @@ as a templated for own settings.
 .PP
 For this purpose copy image or pdf files into one of the roots and visit
 the respective folder in the virtual file system.
-Prepend this folder with \f[B]ZIPsFS/a/\f[R] and you will see the
+Prepend this folder with \f[B]/ZIPsFS/a/\f[R] and you will see the
 generated files:
 .IP
 .nf
@@ -155,23 +171,20 @@ For PDF files extracted ASCII text
 .IP \[bu] 2
 For ZIP files the report of the consistency check including check-sums
 .IP \[bu] 2
-Decompression of .tsv.bz2 and .tsv.gz files
-.IP \[bu] 2
 Mass spectrometry files: They are converted to mgf (Mascot) and msML.
-For wiff files, the contained ASCII text is extracted.
+For wiff files, the contained 16 bit text is converted to plain ASCII.
 .IP \[bu] 2
 Apache Parquet files are converted to tsv and tsv.bz2
 .PP
 When opening these files for the first time there will be some delay.
+The same is true when their last-modified time changes.
 This is because the files need to be generated.
 When accessed a second time, the data comes without delay, because the
 file is already there.
 Furthermore, the file size will be correct.
-When the upstream file changes or the last-modified attribute is
-updated, derived files will be generated again.
 .PP
-Users can deactivate or add conversions by editing
-ZIPsFS_configuration_autogen.c.
+Users can customize the rules in ZIPsFS_configuration_autogen.c.
+Some of the conversions require support for docker.
 .SS Limitations - unknown file size
 .PP
 The system does not know the file size of not-yet-generated files.
@@ -180,8 +193,8 @@ https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unk
 Any help is appreciated.
 .PP
 Initially, ZIPsFS reports an upper estimate of the expected file size.
-This breaks programs that need to know the file size such as
-/usr/bin/tail.
+This breaks programs that need to know the exact file size such as
+\f[I]/usr/bin/tail\f[R].
 .PP
 How is this problem solved in the virtual file systems /proc annd /sys?
 Calling stat /proc/$$/environ.
@@ -205,8 +218,10 @@ Currently, nesting (recursion) is not yet supported.
 A virtual file cannot be the basis for another virtual file.
 .SS ZIPsFS_autogen_queue.sh
 .PP
-Some exotic Wine dependent Windows executables do not work well within
-ZIPsFS.
+Some exotic scientific Windows executables cannot be started from a
+compiled program like ZIPsFS.
+The problem is that the Console API is used instead of terminal escape
+sequences.
 As a work around, we developed the shell script
 \f[B]ZIPsFS_autogen_queue.sh\f[R].
 With each pass of an infinity loop one task is taken from a queue and
@@ -233,7 +248,7 @@ Policy for ZIP entries cached in RAM.
 .PP
 .TS
 tab(@);
-cw(8.3n) lw(61.7n).
+cw(8.1n) lw(61.9n).
 T{
 NEVER
 T}@T{
@@ -245,7 +260,7 @@ T}
 T{
 SEEK
 T}@T{
-ZIP entries are cached if the file position jumps backward.
+ZIP entries are cached when the file position jumps backward.
 This is the default
 T}
 T{
@@ -281,7 +296,7 @@ T}
 .PP
 After initialization the specified symlink is created and points to the
 mount point.
-Previously existing links are overwritten.
+Previously existing links are overwritten atomically.
 This allows to restart ZIPsFS without affecting running programs which
 access file in the virtual ZIPsFS file system.
 For file paths in the virtual file system, the symlink is used rather
@@ -335,9 +350,10 @@ they may be temporarily unavailable.
 Overlay file systems typically freeze when calls to the file API block.
 Conversely, ZIPsFS should continue to operate with the remaining file
 roots.
-This is implemented as follows: Paths starting with double slash (in the
-example \f[I]//computer1/pub\f[R]) are regarded as remote paths and
-treated specially.
+This is implemented as follows for paths starting with double slash (in
+the example \f[I]//computer1/pub\f[R]).
+Double slash indicates remote paths which might get unavailable in
+analogy to remote UNC paths.
 ZIPsFS will periodically check file systems starting with a double
 slash.
 If the last responds was too long ago then the respective file system is

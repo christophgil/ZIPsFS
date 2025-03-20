@@ -344,7 +344,7 @@ static bool stat_cache_or_queue(const char *rp, struct stat *stbuf,struct rootda
 //////////////////////
 /// Infinity loops ///
 //////////////////////
-static int observe_thread(struct rootdata *r, int thread){
+static int observe_thread(struct rootdata *r, const int thread){
   while(r->debug_pretend_blocked[thread]) usleep(1000*100);
   return (r->pthread_when_loop_deciSec[thread]=deciSecondsSinceStart());
 }
@@ -1837,14 +1837,13 @@ static int xmp_read(const char *path, char *buf, const size_t size, const off_t 
     IF1(WITH_MEMCACHE,if (d->flags&FHANDLE_FLAG_MEMCACHE_COMPLETE){ nread=memcache_read(buf,d,offset,offset+size); goto done_d; });
     assert(d->is_busy>=0);
     if ((d->zpath.flags&ZP_ZIP)!=0){      /* Important for libzip. At this point we see 2 threads reading the same zip entry.*/
-
       if (size>(int)_log_read_max_size) _log_read_max_size=(int)size;
       nread=-1;
       IF1(WITH_MEMCACHE,
           if (!(d->flags&(FHANDLE_FLAG_WITH_MEMCACHE|FHANDLE_FLAG_WITHOUT_MEMCACHE))) d->flags|=(memcache_is_advised(d)?FHANDLE_FLAG_WITH_MEMCACHE:FHANDLE_FLAG_WITHOUT_MEMCACHE);
           if (d->flags&FHANDLE_FLAG_WITH_MEMCACHE) nread=memcache_read_fhandle(buf,size,offset,d,fi));
       if (nread<0){
-        pthread_mutex_lock(&d->mutex_read); /* Seeing here same/different struct fhandle instances and various pthread_self() DEBUG_NOW */
+        pthread_mutex_lock(&d->mutex_read); /* Observing here same/different struct fhandle instances and various pthread_self() DEBUG_NOW */
         nread=fhandle_read_zip(D_VP(d),buf,size,offset,d,fi);
         pthread_mutex_unlock(&d->mutex_read);
       }
@@ -1870,10 +1869,9 @@ static int xmp_read(const char *path, char *buf, const size_t size, const off_t 
 }/*xmp_read*/
 static int xmp_release(const char *path, struct fuse_file_info *fi){ // cppcheck-suppress [constParameterCallback]
   ASSERT(fi!=NULL);
-  const int path_l=strlen(path);
-  const uint64_t fh=fi->fh;
-  const int special=whatSpecialFile(path,path_l);
+  const int path_l=strlen(path), special=whatSpecialFile(path,path_l);
   if (special>=SFILE_BEGIN_VIRTUAL) return 0;
+  const uint64_t fh=fi->fh;
   if (fh>=FD_ZIP_MIN){
     LOCK(mutex_fhandle,fhandle_destroy_and_evict_from_pagecache(fh,path,path_l));
   }else if (fh>2 && close(fh)){
@@ -1884,8 +1882,7 @@ static int xmp_release(const char *path, struct fuse_file_info *fi){ // cppcheck
 }
 static int xmp_flush(const char *path, struct fuse_file_info *fi){
   LOG_FUSE(path);
-  const int path_l=strlen(path);
-  return whatSpecialFile(path,path_l)>=SFILE_BEGIN_VIRTUAL?0:
+  return whatSpecialFile(path,strlen(path))>=SFILE_BEGIN_VIRTUAL?0:
     fi->fh<FD_ZIP_MIN?fsync(fi->fh):
     0;
 }
@@ -2170,8 +2167,8 @@ int main(const int argc,const char *argv[]){
     warn=true;
   }
 #if WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
-  if (DIRECTORY_CACHE_SIZE*DIRECTORY_CACHE_BLOCKS<64*1024*1024){
-    log_msg(RED_WARNING"Small file attribute and directory cache of only %d\n",DIRECTORY_CACHE_BLOCKS*DIRECTORY_CACHE_BLOCKS/1024);
+  if (DIRECTORY_CACHE_SIZE*NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE<64*1024*1024){
+    log_msg(RED_WARNING"Small file attribute and directory cache of only %d\n",NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE*NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE/1024);
     warn=true;
   }
 #endif

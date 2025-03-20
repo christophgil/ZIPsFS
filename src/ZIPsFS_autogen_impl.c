@@ -257,7 +257,7 @@ static int aimpl_run(struct autogen_files *ff){
   unlink(ff->log);
   unlink(ff->fail);
   aimpl_wait_concurrent_begin(ac);
-  assert(AUTOGEN_RUN_SUCCESS==0);
+  Assert(AUTOGEN_RUN_SUCCESS==0);
   if (!res &&  (res=config_autogen_run(ff))==AUTOGEN_RUN_NOT_APPLIED){
     res=isOUTF?has_sufficient_storage_space(ff->grealpath):0;
     int fd_err=-1;

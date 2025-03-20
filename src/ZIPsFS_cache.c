@@ -72,10 +72,9 @@ static const char *zinline_cache_vpath_to_zippath(const char *vp,const int vp_l)
 #define CLEAR_DIRCACHE 1
 #define CLEAR_ZIPINLINE_CACHE 2
 #define CLEAR_STATCACHE 3
-
+#define CLEAR_CACHE_LEN 4
 #if WITH_CLEAR_CACHE
 static void dircache_clear_if_reached_limit_all(const bool always,const int mask){
-  if (always) log_entered_function("");
 #define C(m) 0==(mask&(1<<m))?"":#m
   if (always) log_verbose("%s %s %s\n",C(CLEAR_DIRCACHE),C(CLEAR_STATCACHE),C(CLEAR_ZIPINLINE_CACHE));
 #undef C
@@ -87,14 +86,16 @@ static void dircache_clear_if_reached_limit(const bool always,const int mask,str
   IF1(WITH_DIRCACHE,const off_t ss=mstore_count_blocks(&r->dircache_mstore));
 #define M(x) (0!=(mask&(1<<x)))
   if (always IF1(WITH_DIRCACHE,|| ss>=limit)){
-    IF1(WITH_DIRCACHE,warning(WARN_DIRCACHE,r->rootpath,"Clearing directory cache. Cached segments: %zu (%zu) bytes: %zu. %s",ss,limit,mstore_usage(&r->dircache_mstore),!limit?"":"Consider to increase DIRECTORY_CACHE_BLOCKS"));
+    IF1(WITH_DIRCACHE,warning(WARN_DIRCACHE,r->rootpath,"Clearing directory cache. Cached segments: %zu (%zu) bytes: %zu. %s",ss,limit,mstore_usage(&r->dircache_mstore),!limit?"":"Consider to increase NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE"));
     if M(CLEAR_DIRCACHE){
         ht_clear(&r->dircache_ht);
-        IF1(WITH_DIRCACHE,  ht_clear(&r->dircache_ht_fname); mstore_clear(&r->dircache_mstore));
+        IF1(WITH_DIRCACHE,
+            log_verbose("clear dircache_ht_fname"); ht_clear(&r->dircache_ht_fname);
+            log_verbose("clear dircache_mstore"); mstore_clear(&r->dircache_mstore));
       }
     if (!rootindex(r)){
-      IF1(WITH_ZIPINLINE_CACHE, if M(CLEAR_ZIPINLINE_CACHE) ht_clear(&ht_zinline_cache_vpath_to_zippath));
-      IF1(WITH_STAT_CACHE, if M(CLEAR_STATCACHE) ht_clear(&stat_ht));
+      IF1(WITH_ZIPINLINE_CACHE, if M(CLEAR_ZIPINLINE_CACHE){ log_verbose("clear ht_zinline_cache_vpath_to_zippath"); ht_clear(&ht_zinline_cache_vpath_to_zippath)); }
+        IF1(WITH_STAT_CACHE, if M(CLEAR_STATCACHE){ log_verbose("clear stat_ht"); ht_clear(&stat_ht)); }
       //ht_clear(&ht_internalize_mutex_dircache);
     }
   }
@@ -123,7 +124,7 @@ static void dircache_directory_to_cache(const struct directory *dir){
   cg_thread_assert_locked(mutex_dircache);
   debug_assert_crc32_not_null(dir);
   struct rootdata *r=dir->root;
-  IF1(WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,dircache_clear_if_reached_limit(false,0xFFFF,r,DIRECTORY_CACHE_BLOCKS));
+  IF1(WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,dircache_clear_if_reached_limit(false,0xFFFF,r,NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE));
   assert_validchars_direntries(VALIDCHARS_PATH,dir);
   struct directory_core src=dir->core, *d=mstore_add(&r->dircache_mstore,&src,sizeof(struct directory_core),SIZEOF_POINTER);
   if (src.files_l){

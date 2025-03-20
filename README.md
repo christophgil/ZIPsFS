@@ -54,7 +54,7 @@ All files in the source file trees (in above  example command three sources) can
 When files are created or modified, they will be stored in the first file tree (in the example *~/tmp/ZIPsFS/writable*).
 If files exist in two locations, the left most source file system takes precedence.
 
-New files are created in the first file tree, while the following file trees are not modified.
+New files are created in the first file tree, while the other file sources are never modified.
 If an   empty string "" or '' is given for the first source, no writable source  is used.
 
 ## ZIP files
@@ -63,45 +63,57 @@ Let *file.zip* be a ZIP file in any of the source file systems. It will  appear 
 Normally, the folder name is formed by appending "*.Content*" to the zip file name. This can be changed in *ZIPsFS_configuration.c*.
 
 For example Sciex mass spectrometry software requires that the containing files are shown directly in the file listing rather than in a sub-folder.
+Bruker mass spectrometry software expects folder names ending with *.d* rather than *.d.Zip.Content*.
 
 ## Cache
 
 Optionally, ZIPsFS can read certain ZIP entries entirely into RAM and provide the data from the RAM copy  at higher speed.
-This may improve performance for compressed ZIP entries that are read from varying positions in the file, so-called file file-seek.
+This may improve performance for compressed ZIP entries that are read from varying positions in a file, so-called file file-seek.
+This is particularly important, when the ZIP files reside in a remote file system.
 With the  option **-l** an upper limit of memory consumption for the ZIP  RAM cache is specified.
+There are customizeable rules for the case that the limit is reached.
 
-Further caches aim at faster file listing of large directories.
+Further caches aim at faster file listing of large directories.  A file listing of the Sciex style
+where all ZIP entries of many ZIP files are shown would require to read the entry index of many ZIP
+files which takes about 15 ms per ZIP file. A file listing of several thousands of files would take several seconds without a cache.
+
+When the cache size  exceeds a limit, it is cleared.
+
+
 
 
 ## Logs
 
 
-It is recommended to run ZIPsFS in the foreground with option *-f* within a persistent terminal multiplexer like *tmux*.
+It is convenient to run ZIPsFS in the foreground with option *-f* within a persistent terminal multiplexer like *tmux*.
+This allows to observe all messages and to search back in the scroll buffer.
 
-Log files are found in  **~/.ZIPsFS/**.
 
-An HTML file with status information is dynamically generated in  the generated folder **ZIPsFS** in the virtual  ZIPsFS file system.
+In addition,  log files are found in  **~/.ZIPsFS/**.
+
+An HTML file with status information is dynamically generated in  the generated folder **<Mount-Point>/ZIPsFS/** in the virtual  ZIPsFS file system.
 
 ## Real file location
 
 To see the real file path i.e. the file path where a file is physically stored,
-append **@SOURCE.TXT** to the virtual file path. If imported as SAMBA, these virtual files may not be accessible on a Windows PC.
-It seems that Windows can not access files that are not listed in the containing folder.
+append **@SOURCE.TXT** to the virtual file path. From a Windows client, these files are not accessible.
+In Windows, files are generally not accessible, when they are not listed in the parent folder.
 
 
 ## Plugins - Auto-generation of virtual files
 
 ZIPsFS can display virtual files which do not  exist, but which are generated automatically when used.
-This feature must be activated in ZIPsFS_configuration.h.  The first file root is used to store the generated files.
+This feature is  activated when **WITH_AUTOGEN** is set to **1** in *ZIPsFS_configuration.h*.  The first file root may be used to store the generated files.
+Alternatively, the file data is computed and kept in RAM for the time of file access.
 
 A typical use-case are file conversions.
-Auto-generated files are displayed in the virtual file tree in **ZIPsFS/a/**.
+Auto-generated files are displayed in the virtual file tree in **<Mount-Point>/ZIPsFS/a/**.
 If they have not be used before, an estimated file size is reported as the real file size is not yet known.
 
 The currently included examples demonstrate this feature and can serve as a templated for own settings.
 
 For this purpose copy image or pdf files into one of the roots and visit the respective folder in the virtual file system.
-Prepend this folder with **ZIPsFS/a/** and you will see the generated files:
+Prepend this folder with **<Mount-Point>/ZIPsFS/a/** and you will see the generated files:
 
     mnt=<path of mountpoint>
 
@@ -115,15 +127,14 @@ Prepend this folder with **ZIPsFS/a/** and you will see the generated files:
 - For image files extracted text usign Optical Character Recognition
 - For PDF files extracted ASCII text
 - For ZIP files the report of the consistency check including check-sums
-- Decompression of  .tsv.bz2 and .tsv.gz files
-- Mass spectrometry files: They are converted to mgf (Mascot)  and msML.  For wiff files, the contained ASCII text is extracted.
+- Mass spectrometry files: They are converted to mgf (Mascot)  and msML.  For wiff files, the contained 16 bit text is converted to plain ASCII.
 - Apache Parquet files are converted to tsv and tsv.bz2
 
-When opening these files  for the first time there will be some delay. This is because the files need to be generated.
+When opening these files  for the first time there will be some delay. The same is true when their last-modified time changes. This is because the files need to be generated.
 When accessed a second time, the data comes without delay, because the file is already there. Furthermore, the file size will be correct.
-When the upstream file changes or the last-modified attribute is updated, derived files will be generated again.
 
-Users can deactivate or add conversions by editing ZIPsFS_configuration_autogen.c.
+Users can customize the rules in ZIPsFS_configuration_autogen.c.
+Some of the conversions require support for docker.
 
 ### Limitations - unknown file size
 
@@ -133,7 +144,7 @@ https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unk
 is appreciated.
 
 Initially, ZIPsFS reports an upper estimate of the expected file size. This breaks programs that need to know
-the file size such as /usr/bin/tail.
+the exact file size such as */usr/bin/tail*.
 
 How is this problem solved in the virtual file systems /proc annd /sys?
 Calling stat /proc/$$/environ. Consider
@@ -151,7 +162,8 @@ virtual file.
 
 ### ZIPsFS_autogen_queue.sh
 
-Some exotic Wine dependent  Windows executables do not work well within ZIPsFS.
+Some exotic scientific  Windows executables cannot be started from a compiled program like  ZIPsFS.
+The problem is that the Console API is used instead of terminal escape sequences.
 As a work around, we developed the shell script **ZIPsFS_autogen_queue.sh**.
 With each pass of an  infinity loop  one task is taken from a queue and processed. One file is converted at a time per script instance.
 Several instances of this shell script can run in parallel. In the settings, the symbol **PLACEHOLDER_EXTERNAL_QUEUE** is given instead of an executable program.
@@ -174,22 +186,22 @@ Specifies a limit for the cache.  For example *-l  8G* would limit the size of t
 Policy for ZIP entries  cached in RAM.
 
 
-|           |                                                                                  |
-|:---------:|----------------------------------------------------------------------------------|
-|   NEVER   | ZIP are never cached, even not in case of backward seek.                         |
-|           |                                                                                  |
-|   SEEK    | ZIP entries are cached if the file position jumps backward. This is the default  |
-|           |                                                                                  |
-|   RULE    | ZIP entries are cached according to rules in **configuration.c**.                |
-|           |                                                                                  |
-|COMPRESSED | All compressed ZIP entries are cached.                                           |
-|           |                                                                                  |
-|  ALWAYS   | All ZIP entries are cached.                                                      |
-|           |                                                                                  |
+|           |                                                                                    |
+|:---------:|------------------------------------------------------------------------------------|
+|   NEVER   | ZIP are never cached, even not in case of backward seek.                           |
+|           |                                                                                    |
+|   SEEK    | ZIP entries are cached when the file position jumps backward. This is the default  |
+|           |                                                                                    |
+|   RULE    | ZIP entries are cached according to rules in **configuration.c**.                  |
+|           |                                                                                    |
+|COMPRESSED | All compressed ZIP entries are cached.                                             |
+|           |                                                                                    |
+|  ALWAYS   | All ZIP entries are cached.                                                        |
+|           |                                                                                    |
 
 -s *path-of-symbolic-link*
 
-After initialization the specified  symlink is created and points to the mount point. Previously existing links are overwritten.
+After initialization the specified  symlink is created and points to the mount point. Previously existing links are overwritten atomically.
 This allows to restart ZIPsFS without affecting running programs which access file in the virtual ZIPsFS file system.
 For file paths in the virtual file system,  the symlink is used rather than the real mount-point.
 Consider a running  ZIPsFS instance which needs to be replaced by a newer one.  The new ZIPsFS instance is started with
@@ -232,8 +244,8 @@ Other users can read the files
 When source file structures are stored remotely, there is a risk that they  may be
 temporarily unavailable. Overlay file systems typically freeze when calls to the file API block.
 Conversely, ZIPsFS should continue to
-operate with the remaining file roots. This is implemented as follows: Paths starting with double
-slash (in the example *//computer1/pub*) are regarded as remote paths and treated specially.  ZIPsFS
+operate with the remaining file roots. This is implemented as follows for  paths starting with double
+slash (in the example *//computer1/pub*). Double slash indicates  remote paths which might get unavailable in analogy to remote UNC paths.  ZIPsFS
 will periodically check file systems starting with a double slash.  If the last responds was too
 long ago then the respective file system is skipped. Furthermore the stat() function to obtain the
 attributes for a file are queued to be  performed in extra threads.
@@ -245,7 +257,6 @@ longer time it will try to load the same file from another root or return ENOENT
 If loading of ZIP files fail, loading will be repeated after 1s.
 
 For ZIP entries loaded entirely into the RAM, the CRC sum is validated and possible errors are logged.
-
 
 
 FILES

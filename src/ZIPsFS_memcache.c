@@ -258,7 +258,12 @@ static bool virtualpathStat(struct stat *st, const char *vp){
 static void fhandle_set_text(struct fhandle *d, struct textbuffer *b){
   ASSERT_LOCKED_FHANDLE();
   struct memcache *m=memcache_new(d);
-  assert(!m->txtbuf);
+  if(m->txtbuf){ /* This can be triggered by accessing a @SOURCE.TXT file from a Windows client. */
+    const long len=textbuffer_length(b);
+    warning(WARN_MEMCACHE,D_VP(d),"m->txtbuf already set. Length: %'ld",len);
+    if (len<333) textbuffer_write_fd(b,STDERR_FILENO);
+    return;
+  }
   m->txtbuf=b;
   m->memcache_already=m->memcache_l=textbuffer_length(b);
   d->flags|=FHANDLE_FLAG_MEMCACHE_COMPLETE;

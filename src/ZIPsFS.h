@@ -37,7 +37,7 @@
 #define DIR_AUTOGEN_L (sizeof(DIR_AUTOGEN)-1)
 
 #define FN_SET_ATIME "/ZIPsFS_set_file_access_time"
-static const char *SPECIAL_FILES[]={"/warnings.log","/errors.log","/file_system_info.html","/ZIPsFS.command","",FN_SET_ATIME".command",FN_SET_ATIME".ps1",FN_SET_ATIME".bat","/Readme.html",NULL};  /* SPECIAL_FILES[SFILE_LOG_WARNINGS] is first!*/
+static const char *SPECIAL_FILES[]={"/warnings.log","/errors.log","/file_system_info.html","/ZIPsFS_clear_cache.command","",FN_SET_ATIME".command",FN_SET_ATIME".ps1",FN_SET_ATIME".bat","/Readme.html",NULL};  /* SPECIAL_FILES[SFILE_LOG_WARNINGS] is first!*/
 #define SFILE_BEGIN_VIRTUAL SFILE_INFO
 #define PLACEHOLDER_NAME 0x07
 #define DEBUG_ABORT_MISSING_TDF 1
@@ -71,7 +71,7 @@ enum enum_counter_rootdata{
   counter_rootdata_num};
 
 
-enum enum_special_files{SFILE_LOG_WARNINGS,SFILE_LOG_ERRORS,SFILE_INFO,SFILE_CTRL,SFILE_DEBUG_CTRL,
+enum enum_special_files{SFILE_LOG_WARNINGS,SFILE_LOG_ERRORS,SFILE_INFO,SFILE_CLEAR_CACHE,SFILE_DEBUG_CTRL,
 #if WITH_AUTOGEN
                         SFILE_SET_ATIME_SH,SFILE_SET_ATIME_PS,SFILE_SET_ATIME_BAT,
 #endif
@@ -92,7 +92,7 @@ enum enum_autogen_state{AUTOGEN_UNINITILIZED,AUTOGEN_SUCCESS,AUTOGEN_FAIL};
 #define A4(x) C(memcache_nil)C(memcache_queued)C(memcache_reading)C(memcache_done)
 #define A5() C(MEMCACHE_NEVER)C(MEMCACHE_SEEK)C(MEMCACHE_RULE)C(MEMCACHE_COMPRESSED)C(MEMCACHE_ALWAYS)
 #define A6(x) C(STATQUEUE_NIL)C(STATQUEUE_QUEUED)C(STATQUEUE_FAILED)C(STATQUEUE_OK)
-#define A7(x) C(PTHREAD_DIRCACHE)C(PTHREAD_MEMCACHE)C(PTHREAD_STATQUEUE)C(PTHREAD_RESPONDING)C(PTHREAD_MISC0)C(PTHREAD_LEN)
+#define A7(x) C(PTHREAD_NIL)C(PTHREAD_DIRCACHE)C(PTHREAD_MEMCACHE)C(PTHREAD_STATQUEUE)C(PTHREAD_RESPONDING)C(PTHREAD_MISC0)C(PTHREAD_LEN)
 #define A8(x) C(mutex_nil)C(mutex_fhandle)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_autogen_init)C(mutex_dircachejobs)C(mutex_log_count)C(mutex_crc)C(mutex_inode)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_statqueue)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_len) //* mutex_roots must be last */
 #define C(a) a,
 enum mstoreid{A1()};

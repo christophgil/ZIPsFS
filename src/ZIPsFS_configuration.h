@@ -16,16 +16,12 @@
 /////////////////
 /// Debugging ///
 /////////////////
-#define LOG_ALL_FUSE_FUNC 0
-#define WITH_ASSERT_LOCK  0 // Optional assertion
-#define WITH_EXTRA_ASSERT 0 // Optional assertion
+#define LOG_ALL_FUSE_FUNC 1
+#define WITH_ASSERT_LOCK  1 // Optional assertion
+#define WITH_EXTRA_ASSERT 1 // Optional assertion
 
 
 #define WITH_PTHREAD_LOCK 1 /*  Should always be true. Only if suspect deadlock set to 0 */
-
-
-
-
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,11 +32,11 @@
 /// See hide-ifdef-mode of EMACS.
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT 0
-#define WITH_CLEAR_CACHE 0
+#define WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT 0 // Better not yet. Needs more testing!
+#define WITH_CLEAR_CACHE 1
 // The caches of file attributes  grow  during run-time.
 // The cache is a bundle of memory mapped files in ~/.ZIPsFS/. See cg_mstore*.c. The OS can use  disk space to save RAM.
-// Eventually, the caches get cleared when the size exceeds the limit given by  DIRECTORY_CACHE_SIZE and  DIRECTORY_CACHE_SEGMENTS.
+// Eventually, the caches get cleared when the size exceeds the limit given by  DIRECTORY_CACHE_SIZE and  NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE.
 // Currently, WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT is off as cache clearing is not yet fully tested.
 
 
@@ -108,7 +104,7 @@
 #define LOG2_ROOTS 3  // How many file systems are combined. Less is better because then constructed inodes is more efficient.
 #define DIRECTORY_CACHE_SIZE (1L<<20) // Size of file of one cache segment for  directory listings file names and attributes.
 #if WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
-#define DIRECTORY_CACHE_SEGMENTS 16 // Maximum number of blocks. If Exceeded, the directory cache is cleared and filled again.
+#define NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE 16 // Maximum number of blocks. If Exceeded, the directory cache is cleared and filled again.
 #endif
 #define MEMCACHE_READ_BYTES_NUM (64*1024*1024) // When storing zip entries in RAM, number of bytes read in one go
 #define SIZE_CUTOFF_MMAP_vs_MALLOC (1<<16)
