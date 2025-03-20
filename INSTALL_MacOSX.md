@@ -36,3 +36,6 @@ In another terminal check whether you see the content of the home directory at t
 
 ## MacOSX - Install ZIPsFS
 
+Finnally run
+
+     src/ZIPsFS.compile.sh

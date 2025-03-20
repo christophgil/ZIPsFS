@@ -49,7 +49,7 @@ First install the required libraries and packages.
 
 
 
-Alternatively, consider  [installation with autotools](./INSTALL_autotools.md) on Linux
+Alternatively, consider  [installation with autotools](./Install_autotools.md) on Linux
 
 # Testing the installed ZIPsFS
 

@@ -14,3 +14,6 @@ or
 # TroubleShooting
 
 
+Finnally run
+
+     src/ZIPsFS.compile.sh
