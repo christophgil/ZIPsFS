@@ -52,6 +52,8 @@ If not then run
 ## TroubleShooting
 
 
-Finnally run
+
+
+Finally run
 
      src/ZIPsFS.compile.sh

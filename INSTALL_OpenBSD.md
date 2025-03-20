@@ -9,6 +9,8 @@
 
 It was not possible to run ZIPsFS and other fuse filesystems  as non-root.
 If you know how this can be done please tell me.
-Finnally run
+
+
+Finally run
 
      src/ZIPsFS.compile.sh

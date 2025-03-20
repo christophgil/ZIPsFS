@@ -34,6 +34,8 @@ This test may be performed as a normal user or as ROOT.
    m=~/mnt/test-unionfs/
    unionfs-fuse /etc=RO $m
    ls $m
-Finnally run
+
+
+Finally run
 
      src/ZIPsFS.compile.sh

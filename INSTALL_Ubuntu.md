@@ -11,9 +11,9 @@ or
     apt-get install clang
 
 
-# TroubleShooting
 
 
-Finnally run
+
+Finally run
 
      src/ZIPsFS.compile.sh

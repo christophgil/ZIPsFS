@@ -32,6 +32,8 @@ I changed the permissions of /dev/fuse without success.
 /var/pkg/cache
 pkg set-property flush-content-cache-on-success True
 https://github.com/jurikm/illumos-fusefs/raw/master/lib/libfuse-20100615.tgz
-Finnally run
+
+
+Finally run
 
      src/ZIPsFS.compile.sh
