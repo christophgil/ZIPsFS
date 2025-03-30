@@ -51,12 +51,55 @@ Specific features and performance tweaks meet our needs for storing
 large data from mass spectrometry experiments.
 .SS Configuration
 .PP
-The default behavior can be modified with rules based on file names in
-\f[I]ZIPsFS_configuration.h\f[R] and \f[I]ZIPsFS_configuration.c\f[R].
-For changes to take effect, re-compilation and restart is necessary.
-Using the \f[I]-s symlink\f[R] option, the configuration can be changed
-without interrupting the file system.
-Ongoing computations with file access to the ZIPsFS are not affected.
+The default behavior can be modified with rules based on file names.
+The configuration files start with \f[I]ZIPsFS_configuration\f[R].
+They are C files.
+For changes to take effect, re-compilation and restart of ZIPsFS is
+necessary.
+.SS Re-starting ZIPsFS without affecting on-going file accesses
+.PP
+Using the \f[I]-s symlink\f[R] option, ZIPsFS can be restarted without
+interrupting current processes.
+Ongoing computations with file access to ZIPsFS are not affected.
+.PP
+Let MNT be the name of the apparent mount point of the FUSE file system.
+Furthermore, we assume that we are in the parent folder of MNT since
+things work best with relative paths.
+Users who access files from ZIPsFS will use this apparent mount point.
+Strictly speaking, MNT is not the mount point, but a symbolic link to
+the real mount point.
+The real mount is not directly accessed by the user because it changes
+when another instance of ZIPsFS is launched.
+.PP
+Let us assume that the current ZIPsFS uses the mount point
+\f[I]./.mountpoints/MNT/1\f[R] and that MNT is a relative symbolic link
+to that mount point.
+.PP
+The new ZIPsFS instance is launched using \f[I]./.mountpoints/MNT/2\f[R]
+as mount point.
+.PP
+With the command line option
+.IP
+.nf
+\f[C]
+-s MNT
+\f[R]
+.fi
+.PP
+The symbolic link will change and refer to the mount point of the new
+instance.
+.PP
+For the user nothing has changed and the apparent mount point is still
+MNT.
+.PP
+File descriptors will use the new ZIPsFS instance since the symbolic
+link MNT refers to the new mount point.
+.PP
+However, file descriptors created before will still use the previous
+ZIPsFS instance.
+This should be kept alife for some minutes.
+Therefore the previous and the new ZIPsFS instance need to work in
+parallel for some time.
 .SS Union / overlay file system
 .PP
 ZIPsFS is a union or overlay file system.

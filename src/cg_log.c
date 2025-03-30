@@ -28,6 +28,7 @@ static int _warning_count[1<<WARN_SHIFT_MAX];
 #define WARN_FLAG_ONCE_PER_PATH (1<<27)
 #define WARN_FLAG_ONCE (1<<26)
 #define WARN_FLAG_ERROR (1<<25)
+#define WARN_FLAG_SUCCESS (1<<24)
 static FILE *_fWarnErr[2];
 #define warning(...) _warning(__func__,__LINE__,__VA_ARGS__)
 static struct ht _ht_warning;
@@ -63,8 +64,8 @@ static void _warning(const char *fn,int line,const uint32_t channel,const char* 
   for(int j=2;--j>=0;){
     FILE *f=j?(_logIsSilent?NULL:stderr):!toFile?NULL:_fWarnErr[iserror];
     if (!f) continue;
-    const char *pfx=_warning_channel_name[i], *color=_warning_color[i];
-    //fprintf(f,"%s\t%s()\t%d\t%s\t",_warning_pfx[i]?_warning_pfx[i]:(ANSI_FG_RED"ERROR "ANSI_RESET),fn,_warning_count[i],p);
+ char *pfx=_warning_channel_name[i], *color=_warning_color[i];
+ if (0!=(channel&WARN_FLAG_SUCCESS)) pfx=GREEN_SUCCESS; // WARN_FLAG_ERROR
     fprintf(f,"\n%d\t%s%s"ANSI_RESET"\t%s():%d\t%s\t",_warning_count[i],color?color:ANSI_FG_RED,pfx?pfx:"ERROR",fn,line,p);
     va_list argptr; va_start(argptr,format);vfprintf(f,format,argptr);va_end(argptr);
     if ((channel&WARN_FLAG_ERRNO) && e){
@@ -74,6 +75,7 @@ static void _warning(const char *fn,int line,const uint32_t channel,const char* 
     fputs("\n\n",f);
     if (f==_fWarnErr[0]||f==_fWarnErr[1]) fflush(f);
   }
+
   pthread_mutex_unlock(&mutex);
   if ((channel&WARN_FLAG_EXIT)) EXIT(1);
   if (_killOnError && (channel&WARN_FLAG_MAYBE_EXIT)) DIE("Thread %lx\nTime=%'lld\n  _killOnError\n",(long)pthread_self(),(LLD)(_startTime.tv_sec+_startTime.tv_usec/1000-currentTimeMillis()));

@@ -42,9 +42,42 @@ Specific features and performance tweaks  meet our needs for storing large data 
 
 ## Configuration
 
-The default behavior can be modified with rules based on file names in *ZIPsFS_configuration.h* and *ZIPsFS_configuration.c*.
-For changes to take effect, re-compilation and restart is necessary. Using the *-s symlink* option, the configuration can
-be changed without interrupting the file system. Ongoing computations with file access to the ZIPsFS are not affected.
+The default behavior can be modified with rules based on file names. The configuration files start with  *ZIPsFS_configuration*. They are C files.
+For changes to take effect, re-compilation and restart of ZIPsFS is necessary.
+
+### Re-starting ZIPsFS without affecting on-going file accesses
+
+Using the *-s symlink* option, ZIPsFS can be restarted without interrupting current
+processes. Ongoing computations with file access to ZIPsFS are not affected.
+
+
+Let MNT be the name of the apparent mount point of the FUSE file system.
+Furthermore, we assume that we are in the parent folder of MNT since things work best with relative paths.
+Users who access files from ZIPsFS will use this apparent mount point.
+Strictly speaking, MNT is not the mount point, but a  symbolic link to the real mount point.
+The real mount is not directly accessed by the user because it changes when another instance of ZIPsFS is launched.
+
+
+
+Let us assume that the current ZIPsFS uses the mount point *./.mountpoints/MNT/1* and that MNT is a relative symbolic link to that mount point.
+
+The new ZIPsFS instance  is launched using  *./.mountpoints/MNT/2* as mount point.
+
+With the command line option
+
+    -s MNT
+
+The symbolic link will change and  refer to the mount point of the new instance.
+
+For the user nothing has changed and  the apparent mount point is still MNT.
+
+File descriptors will use the new ZIPsFS instance since the symbolic link MNT refers to the new mount point.
+
+However, file descriptors created before will still use the previous ZIPsFS instance. This should be
+kept alife for some minutes.  Therefore the previous and the new ZIPsFS instance need to work in
+parallel for some time.
+
+
 
 
 ## Union / overlay file system
@@ -213,6 +246,11 @@ This is best achieved by changing into the parent path where the symlink will be
 Then give just the name and not the entire path of the symlink. In the /etc/samba/smb.conf give:
 
    follow symlinks = yes
+
+
+
+
+
 
 
 Debug Options

@@ -244,7 +244,7 @@ static int log_print_fuse_argv(int n){
 static int log_print_roots(int n){
   PRINTINFO("<H1>Roots</H1>\n<TABLE border=\"1\"><THEAD><TR>"TH("Path")TH("Writable")TH("Last response")TH("Blocked")TH("Free[GB]")TH("Dir-Cache[kB]")TH("# entries in stat queue ")"</TR></THEAD>\n");
   foreach_root1(r){
-    const int f=r->features, freeGB=(int)((r->statvfs.f_frsize*r->statvfs.f_bfree)>>30), last_response=deciSecondsSinceStart()-r->pthread_when_loop_deciSec[PTHREAD_RESPONDING];
+    const int f=r->features, freeGB=(int)((r->statvfs.f_frsize*r->statvfs.f_bfree)>>30), last_response=deciSecondsSinceStart()-r->thread_when_loop_deciSec[PTHREAD_RESPONDING];
     //10L*(last_response>ROOT_OBSERVE_EVERY_MSECONDS_RESPONDING*10/1000*3?last_response:r->statfs_took_deciseconds)
     PRINTINFO("<TR>"sTDl()sTDc(),rootpath(r),yes_no(f&ROOT_WRITABLE));
     if (f&ROOT_REMOTE){

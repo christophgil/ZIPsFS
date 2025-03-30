@@ -2,7 +2,6 @@
 /// COMPILE_MAIN=ZIPsFS                                       ///
 /// Enums and structs                                         ///
 /////////////////////////////////////////////////////////////////
-
 #define SIZE_POINTER sizeof(char *)
 
 
@@ -330,16 +329,22 @@ struct rootdata{ /* Data for a source directory. ZIPsFS acts like an overlay FS.
   struct mstore dircache_mstore;
 #endif
   struct ht ht_filetypedata;
-  pthread_t pthread[PTHREAD_LEN];
-  int pthread_count_started[PTHREAD_LEN];
-  int pthread_when_loop_deciSec[PTHREAD_LEN]; /* Detect blocked loop. */
-  int pthread_when_canceled_deciSec[PTHREAD_LEN];
+  pthread_t thread[PTHREAD_LEN];
+  int thread_count_started[PTHREAD_LEN];
+  int thread_when_loop_deciSec[PTHREAD_LEN]; /* Detect blocked loop. */
+    int thread_when_canceled_deciSec[PTHREAD_LEN];
   IF1(WITH_STAT_SEPARATE_THREADS,struct statqueue_entry statqueue[STATQUEUE_ENTRY_N]);
-  bool debug_pretend_blocked[PTHREAD_LEN];
+  bool thread_pretend_blocked[PTHREAD_LEN];
+  atomic_int thread_starting[PTHREAD_LEN];
+  bool thread_is_run[PTHREAD_LEN];
+  pid_t thread_pid[PTHREAD_LEN];
   IF1(WITH_MEMCACHE,struct fhandle *memcache_d);
   //pthread_mutex_t  mutex_zip_fread;
   counter_rootdata_t filetypedata_dummy,filetypedata_all, filetypedata[FILETYPEDATA_NUM],filetypedata_frequent[FILETYPEDATA_FREQUENT_NUM];
   bool filetypedata_initialized, blocked;
+
+
+
 };
 
 

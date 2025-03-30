@@ -457,6 +457,7 @@ static int cg_count_fd_this_prg(void){
   return n;
 }
 
+
 static bool cg_check_path_for_fd(const char *title, const char *path, int fd){
   char check_path[MAX_PATHLEN+1],rp[PATH_MAX];
   if (!realpath(path,rp)){
@@ -555,6 +556,18 @@ static long cg_file_size(const char *path){
   return stat(path,&st)?-1:st.st_size;
 }
 #define cg_file_exists(path) (cg_file_size(path)>=0)
+
+
+
+
+static bool cg_pid_exists(const pid_t pid){
+  return !kill(pid,0);
+  /*
+  static char path[99];
+  sprintf(path,"/proc/%ld",(long)pid);
+  return cg_file_exists(path);
+  */
+}
 
 
 #define cg_log_file_stat(...) _cg_log_file_stat(__func__,__VA_ARGS__)
@@ -926,10 +939,14 @@ static int differs_filecontent_from_string(const int opt,const char* path, const
 #endif // _cg_utils_dot_c
 // 1111111111111111111111111111111111111111111111111111111111111
 #if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
+static bool cg_pid_exists_proc(const pid_t pid){
+  static char path[99];
+  sprintf(path,"/proc/%ld",(long)pid);
+  return cg_file_exists(path);
+}
 int main(int argc, char *argv[]){
-  char s[PATH_MAX];
-  cg_stpncpy0(s,argv[1],10);
-  printf("s='%s'\n",s);
+  pid_t pid=atoi(argv[1]);
+  printf("s='%d'  %d %d\n", pid, cg_pid_exists(pid),cg_pid_exists_proc(pid));
   return 0;
 
 

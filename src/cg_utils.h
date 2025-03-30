@@ -196,3 +196,10 @@ enum validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHARS_NU
 
 
 #define STARTSWITH(s,ending) (!strncmp(s,ending,STRLEN(ending)))
+
+
+#if defined(__linux__)
+#define IS_LINUX 1
+#else
+#define IS_LINUX 0
+#endif

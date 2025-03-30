@@ -47,15 +47,15 @@ static void autogen_run(struct fhandle *d){
   struct stat st={0};
   if (autogen_realinfiles(&ff)<0){
     d->autogen_state=AUTOGEN_FAIL;
-    log_debug_now("AUTOGEN_FAIL autogen_realinfiles(ff)");
+     log_verbose("AUTOGEN_FAIL autogen_realinfiles(ff)");
   }else if ((d->autogen_error=-aimpl_run(&ff))){
     d->autogen_state=AUTOGEN_FAIL;
-    log_debug_now("AUTOGEN_FAIL aimpl_run");
+    log_verbose("AUTOGEN_FAIL aimpl_run");
   }else if (ff.buf){ /* Result is in RAM */
-        log_debug_now("ff.buf");
+    //log_debug_now("Result in ff.buf");
     LOCK(mutex_fhandle, fhandle_set_text(d,ff.buf); autogen_ht_fsize(D_VP(d),D_VP_L(d))->value=(char*)textbuffer_length(ff.buf);d->autogen_state=AUTOGEN_SUCCESS);
   }else{ /*Result is in file tmpout  */
-    log_debug_now("ff.tmpout=%s  %d ",ff.tmpout,cg_file_exists(ff.tmpout));
+    //log_debug_now("ff.tmpout=%s  %d ",ff.tmpout,cg_file_exists(ff.tmpout));
     if (stat(ff.tmpout,&st)){ /* Fail */
       warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,ff.tmpout," size=%ld ino: %ld",st.st_size, st.st_ino);
       d->autogen_state=AUTOGEN_FAIL;

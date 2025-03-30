@@ -71,7 +71,6 @@ static bool stat_queue(const bool verbose,const char *rp, const int rp_l,const h
 /* Queue for stat and cyclic statvfs to check whether root is responding */
 static void *infloop_statqueue(void *arg){
   struct rootdata *r=arg;
-  pthread_cleanup_push(infloop_statqueue_start,r);
   char rp[MAX_PATHLEN+1];
   struct stat stbuf;
   const int sleep_min=10;
@@ -101,6 +100,5 @@ static void *infloop_statqueue(void *arg){
     if (sleep++>STATQUEUE_SLEEP_USECONDS) sleep=STATQUEUE_SLEEP_USECONDS;
     //if (!(j&0xfFF)) log_msg(" Q%d ",rootindex(r));
   }
-  pthread_cleanup_pop(0);
 }
 #undef E

@@ -199,9 +199,9 @@ static void memcache_store(struct fhandle *d){
 */
 static void *infloop_memcache(void *arg){
   struct rootdata *r=arg;
+  init_infloop(r,PTHREAD_MEMCACHE);
   /* pthread_cleanup_push(infloop_memcache_start,r); Does not work because pthread_cancel not working when root blocked. */
-  LOCK_NCANCEL(mutex_fhandle,if (r->memcache_d){ r->memcache_d->flags|=FHANDLE_FLAG_INTERRUPTED;
-    });
+  LOCK_NCANCEL(mutex_fhandle,if (r->memcache_d){ r->memcache_d->flags|=FHANDLE_FLAG_INTERRUPTED;});
 #if WITH_RESCUE_BLOCKED_MEMCACHE
   {
     foreach_fhandle(id,d){
@@ -217,6 +217,7 @@ static void *infloop_memcache(void *arg){
   }
 #endif
   for(int i=0;;i++){
+    observe_thread(r,PTHREAD_MEMCACHE);
     struct fhandle *d=NULL;
     lock(mutex_fhandle);
     r->memcache_d=NULL;
@@ -234,7 +235,6 @@ static void *infloop_memcache(void *arg){
       if (wait_for_root_timeout(r)) memcache_store(d);
       LOCK(mutex_fhandle,d->is_memcache_store--; r->memcache_d=NULL);
     }
-    observe_thread(r,PTHREAD_MEMCACHE); /* Allow to rescue blocked */
     usleep(20*1000);
   }
 }
@@ -316,6 +316,7 @@ static off_t memcache_waitfor(struct fhandle *d, off_t min_fill){
   cg_thread_assert_not_locked(mutex_fhandle);
   ASSERT(d->is_busy>0);
   ASSERT(d->zpath.root!=NULL);
+  //  const int us=10*1000;
   LOCK_N(mutex_fhandle, const struct memcache *m=memcache_new(d); if (!m->memcache_status) memcache_fhandle_to_queue(d));
   for(int i=1;memcache_is_queued(m)||m->memcache_status==memcache_reading;i++){
     LOCK_N(mutex_fhandle,off_t a=m->memcache_already);

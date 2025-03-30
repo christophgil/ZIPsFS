@@ -166,6 +166,8 @@ static char _fWarningPath[2][MAX_PATHLEN+1], _debug_ctrl[MAX_PATHLEN+1];
 static float _ucpu_usage,_scpu_usage;/* user and system */
 static long _count_readzip_memcache=0,_count_readzip_memcache_because_seek_bwd=0,_log_read_max_size=0,_count_SeqInode=0;
 static  int64_t _memcache_maxbytes=3L*1000*1000*1000;
+static int _unused_int;
+static bool _thread_unblock_ignore_existing_pid;
 // ---
 #include "ZIPsFS_configuration.c"
 #include "ZIPsFS_debug.c"
@@ -201,6 +203,7 @@ static  int64_t _memcache_maxbytes=3L*1000*1000*1000;
 ////////////////////////////////////////
 /// lock,pthread, synchronization   ///
 ////////////////////////////////////////
+static pid_t _pid;
 static pthread_mutex_t _mutex[NUM_MUTEX];
 static void init_mutex(void){
   static pthread_mutexattr_t _mutex_attr_recursive;
@@ -345,24 +348,17 @@ static bool stat_cache_or_queue(const char *rp, struct stat *stbuf,struct rootda
 /// Infinity loops ///
 //////////////////////
 static int observe_thread(struct rootdata *r, const int thread){
-  while(r->debug_pretend_blocked[thread]) usleep(1000*100);
-  return (r->pthread_when_loop_deciSec[thread]=deciSecondsSinceStart());
+  while(r->thread_pretend_blocked[thread]) usleep(1000*100);
+  return (r->thread_when_loop_deciSec[thread]=deciSecondsSinceStart());
 }
-#if WITH_STAT_SEPARATE_THREADS
-static void infloop_statqueue_start(void *arg){
-  root_start_thread(arg,PTHREAD_STATQUEUE);
-}
-#endif //WITH_STAT_SEPARATE_THREADS
-static void infloop_responding_start(void *arg){ root_start_thread(arg,PTHREAD_RESPONDING);}
-static void infloop_dircache_start(void *arg){ root_start_thread(arg,PTHREAD_DIRCACHE);}
 
-#if WITH_MEMCACHE
-static void infloop_memcache_start(void *arg){
-  root_start_thread(arg,PTHREAD_MEMCACHE);
-}
-#endif //WITH_MEMCACHE
 static void root_start_thread(struct rootdata *r,int ithread){
-  r->debug_pretend_blocked[ithread]=false;
+  r->thread_pretend_blocked[ithread]=false;
+  if (atomic_fetch_add(&r->thread_starting[ithread],0)){
+    log_verbose("r->thread_starting[%s] >0 Not going to start thread.",PTHREAD_S[ithread]);
+    return;
+  }
+  atomic_fetch_add(&r->thread_starting[ithread],1);
   void *(*f)(void *)=NULL;
   switch(ithread){
 #if WITH_STAT_SEPARATE_THREADS
@@ -376,28 +372,38 @@ static void root_start_thread(struct rootdata *r,int ithread){
   case PTHREAD_DIRCACHE: f=&infloop_dircache; break;
   case PTHREAD_MISC0: f=&infloop_misc0; break;
   }
-  if (r->pthread_count_started[ithread]++) warning(WARN_THREAD,report_rootpath(r),"pthread_start %s function: %p",PTHREAD_S[ithread],f);
+  if (r->thread_count_started[ithread]++) warning(WARN_THREAD,report_rootpath(r),"pthread_start %s function: %p",PTHREAD_S[ithread],f);
   ASSERT(f!=NULL);
   if (f){
-    if (pthread_create(&r->pthread[ithread],NULL,f,(void*)r)) warning(WARN_THREAD|WARN_FLAG_EXIT|WARN_FLAG_ERRNO,rootpath(r),"Failed thread_create %s root=%d ",PTHREAD_S[ithread],rootindex(r));
+    if (pthread_create(&r->thread[ithread],NULL,f,(void*)r)){
+      //warning(WARN_THREAD|WARN_FLAG_EXIT|WARN_FLAG_ERRNO,rootpath(r),"Failed thread_create %s root=%d ",PTHREAD_S[ithread],rootindex(r));
+      DIE("Failed thread_create '%s' root='%s' ",PTHREAD_S[ithread],rootpath(r));
+    }
   }
+  atomic_fetch_add(&r->thread_starting[ithread],-1);
 }
+
+
+
 static void *infloop_responding(void *arg){
   struct rootdata *r=arg;
-  pthread_cleanup_push(infloop_responding_start,r);
+  init_infloop(r,PTHREAD_RESPONDING);
   for(int j=0;;j++){
     //if (r->features&ROOT_REMOTE) log_msg(" R%d.%d ",rootindex(r),j);
     const int now=deciSecondsSinceStart();
-    statvfs(rootpath(r),&r->statvfs);
-    const int diff=observe_thread(r,PTHREAD_RESPONDING)-now;
-    if (diff>ROOT_WARN_STATFS_TOOK_LONG_SECONDS*10) log_warn("\nstatfs %s took %'ld ms\n",rootpath(r),100L*diff);
+    if (!statvfs(rootpath(r),&r->statvfs)){ /* sigar_file_system_usage_get() is using statvfs() which blocks on a stale NFS mounts. */
+      const int diff=observe_thread(r,PTHREAD_RESPONDING)-now;
+      if (diff>ROOT_WARN_STATFS_TOOK_LONG_SECONDS*10) log_warn("\n statfs %s took %'ld ms\n",rootpath(r),100L*diff);
+    }
     usleep(1000*ROOT_OBSERVE_EVERY_MSECONDS_RESPONDING);
   }
-  pthread_cleanup_pop(0);
   return NULL;
 }
 static void *infloop_misc0(void *arg){
+  struct rootdata *r=arg;
+  init_infloop(r,PTHREAD_MISC0);
   for(int j=0;;j++){
+    observe_thread(r,PTHREAD_MISC0);
     usleep(1000*1000);
     LOCK_NCANCEL(mutex_fhandle,fhandle_destroy_those_that_are_marked());
     IF1(WITH_AUTOGEN,if (!(j&0xFff)) autogen_cleanup());
@@ -411,44 +417,71 @@ static void *infloop_misc0(void *arg){
     }
   }
 }
+
+///////////////////////////////////////////////
+/// Capability to unblock requires that     ///
+/// pthreads have different gettid() and    ///
+/// /proc- file system                      ///
+///////////////////////////////////////////////
+static void init_infloop(struct rootdata *r, const int ithread){
+  IF1(WITH_CANCEL_BLOCKED_THREADS,
+      pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,&_unused_int);
+      if (r) r->thread_pid[ithread]=gettid(); assert(_pid!=gettid()); assert(cg_pid_exists(gettid())));
+}
+#if WITH_CANCEL_BLOCKED_THREADS
 static void *infloop_unblock(void *arg){
   usleep(1000*1000);
+  if (_pid==gettid()){ warning(WARN_THREAD,"","Threads not using own process IDs. No unblock of blocked threads"); return NULL;}
   if (*_mkSymlinkAfterStart){
-    {
-      struct stat stbuf;
-      PROFILED(lstat)(_mkSymlinkAfterStart,&stbuf);
-      if (((S_IFREG|S_IFDIR)&stbuf.st_mode) && !(S_IFLNK&stbuf.st_mode)){
-        warning(WARN_MISC,""," Cannot make symlink %s =>%s  because %s is a file or dir\n",_mkSymlinkAfterStart,_mnt,_mkSymlinkAfterStart);
-        EXIT(1);
-      }
+    struct stat stbuf;
+    PROFILED(lstat)(_mkSymlinkAfterStart,&stbuf);
+    if (((S_IFREG|S_IFDIR)&stbuf.st_mode) && !(S_IFLNK&stbuf.st_mode)){
+      warning(WARN_MISC,""," Cannot make symlink %s =>%s  because %s is a file or dir\n",_mkSymlinkAfterStart,_mnt,_mkSymlinkAfterStart);
+      EXIT(1);
     }
   }
   while(true){
-    usleep(5000*1000);
+    const int seconds=2;
+    usleep(1000*1000*seconds);
     foreach_root1(r){
-      if (!(r->features&ROOT_REMOTE)) continue;
       RLOOP(t,PTHREAD_LEN){
-        //const bool debug=t==PTHREAD_MEMCACHE&& strstr(rootpath(r),"blocking");
+      if (!r->thread_is_run[t]) continue;
         const int threshold=
           t==PTHREAD_STATQUEUE?10*UNBLOCK_AFTER_SECONDS_THREAD_STATQUEUE:
           t==PTHREAD_MEMCACHE?10*UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE:
           t==PTHREAD_DIRCACHE?10*UNBLOCK_AFTER_SECONDS_THREAD_DIRCACHE:
           t==PTHREAD_RESPONDING?10*UNBLOCK_AFTER_SECONDS_THREAD_RESPONDING:
           0;
-        if (!threshold || !r->pthread[t]) continue;
-        const int timeago=deciSecondsSinceStart()-MAX_int(r->pthread_when_loop_deciSec[t],r->pthread_when_canceled_deciSec[t]);
-        if (timeago>threshold){
-          warning(WARN_THREAD,report_rootpath(r),ANSI_RED"Going to  pthread_cancel() root: %s %d  PTHREAD_S: %s. Last response was %d seconds ago. Threshold: %d"ANSI_RESET"\n",rootpath(r),rootindex(r),PTHREAD_S[t],timeago/10,threshold/10);
-          pthread_cancel(r->pthread[t]); /* All but PTHREAD_MEMCACHE will restart themselfes via pthread_cleanup_push() */
-          //          IF1(WITH_MEMCACHE,if (i==PTHREAD_MEMCACHE) infloop_memcache_start(r)); /* pthread_cancel not working when root blocked. */
-          IF1(WITH_MEMCACHE,if (!rootindex(r)) infloop_memcache_start(r)); /* pthread_cancel not working when root blocked. */
-          r->pthread_when_canceled_deciSec[t]=deciSecondsSinceStart();
+        if (threshold && r->thread[t] && (deciSecondsSinceStart()-MAX_int(r->thread_when_loop_deciSec[t],r->thread_when_canceled_deciSec[t]))>MAX_int(threshold,10*2*seconds)){
+          pthread_cancel(r->thread[t]); /* Double cancel is not harmful: https://stackoverflow.com/questions/7235392/is-it-safe-to-call-pthread-cancel-on-terminated-thread */
+          usleep(1000*1000);
+          const pid_t pid=r->thread_pid[t];
+          bool not_restart=pid && cg_pid_exists(pid);
+          if (not_restart && _thread_unblock_ignore_existing_pid){
+            warning(WARN_THREAD,rootpath(r),"Going to start thread %s even though pid %ld still exists.",PTHREAD_S[t],(long)pid);
+            _thread_unblock_ignore_existing_pid=not_restart=false;
+          }
+          char proc[99]; sprintf(proc,"/proc/%ld",(long)pid);
+          if (not_restart){
+            #define M "Not yet starting thread because process  still exists"
+            log_verbose(M "%s",proc);
+            warning(WARN_THREAD|WARN_FLAG_ONCE_PER_PATH,proc,M);
+            #undef M
+          }else{
+            warning(WARN_THREAD|WARN_FLAG_SUCCESS,proc,"Going root_start_thread(%s,%s) because process does not exist any more",rootpath(r),PTHREAD_S[t]);
+            r->thread_when_canceled_deciSec[t]=deciSecondsSinceStart();
+            root_start_thread(r,t);
+          }
         }
+        usleep(1000*1000);
       }
     }
   }
   return NULL;
 }
+#endif //WITH_CANCEL_BLOCKED_THREADS
+
+
 /////////////////////////////////////////////////////////////////////////////////////////////
 /// 1. Return true for local file roots.
 /// 2. Return false for remote file roots (starting with double slash) that has not responded for long time
@@ -466,7 +499,7 @@ static bool wait_for_root_timeout(struct rootdata *r){
   const int N=10000;
 
   RLOOP(iTry,N){
-    const float delay=(deciSecondsSinceStart()-r->pthread_when_loop_deciSec[PTHREAD_RESPONDING])/10.0;
+    const float delay=(deciSecondsSinceStart()-r->thread_when_loop_deciSec[PTHREAD_RESPONDING])/10.0;
     if (delay>ROOT_SKIP_UNLESS_RESPONDED_WITHIN_SECONDS) break;
     if (delay<ROOT_LAST_RESPONSE_MUST_BE_WITHIN_SECONDS){ log_root_blocked(r,false);return true; }
     cg_sleep_ms(ROOT_LAST_RESPONSE_MUST_BE_WITHIN_SECONDS/N,"");
@@ -759,11 +792,12 @@ static bool directory_from_dircache_zip_or_filesystem(struct directory *mydir,co
 /* Reading zip dirs asynchroneously */
 static void *infloop_dircache(void *arg){
   struct rootdata *r=arg;
-  pthread_cleanup_push(infloop_dircache_start,r);
+  init_infloop(r,PTHREAD_DIRCACHE);
   char path[MAX_PATHLEN+1];
   struct stat stbuf;
   struct directory mydir={0}; /* Put here otherwise use of stack var after ... */
   while(true){
+        observe_thread(r,PTHREAD_DIRCACHE);
     *path=0;
     lock_ncancel(mutex_dircachejobs);/*Pick path from an entry and put in stack variable path */
     struct ht_entry *ee=r->dircache_queue.entries;
@@ -780,10 +814,8 @@ static void *infloop_dircache(void *arg){
       directory_from_dircache_zip_or_filesystem(&mydir,&stbuf);
       directory_destroy(&mydir);
     }
-    observe_thread(r,PTHREAD_DIRCACHE);
     usleep(1000*10);
   }
-  pthread_cleanup_pop(0);
 }
 
 
@@ -1843,7 +1875,7 @@ static int xmp_read(const char *path, char *buf, const size_t size, const off_t 
           if (!(d->flags&(FHANDLE_FLAG_WITH_MEMCACHE|FHANDLE_FLAG_WITHOUT_MEMCACHE))) d->flags|=(memcache_is_advised(d)?FHANDLE_FLAG_WITH_MEMCACHE:FHANDLE_FLAG_WITHOUT_MEMCACHE);
           if (d->flags&FHANDLE_FLAG_WITH_MEMCACHE) nread=memcache_read_fhandle(buf,size,offset,d,fi));
       if (nread<0){
-        pthread_mutex_lock(&d->mutex_read); /* Observing here same/different struct fhandle instances and various pthread_self() DEBUG_NOW */
+        pthread_mutex_lock(&d->mutex_read); /* Observing here same/different struct fhandle instances and various pthread_self() */
         nread=fhandle_read_zip(D_VP(d),buf,size,offset,d,fi);
         pthread_mutex_unlock(&d->mutex_read);
       }
@@ -1896,6 +1928,10 @@ static void exit_ZIPsFS(void){
   fflush(stderr);
 }
 int main(const int argc,const char *argv[]){
+  _pid=getpid();
+  IF1(WITH_CANCEL_BLOCKED_THREADS,assert(_pid==gettid()), assert(cg_pid_exists(_pid)));
+
+
   fprintf(stderr,"MAX_PATHLEN: %d\n",MAX_PATHLEN);
   fprintf(stderr,"has_proc_fs: %s\n",yes_no(has_proc_fs()));
   if (!realpath(*argv,_self_exe)) DIE("Failed realpath %s",*argv);
@@ -1915,7 +1951,7 @@ int main(const int argc,const char *argv[]){
     if(!strcmp(":",argv[i])) colon=i;
     foreground|=colon>0 && !strcmp("-f",argv[i]);
   }
-  fprintf(stderr,ANSI_INVERSE""ANSI_UNDERLINE"This is %s"ANSI_RESET" Version: "ZIPSFS_VERSION"\nCompiled: %s %s  PID: "ANSI_FG_WHITE ANSI_BLUE"%d"ANSI_RESET"\n",path_of_this_executable(),__DATE__,__TIME__,getpid());
+  fprintf(stderr,ANSI_INVERSE""ANSI_UNDERLINE"This is %s"ANSI_RESET" Version: "ZIPSFS_VERSION"\nCompiled: %s %s  PID: "ANSI_FG_WHITE ANSI_BLUE"%d"ANSI_RESET"\n",path_of_this_executable(),__DATE__,__TIME__,_pid);
   IF1(WITH_GNU,fprintf(stderr,"gnu_ggnu_get_libc_version: %s\n",gnu_get_libc_version()));
 #if defined(__has_feature)
 #  if __has_feature(address_sanitizer)
@@ -2025,7 +2061,7 @@ int main(const int argc,const char *argv[]){
       char fn[MAX_PATHLEN];
       FILE *f=fopen(strcpy(stpcpy(fn,dot_ZIPsFS),"/pid.txt"),"w");
       if (f){
-        fprintf(f,"%d\n",getpid());
+        fprintf(f,"%d\n",_pid);
         fclose(f);
       }else{
         perror(fn);
@@ -2057,7 +2093,7 @@ int main(const int argc,const char *argv[]){
       _fWarnErr[i]=fopen(_fWarningPath[i],"w");
     }
     warning(0,NULL,"");ht_set_id(HT_MALLOC_warnings,&_ht_warning);
-    snprintf(_debug_ctrl,MAX_PATHLEN,"%s/%s",dot_ZIPsFS,"ZIPsFS_debug_ctrl.sh");
+    snprintf(_debug_ctrl,MAX_PATHLEN,"%s/%s",dot_ZIPsFS,"ZIPsFS_CTRL.sh");
     {
       static char cachedir[MAX_PATHLEN+1];
       snprintf(cachedir,MAX_PATHLEN,"%s/cachedir",dot_ZIPsFS);
@@ -2179,6 +2215,7 @@ int main(const int argc,const char *argv[]){
     RLOOP(t,PTHREAD_LEN){
       //if (ir&&t==PTHREAD_MISC0) continue; /* Only one instance */
       if (r!=_root&&t==PTHREAD_MISC0) continue; /* Only one instance */
+      r->thread_is_run[t]=true;
       root_start_thread(r,t);
     }
   }
@@ -2191,9 +2228,9 @@ int main(const int argc,const char *argv[]){
   }
 #endif
   static pthread_t thread_unblock;
-  pthread_create(&thread_unblock,NULL,&infloop_unblock,NULL);
+  IF1(WITH_CANCEL_BLOCKED_THREADS,pthread_create(&thread_unblock,NULL,&infloop_unblock,NULL));
   _textbuffer_memusage_lock=_mutex+mutex_textbuffer_usage;
-  log_msg("Running %s with PID %d. Going to fuse_main() ...\n",argv[0],getpid());
+  log_msg("Running %s with PID %d. Going to fuse_main() ...\n",argv[0],_pid);
   cg_free(MALLOC_TESTING,cg_malloc(MALLOC_TESTING,10));
   const int fuse_stat=fuse_main(_fuse_argc=argc-colon,(char**)(_fuse_argv=argv+colon),&xmp_oper,NULL);
   log_msg(RED_WARNING" fuse_main returned %d\n",fuse_stat);

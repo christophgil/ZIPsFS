@@ -16,12 +16,12 @@
 /////////////////
 /// Debugging ///
 /////////////////
-#define LOG_ALL_FUSE_FUNC 1
-#define WITH_ASSERT_LOCK  1 // Optional assertion
-#define WITH_EXTRA_ASSERT 1 // Optional assertion
+#define LOG_ALL_FUSE_FUNC 0
+#define WITH_ASSERT_LOCK  0 // Optional assertion
+#define WITH_EXTRA_ASSERT 0 // Optional assertion
 
 
-#define WITH_PTHREAD_LOCK 1 /*  Should always be true. Only if suspect deadlock set to 0 */
+#define WITH_PTHREAD_LOCK 1 /*  Should be true. Only if suspect deadlock set to 0 */
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -136,7 +136,7 @@
 ///////////////////////////////////
 /// Dynamically generated files ///
 ///////////////////////////////////
-#define WITH_AUTOGEN 1
+#define WITH_AUTOGEN 0
 
 /* WITH_AUTOGEN depends on WITH_MEMCACHE */
 #if ! WITH_MEMCACHE
@@ -165,3 +165,14 @@
 #define WITH_ZIPINLINE_CACHE 0
 
 #endif
+
+
+
+////////////////////////////////////////////////////////////////////////////////////
+/// Frozen threads are killed and restarted                                      ///
+/// Requires that threads have a different gettid() != getpid()                  ///
+/// and that existence of a thread can be tested with kill() as follows:         ///
+///  pid_t pid=gettid();  .... if (0==kill(pid,0)) { Thread still  running }     ///
+/// This is the case at least for LINUX                                          ///
+////////////////////////////////////////////////////////////////////////////////////
+#define WITH_CANCEL_BLOCKED_THREADS IS_LINUX

@@ -16,14 +16,19 @@ echo 'If no command line arguments are given, the script will process the files 
     echo 'Type a positive number to pretend that files were last accessed in the future. This will extend the life span of the files'\n"
 #define B "\n  echo 'No files given. Please select files in the file browser.'\n"
 
-enum _CTRL_ACTION{ACT_NIL,ACT_KILL_ZIPSFS,ACT_BLOCK_THREAD,ACT_UNBLOCK_THREAD,ACT_CANCEL_THREAD,ACT_NO_LOCK,ACT_BAD_LOCK,ACT_CLEAR_CACHE};
+enum _CTRL_ACTION{ACT_NIL,ACT_KILL_ZIPSFS,ACT_BLOCK_THREAD,/*ACT_UNBLOCK_THREAD,*/ACT_FORCE_UNBLOCK,ACT_CANCEL_THREAD,ACT_NO_LOCK,ACT_BAD_LOCK,ACT_CLEAR_CACHE};
 
-static char *bash_secret(){
-  static char s[40]={0};
+static char *ctrl_file_end(){
+  static char s[222]={0};
   if (!*s){
     struct timespec t;
     timespec_get(&t,TIME_UTC);
-    sprintf(s,"%d",(int)((t.tv_sec+t.tv_nsec)&0xFFFFFF));
+    srand(time(0));
+    int r1=rand();
+    srand(t.tv_nsec);
+    int r2=rand();
+    srand(getpid());
+    sprintf(s,"%x%x%x%lx%lx",r1,r2,rand(),t.tv_nsec,t.tv_sec);
   }
   return s;
 }
@@ -31,33 +36,41 @@ static char *bash_secret(){
 static void special_file_content(struct textbuffer *b,const enum enum_special_files i){
   char tmp[333];
   if (i==SFILE_CLEAR_CACHE || i==SFILE_DEBUG_CTRL){
-    sprintf(tmp,SHEBANG"my_stat(){\n\
+    sprintf(tmp,SHEBANG"my_stat(){\necho\n\
     local f=$1  p=${2:-0}\n\
     set -x;stat --format %%s %s/${f}_${p}_%s 2>/dev/null;set +x\n\
-    echo;\n}\n",_mnt,bash_secret());
+    echo;\n}\n",_mnt,ctrl_file_end());
     textbuffer_add_segment(0,b,strdup_untracked(tmp),0);
   }
   switch(i){
   case SFILE_DEBUG_CTRL:
     textbuffer_add_segment_const(b,"\naskWhichThread(){\n");
     FOR(t,PTHREAD_NIL+1,PTHREAD_LEN){
-      sprintf(tmp,"  echo '  %d %s'\n",t,PTHREAD_S[t]);
+      sprintf(tmp,"  echo '  %d %s' >&2\n",t,PTHREAD_S[t]);
       textbuffer_add_segment(0,b,strdup_untracked(tmp),0);
     }
     textbuffer_add_segment_const(b,"  local t=0\n\
 read -r -p 'What thread?' -n 1 t\n\
 [[ $t != [0-9] ]] && t=0\n\
-echo -n $t\n}\n\n");
+echo  $t\n}\n\n");
 
 #define A(act,txt) sprintf(tmp,"echo '   %d  %s'\n",act,txt); textbuffer_add_segment(0,b,strdup_untracked(tmp),0)
-    A(ACT_KILL_ZIPSFS,"Kill-ZIPsFS");
-    A(ACT_BLOCK_THREAD,"Simulate-blocking-thread");
-    A(ACT_UNBLOCK_THREAD,"Undo-simulate-blocking-thread");
-    A(ACT_CANCEL_THREAD,"Interrupt-thread");
-    A(ACT_NO_LOCK,"Simulate error no lock");
-    A(ACT_BAD_LOCK,"Simulate error bad lock");
+#define H(txt) sprintf(tmp,"echo '""%s"ANSI_RESET"'\n",txt); textbuffer_add_segment(0,b,strdup_untracked(tmp),0)
+#define L(what) "Trigger error due to "what" lock. WITH_ASSERT_LOCK is " IF1(WITH_ASSERT_LOCK,"1. ZIPsFS will abort. ") IF0(WITH_ASSERT_LOCK,"0.  This will not work unless WITH_ASSERT_LOCK is set to 1 in ZIPsFS_configuration.h.")
+    H("Terminate");
+    A(ACT_KILL_ZIPSFS,"Kill-ZIPsFS and print status");
+    H("Blocked threads");
+    A(ACT_BLOCK_THREAD,"Simulate-blocking-thread. ZIPsFS will release the block eventually");
+    //    A(ACT_UNBLOCK_THREAD,"Undo-simulate-blocking-thread");
+    A(ACT_FORCE_UNBLOCK,"Unblock thread even if blocked thread cannot be killed.");
+    A(ACT_CANCEL_THREAD,"Interrupt-thread.  ZIPsFS will restart the thread eventually");
+    H("Pthread - Locks");
+    A(ACT_NO_LOCK,L("missing"));
+    A(ACT_BAD_LOCK,L("inappropriate"));
+#undef L
 #undef A
-    textbuffer_add_segment_const(b,"thread=0\nread -r -n 1 -p 'Choice? ' c\nif [[ $c == [1-9] ]];then\n");
+#undef H
+    textbuffer_add_segment_const(b,"thread=0\nread -r -n 1 -p 'Choice? ' c\necho\nif [[ $c == [1-9] ]];then\n");
     sprintf(tmp,"  [[ $c == %d  || $c == %d ]] && thread=$(askWhichThread)\n",ACT_BLOCK_THREAD,ACT_CANCEL_THREAD);
     textbuffer_add_segment(0,b,strdup_untracked(tmp),0);
     textbuffer_add_segment_const(b,"  my_stat $c $thread\nfi");
@@ -161,22 +174,20 @@ read-host -Prompt 'Press Enter'\n");
 #undef P
 #undef B
 static bool trigger_files(const bool isGenerated,const char *path,const int path_l){
-  if (strstr(path,bash_secret())){
+  if (cg_endsWith(path,path_l,ctrl_file_end(),0)){
     int action=-1, para=-1;
     sscanf(path+cg_last_slash(path)+1,"%d_%d_",&action,&para);
     const int thread=PTHREAD_NIL<para && para<PTHREAD_LEN?para:0;
     warning(WARN_DEBUG,path,"Triggered action: %d  para: %d ",action,para);
     if (action>0){
+      struct rootdata *one_root=_root;
       foreach_root1(r){
+        if (r->features&ROOT_REMOTE) one_root=r;
         switch(action){
-        case ACT_BLOCK_THREAD:
-          if (thread) r->debug_pretend_blocked[thread]=true;
-          break;
-        case ACT_UNBLOCK_THREAD:
-          memset(r->debug_pretend_blocked,0,sizeof(r->debug_pretend_blocked));
-          return true;
+          //case ACT_UNBLOCK_THREAD:          memset(r->thread_pretend_blocked,0,sizeof(r->thread_pretend_blocked));          return true;
+        case ACT_FORCE_UNBLOCK: _thread_unblock_ignore_existing_pid=true; break;
         case ACT_CANCEL_THREAD:
-          if (thread) pthread_cancel(r->pthread[thread]);
+          if (thread && r->thread[thread]) pthread_cancel(r->thread[thread]);
           break;
         case ACT_CLEAR_CACHE:
           IF1(WITH_CLEAR_CACHE, if (0<=para && para<CLEAR_CACHE_LEN) dircache_clear_if_reached_limit_all(true,para?(1<<para):0xFFFF));
@@ -218,8 +229,12 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
           return true;
         }/*switch*/
       }/* foreach_root*/
+      if (action==ACT_BLOCK_THREAD && thread && one_root){
+        warning(WARN_THREAD,rootpath(one_root),"Going to simulate block %s",PTHREAD_S[thread]);
+        one_root->thread_pretend_blocked[thread]=true;
+      }
       return true;
-    }/*if(op)*/
+    }/*if(action)*/
   }
   char *posHours=strstr(path,MAGIC_SFX_SET_ATIME);
   if (posHours){
