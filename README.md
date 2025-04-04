@@ -410,3 +410,157 @@ SEE ALSO
 - https://github.com/cybernoid/archivemount
 - https://github.com/mxmlnkn/ratarmount
 
+    # ZIPsFS - FUSE-based  overlay file system which expands  ZIP files
+
+# CURRENT STATE
+
+Usable.
+
+However, we are still fixing minor bugs.
+
+# MOTIVATION
+
+
+We use closed-source proprietary Windows software to read large experimental data from various types
+of mass spectrometry machines. Most of the data is eventually archived in a read-only WORM file
+system. However, with large file directories, access becomes slow, particularly on Windows systems.
+
+To reduce the number of files and to record CRC hash sums, all files from a single mass spectrometry
+measurement are bundled into one ZIP archive. With fewer individual files, searching through the
+entire directory hierarchy takes less than 1 hour.
+
+We initially hoped that files inside ZIP archives would be easily accessible using pipes, named
+pipes, process substitution, or by simply unzipping. Unfortunately, these techniques did not work
+for our use case. Mounting individual ZIP files was the only solution that successfully addressed
+our needs.
+
+ZIPsFS was developed to solve the following problems:
+
+- **Growing Number of ZIP Files**: Recently, the size of our experiments - and therefore the number of ZIP files - has increased enormously. Mounting thousands of individual ZIP files results in a very long <i>/etc/mtab</i> file and puts a significant strain on the operating system.
+
+- **Write Access Requirements**: Some proprietary software requires write access to both files and their parent directories.
+
+- **Inefficiency in Random File Access**: Mass spectrometry software does not read files sequentially. Instead, it accesses bytes from varying positions within the file. This is particularly inefficient for compressed ZIP entries. The worst-case scenario occurs when the software attempts to perform a <i>seek()</i> operation with a negative value (jumping backwards).
+
+- **Multiple Storage Locations**: Experimental records are initially stored in an intermediate storage location and, after verification, are moved to the final archive. As a result, the same file could be located in different places at different stages.
+
+- **Redundant File System Requests**: Some proprietary software generates millions of redundant requests to the file system, which is problematic for both remote files and mounted ZIP files.
+
+
+<SPAN>
+
+
+
+ <DIV style="padding:1em;border:2px solid gray;float:left;">
+       File tree with zip files on hard disk:
+ <BR>
+       <PRE style="font-family: monospace,courier,ariel,sans-serif;">
+ ├── <B style="color:#1111FF;">src</B>
+ │   ├── <B style="color:#1111FF;">InstallablePrograms</B>
+ │   │   └── some_software.zip
+ │   │   └── my_manuscript.zip
+ └── <B style="color:#1111FF;">read-write</B>
+    ├── my_manuscript.zip.Content
+            ├── my-modified-text.txt
+       </PRE>
+ </div>
+
+ <DIV style="padding:1em;border:2px solid gray;float:right;">
+       Virtual file tree presented by ZIPsFS:
+       <PRE style="font-family: monospace,courier,ariel,sans-serif;">
+ ├── <B style="color:#1111FF;">InstallablePrograms</B>
+ │   ├── some_software.zip
+ │   └── <B style="color:#1111FF;">some_software.zip.Content</B>
+ │       ├── help.html
+ │       ├── program.dll
+ │       └── program.exe
+ │   ├── my_manuscript.zip
+ │   └── <B style="color:#1111FF;">my_manuscript.zip.Content</B>
+ │       ├── my_text.tex
+ │       ├── my_lit.bib
+ │       ├── fig1.png
+ │       └── fig2.png
+       </PRE>
+ </DIV>
+
+ <DIV style="clear:both;">
+     The file tree can be adapted to specific needs by editing <I>ZIPsFS_configuration.c</I>.
+     Our mass-spectrometry files are processed with special software.
+     It expects a file tree in its original form i.e. as files would not have been zipped.
+     Furthermore, write permission is required for files and containing folders while files are permanently stored and cannot be modified any more.
+     The folder names need to be ".d" instead of ".d.Zip.Content".
+     For Sciex (zenotof) machines, all files must be in one folder without intermediate folders.
+ </DIV>
+
+ <DIV style="padding:1em;border:2px solid gray;float:left;">
+                     File tree with zip files on our NAS server:
+       <PRE style="font-family: monospace,courier,ariel,sans-serif;">
+ ├── <B style="color:#1111FF;">brukertimstof</B>
+ │   └── <B style="color:#1111FF;">202302</B>
+ │       ├── 20230209_hsapiens_Sample_001.d.Zip
+ │       ├── 20230209_hsapiens_Sample_002.d.Zip
+ │       └── 20230209_hsapiens_Sample_003.d.Zip
+
+ ...
+
+ │       └── 20230209_hsapiens_Sample_099.d.Zip
+ └── <B style="color:#1111FF;">zenotof</B>
+    └── <B style="color:#1111FF;">202304</B>
+    ├── 20230402_hsapiens_Sample_001.wiff2.Zip
+    ├── 20230402_hsapiens_Sample_002.wiff2.Zip
+    └── 270230402_hsapiens_Sample_003.wiff2.Zip
+ ...
+         └── 270230402_hsapiens_Sample_099.wiff2.Zip
+       </PRE>
+ </DIV>
+
+
+ <DIV style="padding:1em;border:2px solid gray;float:right;">
+             Virtual file tree presented by ZIPsFS:
+             <PRE style="font-family: monospace,courier,ariel,sans-serif;">
+ ├── <B style="color:#1111FF;">brukertimstof</B>
+ │   └── <B style="color:#1111FF;">202302</B>
+ │       ├── <B style="color:#1111FF;">20230209_hsapiens_Sample_001.d</B>
+ │       │   ├── analysis.tdf
+ │       │   └── analysis.tdf_bin
+ │       ├── <B style="color:#1111FF;">20230209_hsapiens_Sample_002.d</B>
+ │       │   ├── analysis.tdf
+ │       │   └── analysis.tdf_bin
+ │       └── <B style="color:#1111FF;">20230209_hsapiens_Sample_003.d</B>
+ │           ├── analysis.tdf
+ │           └── analysis.tdf_bin
+
+ ...
+
+ │       └── <B style="color:#1111FF;">20230209_hsapiens_Sample_099.d</B>
+ │           ├── analysis.tdf
+ │           └── analysis.tdf_bin
+ └── <B style="color:#1111FF;">zenotof</B>
+     └── <B style="color:#1111FF;">202304</B>
+           ├── 20230402_hsapiens_Sample_001.timeseries.data
+           ├── 20230402_hsapiens_Sample_001.wiff
+           ├── 20230402_hsapiens_Sample_001.wiff2
+           ├── 20230402_hsapiens_Sample_001.wiff.scan
+           ├── 20230402_hsapiens_Sample_002.timeseries.data
+           ├── 20230402_hsapiens_Sample_002.wiff
+           ├── 20230402_hsapiens_Sample_002.wiff2
+           ├── 20230402_hsapiens_Sample_002.wiff.scan
+           ├── 20230402_hsapiens_Sample_003.timeseries.data
+           ├── 20230402_hsapiens_Sample_003.wiff
+           ├── 20230402_hsapiens_Sample_003.wiff2
+           └── 20230402_hsapiens_Sample_003.wiff.scan
+
+ ...
+
+           ├── 20230402_hsapiens_Sample_099.timeseries.data
+           ├── 20230402_hsapiens_Sample_099.wiff
+           ├── 20230402_hsapiens_Sample_099.wiff2
+           └── 20230402_hsapiens_Sample_099.wiff.scan
+ </PRE>
+ </DIV>
+
+ <DIV style="clear:both;"></DIV>
+
+</SPAN>
+
+
