@@ -23,7 +23,7 @@ https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unk
 
 
 
-    ZIPsFS \[*ZIPsFS-options*\] *path-of-branch1* *path-of-branch2*  *path-of-branch3*   :  \[*fuse-options*\] *mount-point*
+    ZIPsFS [ZIPsFS-options] *path-of-branch1* *path-of-branch2*  :  [*fuse-options*] *mount-point*
 
 
 ## Example
