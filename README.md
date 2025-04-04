@@ -271,16 +271,16 @@ Multiple instances of the script can run in parallel, allowing concurrent task h
 ZIPsFS Options
 --------------
 
--h
+**-h**
 
 Prints brief usage information.
 
 
--l  *Maximum memory for caching ZIP-entries in the RAM*
+**-l  *Maximum memory for caching ZIP-entries in the RAM* **
 
 Specifies a limit for the cache.  For example *-l  8G* would limit the size of the cache to 8 Gigabyte.
 
--c \[NEVER,SEEK,RULE,COMPRESSED,ALWAYS\]
+**-c \[NEVER,SEEK,RULE,COMPRESSED,ALWAYS\]**
 
 Policy for ZIP entries  cached in RAM.
 
@@ -302,7 +302,7 @@ Policy for ZIP entries  cached in RAM.
 
 This is discussed in section Configuration.
 
--b Run in background.
+**-b Run in background**
 
 
 
@@ -325,13 +325,13 @@ FUSE Options
 ------------
 
 
--s
+**-s**
 
 Disable multi-threaded operation. This could rescue ZIPsFS in case of threading related bugs.
 
--o *comma separated Options*
+**-o *comma separated Options* **
 
--o allow_other
+**-o allow_other**
 
 Other users can read the files
 
