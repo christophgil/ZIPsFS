@@ -309,13 +309,13 @@ This is discussed in section Configuration.
 Debug Options
 -------------
 
--T  Checks the capability to print a backtrace.  This requires addr2line which is usually in /usr/bin/ of Linux and FreeBSD. For MacOSX, the tool atos is used.
+**-T**
 
-T  Checks whether ZIPsFS can generate and print a backtrace in case of errors or crashes.
-   This feature relies on external tools to translate memory addresses into source code locations:
-   On Linux and FreeBSD, it uses addr2line, typically located in /usr/bin/.
-   On macOS, it uses the atos tool instead.
-   Ensure these tools are installed and accessible in your system's PATH for backtraces to work correctly.
+Checks whether ZIPsFS can generate and print a backtrace in case of errors or crashes.  This feature
+elies on external tools to translate memory addresses into source code locations: On Linux and
+FreeBSD, it uses addr2line, typically located in /usr/bin/.  On macOS, it uses the atos tool
+instead.  Ensure these tools are installed and accessible in your system's PATH for backtraces to
+work correctly.
 
 
 
