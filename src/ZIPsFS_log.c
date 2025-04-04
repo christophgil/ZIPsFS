@@ -102,7 +102,7 @@ static void rootdata_counter_inc(const char *path, enum enum_counter_rootdata f,
 #define lTD() TD("%'lld")
 #define luTD() TD("%'llu")
 
-static const char **_fuse_argv;
+static const char *_fuse_argv[99]={0};
 static int _fuse_argc;
 static void log_path(const char *f,const char *path){
   log_msg("  %s '"ANSI_FG_BLUE"%s"ANSI_RESET"' len="ANSI_FG_BLUE"%u"ANSI_RESET"\n",f,path,cg_strlen(path));

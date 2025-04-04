@@ -445,7 +445,7 @@ static void *infloop_unblock(void *arg){
     usleep(1000*1000*seconds);
     foreach_root1(r){
       RLOOP(t,PTHREAD_LEN){
-      if (!r->thread_is_run[t]) continue;
+        if (!r->thread_is_run[t]) continue;
         const int threshold=
           t==PTHREAD_STATQUEUE?10*UNBLOCK_AFTER_SECONDS_THREAD_STATQUEUE:
           t==PTHREAD_MEMCACHE?10*UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE:
@@ -463,10 +463,10 @@ static void *infloop_unblock(void *arg){
           }
           char proc[99]; sprintf(proc,"/proc/%ld",(long)pid);
           if (not_restart){
-            #define M "Not yet starting thread because process  still exists"
+#define M "Not yet starting thread because process  still exists"
             log_verbose(M "%s",proc);
             warning(WARN_THREAD|WARN_FLAG_ONCE_PER_PATH,proc,M);
-            #undef M
+#undef M
           }else{
             warning(WARN_THREAD|WARN_FLAG_SUCCESS,proc,"Going root_start_thread(%s,%s) because process does not exist any more",rootpath(r),PTHREAD_S[t]);
             r->thread_when_canceled_deciSec[t]=deciSecondsSinceStart();
@@ -797,7 +797,7 @@ static void *infloop_dircache(void *arg){
   struct stat stbuf;
   struct directory mydir={0}; /* Put here otherwise use of stack var after ... */
   while(true){
-        observe_thread(r,PTHREAD_DIRCACHE);
+    observe_thread(r,PTHREAD_DIRCACHE);
     *path=0;
     lock_ncancel(mutex_dircachejobs);/*Pick path from an entry and put in stack variable path */
     struct ht_entry *ee=r->dircache_queue.entries;
@@ -1931,7 +1931,6 @@ int main(const int argc,const char *argv[]){
   _pid=getpid();
   IF1(WITH_CANCEL_BLOCKED_THREADS,assert(_pid==gettid()), assert(cg_pid_exists(_pid)));
 
-
   fprintf(stderr,"MAX_PATHLEN: %d\n",MAX_PATHLEN);
   fprintf(stderr,"has_proc_fs: %s\n",yes_no(has_proc_fs()));
   if (!realpath(*argv,_self_exe)) DIE("Failed realpath %s",*argv);
@@ -1946,11 +1945,7 @@ int main(const int argc,const char *argv[]){
     for(int i=0;MY_WARNING_NAME[i];i++) _warning_channel_name[i]=(char*)MY_WARNING_NAME[i];
   }
   int colon=0;
-  bool foreground=false;
-  FOR(i,0,argc){
-    if(!strcmp(":",argv[i])) colon=i;
-    foreground|=colon>0 && !strcmp("-f",argv[i]);
-  }
+  FOR(i,1,argc) if (!strcmp(":",argv[i])){ colon=i; break;}
   fprintf(stderr,ANSI_INVERSE""ANSI_UNDERLINE"This is %s"ANSI_RESET" Version: "ZIPSFS_VERSION"\nCompiled: %s %s  PID: "ANSI_FG_WHITE ANSI_BLUE"%d"ANSI_RESET"\n",path_of_this_executable(),__DATE__,__TIME__,_pid);
   IF1(WITH_GNU,fprintf(stderr,"gnu_ggnu_get_libc_version: %s\n",gnu_get_libc_version()));
 #if defined(__has_feature)
@@ -1981,9 +1976,10 @@ int main(const int argc,const char *argv[]){
     { "version",   0, NULL, 'V'},
     {NULL,0,NULL,0}
   };
-  for(int c;(c=getopt_long(argc,(char**)argv,"+aAqT:nkhVs:c:S:l:L:",l_option,NULL))!=-1;){  /* The initial + prevents permutation of argv */
+  bool isBackground=false;
+  for(int c;(c=getopt_long(argc,(char**)argv,"+aAbqT:nkhVs:c:S:l:L:",l_option,NULL))!=-1;){  /* The initial + prevents permutation of argv */
     switch(c){
-    case 'a':  assert(WITH_EXTRA_ASSERT); assert(WITH_ASSERT_LOCK);
+    case 'a':  assert(!WITH_EXTRA_ASSERT); assert(!WITH_ASSERT_LOCK);
     case 'A':  if (WITH_AUTOGEN==(c=='a') || LOG_ALL_FUSE_FUNC==(c=='a')) DIE("Macro WITH_AUTOGEN should be %d due to option -%c\n",!WITH_AUTOGEN,c);break; // cppcheck-suppress [knownConditionTrueFalse]
     case 'V': exit(0);break;
     case 'T':{
@@ -1992,6 +1988,7 @@ int main(const int argc,const char *argv[]){
       else log_error("Option -T requires numbers between 0 and %d",CG_PRINT_STACKTRACE_TEST_MAX);
       exit_ZIPsFS();
     } break;
+    case 'b': isBackground=true; break;
     case 'q': _logIsSilent=true; break;
     case 'k': _killOnError=true; break;
     case 'S': _pretendSlow=true; break;
@@ -2030,8 +2027,8 @@ int main(const int argc,const char *argv[]){
     }
   }
   if (!getuid() || !geteuid()){
-    log_strg("Running ZIPsFS as root opens unnacceptable security holes.\n");
-    if (!foreground) DIE("It is only allowed in foreground mode  with option -f.");
+    log_strg("Running ZIPsFS as root opens unacceptable security holes.\n");
+    if (isBackground) DIE("It is only allowed in foreground mode  with option -f.");
     fprintf(stderr,"Do you accept the risks [Enter / Ctrl-C] ?\n");cg_getc_tty();
   }
   if (!colon){ log_error("No single colon found in parameter list\n"); suggest_help(); return 1;}
@@ -2041,7 +2038,7 @@ int main(const int argc,const char *argv[]){
   {
     struct stat st;
     if (PROFILED(stat)(_mnt,&st)){
-      if (!foreground) DIE("Directory does not exist: %s",_mnt);
+      if (isBackground) DIE("Directory does not exist: %s",_mnt);
       fprintf(stderr,"Create non-existing folder %s  [Enter / Ctrl-C] ?\n",_mnt);
       cg_getc_tty();
       cg_recursive_mkdir(_mnt);
@@ -2210,7 +2207,7 @@ int main(const int argc,const char *argv[]){
 #endif
   IF1(WITH_AUTOGEN,if (!cg_is_member_of_group("docker")){ log_warn(HINT_GRP_DOCKER); warn=true;});
   if (warn && !strstr(_mnt,"/cgille/")){ fprintf(stderr,"Press enter\n");cg_getc_tty();}
-  if (!foreground)  _logIsSilent=_logIsSilentFailed=_logIsSilentWarn=_logIsSilentError=_cg_is_none_interactive=true;
+  if (isBackground)  _logIsSilent=_logIsSilentFailed=_logIsSilentWarn=_logIsSilentError=_cg_is_none_interactive=true;
   foreach_root1(r){
     RLOOP(t,PTHREAD_LEN){
       //if (ir&&t==PTHREAD_MISC0) continue; /* Only one instance */
@@ -2232,7 +2229,10 @@ int main(const int argc,const char *argv[]){
   _textbuffer_memusage_lock=_mutex+mutex_textbuffer_usage;
   log_msg("Running %s with PID %d. Going to fuse_main() ...\n",argv[0],_pid);
   cg_free(MALLOC_TESTING,cg_malloc(MALLOC_TESTING,10));
-  const int fuse_stat=fuse_main(_fuse_argc=argc-colon,(char**)(_fuse_argv=argv+colon),&xmp_oper,NULL);
+   _fuse_argv[_fuse_argc++]="";
+  if (!isBackground) _fuse_argv[_fuse_argc++]="-f";
+  FOR(i,colon+1,argc) _fuse_argv[_fuse_argc++]=argv[i];
+  const int fuse_stat=fuse_main(_fuse_argc,(char**)_fuse_argv,&xmp_oper,NULL);
   log_msg(RED_WARNING" fuse_main returned %d\n",fuse_stat);
   IF1(WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,IF1(WITH_DIRCACHE,dircache_clear_if_reached_limit_all(true,0xFFFF)));
   exit_ZIPsFS();

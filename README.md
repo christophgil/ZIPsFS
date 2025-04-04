@@ -6,6 +6,7 @@ See [Installation](./INSTALL.md)
 (save-some-buffers t)
 (shell-command "pandoc ZIPsFS.1.md -s -t man | /usr/bin/man -l -")
 )
+%% (query-replace-regexp " *— *" " - ")
 -->
 
 
@@ -15,88 +16,131 @@ See [Installation](./INSTALL.md)
 NAME
 ====
 
-**ZIPsFS** — FUSE-based  overlay union file system expanding ZIP files
+**ZIPsFS** - FUSE-based  overlay union file system expanding ZIP files
 
 SYNOPSIS
 ========
 
 
-ZIPsFS \[*ZIPsFS-options*\] *path-of-root1* *path-of-root2*  *path-of-root3*   :  \[*fuse-options*\] *mount-point*
+    ZIPsFS \[*ZIPsFS-options*\] *path-of-branch1* *path-of-branch2*  *path-of-branch3*   :  \[*fuse-options*\] *mount-point*
 
-## Example 1
 
-ZIPsFS   ~/tmp/ZIPsFS/writable ~/local/file/tree  //computer1/pub  //computer2/pub :  -f -o allow_other  ~/mnt/ZIPsFS
+## Example
 
+
+### First create some example files
+
+    b1=~/test/ZIPsFS/writable
+    b2=~/test/ZIPsFS/branch1
+    b3=~/test/ZIPsFS/branch2
+    mnt=~/test/ZIPsFS/mnt
+
+    mkdir -p $b1 $b2 $b3 $mnt
+
+    for c in a b c d e f; do echo hello world $c >$b2/$c.txt; done
+    for ((i=0;i<10;i++)); do echo hello world $i >$b3/$i.txt; done
+
+    zip --fifo $b2/zipfile1.zip <(date)  <(date '+%Y-%M-%d %H:%m %S')
+    zip --fifo $b3/zipfile2.zip <(hostname)  <(ls /)
+    zip --fifo $b3/20250131_this_is_a_mass_spectrometry_folder.d.Zip <(seq 10)
+
+
+### Now start ZIPsFS
+
+    ZIPsFS   $b1 $b2 $b3 : -o allow_other  $mnt
+
+### Browse the virtual file tree
+
+    Open a file browser or another terminal and  browse the files in  ~/test/ZIPsFS/mnt/
+
+### Create a file in the virtual tree
+
+    echo "This file will be stored in ~/test/ZIPsFS/writable "> ~/test/ZIPsFS/mnt/my_file.txt
+
+    cat ~/test/ZIPsFS/mnt/my_file.txt
+
+### Real storage place of the created file
+
+    ls -l ~/test/ZIPsFS/writable/my_file.txt
 
 DESCRIPTION
 ===========
 
 ## Summary
 
-ZIPsFS acts as a union or overlay file system. It combines multiple file structures into one, resulting in a single directory structure that
-contains underlying files and sub-directories from the given sources.  Created or modified files are stored in
-the first file location. The other file sources  are read-only and files will  never be modified.  ZIPsFS expands ZIP files as folders. Normally, the
-folder name is formed from the ZIP file name by appending ".Contents/".  This can be changed
-with rules based on file name patterns. Extensive configuration is possible without interrupting the  file system.
-Specific features and performance tweaks  meet our needs for storing large data from mass spectrometry experiments.
+
+ZIPsFS functions as a union or overlay file system, merging multiple file structures into a unified directory.
+This directory presents the underlying files and subdirectories from the specified sources (branches) as a single, cohesive structure.
+Any newly created or modified files are stored in the first file location, while all other sources remain read-only, ensuring that their files are never altered.
+ZIPsFS treats ZIP files as expandable folders, typically naming them by appending ".Contents/" to the original ZIP file name.
+However, this behavior can be customized using filename-based rules. Extensive configuration options allow adjustments. Changes can be applied without disrupting the file system.
+Additionally, ZIPsFS includes specialized features and performance optimizations tailored for efficiently storing large-scale mass spectrometry data.
+
+
+## Logs
+
+
+ZIPsFS is normally running in the foreground.
+It is recommended to use a  persistent terminal multiplexer like *tmux*.
+This allows to observe all messages and to search back in the scroll buffer.
+
+In addition,  log files are found in  **~/.ZIPsFS/**.
+
+An HTML file with status information is dynamically generated in  the generated folder **<Mount-Point>/ZIPsFS/** in the virtual  ZIPsFS file system.
+
 
 ## Configuration
 
-The default behavior can be modified with rules based on file names. The configuration files start with  *ZIPsFS_configuration*. They are C files.
-For changes to take effect, re-compilation and restart of ZIPsFS is necessary.
+The default behavior can be customized using filename-based rules. Configuration files, identified
+by the prefix ZIPsFS_configuration, are written in C. Any changes require recompilation and a
+restart of ZIPsFS to take effect.
 
-### Re-starting ZIPsFS without affecting on-going file accesses
+With the -s option, the updated ZIPsFS can seamlessly replace running instances without disrupting the virtual file system.
 
-Using the *-s symlink* option, ZIPsFS can be restarted without interrupting current
-processes. Ongoing computations with file access to ZIPsFS are not affected.
+To illustrate how this works, let MNT represent the apparent mount point of the FUSE file system.
+Suppose we are in the parent directory of MNT, enabling the use of relative paths.
+Users access files through this apparent mount point, but in reality, MNT is a symbolic link to the actual mount point.
+The real mount point is not directly accessed by users, as it changes each time a new instance of ZIPsFS is launched.
 
-
-Let MNT be the name of the apparent mount point of the FUSE file system.
-Furthermore, we assume that we are in the parent folder of MNT since things work best with relative paths.
-Users who access files from ZIPsFS will use this apparent mount point.
-Strictly speaking, MNT is not the mount point, but a  symbolic link to the real mount point.
-The real mount is not directly accessed by the user because it changes when another instance of ZIPsFS is launched.
-
-
-
-Let us assume that the current ZIPsFS uses the mount point *./.mountpoints/MNT/1* and that MNT is a relative symbolic link to that mount point.
-
-The new ZIPsFS instance  is launched using  *./.mountpoints/MNT/2* as mount point.
-
-With the command line option
+For example, assume the obsolete ZIPsFS instance is mounted at ./.mountpoints/MNT/1.
+When a new instance replaces it, it may use any empty directory as   mount point  and the  option:
 
     -s MNT
 
-The symbolic link will change and  refer to the mount point of the new instance.
+Once the new instance is running, the symbolic link is updated to point to the new mount
+location. From the user's perspective, nothing changes - the apparent mount point remains MNT. To
+ensure uninterrupted access, the obsolete instance should remain active for a short period to allow
+ongoing file operations to complete.
 
-For the user nothing has changed and  the apparent mount point is still MNT.
 
-File descriptors will use the new ZIPsFS instance since the symbolic link MNT refers to the new mount point.
 
-However, file descriptors created before will still use the previous ZIPsFS instance. This should be
-kept alife for some minutes.  Therefore the previous and the new ZIPsFS instance need to work in
-parallel for some time.
+If MNT  is within an exported  SAMBA or NFS path the real mount points should be in the exported file tree as well.
+Include into */etc/samba/smb.conf*:
 
+    follow symlinks = yes
 
 
 
 ## Union / overlay file system
 
 ZIPsFS is a union or overlay file system. Several file locations are combined to one.
-All files in the source file trees (in above  example command three sources) can be accessed via the mount point (in the example *~/mnt/ZIPsFS*).
-When files are created or modified, they will be stored in the first file tree (in the example *~/tmp/ZIPsFS/writable*).
+When files are created or modified, they will be stored in the first file tree (in the example *~/test/ZIPsFS/writable*).
 If files exist in two locations, the left most source file system takes precedence.
 
-New files are created in the first file tree, while the other file sources are never modified.
-If an   empty string "" or '' is given for the first source, no writable source  is used.
+If an empty string is given for the first source, no writable branch is used.
 
 ## ZIP files
 
-Let *file.zip* be a ZIP file in any of the source file systems. It will  appear in the virtual file system together with a folder *file.zip.Content*.
-Normally, the folder name is formed by appending "*.Content*" to the zip file name. This can be changed in *ZIPsFS_configuration.c*.
+In the example the ZIP files are shown as folders with the suffix  "*.Content*". This can be changed in *ZIPsFS_configuration.c*.
 
-For example Sciex mass spectrometry software requires that the containing files are shown directly in the file listing rather than in a sub-folder.
-Bruker mass spectrometry software expects folder names ending with *.d* rather than *.d.Zip.Content*.
+Extra rules specified:
+
+
+ - Mass spectrometry software expects folder names ending with *.d* rather than *.d.Zip.Content*. This is applied to all ZIP files with a name starting with a year and ending with .d.Zip.
+
+ - For example Sciex mass spectrometry software requires that the containing files are shown directly in the file listing rather than in a sub-folder.
+
+
 
 ## Cache
 
@@ -104,57 +148,36 @@ Optionally, ZIPsFS can read certain ZIP entries entirely into RAM and provide th
 This may improve performance for compressed ZIP entries that are read from varying positions in a file, so-called file file-seek.
 This is particularly important, when the ZIP files reside in a remote file system.
 With the  option **-l** an upper limit of memory consumption for the ZIP  RAM cache is specified.
-There are customizeable rules for the case that the limit is reached.
+There are customizeable rules for how low memory is treated.
 
-Further caches aim at faster file listing of large directories.  A file listing of the Sciex style
-where all ZIP entries of many ZIP files are shown would require to read the entry index of many ZIP
-files which takes about 15 ms per ZIP file. A file listing of several thousands of files would take several seconds without a cache.
-
-When the cache size  exceeds a limit, it is cleared.
+Further caches aim at faster file listing of large directories.
 
 
 
 
-## Logs
-
-
-It is convenient to run ZIPsFS in the foreground with option *-f* within a persistent terminal multiplexer like *tmux*.
-This allows to observe all messages and to search back in the scroll buffer.
-
-
-In addition,  log files are found in  **~/.ZIPsFS/**.
-
-An HTML file with status information is dynamically generated in  the generated folder **<Mount-Point>/ZIPsFS/** in the virtual  ZIPsFS file system.
 
 ## Real file location
 
 To see the real file path i.e. the file path where a file is physically stored,
-append **@SOURCE.TXT** to the virtual file path. From a Windows client, these files are not accessible.
-In Windows, files are generally not accessible, when they are not listed in the parent folder.
 
 
-## Plugins - Auto-generation of virtual files
+append **@SOURCE.TXT** to the virtual file path. Example:
 
-ZIPsFS can display virtual files which do not  exist, but which are generated automatically when used.
-This feature is  activated when **WITH_AUTOGEN** is set to **1** in *ZIPsFS_configuration.h*.  The first file root may be used to store the generated files.
-Alternatively, the file data is computed and kept in RAM for the time of file access.
 
-A typical use-case are file conversions.
-Auto-generated files are displayed in the virtual file tree in **<Mount-Point>/ZIPsFS/a/**.
-If they have not be used before, an estimated file size is reported as the real file size is not yet known.
+    cat ~/test/ZIPsFS/mnt/1.txt@SOURCE.TXT
 
-The currently included examples demonstrate this feature and can serve as a templated for own settings.
+From a Windows client, these files are not accessible.
+This is because they are not listed in the parent folder.
 
-For this purpose copy image or pdf files into one of the roots and visit the respective folder in the virtual file system.
-Prepend this folder with **<Mount-Point>/ZIPsFS/a/** and you will see the generated files:
 
-    mnt=<path of mountpoint>
+## Auto-generation of virtual files
 
-    mkdir $mnt/test
+ZIPsFS can display virtual files  which are generated automatically.
+This feature is  activated by setting  the preprocessor macro  **WITH_AUTOGEN** to  **1** in *ZIPsFS_configuration.h*.
+The first file branch is used to store the generated files.
 
-    cp file.png $mnt/test/
 
-    ls -l $mnt/ZIPsFS/a/test/
+A typical use-case are file conversions. The default rules in ZIPsFS_configuration_autogen.c. comprise:
 
 - For image files (jpg, jpeg, png and gif), smaller versions of 25 % and 50 %
 - For image files extracted text usign Optical Character Recognition
@@ -163,18 +186,25 @@ Prepend this folder with **<Mount-Point>/ZIPsFS/a/** and you will see the genera
 - Mass spectrometry files: They are converted to mgf (Mascot)  and msML.  For wiff files, the contained 16 bit text is converted to plain ASCII.
 - Apache Parquet files are converted to tsv and tsv.bz2
 
-When opening these files  for the first time there will be some delay. The same is true when their last-modified time changes. This is because the files need to be generated.
-When accessed a second time, the data comes without delay, because the file is already there. Furthermore, the file size will be correct.
+For testing, copy an image file:
 
-Users can customize the rules in ZIPsFS_configuration_autogen.c.
+    cp file.png ~/test/ZIPsFS/mnt/
+
+Auto-generated files are displayed in the virtual file tree in **<Mount-Point>/ZIPsFS/a/**. Example:
+
+    ls ~/test/ZIPsFS/mnt/ZIPsFS/a/
+
+
+If they have not be used before and the real file size is still unknown, an estimated file size is reported.
+
 Some of the conversions require support for docker.
 
 ### Limitations - unknown file size
 
 The system does not know the file size of not-yet-generated files.  This seems to be a common
-problem, see
-https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unknown-size.  Any help
-is appreciated.
+problem of UNIX and Linux. See
+https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unknown-size.  Suggestions are welcome.
+
 
 Initially, ZIPsFS reports an upper estimate of the expected file size. This breaks programs that need to know
 the exact file size such as */usr/bin/tail*.
@@ -184,22 +214,19 @@ Calling stat /proc/$$/environ. Consider
 
     ls -l /proc/self/environ
 
-The reported  file size is zero. Nevertheless, *cat*, *more*  and even *tail* work.
+The reported  file size is zero. Nevertheless, *cat*, *more*  and even *tail* work. Why?
 If the FUSE file system  returns zero for a file, the content of the files are not readable.
 Any suggested appreciated.
 
-### Limitations - nested, recursive
-
-Currently, nesting (recursion) is not yet supported. A virtual file cannot be the basis for another
-virtual file.
 
 ### ZIPsFS_autogen_queue.sh
 
-Some exotic scientific  Windows executables cannot be started from a compiled program like  ZIPsFS.
-The problem is that the Console API is used instead of terminal escape sequences.
-As a work around, we developed the shell script **ZIPsFS_autogen_queue.sh**.
-With each pass of an  infinity loop  one task is taken from a queue and processed. One file is converted at a time per script instance.
-Several instances of this shell script can run in parallel. In the settings, the symbol **PLACEHOLDER_EXTERNAL_QUEUE** is given instead of an executable program.
+Some scientific Windows executables do not behave well when started from a compiled programs like ZIPsFS.  The
+problem is caused by the the Console API which replaces old fashion terminal escape sequences.  As a work around, the
+shell script **ZIPsFS_autogen_queue.sh** can be used. ZIPsFS pushes tasks and waits for their
+completion when the symbol **PLACEHOLDER_EXTERNAL_QUEUE** is given instead of an executable
+program.  These tasks are performed in the shell script which need to be started explicitly.
+Several instances of this shell script can run in parallel.
 
 
 ZIPsFS Options
@@ -234,22 +261,9 @@ Policy for ZIP entries  cached in RAM.
 
 -s *path-of-symbolic-link*
 
-After initialization the specified  symlink is created and points to the mount point. Previously existing links are overwritten atomically.
-This allows to restart ZIPsFS without affecting running programs which access file in the virtual ZIPsFS file system.
-For file paths in the virtual file system,  the symlink is used rather than the real mount-point.
-Consider a running  ZIPsFS instance which needs to be replaced by a newer one.  The new ZIPsFS instance is started with
-a different mount point. Both  instances work simultaneously. The symlink which used to point to the mount point of the old instance is now pointing to that of the new one.
-The old instance should be let running for an hour or so until no file handle is open any more.
+This is explained in section Configuration.
 
-If the symlink is within an exported  SAMBA or NFS path, it should be relative.
-This is best achieved by changing into the parent path where the symlink will be created.
-Then give just the name and not the entire path of the symlink. In the /etc/samba/smb.conf give:
-
-   follow symlinks = yes
-
-
-
-
+-b Run in background. Not recommended.
 
 
 
@@ -262,9 +276,6 @@ See ZIPsFS.compile.sh for activation of sanitizers.
 FUSE Options
 ------------
 
--f
-
-Run in foreground and display some logs at stdout. This mode is useful inside tmux.
 
 -s
 
@@ -282,7 +293,7 @@ Other users can read the files
 When source file structures are stored remotely, there is a risk that they  may be
 temporarily unavailable. Overlay file systems typically freeze when calls to the file API block.
 Conversely, ZIPsFS should continue to
-operate with the remaining file roots. This is implemented as follows for  paths starting with double
+operate with the remaining file branches. This is implemented as follows for  paths starting with double
 slash (in the example *//computer1/pub*). Double slash indicates  remote paths which might get unavailable in analogy to remote UNC paths.  ZIPsFS
 will periodically check file systems starting with a double slash.  If the last responds was too
 long ago then the respective file system is skipped. Furthermore the stat() function to obtain the
@@ -290,18 +301,14 @@ attributes for a file are queued to be  performed in extra threads.
 
 For files which are located in ZIP files and which are first loaded entirely into RAM, the system is
 also robust for interruptions and blocks during loading. The system will not freeze. After some
-longer time it will try to load the same file from another root or return ENOENT.
+longer time it will try to load the same file from another branch or return ENOENT.
 
 If loading of ZIP files fail, loading will be repeated after 1s.
 
 For ZIP entries loaded entirely into the RAM, the CRC sum is validated and possible errors are logged.
 
 
-FILES
-=====
 
-- ZIPsFS_configuration.h and ZIPsFS_configuration.c and ZIPsFS_configuration_autogen.c:  Customizable rules. Modification requires recompilation.
-- ~/.ZIPsFS:  Contains the log file and cache and the folder a. The later holds auto-generated files.
 
 
 LIMITATIONS

@@ -302,7 +302,7 @@ struct statqueue_entry{
 
 
 /////////////////////////////////////////////////////////////////////////
-///  struct rootdata holds the data for a source directory
+///  struct rootdata holds the data for a branch
 ///  ZIPsFS is a union file system and combines all source directories
 //////////////////////////////////////////////////////////////////////////
 #define is_last_root_or_null(r)  (!r||r==_root+_root_n-1)
@@ -316,7 +316,7 @@ struct statqueue_entry{
 
 
 
-struct rootdata{ /* Data for a source directory. ZIPsFS acts like an overlay FS. */
+struct rootdata{ /* Data for a branch. ZIPsFS acts like a union FS. */
   char rootpath[MAX_PATHLEN+1];
   int rootpath_l;
   uint32_t features;
