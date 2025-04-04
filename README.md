@@ -1,3 +1,4 @@
+# ZIPsFS - FUSE-based  overlay file system which expands  ZIP files
 See [Installation](./INSTALL.md)
 
 <!---
@@ -409,14 +410,6 @@ SEE ALSO
 - https://github.com/google/mount-zip
 - https://github.com/cybernoid/archivemount
 - https://github.com/mxmlnkn/ratarmount
-
-    # ZIPsFS - FUSE-based  overlay file system which expands  ZIP files
-
-# CURRENT STATE
-
-Usable.
-
-However, we are still fixing minor bugs.
 
 # MOTIVATION
 
