@@ -329,7 +329,7 @@ FUSE Options
 
 Disable multi-threaded operation. This could rescue ZIPsFS in case of threading related bugs.
 
-**-o *comma separated Options* **
+**-o comma separated Options**
 
 **-o allow_other**
 
