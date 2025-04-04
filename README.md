@@ -276,7 +276,7 @@ ZIPsFS Options
 Prints brief usage information.
 
 
-**-l  *Maximum memory for caching ZIP-entries in the RAM* **
+**-l  Maximum memory for caching ZIP-entries in the RAM **
 
 Specifies a limit for the cache.  For example *-l  8G* would limit the size of the cache to 8 Gigabyte.
 
