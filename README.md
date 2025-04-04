@@ -18,15 +18,9 @@ https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unk
 
 
 
-% ZIPsFS(1)
 
-NAME
-====
+## SYNOPSIS
 
-**ZIPsFS** - FUSE-based  overlay union file system expanding ZIP files
-
-SYNOPSIS
-========
 
 
     ZIPsFS \[*ZIPsFS-options*\] *path-of-branch1* *path-of-branch2*  *path-of-branch3*   :  \[*fuse-options*\] *mount-point*
