@@ -115,7 +115,6 @@ To keep it active and monitor its output, it is recommended to use a
 persistent terminal multiplexer such as tmux.
 This enables continuous observation of all messages and facilitates
 long-running sessions.
-.PP
 Additional log files are stored in:
 .IP
 .nf
@@ -205,15 +204,11 @@ This disables file creation and modification.
 By default, ZIP files are displayed as folders with the suffix
 \f[I].Content\f[R].
 This behavior can be customized in the ZIPsFS_configuration.c file.
-.PP
 The default configuration includes a few exceptions tailored to specific
-use cases:
-.PP
-Mass Spectrometry Compatibility:
+use cases in Mass Spectrometry Compatibility:
 .IP \[bu] 2
 For ZIP files whose names start with a year and end with .d.Zip, the
-virtual folder will instead end with .d to satisfy naming conventions of
-mass spectrometry software.
+virtual folder will instead end with \f[I].d\f[R].
 .IP \[bu] 2
 Flat File Display: For some mass spectrometry formats where files are
 not organized into subfolders within the ZIP archive, the contents are
@@ -222,17 +217,13 @@ shown directly in the file list, rather than as a nested folder.
 .PP
 ZIPsFS optionally supports caching specific ZIP entries entirely in RAM,
 allowing data segments to be served from memory in any order.
-.PP
 This feature significantly improves performance for software that
 performs random-access reads.
-.PP
 The \f[I]-l\f[R] option sets an upper limit on memory usage for the ZIP
 RAM cache.
-.PP
 When available memory runs low, ZIPsFS can either pause, proceed without
 caching file data or just ignore the memory restriction depending on the
 configuration.
-.PP
 These caching behaviors - such as which files to cache and how to handle
 memory pressure - are defined in the configuration files based on.
 .SS File attribute cache
@@ -269,10 +260,8 @@ ZIPsFS can generate and display virtual files automatically.
 This feature is enabled by setting the preprocessor macro
 \f[B]WITH_AUTOGEN\f[R] to \f[B]1\f[R] in
 \f[I]ZIPsFS_configuration.h\f[R].
-.PP
 Generated files are stored in the first file branch, allowing them to be
 served instantly upon repeated requests.
-.PP
 A common use case for this feature is file conversion.
 The default rules, defined in \f[I]ZIPsFS_configuration_autogen.c\f[R],
 include:
@@ -312,18 +301,14 @@ ls \[ti]/test/ZIPsFS/mnt/ZIPsFS/a/
 \f[R]
 .fi
 .PP
-If the files haven\[cq]t been generated yet, their actual file size will
-be unknown.
-In this case, an estimated file size will be reported.
-.PP
 Note that some of the conversions may require Docker support.
 .SS Handling Unknown File Sizes in Virtual File Systems
 .PP
 The system cannot determine the size of files whose content has not yet
 been generated.
-.PP
-In kernel-managed virtual file systems such as /proc and /sys, virtual
-files typically report a size of 0 via stat().
+In kernel-managed virtual file systems such as \f[I]/proc\f[R] and
+\f[I]/sys\f[R], virtual files typically report a size of zero via
+\f[I]stat()\f[R].
 Despite this, they often contain dynamically generated content when
 read.
 .PP
@@ -337,15 +322,12 @@ attempt to read from it at all.
 In ZIPsFS a placeholder or estimated size is returned if the file
 content has not been generated at the time of stat().
 The estimate should be large enough to allow reading the full content.
-.PP
 If the size is underestimated, data may be read incompletely, leading to
 truncated output or application errors.
-.PP
 This workaround allows programs to read the file as if it had content,
 even though the size isn\[cq]t known in advance.
 However, it may still break software that relies on accurate size
 reporting for buffering or memory allocation.
-.SS ZIPsFS_autogen_queue.sh
 .SS Windows Console Compatibility: External Queue Workaround
 .PP
 Some Windows command-line executables do not behave reliably when
@@ -353,10 +335,8 @@ launched directly from compiled programs.
 This issue stems from limitations in the Windows Console API, which
 differs from traditional terminal escape sequences and can interfere
 with expected output or behavior.
-.PP
 To work around this, ZIPsFS supports delegating such tasks to an
 external shell script.
-.PP
 When the special symbol \f[B]PLACEHOLDER_EXTERNAL_QUEUE\f[R] is
 specified instead of a direct executable path, ZIPsFS:
 .IP \[bu] 2
@@ -368,7 +348,6 @@ The actual execution of these tasks is handled by the shell script
 ZIPsFS_autogen_queue.sh, which must be started manually by the user.
 This script polls the queue and performs the requested conversions or
 operations.
-.PP
 Multiple instances of the script can run in parallel, allowing
 concurrent task handling.
 .SS ZIPsFS Options

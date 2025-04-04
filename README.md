@@ -96,7 +96,6 @@ Additionally, ZIPsFS includes specialized features and performance optimizations
 ZIPsFS typically runs as a foreground process.  To keep it active and monitor its output, it is
 recommended to use a persistent terminal multiplexer such as tmux. This enables continuous
 observation of all messages and facilitates long-running sessions.
-
 Additional log files are stored in:
 
     ~/.ZIPsFS
@@ -133,8 +132,6 @@ location. From the user's perspective, nothing changes - the apparent mount poin
 ensure uninterrupted access, the obsolete instance should remain active for a short period to allow
 ongoing file operations to complete.
 
-
-
 If MNT  is within an exported  SAMBA or NFS path the real mount points should be in the exported file tree as well.
 Include into */etc/samba/smb.conf*:
 
@@ -159,13 +156,10 @@ To make the file system read-only, you can specify an empty string ("") as the f
 
 By default, ZIP files are displayed as folders with the suffix *.Content*.
 This behavior can be customized in the ZIPsFS_configuration.c file.
-
-The default configuration includes a few exceptions tailored to specific use cases:
-
-Mass Spectrometry Compatibility:
+The default configuration includes a few exceptions tailored to specific use cases in Mass Spectrometry Compatibility:
 
   - For ZIP files whose names start with a year and end with .d.Zip, the virtual folder will instead
-    end with .d to satisfy naming conventions of mass spectrometry software.
+    end with *.d*.
 
   - Flat File Display: For some mass spectrometry formats where files are not organized into
     subfolders within the ZIP archive, the contents are shown directly in the file list, rather than
@@ -178,14 +172,10 @@ Mass Spectrometry Compatibility:
 
 ZIPsFS optionally supports caching specific ZIP entries entirely in RAM, allowing data segments to
 be served from memory in any order.
-
 This feature significantly improves performance for software that performs random-access reads.
-
 The *-l* option sets an upper limit on memory usage for the ZIP RAM cache.
-
 When available memory runs low, ZIPsFS can either pause,  proceed without caching file data or just ignore the
 memory restriction depending on the configuration.
-
 These caching behaviors - such as which files to cache and how to handle memory pressure - are defined in the configuration files based on.
 
 
@@ -217,9 +207,7 @@ Unfortunately, on Windows clients, these metadata files are inaccessible because
 
 
 ZIPsFS can generate and display virtual files automatically. This feature is enabled by setting the preprocessor macro **WITH_AUTOGEN** to **1** in *ZIPsFS_configuration.h*.
-
 Generated files are stored in the first file branch, allowing them to be served instantly upon repeated requests.
-
 A common use case for this feature is file conversion. The default rules, defined in *ZIPsFS_configuration_autogen.c*, include:
 
 - **Image files (JPG, JPEG, PNG, GIF):**  Smaller versions at 25% and 50% scaling.
@@ -240,45 +228,35 @@ Auto-generated files can be viewed in the example configuration by listing the c
 
     ls ~/test/ZIPsFS/mnt/ZIPsFS/a/
 
-If the files haven't been generated yet, their actual file size will be unknown. In this case, an estimated file size will be reported.
 
 Note that some of the conversions may require Docker support.
 
 
 ### Handling Unknown File Sizes in Virtual File Systems
 
-
 The system cannot determine the size of files whose content has not yet been generated.
-
-In kernel-managed virtual file systems such as /proc and /sys, virtual files typically report a size
-of 0 via stat(). Despite this, they often contain dynamically generated content when read.
+In kernel-managed virtual file systems such as */proc* and */sys*, virtual files typically report a size
+of zero via *stat()*. Despite this, they often contain dynamically generated content when read.
 
 However, this behavior does not translate well to FUSE-based file systems.
-
 
 For FUSE, returning a file size of zero to represent an unknown or dynamic size is not
 recommended. Many programs interpret a size of 0 as an empty file and will not attempt to read from
 it at all.
 In ZIPsFS a  placeholder or estimated size is returned if the file content has not been generated  at the time of stat().
 The estimate should be large enough to allow reading the full content.
-
 If the size is underestimated, data may be read incompletely, leading to truncated output or application errors.
-
 This workaround allows programs to read the file as if it had content,
 even though the size isn’t known in advance.
 However, it may still break software that relies on accurate size reporting for buffering or memory allocation.
 
-
-### ZIPsFS_autogen_queue.sh
 
 
 ### Windows Console Compatibility: External Queue Workaround
 
 Some Windows command-line executables do not behave reliably when launched directly from compiled programs.
 This issue stems from limitations in the Windows Console API, which differs from traditional terminal escape sequences and can interfere with expected output or behavior.
-
 To work around this, ZIPsFS supports delegating such tasks to an external shell script.
-
 When the special symbol **PLACEHOLDER_EXTERNAL_QUEUE** is specified instead of a direct executable path, ZIPsFS:
 
  - Pushes the task details to a queue.
@@ -286,7 +264,6 @@ When the special symbol **PLACEHOLDER_EXTERNAL_QUEUE** is specified instead of a
 
 The actual execution of these tasks is handled by the shell script ZIPsFS_autogen_queue.sh,
 which must be started manually by the user. This script polls the queue and performs the requested conversions or operations.
-
 Multiple instances of the script can run in parallel, allowing concurrent task handling.
 
 
