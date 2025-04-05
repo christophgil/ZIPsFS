@@ -218,7 +218,7 @@ When available memory runs low, ZIPsFS can either pause, proceed without
 caching file data or just ignore the memory restriction depending on the
 configuration.
 These caching behaviors - such as which files to cache and how to handle
-memory pressure - are defined in the configuration files based on.
+memory pressure - are defined in the configuration.
 .SS File attribute cache
 .PP
 Additional caching mechanisms are designed to accelerate file listing in
@@ -227,7 +227,7 @@ large directories.
 .PP
 The physical file path, i.e., the actual storage location of a file, can
 be retrieved from a special metadata file created by appending
-\[at]SOURCE.TXT to the filename.
+\f[B]\f[BI]\[at]SOURCE.TXT\f[B]\f[R] to the filename.
 .PP
 For example, to determine the real location of:
 .IP
@@ -295,6 +295,7 @@ ls \[ti]/test/ZIPsFS/mnt/ZIPsFS/a/
 .fi
 .PP
 Note that some of the conversions may require Docker support.
+ZIPsFS must be run by a user belonging to the \f[I]docker\f[R] group.
 .SS Handling Unknown File Sizes in Virtual File Systems
 .PP
 The system cannot determine the size of files whose content has not yet
@@ -302,8 +303,8 @@ been generated.
 In kernel-managed virtual file systems such as \f[I]/proc\f[R] and
 \f[I]/sys\f[R], virtual files typically report a size of zero via
 \f[I]stat()\f[R].
-Despite this, they often contain dynamically generated content when
-read.
+Despite this, they are not empty and contain dynamically generated
+content when read.
 .PP
 However, this behavior does not translate well to FUSE-based file
 systems.
@@ -312,7 +313,7 @@ For FUSE, returning a file size of zero to represent an unknown or
 dynamic size is not recommended.
 Many programs interpret a size of 0 as an empty file and will not
 attempt to read from it at all.
-In ZIPsFS a placeholder or estimated size is returned if the file
+In ZIPsFS, a placeholder or estimated size is returned if the file
 content has not been generated at the time of stat().
 The estimate should be large enough to allow reading the full content.
 If the size is underestimated, data may be read incompletely, leading to
@@ -330,8 +331,8 @@ differs from traditional terminal escape sequences and can interfere
 with expected output or behavior.
 To work around this, ZIPsFS supports delegating such tasks to an
 external shell script.
-When the special symbol \f[B]PLACEHOLDER_EXTERNAL_QUEUE\f[R] is
-specified instead of a direct executable path, ZIPsFS:
+When the special symbol \f[B]\f[BI]PLACEHOLDER_EXTERNAL_QUEUE\f[B]\f[R]
+is specified instead of a direct executable path, ZIPsFS:
 .IP \[bu] 2
 Pushes the task details to a queue.
 .IP \[bu] 2

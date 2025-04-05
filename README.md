@@ -171,7 +171,7 @@ This feature significantly improves performance for software that performs rando
 The ***-l*** option sets an upper limit on memory usage for the ZIP RAM cache.
 When available memory runs low, ZIPsFS can either pause,  proceed without caching file data or just ignore the
 memory restriction depending on the configuration.
-These caching behaviors - such as which files to cache and how to handle memory pressure - are defined in the configuration files based on.
+These caching behaviors - such as which files to cache and how to handle memory pressure - are defined in the configuration.
 
 
 ## File attribute cache
@@ -184,7 +184,7 @@ Additional caching mechanisms are designed to accelerate file listing in large d
 
 
 The physical file path, i.e., the actual storage location of a file, can be retrieved from a special
-metadata file created by appending @SOURCE.TXT to the filename.
+metadata file created by appending ***@SOURCE.TXT*** to the filename.
 
 For example, to determine the real location of:
 
@@ -224,21 +224,21 @@ Auto-generated files can be viewed in the example configuration by listing the c
     ls ~/test/ZIPsFS/mnt/ZIPsFS/a/
 
 
-Note that some of the conversions may require Docker support.
+Note that some of the conversions may require Docker support.  ZIPsFS must be run by a user belonging to the *docker* group.
 
 
 ### Handling Unknown File Sizes in Virtual File Systems
 
 The system cannot determine the size of files whose content has not yet been generated.
 In kernel-managed virtual file systems such as */proc* and */sys*, virtual files typically report a size
-of zero via *stat()*. Despite this, they often contain dynamically generated content when read.
+of zero via *stat()*. Despite this, they are not empty and  contain dynamically generated content when read.
 
 However, this behavior does not translate well to FUSE-based file systems.
 
 For FUSE, returning a file size of zero to represent an unknown or dynamic size is not
 recommended. Many programs interpret a size of 0 as an empty file and will not attempt to read from
 it at all.
-In ZIPsFS a  placeholder or estimated size is returned if the file content has not been generated  at the time of stat().
+In ZIPsFS,  a placeholder or estimated size is returned if the file content has not been generated  at the time of stat().
 The estimate should be large enough to allow reading the full content.
 If the size is underestimated, data may be read incompletely, leading to truncated output or application errors.
 This workaround allows programs to read the file as if it had content,
@@ -252,7 +252,7 @@ However, it may still break software that relies on accurate size reporting for 
 Some Windows command-line executables do not behave reliably when launched directly from compiled programs.
 This issue stems from limitations in the Windows Console API, which differs from traditional terminal escape sequences and can interfere with expected output or behavior.
 To work around this, ZIPsFS supports delegating such tasks to an external shell script.
-When the special symbol **PLACEHOLDER_EXTERNAL_QUEUE** is specified instead of a direct executable path, ZIPsFS:
+When the special symbol ***PLACEHOLDER_EXTERNAL_QUEUE*** is specified instead of a direct executable path, ZIPsFS:
 
  - Pushes the task details to a queue.
  - Waits for the result.
