@@ -150,10 +150,10 @@ To make the file system read-only, you can specify an empty string ("") as the f
 ## ZIP file Presentation
 
 By default, ZIP files are displayed as folders with the suffix ***.Content***.
-This behavior can be customized in the ZIPsFS_configuration.c file.
+This behavior can be customized in the ***ZIPsFS_configuration.c file***.
 The default configuration includes a few exceptions tailored to specific use cases in Mass Spectrometry Compatibility:
 
-  - For ZIP files whose names start with a year and end with .d.Zip, the virtual folder will instead
+  - For ZIP files whose names start with a year and end with *.d.Zip*, the virtual folder will instead
     end with *.d*.
 
   - Flat File Display: For some mass spectrometry formats where files are not organized into
@@ -168,7 +168,7 @@ The default configuration includes a few exceptions tailored to specific use cas
 ZIPsFS optionally supports caching specific ZIP entries entirely in RAM, allowing data segments to
 be served from memory in any order.
 This feature significantly improves performance for software that performs random-access reads.
-The *-l* option sets an upper limit on memory usage for the ZIP RAM cache.
+The ***-l*** option sets an upper limit on memory usage for the ZIP RAM cache.
 When available memory runs low, ZIPsFS can either pause,  proceed without caching file data or just ignore the
 memory restriction depending on the configuration.
 These caching behaviors - such as which files to cache and how to handle memory pressure - are defined in the configuration files based on.

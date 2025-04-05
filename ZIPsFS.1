@@ -195,12 +195,13 @@ generation.
 .PP
 By default, ZIP files are displayed as folders with the suffix
 \f[B]\f[BI].Content\f[B]\f[R].
-This behavior can be customized in the ZIPsFS_configuration.c file.
+This behavior can be customized in the \f[B]\f[BI]ZIPsFS_configuration.c
+file\f[B]\f[R].
 The default configuration includes a few exceptions tailored to specific
 use cases in Mass Spectrometry Compatibility:
 .IP \[bu] 2
-For ZIP files whose names start with a year and end with .d.Zip, the
-virtual folder will instead end with \f[I].d\f[R].
+For ZIP files whose names start with a year and end with
+\f[I].d.Zip\f[R], the virtual folder will instead end with \f[I].d\f[R].
 .IP \[bu] 2
 Flat File Display: For some mass spectrometry formats where files are
 not organized into subfolders within the ZIP archive, the contents are
@@ -211,8 +212,8 @@ ZIPsFS optionally supports caching specific ZIP entries entirely in RAM,
 allowing data segments to be served from memory in any order.
 This feature significantly improves performance for software that
 performs random-access reads.
-The \f[I]-l\f[R] option sets an upper limit on memory usage for the ZIP
-RAM cache.
+The \f[B]\f[BI]-l\f[B]\f[R] option sets an upper limit on memory usage
+for the ZIP RAM cache.
 When available memory runs low, ZIPsFS can either pause, proceed without
 caching file data or just ignore the memory restriction depending on the
 configuration.
