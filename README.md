@@ -83,9 +83,9 @@ Additionally, ZIPsFS includes specialized features and performance optimizations
 ## Logs
 
 
-     ~/.ZIPsFS
 
-     ~/test/ZIPsFS/mnt/ZIPsFS/file_system_info.html
+
+
 
 
 ZIPsFS typically runs as a foreground process.  To keep it active and monitor its output, it is
@@ -100,14 +100,14 @@ ZIPsFS dynamically generates an HTML status file within the virtual file system.
 You can find it under the path: <Mount-Point>/ZIPsFS/
 For example:
 
-    /mnt/myzip/ZIPsFS/status.html
+    ~/test/ZIPsFS/mnt/ZIPsFS/file_system_info.html
 
 This file provides real-time information about the system’s current state.
 
 ## Configuration
 
 Configuration files, identified
-by the prefix ZIPsFS_configuration, are written in C. Any changes require recompilation and a
+by the prefix **ZIPsFS_configuration**, are written in C. Any changes require recompilation and a
 restart of ZIPsFS to take effect.
 
 With the -s option, the updated ZIPsFS can seamlessly replace running instances without disrupting the virtual file system.

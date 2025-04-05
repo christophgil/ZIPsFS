@@ -99,14 +99,6 @@ Additionally, ZIPsFS includes specialized features and performance
 optimizations tailored for efficiently storing large-scale mass
 spectrometry data.
 .SS Logs
-.IP
-.nf
-\f[C]
- \[ti]/.ZIPsFS
-
- \[ti]/test/ZIPsFS/mnt/ZIPsFS/file_system_info.html
-\f[R]
-.fi
 .PP
 ZIPsFS typically runs as a foreground process.
 To keep it active and monitor its output, it is recommended to use a
@@ -127,7 +119,7 @@ You can find it under the path: /ZIPsFS/ For example:
 .IP
 .nf
 \f[C]
-/mnt/myzip/ZIPsFS/status.html
+\[ti]/test/ZIPsFS/mnt/ZIPsFS/file_system_info.html
 \f[R]
 .fi
 .PP
@@ -135,8 +127,8 @@ This file provides real-time information about the system\[cq]s current
 state.
 .SS Configuration
 .PP
-Configuration files, identified by the prefix ZIPsFS_configuration, are
-written in C.
+Configuration files, identified by the prefix
+\f[B]ZIPsFS_configuration\f[R], are written in C.
 Any changes require recompilation and a restart of ZIPsFS to take
 effect.
 .PP
