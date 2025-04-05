@@ -19,8 +19,8 @@ To compile ZIPsFS, run
 # Trouble shooting Detect problems of fuse
 
 
-If ZIPsFS does not work you need to exclude that there is a general problem of the  FUSE system.
-This can be done by testing another FUSE file system like sshfs or fuse-zip.
+If ZIPsFS does not work you need to exclude general problem of the  FUSE system.
+This can be done by testing another FUSE file system like **sshfs** or **fuse-zip**.
 The following shows how  fuse-zip can be tested. First it needs to be installed. On Debian or Ubuntu type
 
     sudo apt get install fuse-zip
@@ -34,6 +34,9 @@ Finally, the files at the mount point are shown.
     zip --fifo  ~/test/fuse-zip/test.zip  <(date)
     fuse-zip  ~/test/fuse-zip/test.zip ~/test/fuse-zip/mnt
     ls -R  ~/test/fuse-zip/mnt
+
+
+
 
 
 
@@ -53,8 +56,3 @@ If this fails, and there is a permission problem, try as root.
 /var/pkg/cache
 pkg set-property flush-content-cache-on-success True
 https://github.com/jurikm/illumos-fusefs/raw/master/lib/libfuse-20100615.tgz
-
-
-Finally run
-
-     src/ZIPsFS.compile.sh

@@ -54,23 +54,10 @@ static ht_hash_t hash_value_strg(const char* key){
 }
 
 /////////////////////////////////////////////////////////
-#define NEXT_MULTIPLE(x,word) ((x+(word-1))&~(word-1))   /* NEXT_MULTIPLE(13,4) -> 16      Word is a power of two */
-#define MSTORE_OPT_MALLOC (1U<<30)
-#define MSTORE_OPT_MMAP_WITH_FILE (1U<<29)  /* Default is anonymous MMAP */
-#define MSTORE_OPT_COUNTMALLOC (1U<<28)
-#define _MSTORE_MASK_SIZE (MSTORE_OPT_COUNTMALLOC-1) // Must be lowest
-#define _MSTORE_FREE_DATA(m)  if (m->data!=m->pointers_data_on_stack) cg_free(_MSTORE_MALLOC_ID(m),m->data)
-#define BLOCK_OFFSET_NEXT_FREE(d) ((off_t*)d)[0]
-#define BLOCK_CAPACITY(d) ((off_t*)d)[1]
 static void mstore_set_mutex(int mutex,struct mstore *x){
   x->mutex=mutex;
 }
 
-#define mstore_usage(m)           _mstore_common(m,_mstore_usage,NULL)
-#define mstore_count_blocks(m)  _mstore_common(m,_mstore_blocks,NULL)
-#define mstore_clear(m)           _mstore_common(m,_mstore_clear,NULL)
-#define mstore_add(m,src,bytes,align)  memcpy(mstore_malloc(m,bytes,align),src,bytes)
-#define mstore_contains(m,pointer)  (0!=_mstore_common(m,_mstore_contains,pointer))
 
 static void _mstore_block_init_with_capacity(const char *d,const off_t capacity){
   assert(d);
@@ -102,11 +89,14 @@ static off_t _mstore_common(struct mstore *m,int opt,const void *pointer){
         //memset(d+_MSTORE_LEADING,0,BLOCK_CAPACITY(d)*SIZEOF_OFF_T);
         // fprintf(stderr," xxxxxxxx BLOCK_OFFSET_NEXT_FREE(d)=%ld   BLOCK_CAPACITY(d)=%ld",BLOCK_OFFSET_NEXT_FREE(d),BLOCK_CAPACITY(d));
         //memset(d+_MSTORE_LEADING,0,BLOCK_CAPACITY(d));
+#ifdef HOOK_MSTORE_CLEAR
+        HOOK_MSTORE_CLEAR(m);
+#endif
         break          ;
       case _mstore_contains:{
         if (d+_MSTORE_LEADING<=(char*)pointer && (char*)pointer<d+BLOCK_CAPACITY(d)){
-         sum=1;
-         break;
+          sum=1;
+          break;
         }
       } break;
       }
@@ -133,7 +123,6 @@ static int mstore_report_memusage_to_strg(char *strg,int max_bytes,struct mstore
 //////////////////////////////////////////////////////////////////////////
 // MMAP with file                                                       //
 //////////////////////////////////////////////////////////////////////////
-#define mstore_base_path() mstore_set_base_path(NULL)
 static const char *mstore_set_base_path(const char *f){
   static char base[MAX_PATHLEN+1];
   if (f && !*base){
@@ -161,7 +150,7 @@ static const char *mstore_set_base_path(const char *f){
 #define mstore_init_file(m,name,size_and_opt) _mstore_init(m,name,size_and_opt|MSTORE_OPT_MMAP_WITH_FILE)
 #define mstore_init(m,name,size_and_opt) _mstore_init(m,name,size_and_opt)
 static struct mstore *_mstore_init(struct mstore *m,const char *name, const int size_and_opt){
-assert(m);
+  assert(m);
   memset(m,0,sizeof(struct mstore));
   m->data=m->pointers_data_on_stack;
   m->name=name;
@@ -183,10 +172,14 @@ assert(m);
 ////////////////////////////////////////
 
 
+static void mstore_file(char path[PATH_MAX+1],struct mstore *m,const int block){
+  char b[9]={'*',0};
+  if (block>=0) sprintf(b,"%02u",block);
+  snprintf(path,PATH_MAX-1,"%s/%03d_%s_%s.cache",mstore_base_path(),m->iinstance,m->name,b);
+}
 static int _mstore_openfile(struct mstore *m,const uint32_t block,const off_t adim){
-  char path[PATH_MAX];
   assert(m->name);
-  snprintf(path,PATH_MAX-1,"%s/%03d_%s_%02u.cache",mstore_base_path(),m->iinstance,m->name,block);
+  char path[PATH_MAX+1];  mstore_file(path,m,block);
   /* Note, there might be several with same name. Unique file names by adding iinstance to the file name */
   //log_entered_function("path: %s",path);
   const int fd=open(path,O_RDWR|O_CREAT|O_TRUNC,0640);
@@ -236,7 +229,7 @@ static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align){
     if (MAP_FAILED==(block=cg_mmap(_MSTORE_MALLOC_ID(m),capacity+_MSTORE_LEADING,fd))) block=NULL;
     if (!block) DIE("MMAP failed %lld  fd: %d",(LLD)(capacity+_MSTORE_LEADING),fd);
   }
-    m->bytes_per_block=capacity*2;
+  m->bytes_per_block=capacity*2;
   _mstore_block_init_with_capacity((m->data[ib]=block),capacity);
   if (!(dst=_mstore_block_try_allocate(m,block,bytes,align))){
     log_error("dst is NULL.  block: %p bytes: %lld align: %d  ib: %d",block, (LLD)bytes,align, ib);

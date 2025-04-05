@@ -459,7 +459,7 @@ static int cg_count_fd_this_prg(void){
 
 
 static bool cg_check_path_for_fd(const char *title, const char *path, int fd){
-  char check_path[MAX_PATHLEN+1],rp[PATH_MAX];
+  char check_path[MAX_PATHLEN+1],rp[PATH_MAX+1];
   if (!realpath(path,rp)){
     log_error("%s  Failed realpath(%s)\n",snull(title),path);
     return false;
@@ -714,7 +714,7 @@ static bool cg_mkdir(const char *path,const mode_t mode){
 }
 static bool _cg_recursive_mkdir(const bool parentOnly,const char *path){
   if (!path) return false;
-  char p[PATH_MAX];
+  char p[PATH_MAX+1];
   strcpy(p,path);
   const int n=cg_pathlen_ignore_trailing_slash(p);
 

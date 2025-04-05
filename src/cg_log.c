@@ -4,10 +4,9 @@
 #define _cg_log_dot_c
 #include <pthread.h>
 #include <stdarg.h>  // provides va_start
-#define log_struct(st,field,format)   fprintf(stderr,"    " #field "=" #format "\n",st->field)
 #include "cg_ht_v7.c"
 #include "cg_utils.c"
-
+#include "cg_log.h"
 ////////////
 /// Time ///
 ////////////
@@ -17,20 +16,12 @@ static bool _killOnError=false, _logIsSilent=false, _logIsSilentFailed=false,_lo
 
 /*********************************************************************************/
 /* *** RAM *** */
-#define WARN_SHIFT_MAX 8
+
 static char *_warning_channel_name[1<<WARN_SHIFT_MAX]={0},*_warning_color[1<<WARN_SHIFT_MAX]={0};
 //char **_warning_channel_name=NULL;
 //char *_warning_pfx[1<<WARN_SHIFT_MAX]={0};
 static int _warning_count[1<<WARN_SHIFT_MAX];
-#define WARN_FLAG_EXIT (1<<30)
-#define WARN_FLAG_MAYBE_EXIT (1<<29)
-#define WARN_FLAG_ERRNO (1<<28)
-#define WARN_FLAG_ONCE_PER_PATH (1<<27)
-#define WARN_FLAG_ONCE (1<<26)
-#define WARN_FLAG_ERROR (1<<25)
-#define WARN_FLAG_SUCCESS (1<<24)
 static FILE *_fWarnErr[2];
-#define warning(...) _warning(__func__,__LINE__,__VA_ARGS__)
 static struct ht _ht_warning;
 static void _warning(const char *fn,int line,const uint32_t channel,const char* path,const char *format,...){
   const int e=errno;
@@ -64,8 +55,9 @@ static void _warning(const char *fn,int line,const uint32_t channel,const char* 
   for(int j=2;--j>=0;){
     FILE *f=j?(_logIsSilent?NULL:stderr):!toFile?NULL:_fWarnErr[iserror];
     if (!f) continue;
- char *pfx=_warning_channel_name[i], *color=_warning_color[i];
- if (0!=(channel&WARN_FLAG_SUCCESS)) pfx=GREEN_SUCCESS; // WARN_FLAG_ERROR
+    char *pfx=_warning_channel_name[i], *color=_warning_color[i];
+    if (0!=(channel&WARN_FLAG_SUCCESS)) pfx=GREEN_SUCCESS;
+        if (0!=(channel&WARN_FLAG_FAIL)) pfx=RED_FAIL;
     fprintf(f,"\n%d\t%s%s"ANSI_RESET"\t%s():%d\t%s\t",_warning_count[i],color?color:ANSI_FG_RED,pfx?pfx:"ERROR",fn,line,p);
     va_list argptr; va_start(argptr,format);vfprintf(f,format,argptr);va_end(argptr);
     if ((channel&WARN_FLAG_ERRNO) && e){

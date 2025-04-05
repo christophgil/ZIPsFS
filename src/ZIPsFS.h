@@ -265,9 +265,14 @@ struct zippath{
 #define FHANDLE_MAX (FHANDLE_BLOCKS*FHANDLE_BLOCK_SIZE)
 #define STATQUEUE_ENTRY_N 128
 #define STATQUEUE_FLAGS_VERBOSE (1<<1)
+
+
+/* flags for config_file_attribute_valid_mseconds() */
 #define STAT_ALSO_SYSCALL (1<<1)
-#define STAT_USE_CACHE (1<<2)
-#define STAT_USE_CACHE_FOR_ROOT(r) (r!=_root_writable?STAT_USE_CACHE:0)
+#define STAT_CACHE_FILE_IS_READONLY (1<<2)
+#define STAT_CACHE_ROOT_IS_REMOTE (1<<3)
+#define STAT_CACHE_ROOT_IS_WRITABLE (1<<4)
+
 struct fhandle{
   uint64_t fh, fh_real;
   struct zip *zarchive;

@@ -1,5 +1,5 @@
 /*
-  ZIPsFS   Copyright (C) 2023   christoph Gille
+  ZIPQsFS   Copyright (C) 2023   christoph Gille
   This program can be distributed under the terms of the GNU GPLv2.
   It has been developed starting with  fuse-3.14: Filesystem in Userspace  passthrough.c
   Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
@@ -56,11 +56,14 @@
 #define WITH_FUSE_3 0
 #define COMMA_FILL_DIR_PLUS
 #endif
+
+#define HOOK_MSTORE_CLEAR(m)   {char mpath[PATH_MAX+1];mstore_file(mpath,m,-1);warning(WARN_DIRCACHE,mpath,"Clearing struct mstore %s ",m->name);}
 // ---
 ////////////////////
 /// Early Macros ///
 ////////////////////
 #define WITH_DEBUG_MALLOC 1
+#include "cg_log.h"
 #include "ZIPsFS_version.h"
 #include "cg_utils.h"
 #include "cg_ht_v7.h"
@@ -171,6 +174,9 @@ static bool _thread_unblock_ignore_existing_pid;
 // ---
 #include "ZIPsFS_configuration.c"
 #include "ZIPsFS_debug.c"
+#if WITH_STAT_CACHE
+#include "ZIPsFS_cache_stat.c"
+#endif //WITH_STAT_CACHE
 #include "ZIPsFS_cache.c"
 #if WITH_TRANSIENT_ZIPENTRY_CACHES
 #include "ZIPsFS_transient_zipentry_cache.c"
@@ -322,27 +328,30 @@ static void directory_add_file(uint8_t flags,struct directory *dir, int64_t inod
 ////////////
 /// stat ///
 ////////////
-static bool stat_maybe_cache(int opt, const char *path,const int path_l,const ht_hash_t hash,struct stat *stbuf){
+
+static int stat_cache_opts_for_root(struct rootdata *r){
+  if (r) return ((r->features&ROOT_REMOTE)?STAT_CACHE_ROOT_IS_REMOTE:0)|(r==_root_writable?STAT_CACHE_ROOT_IS_WRITABLE:0);
+  return 0;
+}
+static bool stat_from_cache_or_syscall(const int opt, const char *path,const int path_l,const ht_hash_t hash,struct stat *stbuf){
   cg_thread_assert_not_locked(mutex_fhandle);
   ASSERT(NULL!=path);   ASSERT(strlen(path)>=path_l);
   IF1(WITH_STAT_CACHE,
-      if (0!=(opt&STAT_USE_CACHE) && stat_from_cache(stbuf,path,path_l,hash)) return true;
-      if (0==(opt&STAT_ALSO_SYSCALL)) return false);
-  const int res=PROFILED(lstat)(path,stbuf);
+      if (stat_from_cache(opt,stbuf,path,path_l,hash)) return true;
+      if (!(opt&STAT_ALSO_SYSCALL)) return false);
+  const int res=lstat(path,stbuf);
   LOCK(mutex_fhandle,inc_count_getattr(path,res?COUNTER_STAT_FAIL:COUNTER_STAT_SUCCESS));
   if (res) return false;
   assert(stbuf->st_ino!=0);
   IF1(WITH_STAT_CACHE,stat_to_cache(stbuf,path,path_l,hash));
   return true;
-}/*stat_maybe_cache*/
-static bool stat_cache_or_queue(const char *rp, struct stat *stbuf,struct rootdata *r){
+}/*stat_from_cache_or_syscall()*/
+static bool stat_from_cache_or_syscall_or_async(const char *rp, struct stat *stbuf,struct rootdata *r){
   const int rp_l=cg_strlen(rp);
   const ht_hash_t hash=hash32(rp,rp_l);
-  if (!WITH_STAT_SEPARATE_THREADS || !r || !(r->features&ROOT_REMOTE)){
-    return stat_maybe_cache(STAT_ALSO_SYSCALL|STAT_USE_CACHE_FOR_ROOT(r),rp,rp_l,hash,stbuf);
-  }else if (stat_maybe_cache(0,rp,rp_l,hash,stbuf)) return true;
-  IF1(WITH_STAT_SEPARATE_THREADS,return stat_queue(false,rp,rp_l,hash,stbuf,r));
-  IF0(WITH_STAT_SEPARATE_THREADS,return false);
+  if (!WITH_STAT_SEPARATE_THREADS || !(r&&r->features&ROOT_REMOTE)) return stat_from_cache_or_syscall(STAT_ALSO_SYSCALL|stat_cache_opts_for_root(r),rp,rp_l,hash,stbuf);
+   if (stat_from_cache_or_syscall(0,rp,rp_l,hash,stbuf)) return true;
+  return IF1(WITH_STAT_SEPARATE_THREADS,stat_queue_and_wait(false,rp,rp_l,hash,stbuf,r)||) false;
 }
 //////////////////////
 /// Infinity loops ///
@@ -351,7 +360,6 @@ static int observe_thread(struct rootdata *r, const int thread){
   while(r->thread_pretend_blocked[thread]) usleep(1000*100);
   return (r->thread_when_loop_deciSec[thread]=deciSecondsSinceStart());
 }
-
 static void root_start_thread(struct rootdata *r,int ithread){
   r->thread_pretend_blocked[ithread]=false;
   if (atomic_fetch_add(&r->thread_starting[ithread],0)){
@@ -659,7 +667,7 @@ static bool zpath_stat(struct zippath *zpath,struct rootdata *r){
   if (!zpath) return false;
   if (zpath->stat_rp.st_ino){
   }else{
-    const bool success=stat_cache_or_queue(RP(),&zpath->stat_rp,r);
+    const bool success=stat_from_cache_or_syscall_or_async(RP(),&zpath->stat_rp,r);
     if (!success) return false;
     zpath->stat_vp=zpath->stat_rp;
   }
@@ -809,7 +817,7 @@ static void *infloop_dircache(void *arg){
         break;
       }}
     unlock_ncancel(mutex_dircachejobs);/*Pick path from an entry and put in stack variable path */
-    if (*path && stat_cache_or_queue(path,&stbuf,r)){
+    if (*path && stat_from_cache_or_syscall_or_async(path,&stbuf,r)){
       directory_init(&mydir,DIRECTORY_IS_ZIPARCHIVE,path,strlen(path),r);
       directory_from_dircache_zip_or_filesystem(&mydir,&stbuf);
       directory_destroy(&mydir);
@@ -874,10 +882,7 @@ static bool _test_realpath(struct zippath *zpath, struct rootdata *r){
     if (!zpath_strcat(zpath,rootpath(r)) || strcmp(vp0,"/") && !zpath_strcat(zpath,vp0)) return false;
     ZPATH_COMMIT_HASH(zpath,realpath);
   }
-  const int zps=zpath_stat(zpath,r);
-  if (!zps) return false;
-  //  if (!zpath_stat(zpath,r)) return false;
-
+  if (!zpath_stat(zpath,r)) return false;
   if (ZPATH_IS_ZIP()){
     if (!cg_endsWithZip(RP(),0)){
       if (ZPATH_IS_VERBOSE()) log_verbose("!cg_endsWithZip rp: %s\n",RP());
@@ -901,9 +906,7 @@ static bool find_realpath_try_inline(struct zippath *zpath, const char *vp, stru
   if (!zpath_strcat(zpath,vp+cg_last_slash(vp)+1)) return false;
   EP_L()=zpath_commit(zpath);
   const bool ok=test_realpath(zpath,r);
-  if (ZPATH_IS_VERBOSE2() && cg_is_regular_file(RP())){
-    log_exited_function("rp: %s vp: %s ep: %s ok: %s",RP(),vp,EP(),yes_no(ok));
-  }
+  if (ZPATH_IS_VERBOSE2() && cg_is_regular_file(RP()))    log_exited_function("rp: %s vp: %s ep: %s ok: %s",RP(),vp,EP(),yes_no(ok));
   return ok;
 }
 static bool find_realpath_nocache(struct zippath *zpath,struct rootdata *r){
@@ -1293,7 +1296,7 @@ static int filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_f
         if (config_skip_zipfile_show_zipentries_instead(u,u_l) && (MAX_PATHLEN>=snprintf(direct_rp,MAX_PATHLEN,"%s/%s",rp,u))){
           const int direct_rp_l=strlen(direct_rp);
           directory_new(dir2,DIRECTORY_IS_ZIPARCHIVE|DIRECTORY_TO_QUEUE,direct_rp,direct_rp_l,r);
-          if (stat_cache_or_queue(direct_rp,&stbuf,r) && directory_from_dircache_zip_or_filesystem(&dir2,&stbuf)){
+          if (stat_from_cache_or_syscall_or_async(direct_rp,&stbuf,r) && directory_from_dircache_zip_or_filesystem(&dir2,&stbuf)){
             FOR(j,0,dir2.core.files_l){/* Embedded zip file */
               const char *n2=dir2.core.fname[j];
               if (n2 && !strchr(n2,'/')){
@@ -1338,7 +1341,7 @@ static int has_sufficient_storage_space(const char *path){
     warning(WARN_OPEN|WARN_FLAG_ERRNO,path,"failed cg_recursive_mk_parentdir");
     return EPERM;
   }
-  char parent[PATH_MAX]; cg_stpncpy0(parent,path,slash);
+  char parent[PATH_MAX+1]; cg_stpncpy0(parent,path,slash);
   struct statvfs st;
   if (statvfs(parent,&st)){
     warning(WARN_OPEN|WARN_FLAG_ERRNO,parent,"Going return EIO");
@@ -2157,7 +2160,7 @@ int main(const int argc,const char *argv[]){
     _mkSymlinkAfterStart[cg_pathlen_ignore_trailing_slash(_mkSymlinkAfterStart)]=0;
     if (*_mkSymlinkAfterStart=='/') fprintf(stderr,RED_WARNING": "ANSI_FG_BLUE"%s"ANSI_RESET" is an absolute path. You might be unable to export the file tree with NFS and Samba. Press Enter to continue anyway!\n",_mkSymlinkAfterStart); cg_getc_tty();
     const int err=cg_symlink_overwrite_atomically(_mnt,_mkSymlinkAfterStart);
-    char rp[PATH_MAX];
+    char rp[PATH_MAX+1];
     if (err || !realpath(_mkSymlinkAfterStart,rp)){
       char cwd[MAX_PATHLEN+1];
       warning(WARN_MISC,_mkSymlinkAfterStart,"Working-dir: %s  cg_symlink_overwrite_atomically(%s,%s); %s",getcwd(cwd,MAX_PATHLEN),_mnt,_mkSymlinkAfterStart,strerror(err));
@@ -2269,3 +2272,4 @@ int main(const int argc,const char *argv[]){
 
 // Unmatched suppression: staticFunction
 // Unmatched suppression: unassignedVariable
+// ht_zinline_cache_vpath_to_zippath  stat_ht  dircache_ht_fname  dircache_ht

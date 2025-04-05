@@ -119,13 +119,20 @@ static void config_containing_zipfile_of_virtual_file_test(void){
 }
 #endif //WITH_ZIPINLINE
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/// keep_cache:1;  Can be filled in by open.
-/// It signals the kernel that any currently cached file data (ie., data that the filesystem provided the last time the file was open) need not be invalidated.
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+/// When a cached struct stat is found the the cache, is it still valid and for how long?       ///
+/// Unlimited for remote branches and files that are read-only files.                           ///
+///////////////////////////////////////////////////////////////////////////////////////////////////
 #if WITH_STAT_CACHE
-static uint32_t config_file_attribute_valid_seconds(const bool isReadOnly, const char *path,const int path_l){
-  if (isReadOnly && cg_endsWithZip(path,path_l)  && (strstr(path,"/fularchiv01")||strstr(path,"/CHA-CHA-RALSER-RAW"))) return UINT32_MAX;
+static uint64_t config_file_attribute_valid_mseconds(const int opt, const char *path,const int path_l){
+  /* Available Flags:
+    (opt&STAT_CACHE_ROOT_IS_WRITABLE)
+    (opt&STAT_CACHE_ROOT_IS_REMOTE)
+    (opt&STAT_CACHE_FILE_IS_READONLY)
+  */
+  if ((opt&STAT_CACHE_ROOT_IS_REMOTE) && cg_endsWithZip(path,path_l)  && (strstr(path,"/fularchiv")||strstr(path,"/store/")||strstr(path,"/CHA-CHA-RALSER-RAW"))){
+    return (opt&STAT_CACHE_FILE_IS_READONLY)?UINT64_MAX:1;
+  }
   return 0;
 }
 #endif //WITH_STAT_CACHE

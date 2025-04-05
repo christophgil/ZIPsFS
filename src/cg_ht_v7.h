@@ -20,6 +20,10 @@ struct ht{
   CG_THREAD_FIELDS;
 #endif
   int client_value_int[3];
+#ifdef  STRUCT_HT_EXTRA_FIELDS
+  STRUCT_HT_EXTRA_FIELDS;
+  #endif
+
 };
 
 typedef uint32_t ht_keylen_t;

@@ -401,7 +401,7 @@ static int log_print_open_files(int n, int *fd_count){
       for(int i=0;(dp=readdir(dir));i++){
         if (fd_count) (*fd_count)++;
         if (n<0 || atoi(dp->d_name)<4) continue;
-        static char proc_path[PATH_MAX];
+        static char proc_path[PATH_MAX+1];
         snprintf(proc_path,PATH_MAX,"/proc/self/fd/%s",dp->d_name);
         const int l=readlink(proc_path,path,255);path[MAX(l,0)]=0;
         if (cg_endsWith(path,0,SPECIAL_FILES[SFILE_LOG_WARNINGS],0)||!strncmp(path,"/dev/",5)|| !strncmp(path,"/proc/",6) || !strncmp(path,"pipe:",5)) continue;
@@ -428,7 +428,7 @@ static int print_maps(int n){
       PRINTINFO("<TABLE border=\"1\">\n<THEAD><TR>"TH("Addr&gt;&gt;12")TH("Name")TH("kB")TH("")"</TR></THEAD>\n");
       const int L=333;
       while(!feof(f)) {
-        char buf[PATH_MAX+100],perm[5],dev[6],mapname[PATH_MAX]={0};
+        char buf[PATH_MAX+100],perm[5],dev[6],mapname[PATH_MAX+1]={0};
         unsigned long long begin,end,inode,foo;
         if(fgets(buf,sizeof(buf),f)==0) break;
         *mapname=0;

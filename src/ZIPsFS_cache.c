@@ -1,57 +1,9 @@
 ///////////////////////////////////////////////
-/// COMPILE_MAIN=ZIPsFS                   ///
+/// COMPILE_MAIN=ZIPsFS                     ///
 /// Optional caches to improve performance  ///
 ///////////////////////////////////////////////
 
 
-/////////////////////////////////////////////////////////
-// Zip inline cache                                    //
-// Faster /bin/ls with many inlined ZIPs               //
-// Can be deaktivated by setting  WITH_ZIPINLINE_CACHE to 0 //
-/////////////////////////////////////////////////////////
-//   time ls -l  $TZ/Z1/Data/30-0072 |nl
-//   time ls -l  $TZ/Z1/Data/30-0051 |nl
-
-#if WITH_STAT_CACHE
-struct cached_stat{
-  int when_read_decisec;
-  ino_t st_ino;
-  struct timespec ST_MTIMESPEC;
-  mode_t st_mode;
-  uid_t st_uid;
-  gid_t st_gid;
-};
-
-static bool stat_from_cache(struct stat *stbuf,const char *path,const int path_l,const ht_hash_t hash){
-  if (0<config_file_attribute_valid_seconds(true,path,path_l)){
-    const int now=deciSecondsSinceStart();
-    struct cached_stat st={0};
-    LOCK(mutex_dircache,const struct cached_stat *c=ht_get(&stat_ht,path,path_l,hash);if (c) st=*c);
-    if (st.st_ino){
-      if (now-st.when_read_decisec<10L*config_file_attribute_valid_seconds(IS_STAT_READONLY(st),path,path_l)){
-#define C(f) stbuf->f=st.f
-        C(st_ino);C(st_mode);C(st_uid);C(st_gid); C(ST_MTIMESPEC);
-#undef C
-        _count_stat_from_cache++;
-        return true;
-      }
-    }
-  }
-  return false;
-}
-static void stat_to_cache(const struct stat *stbuf,const char *path,const int path_l,const ht_hash_t hash){
-#define C(f) st->f=stbuf->f
-  LOCK(mutex_dircache,
-       struct cached_stat *st=ht_get(&stat_ht,path,path_l,hash);
-       if (!st) ht_set(&stat_ht,  ht_intern(&_root->dircache_ht_fname,path,path_l,hash,HT_MEMALIGN_FOR_STRG),  path_l,hash, st=mstore_malloc(&_root->dircache_mstore,sizeof(struct cached_stat),8));
-       C(st_ino);C(st_mode);C(st_uid);C(st_gid);
-       C(ST_MTIMESPEC);
-       st->when_read_decisec=deciSecondsSinceStart());
-#undef C
-}
-
-
-#endif
 #if WITH_ZIPINLINE_CACHE
 static const char *zinline_cache_vpath_to_zippath(const char *vp,const int vp_l){
   cg_thread_assert_locked(mutex_dircache);
@@ -63,7 +15,7 @@ static const char *zinline_cache_vpath_to_zippath(const char *vp,const int vp_l)
   return strncmp(vp_name,zip+cg_last_slash(zip)+1,len)?NULL:zip;
 }
 #endif //WITH_ZIPINLINE_CACHE
-// static void zipinline_cache_set_zip(
+
 
 //////////////////////////////////////////////////////////////////////
 /// Directory from and to cache
@@ -80,6 +32,13 @@ static void dircache_clear_if_reached_limit_all(const bool always,const int mask
 #undef C
   LOCK(mutex_dircache,foreach_root1(r) dircache_clear_if_reached_limit(always,mask,r,0));
 }
+static bool _clear_ht(struct ht *ht){
+  /* There is a version clear_ht_unless_observed() in the Archive */
+  cg_thread_assert_locked(mutex_dircache);
+  ht_clear(ht);
+  warning(WARN_DIRCACHE|WARN_FLAG_SUCCESS,ht->name,"Cache cleared");
+  return true;
+}
 static void dircache_clear_if_reached_limit(const bool always,const int mask,struct rootdata *r,const off_t limit){
   if (!WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT && !always || !r) return;
   cg_thread_assert_locked(mutex_dircache);
@@ -88,15 +47,12 @@ static void dircache_clear_if_reached_limit(const bool always,const int mask,str
   if (always IF1(WITH_DIRCACHE,|| ss>=limit)){
     IF1(WITH_DIRCACHE,warning(WARN_DIRCACHE,r->rootpath,"Clearing directory cache. Cached segments: %zu (%zu) bytes: %zu. %s",ss,limit,mstore_usage(&r->dircache_mstore),!limit?"":"Consider to increase NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE"));
     if M(CLEAR_DIRCACHE){
-        ht_clear(&r->dircache_ht);
-        IF1(WITH_DIRCACHE,
-            log_verbose("clear dircache_ht_fname"); ht_clear(&r->dircache_ht_fname);
-            log_verbose("clear dircache_mstore"); mstore_clear(&r->dircache_mstore));
+        _clear_ht(&r->dircache_ht);
+        IF1(WITH_DIRCACHE, if (_clear_ht(&r->dircache_ht_fname)) mstore_clear(&r->dircache_mstore));
       }
     if (!rootindex(r)){
-      IF1(WITH_ZIPINLINE_CACHE, if M(CLEAR_ZIPINLINE_CACHE){ log_verbose("clear ht_zinline_cache_vpath_to_zippath"); ht_clear(&ht_zinline_cache_vpath_to_zippath)); }
-        IF1(WITH_STAT_CACHE, if M(CLEAR_STATCACHE){ log_verbose("clear stat_ht"); ht_clear(&stat_ht)); }
-      //ht_clear(&ht_internalize_mutex_dircache);
+      IF1(WITH_ZIPINLINE_CACHE, if M(CLEAR_ZIPINLINE_CACHE) _clear_ht(&ht_zinline_cache_vpath_to_zippath));
+      IF1(WITH_STAT_CACHE,      if M(CLEAR_STATCACHE)       _clear_ht(&stat_ht));
     }
   }
 #undef M
@@ -114,11 +70,7 @@ static void debug_assert_crc32_not_null(const struct directory *dir){
 /*
   Not the entire struct directory only the directory_core is stored
   RAM: &r->dircache_mstore
-
-
-
 */
-
 #if WITH_DIRCACHE
 static void dircache_directory_to_cache(const struct directory *dir){
   cg_thread_assert_locked(mutex_dircache);
@@ -135,10 +87,7 @@ static void dircache_directory_to_cache(const struct directory *dir){
     C_FILE_DATA_WITHOUT_NAME();
 #undef C    /*  Due to simplify_name and internalization, the array of filenames will often be the same and needs to be stored only once - hence ht_intern.*/
     d->fname=(char**)ht_intern(&r->dircache_ht_fnamearray,src.fname,src.files_l*SIZE_POINTER,0,SIZE_POINTER);
-
   }
-
-
   const ht_hash_t rp_hash=hash32(dir->dir_realpath,dir->dir_realpath_l);
   const char *rp=ht_intern(&_root->dircache_ht_fname,dir->dir_realpath,dir->dir_realpath_l,rp_hash,HT_MEMALIGN_FOR_STRG); /* The real path of the zip file */
   ht_set(&r->dircache_ht,rp,dir->dir_realpath_l,rp_hash,d);
@@ -185,10 +134,10 @@ static bool dircache_directory_from_cache(struct directory *dir,const struct tim
 #if WITH_EVICT_FROM_PAGECACHE && (!defined(HAS_POSIX_FADVISE) || HAS_POSIX_FADVISE)
 static void maybe_evict_from_filecache(const int fdOrZero,const char *realpath,const int realpath_l){
   const int fd=fdOrZero?fdOrZero:realpath?open(realpath,O_RDONLY):0;
-    if (fd>0){
-      posix_fadvise(fd,0,0,POSIX_FADV_DONTNEED);
-      if (!fdOrZero) close(fd);
-    }
+  if (fd>0){
+    posix_fadvise(fd,0,0,POSIX_FADV_DONTNEED);
+    if (!fdOrZero) close(fd);
+  }
 }
 #else
 #define maybe_evict_from_filecache(fdOrZero,realpath,realpath_l)

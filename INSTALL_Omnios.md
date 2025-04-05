@@ -52,8 +52,3 @@ I changed the permissions of /dev/fuse without success.
 
  <!-- pkg install emacs rsync -->
  <!--  Missing Lynx, sshpass -->
-
-
-Finally run
-
-     src/ZIPsFS.compile.sh

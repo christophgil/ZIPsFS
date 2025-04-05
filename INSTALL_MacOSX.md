@@ -41,8 +41,3 @@ In another terminal check whether you see the content of the home directory at t
 To compile ZIPsFS, run
 
      ./ZIPsFS.compile.sh
-
-
-Finally run
-
-     src/ZIPsFS.compile.sh

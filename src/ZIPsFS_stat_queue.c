@@ -1,7 +1,8 @@
-///////////////////////////////////////////////////////////////////////
-/// statqueue - running stat() in separate thread to avoid blocking ///
-/// COMPILE_MAIN=ZIPsFS                                             ///
-///////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////
+/// COMPILE_MAIN=ZIPsFS                                                            ///
+/// statqueue - running stat() asynchronously in separate thread to avoid blocking ///
+/// COMPILE_MAIN=ZIPsFS                                                            ///
+//////////////////////////////////////////////////////////////////////////////////////
 #define E(q) (q->rp_l==rp_l && q->rp_hash==hash && !strncmp(q->rp,rp,MAX_PATHLEN))
 #define foreach_statqueue_entry(i,q) struct statqueue_entry *q=r->statqueue;for(int i=0;i<STATQUEUE_ENTRY_N;q++,i++)
 #define STATQUEUE_DONE(status) (status==STATQUEUE_FAILED||status==STATQUEUE_OK)
@@ -29,7 +30,7 @@ static struct statqueue_entry *statqueue_add(const bool verbose,struct stat *stb
 }
 
 
-static int _stat_queue1(const bool verbose,const char *rp, const int rp_l,const ht_hash_t hash,struct stat *stbuf,struct rootdata *r){
+static int _stat_queue_and_wait(const bool verbose,const char *rp, const int rp_l,const ht_hash_t hash,struct stat *stbuf,struct rootdata *r){
   struct statqueue_entry *q=NULL,*u=NULL;
   for(int j=0;;j++){
     LOCK(mutex_statqueue, q=statqueue_add(verbose,stbuf,rp,rp_l,hash,r); if (q) q->refcount++);
@@ -55,12 +56,12 @@ static int _stat_queue1(const bool verbose,const char *rp, const int rp_l,const 
   return ok;
 }
 
-static bool stat_queue(const bool verbose,const char *rp, const int rp_l,const ht_hash_t hash,struct stat *stbuf,struct rootdata *r){
+static bool stat_queue_and_wait(const bool verbose,const char *rp, const int rp_l,const ht_hash_t hash,struct stat *stbuf,struct rootdata *r){
   FOR(iTry,0,4){
-    int ok=_stat_queue1(verbose,rp,rp_l,hash,stbuf,r);
+    int ok=_stat_queue_and_wait(verbose,rp,rp_l,hash,stbuf,r);
     if (ok){
       if (iTry){
-        warning(WARN_RETRY,rp,"stat_queue succeeded on attempt %d\n",iTry);
+        warning(WARN_RETRY,rp,"%s(%s) succeeded on attempt %d\n",__func__,rp,iTry);
         rootdata_counter_inc(rp,COUNT_RETRY_STAT,r);
       }
       return ok==1;
@@ -83,8 +84,8 @@ static void *infloop_statqueue(void *arg){
         LOCK_NCANCEL(mutex_statqueue,if (q->status==STATQUEUE_QUEUED){ memcpy(rp,q->rp,(rp_l=q->rp_l)+1);hash=q->rp_hash;});
         rp[rp_l]=0;
         if (rp_l){
-          const bool ok=stat_maybe_cache(STAT_ALSO_SYSCALL|STAT_USE_CACHE_FOR_ROOT(r),rp,rp_l,hash,&stbuf);
-          if (q->flags&STATQUEUE_FLAGS_VERBOSE) log_verbose("stat_maybe_cache(STATQUEUE_FLAGS_VERBOSE,%s  %s",rp,success_or_fail(ok));
+          const bool ok=stat_from_cache_or_syscall(STAT_ALSO_SYSCALL|stat_cache_opts_for_root(r),rp,rp_l,hash,&stbuf);
+          if (q->flags&STATQUEUE_FLAGS_VERBOSE) log_verbose("STATQUEUE_FLAGS_VERBOSE  stat_from_cache_or_syscall() ,%s  %s",rp,success_or_fail(ok));
           LOCK_NCANCEL(mutex_statqueue,
                        if (q->status==STATQUEUE_QUEUED && E(q)){
                          timespec_get(&q->time,TIME_UTC);

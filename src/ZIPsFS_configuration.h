@@ -91,8 +91,7 @@
 
 
 
-#define WITH_STAT_CACHE 1
-// Activate a cache for file attributes of files and ZIP entries.
+#define WITH_STAT_CACHE 1 /* Activate a cache for file attributes */
 
 
 #define WITH_EVICT_FROM_PAGECACHE 1 // Not for MacOSX
