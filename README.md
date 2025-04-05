@@ -41,9 +41,9 @@ https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unk
     for c in a b c d e f; do echo hello world $c >$b2/$c.txt; done
     for ((i=0;i<10;i++)); do echo hello world $i >$b3/$i.txt; done
 
-    zip --fifo $b2/zipfile1.zip <(date)  <(date '+%Y-%M-%d %H:%m %S')
+    zip --fifo $b2/zipfile1.zip <(date)  <(echo $RANDOM)
     zip --fifo $b3/zipfile2.zip <(hostname)  <(ls /)
-    zip --fifo $b3/20250131_this_is_a_mass_spectrometry_folder.d.Zip <(seq 10)
+    zip --fifo $b3/20250131_this_is_a_mass_spectrometry_folder.d.Zip   <(seq 10)
 
 
 ### Now start ZIPsFS

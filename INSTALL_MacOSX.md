@@ -34,8 +34,13 @@ In another terminal check whether you see the content of the home directory at t
      ls ~/mnt/test_bindfs
 
 
-## MacOSX - Install ZIPsFS
 
+
+#  Compile ZIPsFS
+
+To compile ZIPsFS, run
+
+     ./ZIPsFS.compile.sh
 
 
 Finally run
