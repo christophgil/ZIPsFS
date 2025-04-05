@@ -44,7 +44,7 @@ Please modify the path of the libfuse3.so accordingly.
 ## TroubleShooting
 
 
-In my case ZIPsFS started only as root.
+For me ZIPsFS started only as root.
 I changed the permissions of /dev/fuse without success.
 
 
