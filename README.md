@@ -118,7 +118,7 @@ Users access files through this apparent mount point, but in reality, MNT is a s
 The real mount point is not directly accessed by users, as it changes each time a new instance of ZIPsFS is launched.
 
 For example, assume the obsolete ZIPsFS instance is mounted at ./.mountpoints/MNT/1.
-When a new instance replaces it, it may use any empty directory as   mount point  and the  option:
+When a new instance replaces it, it may use any empty directory as   mount point. ZIPsFS must be started with the following command line  option:
 
     -s MNT
 
@@ -144,12 +144,12 @@ When files are created or modified, they are stored in the first file tree - e.g
 
 in the example setup.
 If a file exists in multiple source locations, the version from the leftmost source (the first one listed) takes precedence.
-To make the file system read-only, you can specify an empty string ("") as the first source. This disables file creation and modification.
+To make the file system read-only, you can specify an empty string ("") as the first source. This disables file creation and modification and automatic virtual file generation.
 
 
 ## ZIP file Presentation
 
-By default, ZIP files are displayed as folders with the suffix *.Content*.
+By default, ZIP files are displayed as folders with the suffix ***.Content***.
 This behavior can be customized in the ZIPsFS_configuration.c file.
 The default configuration includes a few exceptions tailored to specific use cases in Mass Spectrometry Compatibility:
 
