@@ -292,7 +292,7 @@ Policy for ZIP entries  cached in RAM.
 |  ALWAYS   | All ZIP entries are cached.                                                        |
 |           |                                                                                    |
 
--s *path-of-symbolic-link*
+**-s *path-of-symbolic-link***
 
 This is discussed in section Configuration.
 
