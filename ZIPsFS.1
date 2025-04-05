@@ -350,7 +350,8 @@ concurrent task handling.
 .PP
 Prints brief usage information.
 .PP
-\f[B]-l Maximum memory for caching ZIP-entries in the RAM\f[R]
+\f[B]-l \f[BI]Maximum memory for caching ZIP-entries in the
+RAM\f[B]\f[R]
 .PP
 Specifies a limit for the cache.
 For example \f[I]-l 8G\f[R] would limit the size of the cache to 8
@@ -406,11 +407,10 @@ T}@T{
 T}
 .TE
 .PP
-\f[B]-s \f[BI]path-of-symbolic-link\f[B]\f[R]
+\f[B]-s \f[BI]path-of-symbolic-link\f[B]\f[R] This is discussed in
+section Configuration.
 .PP
-This is discussed in section Configuration.
-.PP
-\f[B]-b Run in background\f[R]
+\f[B]-b\f[R] Run in background
 .SS Debug Options
 .PP
 \f[B]-T\f[R]
@@ -427,16 +427,16 @@ PATH for backtraces to work correctly.
 See ZIPsFS.compile.sh for activation of sanitizers.
 .SS FUSE Options
 .PP
+These come after the colon in the command line.
+.PP
 \f[B]-s\f[R]
 .PP
 Disable multi-threaded operation.
 This could rescue ZIPsFS in case of threading related bugs.
 .PP
-\f[B]-o comma separated Options\f[R]
+\f[B]-o \f[BI]comma separated Options\f[B]\f[R]
 .PP
-\f[B]-o allow_other\f[R]
-.PP
-Other users can read the files
+\f[B]-o allow_other\f[R] Other users are granted access.
 .SS Fault Management for Remote File Access
 .PP
 Accessing remote files inherently carries a higher risk of failure.
@@ -451,24 +451,29 @@ virtual file system unresponsive.
 ZIPsFS addresses this with built-in fault management for remote
 branches.
 .PP
-Remote sources in ZIPsFS are specified using a double-slash prefix,
+Remote roots in ZIPsFS are specified using a double-slash prefix,
 similar to UNC paths (//server/share/\&...).
-.PP
-Each remote branch is isolated in terms of fault handling and threading.
-Each remote branch is assigned its own thread pool, ensuring faults in
-one do not affect others.
-.PP
+Each remote branch is isolated in terms of fault handling and threading
+and has its own thread pool, ensuring faults in one do not affect
+others.
 To avoid blocking the main file system thread: Remote file operations
 are executed asynchronously in dedicated worker threads.
 .PP
 ZIPsFS remains responsive even if a remote file access hangs.
-If a thread becomes unresponsive: ZIPsFS will terminate the stalled
-thread after a timeout.
-A new thread is started, attempting to restore functionality to the
-affected branch.
 For redundantly stored files (i.e., available on multiple branches),
 another branch may take over transparently if one fails or becomes
 unresponsive.
+.PP
+If a thread becomes unresponsive, ZIPsFS will try to terminate the
+stalled thread after a timeout.
+A new thread is started, attempting to restore functionality to the
+affected branch.
+.PP
+If the stalled thread cannot be terminated, ZIPsFS will not create a new
+thread.
+In this case manual release of the blockage is required by running the
+script \f[B]\f[BI]ZIPsFS_CTRL.sh\f[B]\f[R] in
+\f[B]\f[BI]\[ti]/.ZIPsFS\f[B]\f[R].
 .SS Data Integrity for ZIP Entries
 .PP
 For ZIP entries loaded entirely into RAM: ZIPsFS performs CRC checksum

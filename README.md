@@ -270,7 +270,7 @@ ZIPsFS Options
 
 Prints brief usage information.
 
-**-l  Maximum memory for caching ZIP-entries in the RAM**
+**-l  *Maximum memory for caching ZIP-entries in the RAM***
 
 Specifies a limit for the cache.  For example *-l  8G* would limit the size of the cache to 8 Gigabyte.
 
@@ -293,11 +293,10 @@ Policy for ZIP entries  cached in RAM.
 |           |                                                                                    |
 
 **-s *path-of-symbolic-link***
-
 This is discussed in section Configuration.
 
-**-b Run in background**
-
+**-b**
+ Run in background
 
 
 Debug Options
@@ -318,16 +317,16 @@ See ZIPsFS.compile.sh for activation of sanitizers.
 FUSE Options
 ------------
 
+These come after the colon in the command line.
 
 **-s**
 
 Disable multi-threaded operation. This could rescue ZIPsFS in case of threading related bugs.
 
-**-o comma separated Options**
+**-o *comma separated Options***
 
 **-o allow_other**
-
-Other users can read the files
+Other users are granted access.
 
 
 ## Fault Management for Remote File Access
@@ -341,17 +340,23 @@ Accessing remote files inherently carries a higher risk of failure. Requests may
 In many FUSE file systems, a blocking access can render the entire virtual file system unresponsive.
 ZIPsFS addresses this with built-in fault management for remote branches.
 
-Remote sources in ZIPsFS are specified using a double-slash prefix, similar to UNC paths (//server/share/...).
-
-Each remote branch is isolated in terms of fault handling and threading.
-Each remote branch is assigned its own thread pool, ensuring faults in one do not affect others.
-
+Remote roots in ZIPsFS are specified using a double-slash prefix, similar to UNC paths (//server/share/...).
+Each remote branch is isolated in terms of fault handling and threading and has its own thread pool, ensuring faults in one do not affect others.
 To avoid blocking the main file system thread: Remote file operations are executed asynchronously in dedicated worker threads.
 
-ZIPsFS remains responsive even if a remote file access hangs.  If a thread becomes unresponsive:
-ZIPsFS will terminate the stalled thread after a timeout.  A new thread is started, attempting to
-restore functionality to the affected branch.  For redundantly stored files (i.e., available on
-multiple branches), another branch may take over transparently if one fails or becomes unresponsive.
+
+ZIPsFS remains responsive even if a remote file access hangs.
+For redundantly stored files (i.e., available on multiple branches), another branch may take over transparently if one fails or becomes unresponsive.
+
+
+If a thread becomes unresponsive,
+ZIPsFS will try to terminate the stalled thread after a timeout.  A new thread is started, attempting to
+restore functionality to the affected branch.
+
+If the stalled thread cannot be terminated, ZIPsFS will not create a new thread.
+In this case manual  release of the blockage is required by running the script ***ZIPsFS_CTRL.sh*** in ***~/.ZIPsFS***.
+
+
 
 
 ## Data Integrity for ZIP Entries
