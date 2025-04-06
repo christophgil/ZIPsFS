@@ -259,7 +259,7 @@ main(){
     {
         ! pushd $DIR >/dev/null && return
         local cc="$(sed -n 's|^#include "\(.*\.c\)"$|\1|p' <ZIPsFS.c) $DIR/ZIPsFS.c"
-        local g=$DIR/generated_ZIPsFS.h
+        local g=$DIR/generated_ZIPsFS.inc
         cat $cc | sed 's| *// cppcheck-suppress.*||1' | sed -n 's|^\(static .*)\) *{$|\1;|p' |grep -v -e NOT_TO_HEADER -e '\[[A-Z]'  >$g
         if  ((WITH_PROFILER)); then
 opts+=" ${D}WITH_PROFILER=1 "

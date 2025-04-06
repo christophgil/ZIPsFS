@@ -326,9 +326,17 @@ reporting for buffering or memory allocation.
 .PP
 Some Windows command-line executables do not behave reliably when
 launched directly from compiled programs.
-This issue stems from limitations in the Windows Console API, which
-differs from traditional terminal escape sequences and can interfere
-with expected output or behavior.
+This issue stems from Windows Console API which is used in long-running
+mass spectrometry CLI programs to implement progress reports.
+Like traditional escape sequences, the Windows Console API allows free
+cursor positioning.
+In headless environments, i.e.\ ZIPsFS not started from a desktop
+environment, respective programs block unless without a console device.
+A virtual frame-buffer like \f[B]\f[BI]xvfb\f[B]\f[R] can solve this
+issue.
+.PP
+Nevertheless, programs may still not be runnable using the UNIX fork()
+and exec() paradigm.
 To work around this, ZIPsFS supports delegating such tasks to an
 external shell script.
 When the special symbol \f[B]\f[BI]PLACEHOLDER_EXTERNAL_QUEUE\f[B]\f[R]
@@ -456,7 +464,7 @@ similar to UNC paths (//server/share/\&...).
 Each remote branch is isolated in terms of fault handling and threading
 and has its own thread pool, ensuring faults in one do not affect
 others.
-To avoid blocking the main file system thread: Remote file operations
+To avoid blocking the main file system thread, remote file operations
 are executed asynchronously in dedicated worker threads.
 .PP
 ZIPsFS remains responsive even if a remote file access hangs.
@@ -466,14 +474,25 @@ unresponsive.
 .PP
 If a thread becomes unresponsive, ZIPsFS will try to terminate the
 stalled thread after a timeout.
-A new thread is started, attempting to restore functionality to the
-affected branch.
+As soon as the old thread does not exist any more, a new thread is
+started, attempting to restore functionality to the affected branch.
 .PP
 If the stalled thread cannot be terminated, ZIPsFS will not create a new
 thread.
-In this case manual release of the blockage is required by running the
-script \f[B]\f[BI]ZIPsFS_CTRL.sh\f[B]\f[R] in
-\f[B]\f[BI]\[ti]/.ZIPsFS\f[B]\f[R].
+.PP
+This is best resolved by restarting ZIPsFS without interrupting ongoing
+file accesses.
+.PP
+Another possibility is to start a new thread irrespectively of the still
+existing blocked thread.
+There is a shell script \f[B]\f[BI]ZIPsFS_CTRL.sh\f[B]\f[R] for this in
+\f[B]\f[BI]\[ti]/.ZIPsFS/\f[B]\f[R].
+When the blocked thread which had been scheduled for termination wakes
+up, it will be terminated by the system.
+However, there is no guaranty that termination will be perforemd
+immediately.
+For a short time, the two threads may be active concurrently with
+undefined behaviour and the risk of segmentation faults.
 .SS Data Integrity for ZIP Entries
 .PP
 For ZIP entries loaded entirely into RAM: ZIPsFS performs CRC checksum

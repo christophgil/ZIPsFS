@@ -62,7 +62,7 @@ echo  $t\n}\n\n");
     H("Blocked threads");
     A(ACT_BLOCK_THREAD,"Simulate-blocking-thread. ZIPsFS will release the block eventually");
     //    A(ACT_UNBLOCK_THREAD,"Undo-simulate-blocking-thread");
-    A(ACT_FORCE_UNBLOCK,"Unblock thread even if blocked thread cannot be killed.");
+    A(ACT_FORCE_UNBLOCK,"Unblock thread even if blocked thread cannot be killed - not recommended.");
     A(ACT_CANCEL_THREAD,"Interrupt-thread.  ZIPsFS will restart the thread eventually");
     H("Pthread - Locks");
     A(ACT_NO_LOCK,L("missing"));

@@ -250,7 +250,12 @@ However, it may still break software that relies on accurate size reporting for 
 ### Windows Console Compatibility: External Queue Workaround
 
 Some Windows command-line executables do not behave reliably when launched directly from compiled programs.
-This issue stems from limitations in the Windows Console API, which differs from traditional terminal escape sequences and can interfere with expected output or behavior.
+This issue stems from  Windows Console API which is used in long-running mass spectrometry CLI programs to implement progress reports.
+Like traditional  escape sequences, the Windows Console API allows free cursor positioning.
+In headless environments, i.e. ZIPsFS not started from a desktop environment,
+respective  programs block unless without a  console device. A virtual  frame-buffer like ***xvfb*** can solve this issue.
+
+Nevertheless, programs may still not be runnable using the UNIX fork() and exec() paradigm.
 To work around this, ZIPsFS supports delegating such tasks to an external shell script.
 When the special symbol ***PLACEHOLDER_EXTERNAL_QUEUE*** is specified instead of a direct executable path, ZIPsFS:
 
@@ -342,21 +347,25 @@ ZIPsFS addresses this with built-in fault management for remote branches.
 
 Remote roots in ZIPsFS are specified using a double-slash prefix, similar to UNC paths (//server/share/...).
 Each remote branch is isolated in terms of fault handling and threading and has its own thread pool, ensuring faults in one do not affect others.
-To avoid blocking the main file system thread: Remote file operations are executed asynchronously in dedicated worker threads.
+To avoid blocking the main file system thread, remote file operations are executed asynchronously in dedicated worker threads.
 
+ZIPsFS remains responsive even if a remote file access hangs.  For redundantly stored files (i.e.,
+available on multiple branches), another branch may take over transparently if one fails or becomes
+unresponsive.
 
-ZIPsFS remains responsive even if a remote file access hangs.
-For redundantly stored files (i.e., available on multiple branches), another branch may take over transparently if one fails or becomes unresponsive.
-
-
-If a thread becomes unresponsive,
-ZIPsFS will try to terminate the stalled thread after a timeout.  A new thread is started, attempting to
-restore functionality to the affected branch.
+If a thread becomes unresponsive, ZIPsFS will try to terminate the stalled thread after a timeout.
+As soon as the old thread does not exist any more, a new thread is started, attempting to restore
+functionality to the affected branch.
 
 If the stalled thread cannot be terminated, ZIPsFS will not create a new thread.
-In this case manual  release of the blockage is required by running the script ***ZIPsFS_CTRL.sh*** in ***~/.ZIPsFS***.
 
+This is best resolved by restarting ZIPsFS without interrupting ongoing file accesses.
 
+Another possibility is to start a new thread irrespectively of the still existing blocked thread.
+There is a shell script ***ZIPsFS_CTRL.sh*** for this in ***~/.ZIPsFS/***.  When the blocked thread
+which had been scheduled for termination wakes up, it will be terminated by the system.  However,
+there is no guaranty that termination will be perforemd immediately.  For a short time, the two
+threads may be active concurrently with  undefined behaviour and the risk of segmentation faults.
 
 
 ## Data Integrity for ZIP Entries
@@ -410,21 +419,28 @@ SEE ALSO
 - https://github.com/cybernoid/archivemount
 - https://github.com/mxmlnkn/ratarmount
 
-# MOTIVATION
+# Use case - Archive of mass spectrometry files
 
 
 We use closed-source proprietary Windows software to read large experimental data from various types
-of mass spectrometry machines. Most of the data is eventually archived in a read-only WORM file
-system. However, with large file directories, access becomes slow, particularly on Windows systems.
+of mass spectrometry machines. The data is immediatly copied into an intermediate storage on of the processing PC and
+eventually archived in a read-only WORM file
+system.
 
-To reduce the number of files and to record CRC hash sums, all files from a single mass spectrometry
+To reduce the number of individual files and disk usage and to allow for data integrity checks, all files from a single mass spectrometry
 measurement are bundled into one ZIP archive. With fewer individual files, searching through the
 entire directory hierarchy takes less than 1 hour.
 
-We initially hoped that files inside ZIP archives would be easily accessible using pipes, named
-pipes, process substitution, or by simply unzipping. Unfortunately, these techniques did not work
-for our use case. Mounting individual ZIP files was the only solution that successfully addressed
-our needs.
+We initially hoped that files inside ZIP archives would be  accessed using
+
+ - Pipes
+ - Named pipes
+ - Process substitution
+ - FUSE file systems with which transparently expand multiple ZIP files
+ - Unzipping and storing  extracted files on disk
+
+Unfortunately, these techniques did not work for our use case. Mounting individual ZIP files was initially the only solution. But when sample size
+of large experiments got large, even this was not feasable.
 
 ZIPsFS was developed to solve the following problems:
 

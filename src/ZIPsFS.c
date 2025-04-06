@@ -73,7 +73,7 @@
 #include "ZIPsFS.h"
 // ---
 #define PROFILED(x) x
-#include "generated_ZIPsFS.h"
+#include "generated_ZIPsFS.inc"
 #include "cg_profiler.h"
 // ---
 #include "cg_pthread.c"
