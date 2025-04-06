@@ -423,7 +423,7 @@ SEE ALSO
 
 
 We use closed-source proprietary Windows software to read large experimental data from various types
-of mass spectrometry machines. The data is immediatly copied into an intermediate storage on of the processing PC and
+of mass spectrometry machines. The data is immediatly copied into an intermediate storage on the processing PC and
 eventually archived in a read-only WORM file
 system.
 
@@ -448,11 +448,15 @@ ZIPsFS was developed to solve the following problems:
 
 - **Write Access Requirements**: Some proprietary software requires write access to both files and their parent directories.
 
-- **Inefficiency in Random File Access**: Mass spectrometry software does not read files sequentially. Instead, it accesses bytes from varying positions within the file. This is particularly inefficient for compressed ZIP entries. The worst-case scenario occurs when the software attempts to perform a <i>seek()</i> operation with a negative value (jumping backwards).
+- **Inefficiency in Random File Access**: Some mass spectrometry files are read from varying positions. Random access  is particularly inefficient for compressed ZIP entries, in particular with backward seeks. Buffering of file content is required.
 
-- **Multiple Storage Locations**: Experimental records are initially stored in an intermediate storage location and, after verification, are moved to the final archive. As a result, the same file could be located in different places at different stages.
+- **Multiple Storage Locations**: Experimental records are initially stored in an intermediate storage location and, after verification, are moved to the final archive. Consequently, we need a union file system.
+
+- **Resilience of storage systems:** Sometimes access to the archive gets blocked. Otherwise there are several alternative entry points which will continue to work. This adds requirement for
+fault management.
 
 - **Redundant File System Requests**: Some proprietary software generates millions of redundant requests to the file system, which is problematic for both remote files and mounted ZIP files.
+File attributes need to be cached.
 
 
 <SPAN>
