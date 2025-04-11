@@ -94,7 +94,8 @@ enum enum_autogen_state{AUTOGEN_UNINITILIZED,AUTOGEN_SUCCESS,AUTOGEN_FAIL};
 #define A7(x) C(PTHREAD_NIL)C(PTHREAD_DIRCACHE)C(PTHREAD_MEMCACHE)C(PTHREAD_STATQUEUE)C(PTHREAD_RESPONDING)C(PTHREAD_MISC0)C(PTHREAD_LEN)
 #define A8(x) C(mutex_nil)C(mutex_fhandle)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_autogen_init)C(mutex_dircachejobs)C(mutex_log_count)C(mutex_crc)C(mutex_inode)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_statqueue)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_log_flag)C(mutex_len) //* mutex_roots must be last */
 
-#define A9(x) C(LOG_FLAG_NIL)C(LOG_FUSE_METHODS_ENTER)C(LOG_FUSE_METHODS_EXIT)C(LOG_ZIP)C(LOG_ZIP_INLINE)C(LOG_EVICT_FROM_CACHE)C(LOG_MEMCACHE)C(LOG_REALPATH)C(LOG_STAT_QUEUE)C(LOG_AUTOGEN)C(LOG_READ_BLOCK)\
+#define A9(x) C(LOG_DEACTIVATE_ALL)C(LOG_FUSE_METHODS_ENTER)C(LOG_FUSE_METHODS_EXIT)C(LOG_ZIP)C(LOG_ZIP_INLINE)C(LOG_EVICT_FROM_CACHE)C(LOG_MEMCACHE)C(LOG_REALPATH)C(LOG_STAT_QUEUE)C(LOG_AUTOGEN)C(LOG_READ_BLOCK)\
+       C(LOG_TRANSIENT_ZIPENTRY_CACHE)\
        C(LOG_INFINITY_LOOP_RESPONSE)C(LOG_INFINITY_LOOP_STAT)C(LOG_INFINITY_LOOP_MEMCACHE)C(LOG_INFINITY_LOOP_DIRCACHE)C(LOG_INFINITY_LOOP_MISC)  C(LOG_FLAG_LENGTH)
 #define C(a) a,
 enum enum_mstoreid{A1()};
@@ -237,7 +238,6 @@ struct zippath{
 ///   Memcache: It may also contain the cached file content of the zip entry.
 ///   Only one of all instances with a specific virtual path should store the cached zip entry
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-#define FINDRP_VERBOSE (1<<0)
 #define FINDRP_AUTOGEN_CUT (1<<1)
 #define FINDRP_AUTOGEN_CUT_NOT (1<<2)
 #define FINDRP_NOT_TRANSIENT_CACHE (1<<3)

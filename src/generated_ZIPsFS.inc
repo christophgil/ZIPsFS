@@ -198,6 +198,7 @@ static bool dircache_directory_from_cache(struct directory *dir,const struct tim
 static void maybe_evict_from_filecache(const int fdOrZero,const char *realpath,const int realpath_l);
 static struct ht* transient_cache_get_ht(struct fhandle *d);
 static struct zippath *transient_cache_get_or_create_zpath(const bool create,const char *virtualpath,const int virtualpath_l);
+static int transient_cache_find_realpath(const int opt, struct zippath *zpath, const char *vp,const int vp_l);
 static int get_log_flags();
 static void init_count_getattr(void);
 static void inc_count_getattr(const char *path,enum enum_count_getattr field);

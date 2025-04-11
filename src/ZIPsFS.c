@@ -118,9 +118,9 @@ static int zpath_strlen(const struct zippath *zpath,int s){
 }
 static bool zpath_exists(struct zippath *zpath){
   if (!zpath) return false;
-  const bool ex=zpath->stat_rp.st_ino;
-  if (ex != (zpath->realpath_l!=0)) log_verbose(RED_ERROR" exists: %d zpath->realpath_l: %d",ex,zpath->realpath_l);
-  return ex;
+  const ino_t ino=zpath->stat_rp.st_ino;
+  if ((ino!=0) != (zpath->realpath_l!=0)) warning(WARN_FLAG_ONCE|WARN_FLAG_ERROR,RP(),"Inconsistence ino: %ld  realpath_l: %d",ino,zpath->realpath_l);
+  return ino!=0;
 }
 
 
@@ -372,7 +372,7 @@ static int observe_thread(struct rootdata *r, const int thread){
 static void root_start_thread(struct rootdata *r,int ithread){
   r->thread_pretend_blocked[ithread]=false;
   if (atomic_fetch_add(&r->thread_starting[ithread],0)){
-    log_verbose("r->thread_starting[%s] >0 Not going to start thread.",PTHREAD_S[ithread]);
+    log_warn("r->thread_starting[%s] >0 Not going to start thread.",PTHREAD_S[ithread]);
     return;
   }
   atomic_fetch_add(&r->thread_starting[ithread],1);
@@ -389,12 +389,14 @@ static void root_start_thread(struct rootdata *r,int ithread){
   case PTHREAD_DIRCACHE: f=&infloop_dircache; break;
   case PTHREAD_MISC0: f=&infloop_misc0; break;
   }
-  if (r->thread_count_started[ithread]++) warning(WARN_THREAD,report_rootpath(r),"pthread_start %s function: %p",PTHREAD_S[ithread],f);
+  const int count=r->thread_count_started[ithread]++;
+  if (count) warning(WARN_THREAD,report_rootpath(r),"pthread_start %s function: %p",PTHREAD_S[ithread],f);
   ASSERT(f!=NULL);
   if (f){
     if (pthread_create(&r->thread[ithread],NULL,f,(void*)r)){
-      //warning(WARN_THREAD|WARN_FLAG_EXIT|WARN_FLAG_ERRNO,rootpath(r),"Failed thread_create %s root=%d ",PTHREAD_S[ithread],rootindex(r));
-      DIE("Failed thread_create '%s' root='%s' ",PTHREAD_S[ithread],rootpath(r));
+#define C "Failed thread_create '%s'  Root: %d",PTHREAD_S[ithread],rootindex(r)
+      if (count) warning(WARN_THREAD|WARN_FLAG_EXIT|WARN_FLAG_ERRNO,rootpath(r),C); else DIE(C);
+#undef C
     }
   }
   atomic_fetch_add(&r->thread_starting[ithread],-1);
@@ -483,10 +485,7 @@ static void *infloop_unblock(void *arg){
           }
           char proc[99]; sprintf(proc,"/proc/%ld",(long)pid);
           if (not_restart){
-#define M "Not yet starting thread because process  still exists"
-            log_verbose(M "%s",proc);
-            warning(WARN_THREAD|WARN_FLAG_ONCE_PER_PATH,proc,M);
-#undef M
+            log_warn("Not yet starting thread because process  still exists %s",proc);
           }else{
             warning(WARN_THREAD|WARN_FLAG_SUCCESS,proc,"Going root_start_thread(%s,%s) because process does not exist any more",rootpath(r),PTHREAD_S[t]);
             r->thread_when_canceled_deciSec[t]=deciSecondsSinceStart();
@@ -632,7 +631,7 @@ static void _zpath_assert_strlen(const char *fn,const char *file,const int line,
 #undef C
   if (e){
     log_zpath("Error ",zpath);
-    log_verbose(ANSI_FG_RED"zpath_assert_strlen"ANSI_RESET" in %s at "ANSI_FG_BLUE"%s:%d\n"ANSI_RESET,fn,file,line);
+    log_warn("zpath_assert_strlen in %s at "ANSI_FG_BLUE"%s:%d\n"ANSI_RESET,fn,file,line);
     ASSERT(0);
   }
 }
@@ -1025,28 +1024,11 @@ static long search_file_which_roots(const char *vp,const int vp_l,const bool pat
 static bool find_realpath_any_root(const int opt,struct zippath *zpath,const struct rootdata *onlyThisRoot){
   const char *vp=VP();
   const int vp_l=VP_L();
-
   const bool path_starts_autogen=false IF1(WITH_AUTOGEN, || (0!=(zpath->flags&ZP_STARTS_AUTOGEN)));
   if (!onlyThisRoot && find_realpath_special_file(zpath)) return true;
-#if WITH_TRANSIENT_ZIPENTRY_CACHES
-  if (vp_l  && vp && !path_starts_autogen){
-    struct zippath cached={0};
-    if (!(opt&FINDRP_NOT_TRANSIENT_CACHE)) LOCK(mutex_fhandle,const struct zippath *zp=transient_cache_get_or_create_zpath(false,vp,vp_l); if (zp) cached=*zp);
-    const int f=cached.flags;
-    if (cached.virtualpath && !(f&ZP_DOES_NOT_EXIST) && zpath_exists(&cached)){
-      *zpath=cached;
-      return true;
-    }
-    if (f&ZP_DOES_NOT_EXIST){
-      if (opt&FINDRP_VERBOSE) log_verbose("Going to return false because ZP_DOES_NOT_EXIST %s",vp);
-      return false;
-    }
-  }
-#endif //WITH_TRANSIENT_ZIPENTRY_CACHES
+  IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,const int trans=transient_cache_find_realpath(opt,zpath,vp,vp_l); if (trans) return trans==1);
   const int virtualpath=zpath->virtualpath;
   bool found=false; /* which_roots==01 means only Zero-th root */
-  //  const bool debug=path_starts_autogen && strstr(vp,"scale25%");
-  //    const bool debug=path_starts_autogen && strstr(vp,"VIDEO-001.jpeg");
   FOR(cut01,0,path_starts_autogen?2:1){
     if (0!=(opt&(cut01?FINDRP_AUTOGEN_CUT_NOT:FINDRP_AUTOGEN_CUT))) continue;
     const long roots=(onlyThisRoot?(1<<rootindex(onlyThisRoot)):-1) & ((path_starts_autogen&&!cut01)?01:search_file_which_roots(vp,vp_l,path_starts_autogen));
@@ -2083,7 +2065,7 @@ int main(const int argc,const char *argv[]){
     }
   }
   { /* dot_ZIPsFS */
-    char dot_ZIPsFS[MAX_PATHLEN+1], dirOldLogs[MAX_PATHLEN+1];
+    char dot_ZIPsFS[MAX_PATHLEN+1], dirOldLogs[MAX_PATHLEN+1], tmp[MAX_PATHLEN];
     {
       {
         char *d=dot_ZIPsFS+strlen(cg_copy_path(dot_ZIPsFS,"~/.ZIPsFS"));
@@ -2091,13 +2073,12 @@ int main(const int argc,const char *argv[]){
       }
       snprintf(dirOldLogs,MAX_PATHLEN,"%s%s",dot_ZIPsFS,"/oldLogs");
       cg_recursive_mkdir(dirOldLogs);
-      char fn[MAX_PATHLEN];
-      FILE *f=fopen(strcpy(stpcpy(fn,dot_ZIPsFS),"/pid.txt"),"w");
-      if (f){
+      FILE *f;
+      if (!(f=fopen(strcpy(stpcpy(tmp,dot_ZIPsFS),"/pid.txt"),"w"))){
+        perror(tmp);
+      }else{
         fprintf(f,"%d\n",_pid);
         fclose(f);
-      }else{
-        perror(fn);
       }
     }
     FOR(i,0,2){
@@ -2107,74 +2088,66 @@ int main(const int argc,const char *argv[]){
         const time_t t=stbuf.st_mtime;
         struct tm lt;
         localtime_r(&t,&lt);
-        char oldLog[MAX_PATHLEN+1];
-        snprintf(oldLog,MAX_PATHLEN,"%s%s",dirOldLogs,SPECIAL_FILES[i+SFILE_LOG_WARNINGS]);
-        strftime(strrchr(oldLog,'.'),22,"_%Y_%m_%d_%H:%M:%S",&lt);
-        strcat(oldLog,".log");
-
-        if (rename(_fWarningPath[i],oldLog)) DIE("rename %s %s",_fWarningPath[i],oldLog);
+        snprintf(tmp,MAX_PATHLEN,"%s%s",dirOldLogs,SPECIAL_FILES[i+SFILE_LOG_WARNINGS]);
+        strftime(strrchr(tmp,'.'),22,"_%Y_%m_%d_%H:%M:%S",&lt);
+        strcat(tmp,".log");
+        if (rename(_fWarningPath[i],tmp)) DIE("rename %s %s",_fWarningPath[i],tmp);
         const pid_t pid=fork();
         assert(pid>=0);
         if (pid>0){
           //int status;
           waitpid(pid,/*&status*/NULL,0);
         }else{
-          assert(!execlp("gzip","gzip","-f","--best",oldLog,(char*)NULL));
+          assert(!execlp("gzip","gzip","-f","--best",tmp,(char*)NULL));
           assert(1);
         }
       }
       _fWarnErr[i]=fopen(_fWarningPath[i],"w");
     }
     warning(0,NULL,"");ht_set_id(HT_MALLOC_warnings,&_ht_warning);
-    static char ctrl_sh[MAX_PATHLEN+1];
-    snprintf(ctrl_sh,MAX_PATHLEN,"%s/%s",dot_ZIPsFS,"ZIPsFS_CTRL.sh");
+
     {
-      static char cachedir[MAX_PATHLEN+1];
-      snprintf(cachedir,MAX_PATHLEN,"%s/cachedir",dot_ZIPsFS);
-      mstore_set_base_path(cachedir);
-    }
-    SPECIAL_FILES[SFILE_DEBUG_CTRL]=ctrl_sh;
-    {
-      struct textbuffer b={0};
-      special_file_content(&b,SFILE_DEBUG_CTRL);
-      const int fd=open(ctrl_sh,O_RDONLY);
-      if (fd<0 || textbuffer_differs_from_filecontent_fd(&b,fd)){
-        log_msg("Going to write %s ...\n",ctrl_sh);
-        textbuffer_write_file(&b,ctrl_sh,0770);
-      }else{
-        log_msg(ANSI_FG_GREEN"Up-to-date %s\n"ANSI_RESET,ctrl_sh);
+      static char ctrl_sh[MAX_PATHLEN+1];
+      snprintf(ctrl_sh,MAX_PATHLEN,"%s/%s",dot_ZIPsFS,"ZIPsFS_CTRL.sh");
+      snprintf(tmp,MAX_PATHLEN,"%s/cachedir",dot_ZIPsFS); mstore_set_base_path(tmp);
+      SPECIAL_FILES[SFILE_DEBUG_CTRL]=ctrl_sh;
+      {
+        struct textbuffer b={0};
+        special_file_content(&b,SFILE_DEBUG_CTRL);
+        const int fd=open(ctrl_sh,O_RDONLY);
+        if (fd<0 || textbuffer_differs_from_filecontent_fd(&b,fd)){
+          log_msg("Going to write %s ...\n",ctrl_sh);
+          textbuffer_write_file(&b,ctrl_sh,0770);
+        }else{
+          log_msg(ANSI_FG_GREEN"Up-to-date %s\n"ANSI_RESET,ctrl_sh);
+        }
+        if (fd>0) close(fd);
       }
-      if (fd>0) close(fd);
     }
     {
       snprintf(_fLogFlags,MAX_PATHLEN,"%s/%s",dot_ZIPsFS,"log_flags.conf");
       FILE *f;
       if (!cg_file_exists(_fLogFlags) && (f=fopen(_fLogFlags,"w"))) fclose(f);
-      char readme[MAX_PATHLEN+1];
-      snprintf(readme,MAX_PATHLEN,"%s.readme",_fLogFlags);
-      if ((f=fopen(readme,"w"))){
-        fprintf(f,"# The file %s specifies additional logs.\n"
-                "# Users can enter a decimal number which is a bit-mask. Changes take immediate effect\n#\n"
-                "# MEANING OF BITS:\n#\n",_fLogFlags);
-        FOR(i,1,LOG_FLAG_LENGTH) fprintf(f,"%s=%d\n",LOG_FLAG_S[i],i);
-        fprintf(f,"# Exampl deactivate all:\n#\n#    echo 0 > %s\n#\n",_fLogFlags);
-        fprintf(f,"# Example FUSE functions begin:\n#\n#    echo $((1<<%d)) > %s\n#\n",LOG_FUSE_METHODS_ENTER,_fLogFlags);
-        fprintf(f,"# Example FUSE functions end::\n#\n#    echo $(((1<<%d)|(1<<%d))) > %s\n#\n",LOG_FUSE_METHODS_ENTER,LOG_FUSE_METHODS_EXIT,_fLogFlags);
+      snprintf(tmp,MAX_PATHLEN,"%s.readme",_fLogFlags);
+      if ((f=fopen(tmp,"w"))){
+        fprintf(f,
+                "f_log_flag=%s\n"
+                "# The file specifies additional logs that go exclusively to stderr.\n"
+                "# Users can enter a decimal number which is a bit-mask.\n"
+                "# Changes take immediate effect\n#\n"
+                "# MEANING OF BITS AND SHELL ALIASES:\n#\n",_fLogFlags);
+        FOR(i,0,LOG_FLAG_LENGTH) fprintf(f,"alias %30s='echo $((1<<%d))  >$f_log_flag'\n",LOG_FLAG_S[i],i);
+        fprintf(f,"#\n# Note: To activate the aliases, this script can be sourced in bash.  Run\n#    . %s\n",tmp);
         fclose(f);
       }
-
     }
-
-
   }
   FOR(i,optind,colon){ /* Source roots are given at command line. Between optind and colon */
     if (_root_n>=ROOTS) DIE("Exceeding max number of ROOTS %d.  Increase constant  LOG2_ROOTS   in configuration.h and recompile!\n",ROOTS);
     const char *p=argv[i];
-
     if (!*p){ log_warn("Command line argument # %d is empty. %s\n",optind,i==optind?"Consequently, there will be no writable root.":"");  continue;}
     struct rootdata *r=_root+_root_n++;
     if (i==optind)  (_root_writable=r)->features|=ROOT_WRITABLE;
-
     {
       int slashes=-1;while(p[++slashes]=='/');
       if (slashes>1){ r->features|=ROOT_REMOTE; p+=(slashes-1); }

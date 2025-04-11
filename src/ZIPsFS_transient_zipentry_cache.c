@@ -60,3 +60,21 @@ static struct zippath *transient_cache_get_or_create_zpath(const bool create,con
   }
   return NULL;
 }
+
+
+
+static int transient_cache_find_realpath(const int opt, struct zippath *zpath, const char *vp,const int vp_l){
+    struct zippath cached={0};
+    if (!(opt&FINDRP_NOT_TRANSIENT_CACHE)) LOCK(mutex_fhandle,const struct zippath *zp=transient_cache_get_or_create_zpath(false,vp,vp_l); if (zp) cached=*zp);
+    const int f=cached.flags;
+    if (cached.virtualpath && !(f&ZP_DOES_NOT_EXIST) && zpath_exists(&cached)){
+      *zpath=cached;
+      LF();IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(ANSI_FG_GREEN"%s"ANSI_RESET,vp);
+      return 1;
+    }
+    if (f&ZP_DOES_NOT_EXIST){
+        LF();IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(ANSI_FG_RED"%s"ANSI_RESET,vp);
+        return -1;
+    }
+    return 0;
+}
