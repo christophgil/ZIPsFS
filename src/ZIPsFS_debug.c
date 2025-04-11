@@ -62,7 +62,7 @@ static bool _debugSpecificPath(int mode, const char *path, int path_l){
 ////////////////////////
 #define assert_validchars(t,s,len,msg) _assert_validchars(t,s,len,msg,__func__)
 
-static void _assert_validchars(enum validchars t,const char *s,int len,const char *msg,const char *fn){
+static void _assert_validchars(enum enum_validchars t,const char *s,int len,const char *msg,const char *fn){
   static bool initialized;
   // cppcheck-suppress duplicateConditionalAssign
   if (!initialized) initialized=cg_validchars(VALIDCHARS_PATH)[PLACEHOLDER_NAME]=cg_validchars(VALIDCHARS_FILE)[PLACEHOLDER_NAME]=true;
@@ -73,7 +73,7 @@ static void _assert_validchars(enum validchars t,const char *s,int len,const cha
   }
 }
 #define  assert_validchars_direntries(t,dir) _assert_validchars_direntries(t,dir,__func__)
-static void _assert_validchars_direntries(enum validchars t,const struct directory *dir,const char *fn){
+static void _assert_validchars_direntries(enum enum_validchars t,const struct directory *dir,const char *fn){
   if (dir){
     RLOOP(i,dir->core.files_l){
       const char *s=dir->core.fname[i];
@@ -218,9 +218,7 @@ static void debug_dircache_compare_cached(struct directory *mydir,const struct s
 static void debug_track_false_getattr_errors(const char *vp,const int vp_l){
   if ((ENDSWITH(vp,vp_l,".SSMetaData") || ENDSWITH(vp,vp_l,".raw")  )){
     log_verbose("vp=%s",vp);
-
     NEW_ZIPPATH(vp);
-    //zpath->flags|=ZP_VERBOSE2;
     const bool found=find_realpath_any_root(0,zpath,NULL);
     log_zpath("",zpath);
     exit_ZIPsFS();

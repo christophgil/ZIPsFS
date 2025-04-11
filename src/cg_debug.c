@@ -103,19 +103,19 @@ static void assert_r_ok(const char *p, const struct stat *st){
 #if 0
 static int functions_count[functions_l];
 static int64_t functions_time[functions_l];
-static const char *function_name(enum functions f){
+static const char *function_name(enum enum_functions f){
 #define C(x) f==x ## _ ? #x :
   return C(xmp_open) C(xmp_access) C(xmp_getattr) C(xmp_read) C(xmp_readdir) C(mcze) "null";
 #undef C
 }
-static void _log_count_b(enum functions f){
+static void _log_count_b(enum enum_functions f){
   functions_time[f]=currentTimeMillis();
   log(" >>%s%d ",function_name(f),functions_count[f]);
   pthread_mutex_lock(mutex+mutex_log_count);
   functions_count[f]++;
   pthread_mutex_unlock(mutex+mutex_log_count);
 }
-static void _log_count_e(enum functions f,const char *path){
+static void _log_count_e(enum enum_functions f,const char *path){
   const int64_t ms=currentTimeMillis()-functions_time[f];
   pthread_mutex_lock(mutex+mutex_log_count);
   --functions_count[f];

@@ -399,7 +399,7 @@ static int cg_pathlen_ignore_trailing_slash(const char *p){
 static bool cg_path_equals_or_is_parent(const char *subpath,const int subpath_l,const char *path,const int path_l){
   return subpath && path && (subpath_l==path_l||(subpath_l<path_l&&path[subpath_l]=='/')) && !memcmp(path,subpath,subpath_l);
 }
-static bool *cg_validchars(enum validchars type){
+static bool *cg_validchars(enum enum_validchars type){
   static bool ccc[VALIDCHARS_NUM][128];
   static bool initialized;
   if (!initialized){
@@ -419,7 +419,7 @@ static bool *cg_validchars(enum validchars type){
   return ccc[type];
 }
 
-static int cg_find_invalidchar(enum validchars type,const char *s,const int len){
+static int cg_find_invalidchar(enum enum_validchars type,const char *s,const int len){
   if (s){
     const bool *bb=cg_validchars(type);
     FOR(i,0,len){
@@ -779,14 +779,18 @@ static char* cg_path_expand_tilde(char *dst, const int dst_max, const char *path
 ///////////////////
 ///    time     ///
 ///////////////////
-static double cg_timespec_diff(const struct timespec a, const struct timespec b) {
+static double cg_timespec_diff(const struct timespec a, const struct timespec b){
   double v=(a.tv_sec-b.tv_sec)+(a.tv_nsec-b.tv_nsec)/(1000*1000*1000.0);
   return v;
 }
 #define CG_STAT_B_BEFORE_A(a,b) cg_timespec_b_before_a(a.ST_MTIMESPEC,b.ST_MTIMESPEC)
-static bool cg_timespec_b_before_a(struct timespec a, struct timespec b) {  //Returns true if b happened first.
+static bool cg_timespec_b_before_a(struct timespec a, struct timespec b){  //Returns true if b happened first.
   return a.tv_sec==b.tv_sec ? a.tv_nsec>b.tv_nsec : a.tv_sec>b.tv_sec;
 }
+static bool cg_timespec_eq(struct timespec a, struct timespec b){
+  return a.tv_sec==b.tv_sec && a.tv_nsec==b.tv_nsec;
+}
+
 static struct timespec cg_file_last_modified(const char *path){
   struct stat st;
   static struct timespec ZERO={0};

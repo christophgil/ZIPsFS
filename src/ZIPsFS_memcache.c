@@ -99,10 +99,9 @@ struct zip_file {
 
 #define MEMCACHE_READ_ERROR 1
 static int memcache_store_try(struct fhandle *d){
-
-
 #define A() LOCK(mutex_fhandle,ASSERT(!fhandle_can_destroy(d));  assert(D_VP(d)!=NULL); assert(d->zpath.root!=NULL); assert(d->memcache); assert(d->memcache->memcache_status==memcache_reading))
-  const bool verbose=false; // CPPCHECK-SUPPRESS-macro variableScope
+  LF();
+  IF_LOG_FLAG(LOG_MEMCACHE) log_entered_function("%s",D_RP(d));
   assert(cg_strlen(D_VP(d)));
   if (!d->zpath.root){ log_zpath("root is null",&d->zpath); return -1;}
   A();
@@ -153,17 +152,19 @@ static int memcache_store_try(struct fhandle *d){
           fhandle_counter_inc(d,ZIP_READ_CACHE_CRC32_SUCCESS);
           wait_lock-=currentTimeMillis();
           LOCK(mutex_fhandle, A();m->memcache_took_mseconds=currentTimeMillis()-start;  _log_memcache_took_mseconds_in_lock=MAX_long(_log_memcache_took_mseconds_in_lock, m->memcache_took_mseconds_in_lock=wait_lock+currentTimeMillis());memcache_set_status(m,memcache_done));
-          log_succes("memcache_done  d= %p %s    in %'llu mseconds   ret: %d\n",d,path,(LLU)(currentTimeMillis()-start), ret);
-          if (verbose) log_exited_function("%s  d->memcache_already_current==st_size  crc32 OK\n",D_RP(d));
+          IF_LOG_FLAG(LOG_MEMCACHE){
+            log_succes("memcache_done  d= %p %s    in %'llu mseconds   ret: %d\n",d,path,(LLU)(currentTimeMillis()-start), ret);
+          log_exited_function("%s  d->memcache_already_current==st_size  crc32 OK\n",D_RP(d));
+          }
         }else{
           LOCK(mutex_fhandle,A();memcache_set_status(m,m->memcache_already_current=0);m->memcache_already=0);
           fhandle_counter_inc(d,ZIP_READ_CACHE_CRC32_FAIL);
-          if (verbose) log_exited_function("%s  d->memcache_already_current==st_size  crc32 wrong\n",D_RP(d));
+          IF_LOG_FLAG(LOG_MEMCACHE) log_exited_function("%s  d->memcache_already_current==st_size  crc32 wrong\n",D_RP(d));
         }
       }else{
         if (!(d->flags&FHANDLE_FLAG_INTERRUPTED)) warning(WARN_MEMCACHE|WARN_FLAG_ERROR,path,"d->memcache_already_current!=st_size:  %zu!=%ld",m->memcache_already_current,st_size);
         LOCK(mutex_fhandle,memcache_set_status(m,memcache_done));
-        if (verbose) log_exited_function("%s  d->memcache_already_current!=st_size\n",D_RP(d));
+        IF_LOG_FLAG(LOG_MEMCACHE) log_exited_function("%s  d->memcache_already_current!=st_size\n",D_RP(d));
       }
     }/*zf!=NULL*/
     zip_fclose(zf);

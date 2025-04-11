@@ -99,7 +99,7 @@
 #endif //WITH_AUTOGEN
 static char _self_exe[PATH_MAX+1];//,static char _initial_cwd[PATH_MAX+1];
 static int _fhandle_n=0,_mnt_l=0;
-IF1(WITH_MEMCACHE,static enum when_memcache_zip _memcache_policy=MEMCACHE_SEEK);
+IF1(WITH_MEMCACHE,static enum enum_when_memcache_zip _memcache_policy=MEMCACHE_SEEK);
 static bool _pretendSlow=false;
 static char _mkSymlinkAfterStart[MAX_PATHLEN+1]={0},_mnt[PATH_MAX+1];
 static struct ht *ht_set_id(const int id,struct ht *ht){
@@ -165,7 +165,7 @@ static int rootindex(const struct rootdata *r){
 }
 static int _root_n=0;
 /* *** fhandle vars and defs *** */
-static char _fWarningPath[2][MAX_PATHLEN+1], _debug_ctrl[MAX_PATHLEN+1];
+static char _fWarningPath[2][MAX_PATHLEN+1], _fLogFlags[MAX_PATHLEN+1];
 static float _ucpu_usage,_scpu_usage;/* user and system */
 static long _count_readzip_memcache=0,_count_readzip_memcache_because_seek_bwd=0,_log_read_max_size=0,_count_SeqInode=0;
 static  int64_t _memcache_maxbytes=3L*1000*1000*1000;
@@ -350,13 +350,22 @@ static bool stat_from_cache_or_syscall_or_async(const char *rp, struct stat *stb
   const int rp_l=cg_strlen(rp);
   const ht_hash_t hash=hash32(rp,rp_l);
   if (!WITH_STAT_SEPARATE_THREADS || !(r&&r->features&ROOT_REMOTE)) return stat_from_cache_or_syscall(STAT_ALSO_SYSCALL|stat_cache_opts_for_root(r),rp,rp_l,hash,stbuf);
-   if (stat_from_cache_or_syscall(0,rp,rp_l,hash,stbuf)) return true;
-  return IF1(WITH_STAT_SEPARATE_THREADS,stat_queue_and_wait(false,rp,rp_l,hash,stbuf,r)||) false;
+  if (stat_from_cache_or_syscall(0,rp,rp_l,hash,stbuf)) return true;
+  return IF1(WITH_STAT_SEPARATE_THREADS,stat_queue_and_wait(rp,rp_l,hash,stbuf,r)||) false;
 }
 //////////////////////
 /// Infinity loops ///
 //////////////////////
 static int observe_thread(struct rootdata *r, const int thread){
+  LF();
+  const int flag=
+    thread==PTHREAD_RESPONDING?LOG_INFINITY_LOOP_RESPONSE:
+    thread==PTHREAD_STATQUEUE?LOG_INFINITY_LOOP_STAT:
+    thread==PTHREAD_MEMCACHE?LOG_INFINITY_LOOP_MEMCACHE:
+    thread==PTHREAD_DIRCACHE?LOG_INFINITY_LOOP_DIRCACHE:
+    thread==PTHREAD_MISC0?LOG_INFINITY_LOOP_MISC:
+    0;
+  if (flag) IF_LOG_FLAG(flag) log_verbose("Thread: %s  Root: %s ",PTHREAD_S[thread],rootpath(r));
   while(r->thread_pretend_blocked[thread]) usleep(1000*100);
   return (r->thread_when_loop_deciSec[thread]=deciSecondsSinceStart());
 }
@@ -408,6 +417,7 @@ static void *infloop_responding(void *arg){
   return NULL;
 }
 static void *infloop_misc0(void *arg){
+  LF();
   struct rootdata *r=arg;
   init_infloop(r,PTHREAD_MISC0);
   for(int j=0;;j++){
@@ -421,7 +431,7 @@ static void *infloop_misc0(void *arg){
       cpuusage_read_proc(&pstat2,getpid());
       cpuusage_calc_pct(&pstat2,&pstat1,&_ucpu_usage,&_scpu_usage);
       pstat1=pstat2;
-      if (false) if (_ucpu_usage>40||_scpu_usage>40) log_verbose("pid: %d cpu_usage user: %.2f system: %.2f\n",getpid(),_ucpu_usage,_scpu_usage);
+      IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE) if (_ucpu_usage>40||_scpu_usage>40) log_verbose("pid: %d cpu_usage user: %.2f system: %.2f\n",getpid(),_ucpu_usage,_scpu_usage);
     }
   }
 }
@@ -432,6 +442,8 @@ static void *infloop_misc0(void *arg){
 /// /proc- file system                      ///
 ///////////////////////////////////////////////
 static void init_infloop(struct rootdata *r, const int ithread){
+  LF();
+  IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE) log_entered_function("Thread: %s  Root: %s ",PTHREAD_S[ithread],rootpath(r));
   IF1(WITH_CANCEL_BLOCKED_THREADS,
       pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,&_unused_int);
       if (r) r->thread_pid[ithread]=gettid(); assert(_pid!=gettid()); assert(cg_pid_exists(gettid())));
@@ -511,8 +523,10 @@ static bool wait_for_root_timeout(struct rootdata *r){
     if (delay>ROOT_SKIP_UNLESS_RESPONDED_WITHIN_SECONDS) break;
     if (delay<ROOT_LAST_RESPONSE_MUST_BE_WITHIN_SECONDS){ log_root_blocked(r,false);return true; }
     cg_sleep_ms(ROOT_LAST_RESPONSE_MUST_BE_WITHIN_SECONDS/N,"");
-
-    if (iTry>N/2 && iTry%(N/10)==0) log_msg("%s %s %d/%d\n",__func__,rootpath(r),iTry,N);
+    LF();
+    bool log=iTry>N/2 && iTry%(N/10)==0;
+    IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE) log=true;
+    if (log) log_verbose("%s %d/%d\n",rootpath(r),iTry,N);
   }
   r->log_count_delayed_periods++;
   r->log_count_delayed++;
@@ -630,7 +644,7 @@ static void zpath_reset_keep_VP(struct zippath *zpath){
   VP0_L()=EP_L()=zpath->zipcrc32=0; /* Reset. Later probe a different realpath */
   zpath->root=NULL;
   zpath->strgs_l=zpath->virtualpath+VP_L();
-  zpath->flags=(zpath->flags&(ZP_STARTS_AUTOGEN|ZP_VERBOSE|ZP_VERBOSE2));
+  zpath->flags=(zpath->flags&ZP_STARTS_AUTOGEN);
 }
 static void zpath_init(struct zippath *zpath, const char *vp){
   assert(zpath!=NULL);
@@ -681,11 +695,12 @@ static bool zpath_stat(struct zippath *zpath,struct rootdata *r){
 static struct zip *zip_open_ro(const char *orig){
   struct zip *zip=NULL;
   if (orig){
+    LF();
     if (!cg_endsWithZip(orig,0)){
-      log_verbose("zip_open_ro %s ",orig);
+      IF_LOG_FLAG(LOG_ZIP) log_verbose("zip_open_ro %s ",orig);
       return NULL;
     }
-    //static int count; log_verbose("Going to zip_open(%s) #%d ... ",orig,count);cg_print_stacktrace(0);
+    IF_LOG_FLAG(LOG_ZIP){ static int count; log_verbose("Going to zip_open(%s) #%d ... ",orig,count);cg_print_stacktrace(0); }
     RLOOP(iTry,2){
       int err;
       zip=zip_open(orig,ZIP_RDONLY,&err);
@@ -873,7 +888,7 @@ static int whatSpecialFile(const char *vp,const int vp_l){
 /* Returns true on success */
 static bool _test_realpath(struct zippath *zpath, struct rootdata *r){
   assert(r!=NULL);
-
+  LF();
   //zpath_assert_strlen(zpath);
   zpath->realpath=zpath_newstr(zpath); /* realpath is next string on strgs_l stack */
   zpath->root=r;
@@ -885,7 +900,7 @@ static bool _test_realpath(struct zippath *zpath, struct rootdata *r){
   if (!zpath_stat(zpath,r)) return false;
   if (ZPATH_IS_ZIP()){
     if (!cg_endsWithZip(RP(),0)){
-      if (ZPATH_IS_VERBOSE()) log_verbose("!cg_endsWithZip rp: %s\n",RP());
+      IF_LOG_FLAG(LOG_REALPATH) log_verbose("!cg_endsWithZip rp: %s\n",RP());
       return false;
     }
     if (EP_L() && filler_readdir_zip(0,zpath,NULL,NULL,NULL)) {
@@ -900,13 +915,14 @@ static bool test_realpath(struct zippath *zpath, struct rootdata *r){
 }
 /* Uses different approaches and calls test_realpath */
 static bool find_realpath_try_inline(struct zippath *zpath, const char *vp, struct rootdata *r){
+  LF();
   //if (zpath->flags&ZP_STARTS_AUTOGEN) return false;
   zpath->entry_path=zpath_newstr(zpath);
   zpath->flags|=ZP_ZIP;
   if (!zpath_strcat(zpath,vp+cg_last_slash(vp)+1)) return false;
   EP_L()=zpath_commit(zpath);
   const bool ok=test_realpath(zpath,r);
-  if (ZPATH_IS_VERBOSE2() && cg_is_regular_file(RP()))    log_exited_function("rp: %s vp: %s ep: %s ok: %s",RP(),vp,EP(),yes_no(ok));
+  IF_LOG_FLAG(LOG_ZIP_INLINE) if (cg_is_regular_file(RP()))    log_exited_function("rp: %s vp: %s ep: %s ok: %s",RP(),vp,EP(),yes_no(ok));
   return ok;
 }
 static bool find_realpath_nocache(struct zippath *zpath,struct rootdata *r){
@@ -1098,6 +1114,7 @@ static bool fhandle_can_destroy(struct fhandle *d){
 ////////////////////////////////////////////////////////////
 #define fhandle_destroy_and_evict_from_pagecache(fh,path,path_l) _fhandle_destroy(fhandle_get(path,fh),fh,path,path_l);
 static void _fhandle_destroy(struct fhandle *d,const int fd_evict,const char *path_evict,const int path_evict_l){
+  LF();
   ASSERT_LOCKED_FHANDLE();
   IF1(WITH_EVICT_FROM_PAGECACHE,bool do_evict=path_evict?config_advise_evict_from_filecache(path_evict,path_evict_l, d?D_EP(d):NULL,d?D_EP_L(d):0):false);
   if (d){
@@ -1124,7 +1141,7 @@ static void _fhandle_destroy(struct fhandle *d,const int fd_evict,const char *pa
       memset(d,0,SIZEOF_FHANDLE);
     }
   }
-  IF1(WITH_EVICT_FROM_PAGECACHE,if (do_evict){maybe_evict_from_filecache(fd_evict,path_evict,path_evict_l); log_verbose(ANSI_MAGENTA"Evicted %s"ANSI_RESET,path_evict);});
+  IF1(WITH_EVICT_FROM_PAGECACHE,if (do_evict){maybe_evict_from_filecache(fd_evict,path_evict,path_evict_l); IF_LOG_FLAG(LOG_EVICT_FROM_CACHE) log_verbose(ANSI_MAGENTA"Evicted %s"ANSI_RESET,path_evict);});
 }
 static void fhandle_destroy(struct fhandle *d){
   if (d) _fhandle_destroy(d,0,D_RP(d),D_RP_L(d));
@@ -1388,14 +1405,14 @@ void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_config *
 #endif
   return NULL;
 }
-#define LOG_FUSE(path) IF1(LOG_ALL_FUSE_FUNC,log_entered_function("%s",path))
-#define LOG_FUSE_RES(path,res) IF1(LOG_ALL_FUSE_FUNC,log_entered_function("%s res:%d",path,res))
+
 
 /////////////////////////////////////////////////
 // Functions where Only single paths need to be  substituted
 // Release FUSE 2.9 The chmod, chown, truncate, utimens and getattr handlers of the high-level API now all receive an additional struct fuse_file_info pointer (which, however, may be NULL even if the file is currently open).
 #if FUSE_MAJOR_V>=2 && FUSE_MINOR_V>9
 static int xmp_getattr(const char *path, struct stat *stbuf,struct fuse_file_info *fi_or_null){ /* NOT_TO_GENERATED_HEADER */
+  LOG_FUSE(path);
   const int res=_xmp_getattr(path,stbuf,fi_or_null);
   LOG_FUSE_RES(path,res);
   return res;
@@ -1435,7 +1452,6 @@ static int PROFILED(_xmp_getattr)(const char *path, struct stat *stbuf, void *fi
       return 0;
     }
   }
-  //log_entered_function(ANSI_RED"journal and wal %s"ANSI_RESET,path);
   bool found;FIND_REALPATH(path);
   if (found){
     *stbuf=zpath->stat_vp;
@@ -1478,6 +1494,7 @@ static int xmp_utimens(const char *path, const struct timespec ts[2],struct fuse
   return res==-1?-errno:0;
 }
 static int xmp_readlink(const char *path, char *buf, size_t size){
+  LOG_FUSE(path);
   bool found;FIND_REALPATH(path);
   LOG_FUSE_RES(path,found);
   if (!found) return -ENOENT;
@@ -1485,11 +1502,13 @@ static int xmp_readlink(const char *path, char *buf, size_t size){
   return n==-1?-errno: (buf[n]=0);
 }
 static int xmp_unlink(const char *path){
+  LOG_FUSE(path);
   bool found;FIND_REALPATH(path);
   LOG_FUSE_RES(path,found);
   return !found?-ENOENT: !ZPATH_ROOT_WRITABLE()?-EACCES:  minus_val_or_errno(unlink(RP()));
 }
 static int xmp_rmdir(const char *path){
+  LOG_FUSE(path);
   bool found;FIND_REALPATH(path);
   LOG_FUSE_RES(path,found);
   return !ZPATH_ROOT_WRITABLE()?-EACCES: !found?-ENOENT: minus_val_or_errno(rmdir(RP()));
@@ -1571,6 +1590,7 @@ static int xmp_truncate(const char *path, off_t size IF1(WITH_FUSE_3,,struct fus
 /** unsigned int cache_readdir:1; FOPEN_CACHE_DIR Can be filled in by opendir. It signals the kernel to  enable caching of entries returned by readdir(). */
 #if FUSE_MAJOR_V>=3 && FUSE_MINOR_V>5 /* FUSE 3.5 Added a new cache_readdir flag to fuse_file_info to enable caching of readdir results. */
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi,enum fuse_readdir_flags flags){
+  LOG_FUSE(path);
   const int res=_xmp_readdir(path,buf,filler,offset,fi);
   LOG_FUSE_RES(path,res);
   return res;
@@ -1641,6 +1661,7 @@ static int create_or_open(const char *path, mode_t mode, struct fuse_file_info *
   return 0;
 }
 static int xmp_create(const char *path, mode_t mode,struct fuse_file_info *fi){ /* O_CREAT|O_RDWR goes here */
+  LOG_FUSE(path);
   const int res=create_or_open(path,mode,fi);
   LOG_FUSE_RES(path,res);
   return res;
@@ -1678,7 +1699,13 @@ static int xmp_symlink(const char *target, const char *path){ // target,link
 }
 
 static int xmp_rename(const char *old_path, const char *neu_path IF1(WITH_FUSE_3,, const uint32_t flags)){
-  IF1(LOG_ALL_FUSE_FUNC,log_entered_function("%s -> %s",old_path, neu_path));
+  LF();
+  IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER) log_entered_function("%s -> %s",old_path,neu_path);
+  const int res=_xmp_rename(old_path,neu_path IF1(WITH_FUSE_3,,flags));
+  LOG_FUSE_RES(old_path,res);
+  return res;
+}
+static int _xmp_rename(const char *old_path, const char *neu_path IF1(WITH_FUSE_3,, const uint32_t flags)){
   bool eexist=false;
 #if WITH_GNU && WITH_FUSE_3
   if (flags&RENAME_NOREPLACE){
@@ -1742,10 +1769,10 @@ static off_t fhandle_zip_fread(struct fhandle *d, void *buf,  zip_uint64_t nbyte
 }
 /* Returns true on success. May fail for seek backward. */
 static bool fhandle_zip_fseek(struct fhandle *d, const off_t offset, const char *errmsg){
-  //log_entered_function("%p %s offset: %ld  fhandle_zip_ftell: %ld",d, D_VP(d),offset,fhandle_zip_ftell(d));
   off_t skip=(offset-fhandle_zip_ftell(d));
   if (!skip) return true;
   const bool backward=(skip<0);
+  LF(); IF_LOG_FLAG(LOG_ZIP) log_verbose("%p %s offset: %ld  ftell: %ld   diff: %ld  backward: %s"ANSI_RESET,d, D_VP(d),offset,fhandle_zip_ftell(d),skip, backward?ANSI_FG_RED"Yes":ANSI_FG_GREEN"No");
   const int fwbw=backward?FHANDLE_FLAG_SEEK_BW_FAIL:FHANDLE_FLAG_SEEK_FW_FAIL;
   if (!(d->flags&fwbw) && !zip_file_is_seekable(d->zip_file)) d->flags|=(FHANDLE_FLAG_SEEK_BW_FAIL|FHANDLE_FLAG_SEEK_FW_FAIL);
   if (!(d->flags&fwbw) && !zip_fseek(d->zip_file,offset,SEEK_SET)){
@@ -1837,9 +1864,15 @@ static uint64_t fd_for_fhandle(long *fd, struct fhandle *d,const int open_flags)
   }
   return false;
 }
+
 static int xmp_read(const char *path, char *buf, const size_t size, const off_t offset,struct fuse_file_info *fi){
+  LF(); IF_LOG_FLAG(LOG_READ_BLOCK) log_entered_function("%s Offset: %'ld +%'d ",path,(long)offset,(int)size);
+  const int bytes=_xmp_read(path,buf,size,offset,fi);
+  IF_LOG_FLAG(LOG_READ_BLOCK) log_exited_function("%s Offset: %'ld +%'d Bytes: %'d %s",path,(long)offset,(int)size,bytes,success_or_fail(bytes>0));
+  return bytes;
+}
+static int _xmp_read(const char *path, char *buf, const size_t size, const off_t offset,struct fuse_file_info *fi){
   ASSERT(fi!=NULL);
-  LOG_FUSE(path);
   const int path_l=strlen(path);
   long fd=fi->fh;
   int nread=0;
@@ -1983,7 +2016,7 @@ int main(const int argc,const char *argv[]){
   for(int c;(c=getopt_long(argc,(char**)argv,"+aAbqT:nkhVs:c:S:l:L:",l_option,NULL))!=-1;){  /* The initial + prevents permutation of argv */
     switch(c){
     case 'a':  assert(!WITH_EXTRA_ASSERT); assert(!WITH_ASSERT_LOCK);
-    case 'A':  if (WITH_AUTOGEN==(c=='a') || LOG_ALL_FUSE_FUNC==(c=='a')) DIE("Macro WITH_AUTOGEN should be %d due to option -%c\n",!WITH_AUTOGEN,c);break; // cppcheck-suppress [knownConditionTrueFalse]
+    case 'A':  if (WITH_AUTOGEN==(c=='a')) DIE("Macro WITH_AUTOGEN should be %d due to option -%c\n",!WITH_AUTOGEN,c);break; // cppcheck-suppress [knownConditionTrueFalse]
     case 'V': exit(0);break;
     case 'T':{
       const int i=atoi(optarg);
@@ -2093,25 +2126,46 @@ int main(const int argc,const char *argv[]){
       _fWarnErr[i]=fopen(_fWarningPath[i],"w");
     }
     warning(0,NULL,"");ht_set_id(HT_MALLOC_warnings,&_ht_warning);
-    snprintf(_debug_ctrl,MAX_PATHLEN,"%s/%s",dot_ZIPsFS,"ZIPsFS_CTRL.sh");
+    static char ctrl_sh[MAX_PATHLEN+1];
+    snprintf(ctrl_sh,MAX_PATHLEN,"%s/%s",dot_ZIPsFS,"ZIPsFS_CTRL.sh");
     {
       static char cachedir[MAX_PATHLEN+1];
       snprintf(cachedir,MAX_PATHLEN,"%s/cachedir",dot_ZIPsFS);
       mstore_set_base_path(cachedir);
     }
-    SPECIAL_FILES[SFILE_DEBUG_CTRL]=_debug_ctrl;
+    SPECIAL_FILES[SFILE_DEBUG_CTRL]=ctrl_sh;
     {
       struct textbuffer b={0};
       special_file_content(&b,SFILE_DEBUG_CTRL);
-      const int fd=open(_debug_ctrl,O_RDONLY);
+      const int fd=open(ctrl_sh,O_RDONLY);
       if (fd<0 || textbuffer_differs_from_filecontent_fd(&b,fd)){
-        log_msg("Going to write %s ...\n",_debug_ctrl);
-        textbuffer_write_file(&b,_debug_ctrl,0770);
+        log_msg("Going to write %s ...\n",ctrl_sh);
+        textbuffer_write_file(&b,ctrl_sh,0770);
       }else{
-        log_msg(ANSI_FG_GREEN"Up-to-date %s\n"ANSI_RESET,_debug_ctrl);
+        log_msg(ANSI_FG_GREEN"Up-to-date %s\n"ANSI_RESET,ctrl_sh);
       }
       if (fd>0) close(fd);
     }
+    {
+      snprintf(_fLogFlags,MAX_PATHLEN,"%s/%s",dot_ZIPsFS,"log_flags.conf");
+      FILE *f;
+      if (!cg_file_exists(_fLogFlags) && (f=fopen(_fLogFlags,"w"))) fclose(f);
+      char readme[MAX_PATHLEN+1];
+      snprintf(readme,MAX_PATHLEN,"%s.readme",_fLogFlags);
+      if ((f=fopen(readme,"w"))){
+        fprintf(f,"# The file %s specifies additional logs.\n"
+                "# Users can enter a decimal number which is a bit-mask. Changes take immediate effect\n#\n"
+                "# MEANING OF BITS:\n#\n",_fLogFlags);
+        FOR(i,1,LOG_FLAG_LENGTH) fprintf(f,"%s=%d\n",LOG_FLAG_S[i],i);
+        fprintf(f,"# Exampl deactivate all:\n#\n#    echo 0 > %s\n#\n",_fLogFlags);
+        fprintf(f,"# Example FUSE functions begin:\n#\n#    echo $((1<<%d)) > %s\n#\n",LOG_FUSE_METHODS_ENTER,_fLogFlags);
+        fprintf(f,"# Example FUSE functions end::\n#\n#    echo $(((1<<%d)|(1<<%d))) > %s\n#\n",LOG_FUSE_METHODS_ENTER,LOG_FUSE_METHODS_EXIT,_fLogFlags);
+        fclose(f);
+      }
+
+    }
+
+
   }
   FOR(i,optind,colon){ /* Source roots are given at command line. Between optind and colon */
     if (_root_n>=ROOTS) DIE("Exceeding max number of ROOTS %d.  Increase constant  LOG2_ROOTS   in configuration.h and recompile!\n",ROOTS);
@@ -2232,7 +2286,7 @@ int main(const int argc,const char *argv[]){
   _textbuffer_memusage_lock=_mutex+mutex_textbuffer_usage;
   log_msg("Running %s with PID %d. Going to fuse_main() ...\n",argv[0],_pid);
   cg_free(MALLOC_TESTING,cg_malloc(MALLOC_TESTING,10));
-   _fuse_argv[_fuse_argc++]="";
+  _fuse_argv[_fuse_argc++]="";
   if (!isBackground) _fuse_argv[_fuse_argc++]="-f";
   FOR(i,colon+1,argc) _fuse_argv[_fuse_argc++]=argv[i];
   const int fuse_stat=fuse_main(_fuse_argc,(char**)_fuse_argv,&xmp_oper,NULL);
@@ -2269,7 +2323,3 @@ int main(const int argc,const char *argv[]){
 // stat foreach_fhandle EIO local  fseek seek open
 // fdescriptor fdscrptr fhandle fhandle_read_zip  #include "generated_profiler_names.c" LOCK
 // mutex_fhandle
-
-// Unmatched suppression: staticFunction
-// Unmatched suppression: unassignedVariable
-// ht_zinline_cache_vpath_to_zippath  stat_ht  dircache_ht_fname  dircache_ht

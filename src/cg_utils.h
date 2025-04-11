@@ -180,7 +180,7 @@ M(MAX,long)
 #define LLD long long
 
 
-enum validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHARS_NUM};
+enum enum_validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHARS_NUM};
 #endif // _cg_utils_dot_h
 
 

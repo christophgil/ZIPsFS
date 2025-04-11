@@ -2,6 +2,38 @@
 /// COMPILE_MAIN=ZIPsFS                                       ///
 /// Logging in  ZIPsFS                                        ///
 /////////////////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////////////////////////////////
+/// The file _fLogFlags contains a decimal number specifying what is logged.  ///
+/////////////////////////////////////////////////////////////////////////////////
+
+static int get_log_flags(){
+  static int flags;
+  static time_t when;
+  static struct timespec mtim;
+  time_t now=time(0);
+  struct stat st;
+  //log_debug_now("flags: %d  now:%ld when:%ld,  stat: %d  eq: %d",flags, now, when, stat(_fLogFlags,&st), cg_timespec_eq(st.ST_MTIMESPEC,mtim));
+  if (now!=when && !stat(_fLogFlags,&st) && !cg_timespec_eq(st.ST_MTIMESPEC,mtim)){
+    int flags1=0;
+    FILE *f=fopen(_fLogFlags,"r");
+    if (f){
+      fscanf(f," ");
+      fscanf(f,"%d",&flags1);
+      fclose(f);
+      log_verbose("Log-flags: "ANSI_FG_BLUE"%d"ANSI_RESET"   from  '%s'",flags1,_fLogFlags);
+    }else{
+      warning(WARN_FLAG_ERRNO|WARN_FLAG_ERROR,_fLogFlags,"Reading log-flags");
+    }
+    LOCK(mutex_log_flag, mtim=st.ST_MTIMESPEC;when=now;flags=flags1);
+  }
+  return flags;
+}
+
+
+
+
 //////////////////////////////////////
 // logs per file type
 /////////////////////////////////////
@@ -651,7 +683,7 @@ static void _log_zpath(const char *fn,const int line,const char *msg, struct zip
   log_msg("    %p    RP="ANSI_FG_BLUE"'%s' "ANSI_RESET,RP(), snull(RP())); cg_log_file_stat("",&zpath->stat_rp);
   log_msg("    %p  root="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,zpath->root,rootpath(zpath->root));
 #define C(f) ((zpath->flags&f)?#f:"")
-  log_msg("       flags="ANSI_FG_BLUE"%s %s %s %s %s\n"ANSI_RESET,C(ZP_ZIP),C(ZP_DOES_NOT_EXIST),C(ZP_IS_COMPRESSED),C(ZP_VERBOSE),C(ZP_STARTS_AUTOGEN));
+  log_msg("       flags="ANSI_FG_BLUE"%s %s %s %s\n"ANSI_RESET,C(ZP_ZIP),C(ZP_DOES_NOT_EXIST),C(ZP_IS_COMPRESSED),C(ZP_STARTS_AUTOGEN));
 #undef C
 }
 #define log_zpath(...) _log_zpath(__func__,__LINE__,__VA_ARGS__) /*TO_HEADER*/

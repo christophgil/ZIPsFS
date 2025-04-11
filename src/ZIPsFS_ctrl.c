@@ -16,7 +16,7 @@ echo 'If no command line arguments are given, the script will process the files 
     echo 'Type a positive number to pretend that files were last accessed in the future. This will extend the life span of the files'\n"
 #define B "\n  echo 'No files given. Please select files in the file browser.'\n"
 
-enum _CTRL_ACTION{ACT_NIL,ACT_KILL_ZIPSFS,ACT_BLOCK_THREAD,/*ACT_UNBLOCK_THREAD,*/ACT_FORCE_UNBLOCK,ACT_CANCEL_THREAD,ACT_NO_LOCK,ACT_BAD_LOCK,ACT_CLEAR_CACHE};
+enum enum_ctrl_action{ACT_NIL,ACT_KILL_ZIPSFS,ACT_BLOCK_THREAD,/*ACT_UNBLOCK_THREAD,*/ACT_FORCE_UNBLOCK,ACT_CANCEL_THREAD,ACT_NO_LOCK,ACT_BAD_LOCK,ACT_CLEAR_CACHE};
 
 static char *ctrl_file_end(){
   static char s[222]={0};

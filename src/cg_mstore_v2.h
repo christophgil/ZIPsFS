@@ -29,7 +29,7 @@
 #define _MSTORE_MALLOC_ID(m) 0
 #endif // WITH_DEBUG_MALLOC
 
-enum _mstore_operation{_mstore_destroy,_mstore_usage,_mstore_clear,_mstore_contains,_mstore_blocks};
+enum enum_mstore_operation{_mstore_destroy,_mstore_usage,_mstore_clear,_mstore_contains,_mstore_blocks};
 struct mstore{
   char *pointers_data_on_stack[_MSTORE_BLOCKS_STACK];
   char _block_on_stack[_MSTORE_LEADING+_MSTORE_BLOCK_ON_STACK_CAPACITY];

@@ -82,18 +82,20 @@ Additionally, ZIPsFS includes specialized features and performance optimizations
 
 ## Logs
 
-
-
-
-
-
-
 ZIPsFS typically runs as a foreground process.  To keep it active and monitor its output, it is
 recommended to use a persistent terminal multiplexer such as tmux. This enables continuous
 observation of all messages and facilitates long-running sessions.
 Additional log files are stored in:
 
     ~/.ZIPsFS
+
+For each mount point there are files specifying more  logs.
+
+    log_flags.conf
+
+See readme for details:
+
+    log_flags.conf.readme
 
 
 ZIPsFS dynamically generates an HTML status file within the virtual file system.
@@ -275,9 +277,12 @@ ZIPsFS Options
 
 Prints brief usage information.
 
-**-l  *Maximum memory for caching ZIP-entries in the RAM***
 
-Specifies a limit for the cache.  For example *-l  8G* would limit the size of the cache to 8 Gigabyte.
+
+**-s *path-of-symbolic-link***
+This is discussed in section Configuration.
+
+
 
 **-c \[NEVER,SEEK,RULE,COMPRESSED,ALWAYS\]**
 
@@ -297,8 +302,9 @@ Policy for ZIP entries  cached in RAM.
 |  ALWAYS   | All ZIP entries are cached.                                                        |
 |           |                                                                                    |
 
-**-s *path-of-symbolic-link***
-This is discussed in section Configuration.
+**-l  *Maximum memory for caching ZIP-entries in the RAM***
+
+Specifies a limit for the cache.  For example *-l  8G* would limit the size of the cache to 8 Gigabyte.
 
 **-b**
  Run in background
@@ -358,6 +364,9 @@ As soon as the old thread does not exist any more, a new thread is started, atte
 functionality to the affected branch.
 
 If the stalled thread cannot be terminated, ZIPsFS will not create a new thread.
+To check whether all threads are responding, activate logging. For details see
+
+    ~/.ZIPsFS/.../log_flags.conf.readme
 
 This is best resolved by restarting ZIPsFS without interrupting ongoing file accesses.
 

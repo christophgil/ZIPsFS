@@ -16,7 +16,6 @@
 /////////////////
 /// Debugging ///
 /////////////////
-#define LOG_ALL_FUSE_FUNC 0
 #define WITH_ASSERT_LOCK  0 // Optional assertion
 #define WITH_EXTRA_ASSERT 0 // Optional assertion
 

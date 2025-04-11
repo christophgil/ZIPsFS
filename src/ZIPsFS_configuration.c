@@ -337,9 +337,6 @@ static void config_exclude_files(const char *path, const int path_l, const int n
   /* If it is a Zip file ending with .d.Zip which has members analysis.tdf and analysis.tdf_bin, then keep only those two */
   const bool is_dotd=path_l>10  && ENDSWITH(path,path_l,".d") && !strncmp(path,_root_writable->rootpath,_root_writable->rootpath_l);
   const bool is_dotd_Zip=(path_l>10  && ENDSWITH(path,path_l,".d.Zip"));
-
-
-
   if (is_dotd_Zip || is_dotd){
     //  if (path_l>10  && !strcmp(".d.Zip",path+path_l-6)){
     for(int i=path_l; --i>=0;){
@@ -348,7 +345,6 @@ static void config_exclude_files(const char *path, const int path_l, const int n
           if (is_dotd){
             for(int j=num_files; --j>=0;){
               if (files[j] && (!strcmp("analysis.tdf-wal",files[j])||!strcmp("analysis.tdf-shm",files[j]))){
-                //log_debug_now("files[%d]: %s\n" ,j,files[j]);
                 files[j]=NULL;
               }
             }

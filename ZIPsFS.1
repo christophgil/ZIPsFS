@@ -113,6 +113,22 @@ Additional log files are stored in:
 \f[R]
 .fi
 .PP
+For each mount point there are files specifying more logs.
+.IP
+.nf
+\f[C]
+log_flags.conf
+\f[R]
+.fi
+.PP
+See readme for details:
+.IP
+.nf
+\f[C]
+log_flags.conf.readme
+\f[R]
+.fi
+.PP
 ZIPsFS dynamically generates an HTML status file within the virtual file
 system.
 You can find it under the path: /ZIPsFS/ For example:
@@ -358,12 +374,8 @@ concurrent task handling.
 .PP
 Prints brief usage information.
 .PP
-\f[B]-l \f[BI]Maximum memory for caching ZIP-entries in the
-RAM\f[B]\f[R]
-.PP
-Specifies a limit for the cache.
-For example \f[I]-l 8G\f[R] would limit the size of the cache to 8
-Gigabyte.
+\f[B]-s \f[BI]path-of-symbolic-link\f[B]\f[R] This is discussed in
+section Configuration.
 .PP
 \f[B]-c [NEVER,SEEK,RULE,COMPRESSED,ALWAYS]\f[R]
 .PP
@@ -415,8 +427,12 @@ T}@T{
 T}
 .TE
 .PP
-\f[B]-s \f[BI]path-of-symbolic-link\f[B]\f[R] This is discussed in
-section Configuration.
+\f[B]-l \f[BI]Maximum memory for caching ZIP-entries in the
+RAM\f[B]\f[R]
+.PP
+Specifies a limit for the cache.
+For example \f[I]-l 8G\f[R] would limit the size of the cache to 8
+Gigabyte.
 .PP
 \f[B]-b\f[R] Run in background
 .SS Debug Options
@@ -479,6 +495,14 @@ started, attempting to restore functionality to the affected branch.
 .PP
 If the stalled thread cannot be terminated, ZIPsFS will not create a new
 thread.
+To check whether all threads are responding, activate logging.
+For details see
+.IP
+.nf
+\f[C]
+\[ti]/.ZIPsFS/.../log_flags.conf.readme
+\f[R]
+.fi
 .PP
 This is best resolved by restarting ZIPsFS without interrupting ongoing
 file accesses.

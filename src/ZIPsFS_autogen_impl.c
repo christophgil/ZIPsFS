@@ -20,8 +20,10 @@ static void aimpl_wait_concurrent(const struct autogen_rule *ac, const int inc){
   if (ac->concurrent_computations>1){
 #define A(inc) atomic_fetch_add(count+ac->_seqnum,inc)
     static atomic_int count[AUTOGEN_MAX_RULES];
-    while(inc==1 && A(0)>=ac->concurrent_computations){
-      //log_verbose("while(count[i] (%d) >=ac->concurrent_computations (%d))",A(0),ac->concurrent_computations);
+    LF();
+    int running;
+    while(inc==1 && (running=A(0))>=ac->concurrent_computations){
+      IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("Waiting: Rule: %d %s  Running: %d >= Max running (%d)",ac->_seqnum,ac->ext,running,ac->concurrent_computations);
       usleep(1000*1000);
     }
     assert(A(0)>=0);
@@ -215,9 +217,9 @@ static int autogen_realinfiles(struct autogen_files *ff){
 static void aimpl_maybe_reset_atime_in_future(const struct fhandle *d){
   if (d && d->zpath.flags&ZP_STARTS_AUTOGEN){
     const struct stat *st=&d->zpath.stat_rp;
-    //log_debug_now("atime %'ld ",st->st_atime);log_debug_now("now   %'ld ",currentTimeMillis()/1000);
     if (st->st_atime>currentTimeMillis()/1000+(3600*24)){ /* future + one day */
-      //log_debug_now("Reset atime for %s atime",D_RP(d));
+      LF();
+      IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("Reset atime for %s atime",D_RP(d));
       struct utimbuf new_times={.actime=st->st_atime,.modtime=st->st_mtime};
       if (utime(D_RP(d),&new_times)) warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,D_RP(d),"Setting atime");
     }
@@ -238,6 +240,7 @@ static int _aimpl_fd_open(const char *path, int *fd){
 /// Called from  autogen_run()
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 static int aimpl_run(struct autogen_files *ff){
+  LF();
   if (!_realpath_autogen) return -EACCES;
   const struct autogen_rule *ac=ff->rule;
   if (!ac || !ff->infiles_n) return -EIO;
@@ -253,7 +256,7 @@ static int aimpl_run(struct autogen_files *ff){
       if (isOUTF && !stat(ff->grealpath,&st_out) && CG_STAT_B_BEFORE_A(st_fail,st_out)  || ff->rinfiles[0] && CG_STAT_B_BEFORE_A(st_fail,ff->infiles_stat[0])) return EPIPE;
     }
   }
-    log_verbose("ff->rinfiles[0]: %s size: %ld  ac->out:%d ff->out:%d",snull(ff->rinfiles[0]), ff->infiles_stat[0].st_size,ac->out,ff->out);
+  IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("ff->rinfiles[0]: %s size: %ld  ac->out:%d ff->out:%d",snull(ff->rinfiles[0]), ff->infiles_stat[0].st_size,ac->out,ff->out);
   unlink(ff->log);
   unlink(ff->fail);
   aimpl_wait_concurrent_begin(ac);
@@ -307,9 +310,8 @@ static int aimpl_run(struct autogen_files *ff){
     }
   }/* if (!res) */
   aimpl_wait_concurrent_end(ac);
-  //log_debug_now("ff->log: %s exists: %d",ff->log,cg_file_exists(ff->log));
   if (res && cg_file_exists(ff->log) && rename(ff->log,ff->fail)) log_errno("rename(%s,%s)",ff->log,ff->fail);
-
+  IF_LOG_FLAG(LOG_AUTOGEN) log_exited_function("%s res: %d %s",ff->grealpath,res,success_or_fail(!res));
   return -res;
 #undef isRAM
 #undef isMMAP

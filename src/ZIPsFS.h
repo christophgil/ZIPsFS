@@ -43,7 +43,7 @@ static const char *SPECIAL_FILES[]={"/warnings.log","/errors.log","/file_system_
 #define IS_STAT_READONLY(st) !(st.st_mode&(S_IWUSR|S_IWGRP|S_IWOTH))
 
 
-enum functions{xmp_open_,xmp_access_,xmp_getattr_,xmp_read_,xmp_readdir_,functions_l};
+enum enum_functions{xmp_open_,xmp_access_,xmp_getattr_,xmp_read_,xmp_readdir_,functions_l};
 enum enum_count_getattr{
   COUNTER_STAT_FAIL,COUNTER_STAT_SUCCESS,
   COUNTER_OPENDIR_FAIL,COUNTER_OPENDIR_SUCCESS,
@@ -92,18 +92,22 @@ enum enum_autogen_state{AUTOGEN_UNINITILIZED,AUTOGEN_SUCCESS,AUTOGEN_FAIL};
 #define A5() C(MEMCACHE_NEVER)C(MEMCACHE_SEEK)C(MEMCACHE_RULE)C(MEMCACHE_COMPRESSED)C(MEMCACHE_ALWAYS)
 #define A6(x) C(STATQUEUE_NIL)C(STATQUEUE_QUEUED)C(STATQUEUE_FAILED)C(STATQUEUE_OK)
 #define A7(x) C(PTHREAD_NIL)C(PTHREAD_DIRCACHE)C(PTHREAD_MEMCACHE)C(PTHREAD_STATQUEUE)C(PTHREAD_RESPONDING)C(PTHREAD_MISC0)C(PTHREAD_LEN)
-#define A8(x) C(mutex_nil)C(mutex_fhandle)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_autogen_init)C(mutex_dircachejobs)C(mutex_log_count)C(mutex_crc)C(mutex_inode)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_statqueue)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_len) //* mutex_roots must be last */
+#define A8(x) C(mutex_nil)C(mutex_fhandle)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_autogen_init)C(mutex_dircachejobs)C(mutex_log_count)C(mutex_crc)C(mutex_inode)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_statqueue)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_log_flag)C(mutex_len) //* mutex_roots must be last */
+
+#define A9(x) C(LOG_FLAG_NIL)C(LOG_FUSE_METHODS_ENTER)C(LOG_FUSE_METHODS_EXIT)C(LOG_ZIP)C(LOG_ZIP_INLINE)C(LOG_EVICT_FROM_CACHE)C(LOG_MEMCACHE)C(LOG_REALPATH)C(LOG_STAT_QUEUE)C(LOG_AUTOGEN)C(LOG_READ_BLOCK)\
+       C(LOG_INFINITY_LOOP_RESPONSE)C(LOG_INFINITY_LOOP_STAT)C(LOG_INFINITY_LOOP_MEMCACHE)C(LOG_INFINITY_LOOP_DIRCACHE)C(LOG_INFINITY_LOOP_MISC)  C(LOG_FLAG_LENGTH)
 #define C(a) a,
-enum mstoreid{A1()};
-enum mallocid{A2()};
-enum warnings{A3()};
+enum enum_mstoreid{A1()};
+enum enum_mallocid{A2()};
+enum enum_warnings{A3()};
 #if WITH_MEMCACHE
- enum memcache_status{A4()};
- enum when_memcache_zip{A5()};
+enum enum_memcache_status{A4()};
+enum enum_when_memcache_zip{A5()};
 #endif //WITH_MEMCACHE
-enum statqueue_status{A6()};
-enum root_thread{A7()};
-enum mutex{A8()};
+enum enum_statqueue_status{A6()};
+enum enum_root_thread{A7()};
+enum enum_mutex{A8()};
+enum enum_log_flags{A9()};
 #undef C
 #define C(a) #a,
 static const char *HT_MALLOC_S[]={A1()NULL};
@@ -114,6 +118,7 @@ IF1(WITH_MEMCACHE,static const char *WHEN_MEMCACHE_S[]={A5()NULL});
 static const char *STATQUEUE_STATUS_S[]={A6()NULL};
 static const char *PTHREAD_S[]={A7()NULL};
 static const char *MUTEX_S[]={A8()NULL};
+static const char *LOG_FLAG_S[]={A9()NULL};
 #undef C
 #undef A1
 #undef A2
@@ -123,6 +128,7 @@ static const char *MUTEX_S[]={A8()NULL};
 #undef A6
 #undef A7
 #undef A8
+
 
 
 struct counter_rootdata{
@@ -200,11 +206,9 @@ struct zippath{
 #define ZP_ZIP (1<<3)
 #define ZP_DOES_NOT_EXIST (1<<4)
 #define ZP_IS_COMPRESSED (1<<5)
-#define ZP_VERBOSE (1<<6)
-#define ZP_VERBOSE2 (1<<7)
+
+
 #define ZPATH_IS_ZIP() ((zpath->flags&ZP_ZIP)!=0)
-#define ZPATH_IS_VERBOSE() false //((zpath->flags&ZP_VERBOSE)!=0)
-#define ZPATH_IS_VERBOSE2() false //((zpath->flags&ZP_VERBOSE2)!=0)
 #define ZPATH_ROOT_WRITABLE() (0!=(zpath->root->features&ROOT_WRITABLE))
 #define LOG_FILE_STAT() cg_log_file_stat(zpath->realpath,&zpath->stat_rp),log_file_stat(zpath->virtualpath,&zpath->stat_vp)
 #define VP() (zpath->strgs+zpath->virtualpath)
@@ -264,7 +268,7 @@ struct zippath{
 #define FHANDLE_BLOCK_SIZE (1<<FHANDLE_LOG2_BLOCK_SIZE)
 #define FHANDLE_MAX (FHANDLE_BLOCKS*FHANDLE_BLOCK_SIZE)
 #define STATQUEUE_ENTRY_N 128
-#define STATQUEUE_FLAGS_VERBOSE (1<<1)
+
 
 
 /* flags for config_file_attribute_valid_mseconds() */
@@ -299,29 +303,24 @@ struct statqueue_entry{
   volatile int flags,refcount;
   char rp[MAX_PATHLEN+1]; volatile int rp_l;  volatile ht_hash_t rp_hash;
   struct stat stat;
-  volatile enum statqueue_status status;
+  volatile enum enum_statqueue_status status;
   struct timespec time;
 };
 #endif
 
-
-
 /////////////////////////////////////////////////////////////////////////
+///  Union file system:
 ///  struct rootdata holds the data for a branch
+///  This is the root path  of an upstream source file tree.
 ///  ZIPsFS is a union file system and combines all source directories
 //////////////////////////////////////////////////////////////////////////
 #define is_last_root_or_null(r)  (!r||r==_root+_root_n-1)
-//#define foreach_root(ir,r)    int ir=0;for(struct rootdata *r=_root; ir<_root_n; r++,ir++)
-// #define foreach_root(ir,r)    struct rootdata *r=_root; for(int ir=0; ir<_root_n; r++,ir++)
 #define foreach_root1(r)    for(struct rootdata *r=_root; r<_root+_root_n; r++)
 
 #define ROOT_WRITABLE (1<<1)
 #define ROOT_REMOTE (1<<2)
 
-
-
-
-struct rootdata{ /* Data for a branch. ZIPsFS acts like a union FS. */
+struct rootdata{
   char rootpath[MAX_PATHLEN+1];
   int rootpath_l;
   uint32_t features;
@@ -337,7 +336,7 @@ struct rootdata{ /* Data for a branch. ZIPsFS acts like a union FS. */
   pthread_t thread[PTHREAD_LEN];
   int thread_count_started[PTHREAD_LEN];
   int thread_when_loop_deciSec[PTHREAD_LEN]; /* Detect blocked loop. */
-    int thread_when_canceled_deciSec[PTHREAD_LEN];
+  int thread_when_canceled_deciSec[PTHREAD_LEN];
   IF1(WITH_STAT_SEPARATE_THREADS,struct statqueue_entry statqueue[STATQUEUE_ENTRY_N]);
   bool thread_pretend_blocked[PTHREAD_LEN];
   atomic_int thread_starting[PTHREAD_LEN];
@@ -353,6 +352,14 @@ struct rootdata{ /* Data for a branch. ZIPsFS acts like a union FS. */
 };
 
 
+///////////////
+/// Logging A9 ///
+///////////////
+#define LF() const int log_flags=get_log_flags()
+#define IF_LOG_FLAG(f) if (log_flags&(1<<f))
+#define LOG_FUSE(path)         LF();IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER) log_entered_function("%s",path)
+#define LOG_FUSE_RES(path,res)      IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER) log_entered_function("%s res:%d",path,res)
+
 
 
 
@@ -360,7 +367,7 @@ struct rootdata{ /* Data for a branch. ZIPsFS acts like a union FS. */
 #define ADVISE_CACHE_IS_CMPRESSED (1<<1)
 #define ADVISE_CACHE_IS_SEEK_BW (1<<2)
 struct memcache{
-  volatile enum memcache_status memcache_status;
+  volatile enum enum_memcache_status memcache_status;
   struct textbuffer *txtbuf;
   volatile off_t memcache_l,memcache_already_current,memcache_already;
   int64_t memcache_took_mseconds, memcache_took_mseconds_in_lock;

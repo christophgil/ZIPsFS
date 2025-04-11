@@ -32,7 +32,8 @@ const char *PLACEHOLDERS[]={
 #define autogen_ht_fsize(vp,vp_l) ht_numkey_get_entry(&ht_fsize,inode_from_virtualpath(vp,vp_l),0,true)
 
 static void autogen_run(struct fhandle *d){
-  log_verbose("%s",D_VP(d));
+  LF();
+  IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("%s",D_VP(d));
   const char *rp=D_RP(d);
   assert(strlen(rp)<MAX_PATHLEN-10);
   INIT_STRUCT_AUTOGEN_FILES(ff,D_VP(d),D_VP_L(d));
@@ -47,20 +48,18 @@ static void autogen_run(struct fhandle *d){
   struct stat st={0};
   if (autogen_realinfiles(&ff)<0){
     d->autogen_state=AUTOGEN_FAIL;
-     log_verbose("AUTOGEN_FAIL autogen_realinfiles(ff)");
+     IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("AUTOGEN_FAIL autogen_realinfiles(ff)");
   }else if ((d->autogen_error=-aimpl_run(&ff))){
     d->autogen_state=AUTOGEN_FAIL;
-    log_verbose("AUTOGEN_FAIL aimpl_run");
+    IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("AUTOGEN_FAIL aimpl_run");
   }else if (ff.buf){ /* Result is in RAM */
-    //log_debug_now("Result in ff.buf");
     LOCK(mutex_fhandle, fhandle_set_text(d,ff.buf); autogen_ht_fsize(D_VP(d),D_VP_L(d))->value=(char*)textbuffer_length(ff.buf);d->autogen_state=AUTOGEN_SUCCESS);
   }else{ /*Result is in file tmpout  */
-    //log_debug_now("ff.tmpout=%s  %d ",ff.tmpout,cg_file_exists(ff.tmpout));
     if (stat(ff.tmpout,&st)){ /* Fail */
       warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,ff.tmpout," size=%ld ino: %ld",st.st_size, st.st_ino);
       d->autogen_state=AUTOGEN_FAIL;
     }else{/* tmpout success */
-      log_verbose("Size: %lld ino: %llu, Going to rename(%s,%s)\n",(LLD)st.st_size,(LLU)st.st_ino,ff.tmpout,rp);
+      IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("Size: %lld ino: %llu, Going to rename(%s,%s)\n",(LLD)st.st_size,(LLU)st.st_ino,ff.tmpout,rp);
       if (rename(ff.tmpout,rp)) log_errno("rename(%s,%s)",ff.tmpout,rp); /* Atomic file creation */
       else if (chmod(rp,0777)) log_errno("chmod(%s,0777)",rp);
       zpath_stat(&d->zpath,_root_writable);
@@ -100,8 +99,9 @@ static long autogen_estimate_filesize(const char *vp,const int vp_l){
   return size;
 }
 static bool autogen_remove_if_not_up_to_date(struct zippath *zpath){
+  LF();
   if (autogen_not_up_to_date(zpath->stat_rp.ST_MTIMESPEC,VP(),VP_L()) || config_autogen_file_is_invalid(VP(),VP_L(),&zpath->stat_rp, _root_writable->rootpath)){
-    log_verbose("Not up-to-date. Deleting %s",RP());
+    IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("Not up-to-date. Deleting %s",RP());
     unlink(RP());
     return true;
   }
