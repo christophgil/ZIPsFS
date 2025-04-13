@@ -75,6 +75,14 @@ static off_t _textbuffer_copy_to_or_compare(const bool isCopy,const struct textb
       if (f>=to) break;
       if (t>f){
         if (isCopy){
+
+
+          assert(f-from+t-f<=to);
+
+          memset(dst+f-from,7,t-f); // DEBUG_NOW
+
+
+
           memcpy(dst+f-from,b->segment[i]+(f-f0),t-f);
         }else{
           if (memcmp(dst+f-from,b->segment[i]+(f-f0),t-f)) return 1;

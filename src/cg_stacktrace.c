@@ -222,7 +222,6 @@ static void _cg_print_stacktrace_test1(void){
 static void _cg_print_stacktrace_test2(void){
   _cg_print_stacktrace_test1();
 }
-#define CG_PRINT_STACKTRACE_TEST_MAX 2
 static void cg_print_stacktrace_test(int what){
   switch(what){
   case 0:
@@ -233,13 +232,13 @@ static void cg_print_stacktrace_test(int what){
     _cg_print_stacktrace_test2();
     break;
   case 2:{
-#ifndef    __cppcheck__
+#ifndef __cppcheck__
     log_msg("Going to write to address 0. Press Enter to continue "); cg_getc_tty();
-
     char *s=NULL;
     strcpy(s,"Force nullPointer dereference");
 #endif
   } break;
+  default: log_error("Option -T requires numbers between 0 and 2");
   }
 }
 

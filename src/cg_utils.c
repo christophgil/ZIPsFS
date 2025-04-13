@@ -433,18 +433,18 @@ static int cg_find_invalidchar(enum enum_validchars type,const char *s,const int
 
 
 
-static int cg_path_for_fd(const char *title, char *path, int fd){
+static void cg_path_for_fd(const char *title, char *path, int fd){
   *path=0;
-  if (!has_proc_fs()) return 1;
+  if (!has_proc_fs()) return;
   char buf[99];
   sprintf(buf,"/proc/self/fd/%d",fd);
 
   const ssize_t n=readlink(buf,path, MAX_PATHLEN-1);
   if (n<0){
+    *path=0;
     log_errno("\n%s  %s: ",snull(title),buf);
-    return -1;
   }
-  return path[n]=0;
+   path[n]=0;
 }
 
 static int cg_count_fd_this_prg(void){
@@ -793,8 +793,8 @@ static bool cg_timespec_eq(struct timespec a, struct timespec b){
 
 static struct timespec cg_file_last_modified(const char *path){
   struct stat st;
-  static struct timespec ZERO={0};
-  if (!path || !*path || PROFILED(stat)(path,&st)) return ZERO;
+  static struct timespec TZERO={0};
+  if (!path || !*path || PROFILED(stat)(path,&st)) return TZERO;
   return st.ST_MTIMESPEC;
 }
 static bool cg_file_is_newer_than(const char *path1,const char *path2){
@@ -901,13 +901,14 @@ static void cg_exec(char const * const * const env,char const * const * const cm
   //  if(fd_err>0 && fd_err!=fd_out) close(fd_err);
   cg_log_exec_fd(STDERR_FILENO,env,cmd);
 #if defined(HAS_EXECVPE) && HAS_EXECVPE
-  execvpe(cmd[0],cmd,env);
+  execvpe(cmd[0],(char *const *)cmd,env);
 #elif ! defined(HAS_UNDERSCORE_ENVIRON) || HAS_UNDERSCORE_ENVIRON
   extern char **_environ; /* default */
   if (env) _environ=(char**)env;
   execvp(cmd[0],(char *const *)cmd);
+
 #else
-  execvp(cmd[0],cmd);
+  execvp(cmd[0],(char *const *)cmd);
 #endif
   EXIT(EPIPE);
 }

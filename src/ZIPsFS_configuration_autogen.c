@@ -126,7 +126,7 @@ static int config_autogen_add_virtual_infiles(struct autogen_files *ff){
   return 1;
 }
 
-static enum autogen_run_res config_autogen_run(struct autogen_files *ff){
+static enum enum_autogen_run_res config_autogen_run(struct autogen_files *ff){
   if (ff->rule==&_test_textbuf){ /* This example shows how file content is generated without calling an external program. */
     /* There are three functions to add text:
        autogen_filecontent_append(): The memory had been allocated with malloc() and will be released with free()

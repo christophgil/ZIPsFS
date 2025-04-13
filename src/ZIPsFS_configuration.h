@@ -43,7 +43,7 @@
 // This activates sorage of the ZIP file index and the file listing of rarely changing file directories in a cache.
 // The cache key is the filepath of the ZIP file or directory  plus the last-modified file  attribute.
 
-#define WITH_DIRCACHE_OPTIMIZE_NAMES 1
+#define WITH_ZIPENTRY_PLACEHOLDER 1
 // When the  base name of the ZIP file  is part of  ZIP entry names, storage space can be saved.
 // The base name is replaced by a specific symbol denoted here as "*" asterisk. Consider for example a Zipfile my_record_1234.Zip containing my_record_1234.wiff and
 // my_record_1234.rawIdx and my_record_1234.raw.  Substitution of the ZIP file name "my_record_1234" by "*" results in  *.wiff and *.rawIdx and *.raw.
@@ -56,10 +56,10 @@
 // See man fseek
 // The virtual file paths are selected with the function config_advise_cache_zipentry_in_ram(). Also see CLI parameter -c.
 // Depending on the size, memory is reserved either with MALLOC() or with MMAP().
-// The memory address is kept int struct fhandle as long as the file is open.
-// When several threads are accessing the same file, then only one instance of struct fhandle has a reference to the RAM area with the file content.
-// This cache is used by all other instances of struct fhandle with the same file path.
-// Upon close, such struct fhandle instance is kept alive as long as  there are still instances with the same path. Instead, it is marked for  deletion at a later time.
+// The memory address is kept int struct fHandle as long as the file is open.
+// When several threads are accessing the same file, then only one instance of struct fHandle has a reference to the RAM area with the file content.
+// This cache is used by all other instances of struct fHandle with the same file path.
+// Upon close, such struct fHandle instance is kept alive as long as  there are still instances with the same path. Instead, it is marked for  deletion at a later time.
 
 
 

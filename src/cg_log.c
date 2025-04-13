@@ -55,7 +55,7 @@ static void _warning(const char *fn,int line,const uint32_t channel,const char* 
   for(int j=2;--j>=0;){
     FILE *f=j?(_logIsSilent?NULL:stderr):!toFile?NULL:_fWarnErr[iserror];
     if (!f) continue;
-    char *pfx=_warning_channel_name[i], *color=_warning_color[i];
+    const char *pfx=_warning_channel_name[i], *color=_warning_color[i];
     if (0!=(channel&WARN_FLAG_SUCCESS)) pfx=GREEN_SUCCESS;
         if (0!=(channel&WARN_FLAG_FAIL)) pfx=RED_FAIL;
     fprintf(f,"\n%d\t%s%s"ANSI_RESET"\t%s():%d\t%s\t",_warning_count[i],color?color:ANSI_FG_RED,pfx?pfx:"ERROR",fn,line,p);

@@ -153,7 +153,7 @@ static bool debug_path(const char *vp){
 
 
 
-static bool debug_fhandle(const struct fhandle *d){
+static bool debug_fhandle(const struct fHandle *d){
   return d && !d->n_read && tdf_or_tdf_bin(D_VP(d));
 }
 static void debug_fhandle_listall(void){
@@ -203,11 +203,11 @@ static void debug_compare_directory_a_b(struct directory *A,struct directory *B)
   } //else dde_print(GREEN_SUCCESS"%s\n",B->dir_realpath);
 }
 static void debug_dircache_compare_cached(struct directory *mydir,const struct stat *rp_stat){
-  int dde_result;
+  bool dde_result;
   struct directory dde_dir={0};
   directory_init(DIRECTORY_IS_ZIPARCHIVE,&dde_dir,mydir->dir_realpath,mydir->root);
   LOCK_NCANCEL(mutex_dircache, dde_result=dircache_directory_from_cache(&dde_dir,rp_stat->ST_MTIMESPEC)?1:0);
-  if (dde_result==1) debug_compare_directory_a_b(&dde_dir,mydir);
+  if (dde_result) debug_compare_directory_a_b(&dde_dir,mydir);
 }
 #endif //DEBUG_DIRCACHE_COMPARE_CACHED
 
@@ -228,3 +228,15 @@ static void debug_track_false_getattr_errors(const char *vp,const int vp_l){
 #endif //DEBUG_TRACK_FALSE_GETATTR_ERRORS
 
 ///////////////////////////////////////////////////////////////////
+#if WITH_EXTRA_ASSERT
+static bool debug_trigger_vp(const char *vp,const int vp_l){
+  return  !strcmp("/PRO2/Data/50-0139",vp) ||
+    !strcmp("/PRO2/Data",vp) ||
+    !strcmp("/PRO2",vp) ||
+    ENDSWITH(vp,vp_l,".d") ||
+    ENDSWITH(vp,vp_l,".tdf") ||
+    ENDSWITH(vp,vp_l,".tdf_bin");
+}
+#else
+#define debug_trigger_vp(...) false
+#endif

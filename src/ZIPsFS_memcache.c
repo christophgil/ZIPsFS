@@ -15,7 +15,7 @@ static void memcache_set_status(struct memcache *m,const int status){ /* NOT_TO_
   if (m) m->memcache_status=status;
 }
 
-static struct memcache *memcache_new(struct fhandle *d){
+static struct memcache *memcache_new(struct fHandle *d){
   ASSERT_LOCKED_FHANDLE();
   if (!d->memcache){
     static int id;
@@ -35,7 +35,7 @@ static struct memcache *memcache_new(struct fhandle *d){
 ///////////////////////////////////////////
 
 /* Called from memcache_read_fhandle() fhandle_read_zip()  and xmp_read() */
-static off_t memcache_read(char *buf,const struct fhandle *d,const off_t from,off_t to){
+static off_t memcache_read(char *buf,const struct fHandle *d,const off_t from,off_t to){
   cg_thread_assert_not_locked(mutex_fhandle);
   const struct memcache *m=!d?NULL:d->memcache;
   if (!m || !m->txtbuf) return 0;
@@ -45,8 +45,8 @@ static off_t memcache_read(char *buf,const struct fhandle *d,const off_t from,of
   if (to>from){ textbuffer_copy_to(m->txtbuf,from,to,buf); return to-from;}
   return already<=from && m->memcache_status==memcache_done?-1:0;
 }
-/* Invoked from xmp_read, where struct fhandle *d=fhandle_get(path,fd) */
-static off_t memcache_read_fhandle(char *buf, const off_t size, const off_t offset,struct fhandle *d,struct fuse_file_info *fi){
+/* Invoked from xmp_read, where struct fHandle *d=fhandle_get(path,fd) */
+static off_t memcache_read_fhandle(char *buf, const off_t size, const off_t offset,struct fHandle *d,struct fuse_file_info *fi){
   LOCK_N(mutex_fhandle, struct memcache *m=memcache_new(d));
   const off_t already=memcache_waitfor(d,offset+size);
   if (offset==m->memcache_l) return 0; /* Otherwise md5sum fails with EPERM */
@@ -60,7 +60,7 @@ static off_t memcache_read_fhandle(char *buf, const off_t size, const off_t offs
 
 /* Those that are queued will be processed in a different thread. See infloop_memcache() */
 
-static bool memcache_fhandle_to_queue(struct fhandle *d){
+static bool memcache_fhandle_to_queue(struct fHandle *d){
   ASSERT_LOCKED_FHANDLE();
   const off_t st_size=d->zpath.stat_vp.st_size;
   if (!st_size){ warning(WARN_MEMCACHE,D_VP(d),"st_size is 0");return false;}
@@ -78,7 +78,7 @@ static bool memcache_fhandle_to_queue(struct fhandle *d){
 }
 /* Compare with crc32 stored in ZIP file */
 
-static bool fhandle_check_crc32(struct fhandle *d){
+static bool fhandle_check_crc32(struct fHandle *d){
   const off_t st_size=d->zpath.stat_vp.st_size;
   assert(d->memcache);
   {
@@ -98,7 +98,7 @@ struct zip_file {
 };
 
 #define MEMCACHE_READ_ERROR 1
-static int memcache_store_try(struct fhandle *d){
+static int memcache_store_try(struct fHandle *d){
 #define A() LOCK(mutex_fhandle,ASSERT(!fhandle_can_destroy(d));  assert(D_VP(d)!=NULL); assert(d->zpath.root!=NULL); assert(d->memcache); assert(d->memcache->memcache_status==memcache_reading))
   LF();
   IF_LOG_FLAG(LOG_MEMCACHE) log_entered_function("%s",D_RP(d));
@@ -154,7 +154,7 @@ static int memcache_store_try(struct fhandle *d){
           LOCK(mutex_fhandle, A();m->memcache_took_mseconds=currentTimeMillis()-start;  _log_memcache_took_mseconds_in_lock=MAX_long(_log_memcache_took_mseconds_in_lock, m->memcache_took_mseconds_in_lock=wait_lock+currentTimeMillis());memcache_set_status(m,memcache_done));
           IF_LOG_FLAG(LOG_MEMCACHE){
             log_succes("memcache_done  d= %p %s    in %'llu mseconds   ret: %d\n",d,path,(LLU)(currentTimeMillis()-start), ret);
-          log_exited_function("%s  d->memcache_already_current==st_size  crc32 OK\n",D_RP(d));
+            log_exited_function("%s  d->memcache_already_current==st_size  crc32 OK\n",D_RP(d));
           }
         }else{
           LOCK(mutex_fhandle,A();memcache_set_status(m,m->memcache_already_current=0);m->memcache_already=0);
@@ -177,7 +177,7 @@ static int memcache_store_try(struct fhandle *d){
 
 
 /* Invoked from infloop_memcache */
-static void memcache_store(struct fhandle *d){
+static void memcache_store(struct fHandle *d){
   if (!d) return;
   assert(cg_strlen(D_VP(d)));
   cg_thread_assert_not_locked(mutex_fhandle);
@@ -195,7 +195,7 @@ static void memcache_store(struct fhandle *d){
 
 /*
   Each root has one infloop_memcache instance.
-  The fhandle array is iterated.
+  The fHandle array is iterated.
   File data is stored to RAM.
 */
 static void *infloop_memcache(void *arg){
@@ -219,7 +219,7 @@ static void *infloop_memcache(void *arg){
 #endif
   for(int i=0;;i++){
     observe_thread(r,PTHREAD_MEMCACHE);
-    struct fhandle *d=NULL;
+    struct fHandle *d=NULL;
     lock(mutex_fhandle);
     r->memcache_d=NULL;
     foreach_fhandle(id,e){
@@ -256,7 +256,7 @@ static bool virtualpathStat(struct stat *st, const char *vp){
 ///////////////////////////
 /// struct textbuffer   ///
 ///////////////////////////
-static void fhandle_set_text(struct fhandle *d, struct textbuffer *b){
+static void fhandle_set_text(struct fHandle *d, struct textbuffer *b){
   ASSERT_LOCKED_FHANDLE();
   struct memcache *m=memcache_new(d);
   if(m->txtbuf){ /* This can be triggered by accessing a @SOURCE.TXT file from a Windows client. */
@@ -271,7 +271,7 @@ static void fhandle_set_text(struct fhandle *d, struct textbuffer *b){
 }
 static uint64_t fhandle_set_filesource_info(struct zippath *zpath){
   if (PATH_IS_FILE_INFO(VP(),VP_L())){
-      cg_thread_assert_not_locked(mutex_fhandle);
+    cg_thread_assert_not_locked(mutex_fhandle);
     char vp[VP_L()+1];
     const int vp_l=VP_L()-(sizeof(VFILE_SFX_INFO)-1);
     strcpy(vp,VP());
@@ -281,7 +281,7 @@ static uint64_t fhandle_set_filesource_info(struct zippath *zpath){
     if (!find_realpath_any_root(0,&zp,NULL)) return -1;
     lock(mutex_fhandle);
     const uint64_t fh=next_fh();
-    struct fhandle *d=fhandle_create(fh,zpath);
+    struct fHandle *d=fhandle_create(fh,zpath);
     struct textbuffer *b=textbuffer_new(MALLOC_memcache_textbuffer);
     char buf[zp.realpath_l+zp.entry_path_l+3];
     const int len=sprintf(buf,"%s%s%s\n",zp.strgs+zp.realpath,zp.entry_path_l?"\t":"",zp.strgs+zp.entry_path);
@@ -297,7 +297,7 @@ static uint64_t fhandle_set_filesource_info(struct zippath *zpath){
 
 
 
-static bool _memcache_is_advised(const struct fhandle *d){
+static bool _memcache_is_advised(const struct fHandle *d){
   if (!d || _memcache_policy==MEMCACHE_NEVER) return false;
   const int flags=((d->zpath.flags&ZP_IS_COMPRESSED)?ADVISE_CACHE_IS_CMPRESSED:0)|((d->flags&FHANDLE_FLAG_SEEK_BW_FAIL)?ADVISE_CACHE_IS_SEEK_BW:0);
   if (config_advise_cache_zipentry_in_ram_never(D_VP(d),D_RP(d),d->zpath.stat_vp.st_size,flags)) return false;
@@ -307,13 +307,13 @@ static bool _memcache_is_advised(const struct fhandle *d){
     config_advise_cache_zipentry_in_ram(D_VP(d),D_RP(d),d->zpath.stat_vp.st_size,flags);
 }
 
-static bool memcache_is_advised(const struct fhandle *d){
+static bool memcache_is_advised(const struct fHandle *d){
   const bool r=_memcache_is_advised(d);
   //log_debug_now("vp: %s advise: %d d: %p  usage: %ld", D_VP(d), r,d,ramUsageForFilecontent());
   return r;
 }
-/* Returns fhandle instance with at least min_fill memcache data */
-static off_t memcache_waitfor(struct fhandle *d, off_t min_fill){
+/* Returns fHandle instance with at least min_fill memcache data */
+static off_t memcache_waitfor(struct fHandle *d, off_t min_fill){
   cg_thread_assert_not_locked(mutex_fhandle);
   ASSERT(d->is_busy>0);
   ASSERT(d->zpath.root!=NULL);
@@ -339,7 +339,7 @@ static off_t memcache_waitfor(struct fhandle *d, off_t min_fill){
 
 
 /* Called from fhandle_destroy() */
-static void memcache_free(struct fhandle *d){
+static void memcache_free(struct fHandle *d){
   ASSERT_LOCKED_FHANDLE();
   struct memcache *m=d->memcache;
   if (m){
@@ -349,4 +349,45 @@ static void memcache_free(struct fhandle *d){
     cg_free(MALLOC_memcache,m);
     //    foreach_fhandle_also_emty(id2,e) if (e->memcache==m) e->memcache=NULL;
   }
+}
+
+
+
+static void memcache_infer_from_other_handle(struct fHandle *d){
+  const ht_hash_t hash=D_VP_HASH(d);
+  { foreach_fhandle(ie,e) if (d!=e && hash==D_VP_HASH(e) && !strcmp(D_VP(d),D_VP(e))) d->memcache=e->memcache; }
+}
+
+
+static bool memcache_set_maxbytes(const char *s){
+  if ((_memcache_maxbytes=cg_atol_kmgt(s))<(1<<22)){
+    log_error("Option -l: _memcache_maxbytes is too small %s\n",s);
+    return false;
+  }
+  return true;
+}
+
+static bool memcache_set_policy(const char *a){
+  bool ok=false;
+  const char *s;
+  for(int i=0;!ok && (s=rm_pfx_us(WHEN_MEMCACHE_S[i]));i++){
+    if ((ok=!strcasecmp(s,a))) _memcache_policy=i;
+  }
+  if (!ok){ log_error("Wrong option -c %s\n",a); ZIPsFS_usage(); return false;}
+  return true;
+}
+
+
+static bool memcache_can_destroy(struct fHandle *d){
+  const struct memcache *m=d->memcache;
+  if (!m) return true;
+  /* Not close when serving as file-content-cache for other fHandle instances  with identical path */
+  if (m->memcache_status==memcache_reading||d->is_memcache_store>0) return false;
+  const ht_hash_t hash=D_VP_HASH(d);
+  foreach_fhandle(id,e){
+    if (e==d || (e->flags&FHANDLE_FLAG_DESTROY_LATER)) continue;
+    //if (!m->memcache_status && /* Otherwise two with same path, each having a cache could stick for ever */
+    if (D_VP_HASH(e)==hash && !strcmp(D_VP(d),D_VP(e))) return false;
+  }
+return true;
 }

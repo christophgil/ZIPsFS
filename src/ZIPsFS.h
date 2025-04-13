@@ -148,8 +148,8 @@ struct autogen_files;
 
 // ---
 #if ! WITH_DIRCACHE
-#undef WITH_DIRCACHE_OPTIMIZE_NAMES
-#define WITH_DIRCACHE_OPTIMIZE_NAMES 0
+#undef WITH_ZIPENTRY_PLACEHOLDER
+#define WITH_ZIPENTRY_PLACEHOLDER 0
 #undef WITH_ZIPINLINE_CACHE
 #define WITH_ZIPINLINE_CACHE 0
 #endif
@@ -233,7 +233,7 @@ struct zippath{
 #define NEW_ZIPPATH(virtpath)  struct zippath __zp={0},*zpath=&__zp;zpath_init(zpath,virtpath)
 #define FIND_REALPATH(virtpath)    NEW_ZIPPATH(virtpath);  found=find_realpath_any_root(0,zpath,NULL);
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-///   The struct fhandle "file handle" holds data associated with a file descriptor.
+///   The struct fHandle "file handle" holds data associated with a file descriptor.
 ///   They are stored in the linear list _fhandle. The list may have holes.
 ///   Memcache: It may also contain the cached file content of the zip entry.
 ///   Only one of all instances with a specific virtual path should store the cached zip entry
@@ -254,14 +254,14 @@ struct zippath{
 #define FHANDLE_FLAG_WITHOUT_MEMCACHE  (1<<8)
 #define FHANDLE_FLAG_MEMCACHE_COMPLETE (1<<9)
 #define FHANDLE_FLAG_OPEN_LATER_IN_READ_OR_WRITE (1<<10)
-// #define foreach_fhandle_also_emty(id,d) int id=_fhandle_n;for(struct fhandle *d;--id>=0 && ((d=fhandle_at_index(id))||true);)
+// #define foreach_fhandle_also_emty(id,d) int id=_fhandle_n;for(struct fHandle *d;--id>=0 && ((d=fhandle_at_index(id))||true);)
 
-#define foreach_fhandle_also_emty(id,d) struct fhandle *d; for(int id=_fhandle_n;--id>=0 && ((d=fhandle_at_index(id))||true);)
+#define foreach_fhandle_also_emty(id,d) struct fHandle *d; for(int id=_fhandle_n;--id>=0 && ((d=fhandle_at_index(id))||true);)
 // cppcheck-suppress-macro constVariablePointer
 #define foreach_fhandle(id,d)  foreach_fhandle_also_emty(id,d) if (d->flags)
 #define fhandle_path_eq(d,path,hash) d->zpath.virtualpath_hash==hash && !strcmp(D_VP(d),path)
 #define find_realpath_again_fhandle(d) zpath_reset_keep_VP(&d->zpath),find_realpath_any_root(0,&d->zpath,NULL)
-#define SIZEOF_FHANDLE sizeof(struct fhandle)
+#define SIZEOF_FHANDLE sizeof(struct fHandle)
 #define SIZEOF_ZIPPATH sizeof(struct zippath)
 #define FHANDLE_LOG2_BLOCK_SIZE 5
 #define FHANDLE_BLOCKS 512
@@ -277,7 +277,7 @@ struct zippath{
 #define STAT_CACHE_ROOT_IS_REMOTE (1<<3)
 #define STAT_CACHE_ROOT_IS_WRITABLE (1<<4)
 
-struct fhandle{
+struct fHandle{
   uint64_t fh, fh_real;
   struct zip *zarchive;
   zip_file_t *zip_file;
@@ -342,7 +342,7 @@ struct rootdata{
   atomic_int thread_starting[PTHREAD_LEN];
   bool thread_is_run[PTHREAD_LEN];
   pid_t thread_pid[PTHREAD_LEN];
-  IF1(WITH_MEMCACHE,struct fhandle *memcache_d);
+  IF1(WITH_MEMCACHE,struct fHandle *memcache_d);
   //pthread_mutex_t  mutex_zip_fread;
   counter_rootdata_t filetypedata_dummy,filetypedata_all, filetypedata[FILETYPEDATA_NUM],filetypedata_frequent[FILETYPEDATA_FREQUENT_NUM];
   bool filetypedata_initialized, blocked;

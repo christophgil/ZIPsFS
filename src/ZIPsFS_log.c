@@ -3,7 +3,7 @@
 /// Logging in  ZIPsFS                                        ///
 /////////////////////////////////////////////////////////////////
 
-
+// cppcheck-suppress-file unusedFunction
 /////////////////////////////////////////////////////////////////////////////////
 /// The file _fLogFlags contains a decimal number specifying what is logged.  ///
 /////////////////////////////////////////////////////////////////////////////////
@@ -39,7 +39,6 @@ static int get_log_flags(){
 /////////////////////////////////////
 
 //enum memusage{memusage_mmap,memusage_malloc,memusage_n,memusage_get_curr,memusage_get_peak};
-// cppcheck-suppress-file unusedFunction
 static int64_t _log_memcache_took_mseconds_in_lock;
 static void init_count_getattr(void){
   static bool initialized;
@@ -108,7 +107,7 @@ static counter_rootdata_t *filetypedata_for_ext(const char *path,struct rootdata
 static void _rootdata_counter_inc(counter_rootdata_t *c, enum enum_counter_rootdata f){
   if (c->counts[f]<UINT32_MAX) atomic_fetch_add(c->counts+f,1);
 }
-static void fhandle_counter_inc( struct fhandle* d, enum enum_counter_rootdata f){
+static void fhandle_counter_inc( struct fHandle* d, enum enum_counter_rootdata f){
   if (!d->filetypedata) d->filetypedata=filetypedata_for_ext(D_VP(d),d->zpath.root);
   _rootdata_counter_inc(d->filetypedata,f);
 
@@ -562,7 +561,7 @@ static size_t _kilo(size_t x){
   return ((1<<10)-1+x)>>10;
 }
 static int print_fhandle(int n,const char *title){
-  PRINTINFO("<H1>Data associated to file descriptors (struct fhandle)</H1>\n_fhandle_n: %d (Maximum %d)<BR>\n",n,FHANDLE_MAX);
+  PRINTINFO("<H1>Data associated to file descriptors (struct fHandle)</H1>\n_fhandle_n: %d (Maximum %d)<BR>\n",n,FHANDLE_MAX);
   if (!_fhandle_n){
     PRINTINFO("The cache is empty which is good. It means that no entry is locked or leaked.<BR>\n");
   }else{
@@ -596,7 +595,7 @@ static int print_fhandle(int n,const char *title){
     }
     PRINTINFO("</TABLE>");
   }
-  PRINTINFO("Max MillisecWaitLock: %ld\n",_log_memcache_took_mseconds_in_lock);
+  PRINTINFO("Max MillisecWaitLock: %lld\n",(LLD)_log_memcache_took_mseconds_in_lock);
   return n;
 }
 #define MAKE_INFO_HTML (1<<1)
@@ -663,7 +662,7 @@ static const char *zip_fdopen_err(int err){
 #undef ZIP_FDOPEN_ERR
 }
 #if WITH_MEMCACHE
-static void fhandle_log_cache(const struct fhandle *d){
+static void fhandle_log_cache(const struct fHandle *d){
   if (!d){ log_char('\n');return;}
   const struct memcache *m=d->memcache;
   log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %lld/%lld   hasc: %s\n",d,D_VP(d),yes_no(m && m->txtbuf),!m?0:MEMCACHE_STATUS_S[m->memcache_status],(LLD)(!m?-1:m->memcache_already),(LLD)(!m?-1:m->memcache_l),yes_no(m && m->memcache_l>0));
@@ -690,7 +689,7 @@ static void _log_zpath(const char *fn,const int line,const char *msg, struct zip
 
 #define FHANDLE_ALREADY_LOGGED_VIA_ZIP (1<<0)
 #define FHANDLE_ALREADY_LOGGED_FAILED_DIFF (1<<1)
-static bool fhandle_not_yet_logged(unsigned int flag,struct fhandle *d){
+static bool fhandle_not_yet_logged(unsigned int flag,struct fHandle *d){
   if (d->already_logged&flag) return false;
   d->already_logged|=flag;
   return true;

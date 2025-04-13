@@ -31,7 +31,7 @@ const char *PLACEHOLDERS[]={
 //static struct ht_entry *autogen_ht_fsize(const char *vp,const int vp_l){return ht_numkey_get_entry(&ht_fsize,inode_from_virtualpath(vp,vp_l),0,true);}
 #define autogen_ht_fsize(vp,vp_l) ht_numkey_get_entry(&ht_fsize,inode_from_virtualpath(vp,vp_l),0,true)
 
-static void autogen_run(struct fhandle *d){
+static void autogen_run(struct fHandle *d){
   LF();
   IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("%s",D_VP(d));
   const char *rp=D_RP(d);
@@ -216,4 +216,25 @@ static void autogen_free_argv(char const * const * cmd,const char * const * cmd_
   for(int i=0;cmd_orig[i];i++){
     if (cmd[i]!=cmd_orig[i] && !_autogen_is_placeholder(cmd_orig[i])) cg_free(MALLOC_autogen_argv,cmd[i]);
   }
+}
+
+
+
+static void autogen_zpath_init(struct zippath *zpath,const char *path){
+  zpath_init(zpath,path);
+  zpath->realpath=zpath_newstr(zpath);
+  zpath_strcat(zpath,rootpath(zpath->root=_root_writable));
+  zpath_strcat(zpath,path);
+  ZPATH_COMMIT_HASH(zpath,realpath);
+}
+
+
+static bool autogen_zpath_set_stat(struct stat *stbuf,const struct zippath *zpath,const char *path,const int path_l){
+  long size;
+ if(_realpath_autogen && (size=autogen_estimate_filesize(path,path_l))>0){
+      stat_init(stbuf,size,&zpath->stat_rp);
+      stbuf->st_ino=inode_from_virtualpath(path,path_l);
+      return true;
+    }
+ return false;
 }

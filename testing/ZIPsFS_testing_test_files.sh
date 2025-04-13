@@ -32,8 +32,10 @@ test_checksum(){
 
 test_zip_entry(){
     local vp=$1
+    echo $ANSI_INVERSE"test_zip_entry $ANSI_RESET '$vp'"
     local ze=$(< ${vp}@SOURCE.TXT)
-    [[ -z $ze ]] && echo -n "$ze " && echo -n  "  Empty ${vp}@SOURCE.TXT " && Enter && return 1
+    #    [[ -z $ze ]] && echo -n "$ze " && echo -n  "  Empty ${vp}@SOURCE.TXT " && Enter && return 1
+        [[ -z $ze ]] && echo -n  "  Empty ${vp}@SOURCE.TXT " && Enter && return 1
     local z=${ze%$'\t'*}
     local e=${ze#*$'\t'}
     echo -n  "'$z'   '$e'  "
@@ -51,6 +53,10 @@ test_zip_entry(){
 
 main(){
 
+   test_zip_entry mnt/6600-tof2/Cal/202208/Cal20220819161022040.wiff
+   test_zip_entry mnt/6600-tof2/Cal/202208/Cal20220819161022040.wiff.scan
+
+read -t 5 -r -p 'Enter or wait 5s'
 
     test_zip_entry mnt/ZIPsFS/a/misc_tests/zip/images_helpimg.ZIP.Content/media/helpimg/area1.png
 

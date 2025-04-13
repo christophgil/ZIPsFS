@@ -46,6 +46,9 @@ static void aimpl_wait_concurrent(const struct autogen_rule *ac, const int inc){
 /// This is run once when ZIPsFS is started.                       ///
 //////////////////////////////////////////////////////////////////////
 static void aimpl_init(void){
+  static char realpath_autogen_heap[MAX_PATHLEN+1]; // cppcheck-suppress unassignedVariable
+  if (!_root_writable) return;
+  stpcpy(stpcpy(_realpath_autogen=realpath_autogen_heap,_root_writable->rootpath),DIR_AUTOGEN);
   FOREACH_AUTOGEN_RULE(idx,ac){
     assert(idx<AUTOGEN_MAX_RULES);
     ac->_seqnum=idx;
@@ -214,7 +217,7 @@ static int autogen_realinfiles(struct autogen_files *ff){
 /// When these files are read, their atime  should not be set to now.                                       ///
 /// O_NOATIME can not be used.  It is Linux specific                                                        ///
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
-static void aimpl_maybe_reset_atime_in_future(const struct fhandle *d){
+static void aimpl_maybe_reset_atime_in_future(const struct fHandle *d){
   if (d && d->zpath.flags&ZP_STARTS_AUTOGEN){
     const struct stat *st=&d->zpath.stat_rp;
     if (st->st_atime>currentTimeMillis()/1000+(3600*24)){ /* future + one day */
@@ -260,7 +263,7 @@ static int aimpl_run(struct autogen_files *ff){
   unlink(ff->log);
   unlink(ff->fail);
   aimpl_wait_concurrent_begin(ac);
-  Assert(AUTOGEN_RUN_SUCCESS==0);
+  Assert(AUTOGEN_RUN_SUCCESS==0); // cppcheck-suppress knownConditionTrueFalse
   if (!res &&  (res=config_autogen_run(ff))==AUTOGEN_RUN_NOT_APPLIED){
     res=isOUTF?has_sufficient_storage_space(ff->grealpath):0;
     int fd_err=-1;

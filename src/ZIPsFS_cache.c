@@ -34,6 +34,7 @@ static void dircache_clear_if_reached_limit_all(const bool always,const int mask
 }
 static bool _clear_ht(struct ht *ht){
   /* There is a version clear_ht_unless_observed() in the Archive */
+  if (!ht) return false;
   cg_thread_assert_locked(mutex_dircache);
   ht_clear(ht);
   warning(WARN_DIRCACHE|WARN_FLAG_SUCCESS,ht->name,"Cache cleared");
@@ -85,7 +86,7 @@ static void dircache_directory_to_cache(const struct directory *dir){
     }
 #define C(F,type) if (src.F) d->F=mstore_add(&r->dircache_mstore,src.F,src.files_l*sizeof(type),sizeof(type))
     C_FILE_DATA_WITHOUT_NAME();
-#undef C    /*  Due to simplify_name and internalization, the array of filenames will often be the same and needs to be stored only once - hence ht_intern.*/
+#undef C    /*  Due to zipentry_placeholder_insert()  and internalization, the array of filenames will often be the same and needs to be stored only once - hence ht_intern.*/
     d->fname=(char**)ht_intern(&r->dircache_ht_fnamearray,src.fname,src.files_l*SIZE_POINTER,0,SIZE_POINTER);
   }
   const ht_hash_t rp_hash=hash32(dir->dir_realpath,dir->dir_realpath_l);
@@ -99,7 +100,8 @@ static void dircache_directory_to_cache(const struct directory *dir){
     stpncpy(vp_entry,vp,slash1);/* First copy parent dir */
     RLOOP(i,src.files_l){
       if (!d->fname[i]) continue;
-      unsimplify_fname(strcpy(u,d->fname[i]),rp);
+      strcpy(u,d->fname[i]);
+      IF1(WITH_ZIPENTRY_PLACEHOLDER,zipentry_placeholder_expand(u,rp));
       const int vp_entry_l=strlen(strcpy(vp_entry+slash1,u)); /* Append file name to parent dir */
       ht_numkey_set(&ht_zinline_cache_vpath_to_zippath,hash32(vp_entry,vp_entry_l),vp_entry_l,rp);
     } /* Note: We are not storing vp_entry. We rely on its hash value and accept collisions. */

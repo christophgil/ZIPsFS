@@ -1,15 +1,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// COMPILE_MAIN=ZIPsFS                                                                                                          ///
 /// Temporary cache for file attributs (struct stat).
-/// The hashtable is a member of struct fhandle.
-/// The cache lives as long as the fhandle instance representing a virtual file stored as a ZIP entry.
+/// The hashtable is a member of struct fHandle.
+/// The cache lives as long as the fHandle instance representing a virtual file stored as a ZIP entry.
 /// MOTIVATION:
 ///     We are using software which is sending lots of requests to the FS while the large data files are loaded from the ZIP file.
 ///
 /////////////////////////////////////////////////////////////////////////////////////
 
 #define FHANDLE_BOTH_SHARE_TRANSIENT_CACHE(d1,d2) (d1->zpath.virtualpath_without_entry_hash==d2->zpath.virtualpath_without_entry_hash && !strcmp(D_VP0(d1),D_VP0(d2)))
-static struct ht* transient_cache_get_ht(struct fhandle *d){
+static struct ht* transient_cache_get_ht(struct fHandle *d){
   struct ht *ht=d->ht_transient_cache;
   if (!ht){
     ht_set_mutex(mutex_fhandle,ht_init(ht=d->ht_transient_cache=calloc_untracked(1,sizeof(struct ht)),"transient_cache",HT_FLAG_NUMKEY|HT_FLAG_COUNTMALLOC|5));
@@ -23,10 +23,10 @@ static struct ht* transient_cache_get_ht(struct fhandle *d){
   return ht;
 }
 /* Get/create a zippath object for a given virtual path.
-   The hash table is stored in  struct fhandle.
-   Therefore the list of fhandle instances are iterated to find an entry in its hash table.
-   If no zpath entry  found, one is created and associated to the cache of one of the fhandle instances.
-   The cache lives as long as the fhandle object.
+   The hash table is stored in  struct fHandle.
+   Therefore the list of fHandle instances are iterated to find an entry in its hash table.
+   If no zpath entry  found, one is created and associated to the cache of one of the fHandle instances.
+   The cache lives as long as the fHandle object.
    This function is not searching for realpath of path. It is just retrieving or creating struct zippath.
 */
 static struct zippath *transient_cache_get_or_create_zpath(const bool create,const char *virtualpath,const int virtualpath_l){
@@ -64,17 +64,45 @@ static struct zippath *transient_cache_get_or_create_zpath(const bool create,con
 
 
 static int transient_cache_find_realpath(const int opt, struct zippath *zpath, const char *vp,const int vp_l){
-    struct zippath cached={0};
-    if (!(opt&FINDRP_NOT_TRANSIENT_CACHE)) LOCK(mutex_fhandle,const struct zippath *zp=transient_cache_get_or_create_zpath(false,vp,vp_l); if (zp) cached=*zp);
-    const int f=cached.flags;
-    if (cached.virtualpath && !(f&ZP_DOES_NOT_EXIST) && zpath_exists(&cached)){
-      *zpath=cached;
-      LF();IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(ANSI_FG_GREEN"%s"ANSI_RESET,vp);
-      return 1;
+  struct zippath cached={0};
+  if (!(opt&FINDRP_NOT_TRANSIENT_CACHE)) LOCK(mutex_fhandle,const struct zippath *zp=transient_cache_get_or_create_zpath(false,vp,vp_l); if (zp) cached=*zp);
+  const int f=cached.flags;
+  if (cached.virtualpath && !(f&ZP_DOES_NOT_EXIST) && zpath_exists(&cached)){
+    *zpath=cached;
+    LF();IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(ANSI_FG_GREEN"%s"ANSI_RESET,vp);
+    return 1;
+  }
+  if (f&ZP_DOES_NOT_EXIST){
+    LF();IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(ANSI_FG_RED"%s"ANSI_RESET,vp);
+    return -1;
+  }
+  return 0;
+}
+
+static void transient_cache_store(const bool onlyThisRoot,const struct zippath *zpath, const char *vp,const int vp_l){
+  struct zippath *zp=transient_cache_get_or_create_zpath(true,vp,vp_l);
+  if (zp){
+    if (zpath) *zp=*zpath;
+    else if (!onlyThisRoot) zp->flags|=ZP_DOES_NOT_EXIST; /* Not found in any root. */
+  }
+}
+
+
+
+static void transient_cache_destroy(struct fHandle *d){
+  if (d->ht_transient_cache){
+    foreach_fhandle(ie,e) if (d->ht_transient_cache==e->ht_transient_cache) return;
+    ht_destroy(d->ht_transient_cache);
+    cg_free(MALLOC_fhandle,d->ht_transient_cache);
+    d->ht_transient_cache=0;
+  }
+}
+
+static void transient_cache_activate(struct fHandle *d){
+  if ((d->zpath.flags&ZP_ZIP) && config_advise_transient_cache_for_zipentries(D_VP(d),D_VP_L(d))){
+    d->flags|=FHANDLE_FLAG_WITH_TRANSIENT_ZIPENTRY_CACHES;
+    foreach_fhandle(ie,e){
+      if (d!=e && FHANDLE_BOTH_SHARE_TRANSIENT_CACHE(d,e) && NULL!=(d->ht_transient_cache=e->ht_transient_cache)) break;
     }
-    if (f&ZP_DOES_NOT_EXIST){
-        LF();IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(ANSI_FG_RED"%s"ANSI_RESET,vp);
-        return -1;
-    }
-    return 0;
+  }
 }

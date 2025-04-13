@@ -203,7 +203,7 @@ static bool config_advise_cache_zipentry_in_ram(const char *virtualpath,const ch
     }
     while((u=ramUsageForFilecontent()+st_tdf_bin.st_size+filesize>m)){
       usleep((1<<20));
-      fprintf(stderr,"%s:%d:  Waiting RAM usage too high for  %s  tdf:%'ld +  tdf_bin:%'ld + u:%'ld > %'ld \n",__func__,__LINE__,virtualpath,filesize,st_tdf_bin.st_size,u,m);
+      fprintf(stderr,"%s:%d:  Waiting RAM usage too high for  %s  tdf:%'lld +  tdf_bin:%'lld + u:%'lld > %'lld \n",__func__,__LINE__,virtualpath,(LLD)filesize,(LLD)st_tdf_bin.st_size,(LLD)u,(LLD)m);
     }
 
     return true;

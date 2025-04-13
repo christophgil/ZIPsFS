@@ -172,9 +172,9 @@ static struct mstore *_mstore_init(struct mstore *m,const char *name, const int 
 ////////////////////////////////////////
 
 
-static void mstore_file(char path[PATH_MAX+1],struct mstore *m,const int block){
+static void mstore_file(char path[PATH_MAX+1],const struct mstore *m,const int block){
   char b[9]={'*',0};
-  if (block>=0) sprintf(b,"%02u",block);
+  if (block>=0) sprintf(b,"%02d",block);
   snprintf(path,PATH_MAX-1,"%s/%03d_%s_%s.cache",mstore_base_path(),m->iinstance,m->name,b);
 }
 static int _mstore_openfile(struct mstore *m,const uint32_t block,const off_t adim){

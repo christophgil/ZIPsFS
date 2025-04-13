@@ -35,7 +35,7 @@ struct autogen_rule{
   int *_ends_ll, *_ends_ic_ll;            /* String lengths */
   int _ext_l;
   /* -------------------------------------------- */
-  enum enum__autogen_capture_output out;   /* Where should the Standard output of the called command go to */
+  enum enum_autogen_capture_output out;   /* Where should the Standard output of the called command go to */
   double estimated_filesize;          /* File size is guessed for not yet generated files. See  CA_FLAG_fsize_is_multiple_of_infile. */
   int concurrent_computations;        /* If 0 or 1 (recommended), it will be computed in a locked code block such that only one computation is performed at a time */
   int min_free_diskcapacity_gb;       /* If the free disk  capacity is below, no files are created. Error ENOSPC is returned. If zero, DEFAULT_MIN_FREE_DISKCAPACITY_GB is used. */
@@ -73,7 +73,7 @@ struct autogen_files{
   char log[MAX_PATHLEN+1];
   char fail[MAX_PATHLEN+1];
   struct textbuffer *buf;
-    enum _autogen_capture_output out;   /* Like autogen_rule.out.  Corrected for low memory */
+    enum enum_autogen_capture_output out;   /* Like autogen_rule.out.  Corrected for low memory */
 
 };
 

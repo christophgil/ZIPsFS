@@ -49,7 +49,7 @@ struct mstore{
 
 typedef uint32_t ht_hash_t;
 
-static void mstore_file(char path[PATH_MAX+1],struct mstore *m,const int block);
+static void mstore_file(char path[PATH_MAX+1],const struct mstore *m,const int block);
 
 
 #endif

@@ -29,7 +29,7 @@ static struct statqueue_entry *statqueue_add(struct stat *stbuf, const char *rp,
 }
 
 
-static int _stat_queue_and_wait(const char *rp, const int rp_l,const ht_hash_t hash,struct stat *stbuf,struct rootdata *r){
+static yes_zero_no_t _stat_queue_and_wait(const char *rp, const int rp_l,const ht_hash_t hash,struct stat *stbuf,struct rootdata *r){
   LF();
   struct statqueue_entry *q=NULL,*u=NULL;
   for(int j=0;;j++){
@@ -39,7 +39,9 @@ static int _stat_queue_and_wait(const char *rp, const int rp_l,const ht_hash_t h
     if (is_square_number(j))  warning(WARN_STAT,rp,"No empty slot in queue %d",j);
   }
   IF_LOG_FLAG(LOG_STAT_QUEUE) log_verbose("q->status=%d %s",q->status,rp);
-  int sleep=STATQUEUE_SLEEP_USECONDS/8,sum=0, ok=0;
+  int sleep=STATQUEUE_SLEEP_USECONDS/8,sum=0;
+
+  yes_zero_no_t ok=ZERO;
   while((sum+=sleep)<STATQUEUE_TIMEOUT_SECONDS*1000*1000){
     usleep(sleep);
     sleep+=(sleep>>3);
@@ -48,7 +50,7 @@ static int _stat_queue_and_wait(const char *rp, const int rp_l,const ht_hash_t h
   LOCK(mutex_statqueue,
        if (u && STATQUEUE_DONE(u->status) && E(u)){
          *stbuf=u->stat;
-         ok=(STATQUEUE_OK==u->status)?1:-1;
+         ok=(STATQUEUE_OK==u->status)?YES:NO;
        }
        q->refcount--;
        ASSERT(q->refcount>=0));
@@ -58,13 +60,13 @@ static int _stat_queue_and_wait(const char *rp, const int rp_l,const ht_hash_t h
 
 static bool stat_queue_and_wait(const char *rp, const int rp_l,const ht_hash_t hash,struct stat *stbuf,struct rootdata *r){
   FOR(iTry,0,4){
-    int ok=_stat_queue_and_wait(rp,rp_l,hash,stbuf,r);
+    yes_zero_no_t ok=_stat_queue_and_wait(rp,rp_l,hash,stbuf,r);
     if (ok){
       if (iTry){
         warning(WARN_RETRY,rp,"%s(%s) succeeded on attempt %d\n",__func__,rp,iTry);
         rootdata_counter_inc(rp,COUNT_RETRY_STAT,r);
       }
-      return ok==1;
+      return ok==YES;
     }
   }
   return false;
