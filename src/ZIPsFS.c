@@ -18,6 +18,7 @@
 #define PATH_MAX 1024
 #endif
 // ---
+#include <pthread.h> /* Keep. Required by OpenBSD */
 #include <sys/types.h>
 #include <unistd.h> /// ???? lseek
 #include <getopt.h>
@@ -40,16 +41,13 @@
 #else
 #define ASSERT(...)
 #endif
-//////////////////////////////
-/// FUSE 1 or  FUSE 2      ///
-//////////////////////////////
-/* If compiled with ZIPsFS.compile.sh, then the FUSE_MAJOR_V and FUSE_MINOR_V are detected with print_fuse_version.c */
-#ifndef FUSE_MAJOR_V
-#define FUSE_MAJOR_V 3
-#define FUSE_MINOR_V 999
+// ---
+#ifndef FUSE_MAJOR_VERSION
+#define FUSE_MAJOR_VERSION 1
+#define FUSE_MINOR_VERSION 0
 #endif
 // ---
-#if FUSE_MAJOR_V>2
+#if FUSE_MAJOR_VERSION>2
 #define WITH_FUSE_3 1
 #define COMMA_FILL_DIR_PLUS ,0
 #else
@@ -62,6 +60,7 @@
 ////////////////////
 /// Early Macros ///
 ////////////////////
+#define VERSION_AT_LEAST(major,minor, MAJOR_LEAST,MINOR_LEAST)  (major>MAJOR_LEAST || (major==MAJOR_LEAST && minor>=MINOR_LEAST))
 #define WITH_DEBUG_MALLOC 1
 #include "cg_log.h"
 #include "ZIPsFS_version.h"
@@ -1241,7 +1240,9 @@ void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_config *
 /////////////////////////////////////////////////
 // Functions where Only single paths need to be  substituted
 // Release FUSE 2.9 The chmod, chown, truncate, utimens and getattr handlers of the high-level API now all receive an additional struct fuse_file_info pointer (which, however, may be NULL even if the file is currently open).
-#if FUSE_MAJOR_V>=2 && FUSE_MINOR_V>9
+
+
+#if VERSION_AT_LEAST(FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION, 2,10)
 #define WITH_XMP_GETATTR_FUSE_FILE_INFO 1
 #else
 #define WITH_XMP_GETATTR_FUSE_FILE_INFO 0
@@ -1308,7 +1309,7 @@ static int PROFILED(xmp_access)(const char *path, int mask){
   if (debug_trigger_vp(path,path_l)) log_verbose("%s returning %d",path,minus_val_or_errno(res));
   return minus_val_or_errno(res);
 }
-#if FUSE_MAJOR_V>=2 && FUSE_MINOR_V>9  /* Not sure when parameter introduced */
+#if VERSION_AT_LEAST(FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION, 2,10) /* Not sure when parameter introduced */
 #define WITH_UTIMENS_FUSE_FILE_INFO 1
 #else
 #define WITH_UTIMENS_FUSE_FILE_INFO 0
@@ -1414,9 +1415,8 @@ static int xmp_truncate(const char *path, off_t size IF1(WITH_FUSE_3,,struct fus
 /////////////////////////////////
 // Readdir
 /////////////////////////////////
-// Macosx DFUSE_MAJOR_V=2 -DFUSE_MINOR_V=9
 /** unsigned int cache_readdir:1; FOPEN_CACHE_DIR Can be filled in by opendir. It signals the kernel to  enable caching of entries returned by readdir(). */
-#if FUSE_MAJOR_V>=3 && FUSE_MINOR_V>5 /* FUSE 3.5 Added a new cache_readdir flag to fuse_file_info to enable caching of readdir results. */
+#if VERSION_AT_LEAST(FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION,3,5)  /* FUSE 3.5 Added a new cache_readdir flag to fuse_file_info to enable caching of readdir results. */
 #define WITH_XMP_READDIR_FLAGS 1
 #else
 #define WITH_XMP_READDIR_FLAGS 0
@@ -1555,7 +1555,7 @@ static int _xmp_rename(const char *old_path, const char *neu_path IF1(WITH_FUSE_
 //////////////////////////////////
 // Functions for reading bytes ///
 //////////////////////////////////
-#if FUSE_MAJOR_V>2
+#if WITH_FUSE_3
 static off_t xmp_lseek(const char *path, const off_t off, const int whence, struct fuse_file_info *fi){ // cppcheck-suppress [constParameterCallback]
   LOG_FUSE(path);
   ASSERT(fi!=NULL);
@@ -1604,7 +1604,12 @@ static bool fhandle_zip_fseek(struct fHandle *d, const off_t offset, const char 
   const bool backward=(skip<0);
   LF(); IF_LOG_FLAG(LOG_ZIP) log_verbose("%p %s offset: %lld  ftell: %lld   diff: %lld  backward: %s"ANSI_RESET,d, D_VP(d),(LLD)offset,(LLD)fhandle_zip_ftell(d),(LLD)skip, backward?ANSI_FG_RED"Yes":ANSI_FG_GREEN"No");
   const int fwbw=backward?FHANDLE_FLAG_SEEK_BW_FAIL:FHANDLE_FLAG_SEEK_FW_FAIL;
+
+
+#if VERSION_AT_LEAST(LIBZIP_VERSION_MAJOR,LIBZIP_VERSION_MINOR,1,9)
   if (!(d->flags&fwbw) && !zip_file_is_seekable(d->zip_file)) d->flags|=(FHANDLE_FLAG_SEEK_BW_FAIL|FHANDLE_FLAG_SEEK_FW_FAIL);
+#endif
+  /*  zip_file_is_seekable() was added in libzip 1.9.0.   /usr/include/zip.h */
   if (!(d->flags&fwbw) && !zip_fseek(d->zip_file,offset,SEEK_SET)){
     d->zip_fread_position=offset;
     return true;
@@ -1798,19 +1803,15 @@ static int xmp_flush(const char *path, struct fuse_file_info *fi){
 }
 static void exit_ZIPsFS(void){
   log_verbose("Going to exit ...");
-
   /* osxfuse and netbsd needs two parameters:  void fuse_unmount(const char *mountpoint, struct fuse_chan *ch); */
-#if FUSE_MAJOR_V>=3
-  if (fuse_get_context() && fuse_get_context()->fuse) fuse_unmount(fuse_get_context()->fuse);
-#endif
+  IF1(WITH_FUSE_3,if (fuse_get_context() && fuse_get_context()->fuse) fuse_unmount(fuse_get_context()->fuse));
   fflush(stderr);
 }
 int main(const int argc,const char *argv[]){
   _pid=getpid();
   IF1(WITH_CANCEL_BLOCKED_THREADS,assert(_pid==gettid()), assert(cg_pid_exists(_pid)));
 
-  fprintf(stderr,"MAX_PATHLEN: %d\n",MAX_PATHLEN);
-  fprintf(stderr,"has_proc_fs: %s\n",yes_no(has_proc_fs()));
+
   if (!realpath(*argv,_self_exe)) DIE("Failed realpath %s",*argv);
   init_mutex();
   init_sighandler(argv[0],(1L<<SIGSEGV)|(1L<<SIGUSR1)|(1L<<SIGABRT),stderr);
@@ -1824,28 +1825,25 @@ int main(const int argc,const char *argv[]){
   }
   int colon=0;
   FOR(i,1,argc) if (!strcmp(":",argv[i])){ colon=i; break;}
-  fprintf(stderr,ANSI_INVERSE""ANSI_UNDERLINE"This is %s"ANSI_RESET" Version: "ZIPSFS_VERSION"\nCompiled: %s %s  PID: "ANSI_FG_WHITE ANSI_BLUE"%d"ANSI_RESET"\n",path_of_this_executable(),__DATE__,__TIME__,_pid);
+  char *compile_feature="";
+#if defined(__has_feature) && __has_feature(address_sanitizer)
+  compile_feature="With sanitizer ";
+  #endif
+  fprintf(stderr,ANSI_INVERSE""ANSI_UNDERLINE"This is %s"ANSI_RESET" Version: "ZIPSFS_VERSION"  Compiled: %s "STRINGIZE(__DATE__)" "STRINGIZE(__TIME__)"  PID: "ANSI_FG_WHITE ANSI_BLUE"%d"ANSI_RESET"\n",
+          path_of_this_executable(),compile_feature,_pid);
   IF1(WITH_GNU,fprintf(stderr,"gnu_ggnu_get_libc_version: %s\n",gnu_get_libc_version()));
-#if defined(__has_feature)
-#  if __has_feature(address_sanitizer)
-  puts_stderr("Compiled with sanitizer\n");
-#else
-  puts_stderr("Compiled without sanitizer\n");
-#  endif
-#endif
+  fprintf(stderr,"Version libfuse: "STRINGIZE(FUSE_MAJOR_VERSION)"."STRINGIZE(FUSE_MINOR_VERSION)" libzip: "STRINGIZE(LIBZIP_VERSION_MAJOR)"."STRINGIZE(LIBZIP_VERSION_MINOR)"\n"
+          "MAX_PATHLEN: "STRINGIZE(MAX_PATHLEN)"\n"
+          "has_proc_fs: %s\n",yes_no(has_proc_fs()));
   setlocale(LC_NUMERIC,""); /* Enables decimal grouping in fprintf */
   ASSERT(S_IXOTH==(S_IROTH>>2));
   IF1(WITH_ZIPINLINE,config_containing_zipfile_of_virtual_file_test());
   static struct fuse_operations xmp_oper={0};
 #define S(f) xmp_oper.f=xmp_##f
   S(init);
-
   S(getattr);
-
   S(access);
-
   S(utimens);
-
   S(readlink);
   //S(opendir);
   S(readdir);   S(mkdir);

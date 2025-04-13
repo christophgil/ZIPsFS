@@ -572,7 +572,7 @@ static int print_fhandle(int n,const char *title){
     foreach_fhandle(id,d){
       PRINTINFO("<TR>"sTDl(),snull(D_VP(d)));
       if (d->accesstime){
-        PRINTINFO(TD("%'ld s"),t0-d->accesstime);
+        PRINTINFO(TD("%'lld s"),(LLD)(t0-d->accesstime));
       }else{
         PRINTINFO(TD("Never"));
       }

@@ -28,7 +28,7 @@ static char *ctrl_file_end(){
     srand(t.tv_nsec);
     int r2=rand();
     srand(getpid());
-    sprintf(s,"%x%x%x%lx%lx",r1,r2,rand(),t.tv_nsec,t.tv_sec);
+    sprintf(s,"%x%x%x%lx%llx",r1,r2,rand(),t.tv_nsec,(LLD)t.tv_sec);
   }
   return s;
 }

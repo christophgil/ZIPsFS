@@ -901,7 +901,7 @@ static void cg_exec(char const * const * const env,char const * const * const cm
   //  if(fd_err>0 && fd_err!=fd_out) close(fd_err);
   cg_log_exec_fd(STDERR_FILENO,env,cmd);
 #if defined(HAS_EXECVPE) && HAS_EXECVPE
-  execvpe(cmd[0],(char *const *)cmd,env);
+  execvpe(cmd[0],(char *const *)cmd,(char *const *)env);
 #elif ! defined(HAS_UNDERSCORE_ENVIRON) || HAS_UNDERSCORE_ENVIRON
   extern char **_environ; /* default */
   if (env) _environ=(char**)env;

@@ -135,7 +135,7 @@ static void textbuffer_memusage_change(const uint8_t flags,const struct textbuff
 static off_t textbuffer_length(const struct textbuffer *b);
 static int textbuffer_char_at(const struct textbuffer *b, const off_t pos);
 static off_t _textbuffer_copy_to_or_compare(const bool isCopy,const struct textbuffer *b,const off_t from,const off_t to, char *dst);
-static int textbuffer_add_segment(const u_int8_t flags,struct textbuffer *b, const char *bytes, const off_t size_or_zero);
+static int textbuffer_add_segment(const uint8_t flags,struct textbuffer *b, const char *bytes, const off_t size_or_zero);
 static char *textbuffer_malloc(const int flags,struct textbuffer *b, off_t size);
 static off_t textbuffer_read(const uint8_t flags,struct textbuffer *b,const int fd);
 static int textbuffer_from_exec_output(const uint8_t flags,struct textbuffer *b,char const * const cmd[],char const * const env[], const char *path_stderr);

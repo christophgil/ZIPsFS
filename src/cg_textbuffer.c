@@ -103,7 +103,7 @@ static off_t _textbuffer_copy_to_or_compare(const bool isCopy,const struct textb
 #define malloc_or_mmap(is_mmap,size) (is_mmap?cg_mmap(MALLOC_textbuffer,size,0):cg_malloc(MALLOC_textbuffer,size))
 #define free_or_munmap(is_mmap,b,size) {if (is_mmap) cg_munmap(MALLOC_textbuffer,b,size); else cg_free(MALLOC_textbuffer,b);}
 
-static int textbuffer_add_segment(const u_int8_t flags,struct textbuffer *b, const char *bytes, const off_t size_or_zero){
+static int textbuffer_add_segment(const uint8_t flags,struct textbuffer *b, const char *bytes, const off_t size_or_zero){
   if (!b || !bytes) return -1;
   const off_t size=size_or_zero?size_or_zero:strlen(bytes);
   void *new_segment=NULL, *new_segment_e=NULL, *new_segment_flags=NULL;
@@ -208,7 +208,7 @@ static void textbuffer_reset(struct textbuffer *b){
   RLOOP(i,b->n){
     if (ss && ss[i]){
       const off_t size=ee[i]-(i?ee[i-1]:0);
-      u_int8_t f=b->segment_flags[i];
+      uint8_t f=b->segment_flags[i];
       if (0==(f&TEXTBUFFER_NODESTROY)){
         free_or_munmap(f&TEXTBUFFER_MUNMAP,ss[i],size);
       }
