@@ -91,7 +91,7 @@ static void _debug_directory_print(const struct directory *dir,const char *fn,co
     log_msg("d->fname: %p directory_is_stack: %d   \n",d->fname, d->fname==dir->_stack_fname);
     RLOOP(i,d->files_l){
       const char *s=d->fname[i];
-      log_msg(" (%d) %p '%s'  size: %'ld\n",i,s,snull(s),!d->fsize?-1:d->fsize[i]);
+      log_msg(" (%d) %p '%s'  size: %'lld\n",i,s,snull(s),(LLD)(!d->fsize?-1:d->fsize[i]));
     }
   }
 }

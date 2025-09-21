@@ -88,7 +88,7 @@ static void dircache_directory_to_cache(struct directory *dir){
   struct directory_core src=dir->core, *d=mstore_add(&r->dircache_mstore,&src,sizeof(struct directory_core),SIZEOF_POINTER);
   if (!d->dir_mtim.tv_sec){
     directory_rp_stat(dir);
-    d->dir_mtim=dir->dir_zpath.stat_rp.st_mtim;
+    d->dir_mtim=dir->dir_zpath.stat_rp.ST_MTIMESPEC;
   }
   //ASSERT_PRINT(src.dir_mtim.tv_sec!=0);
   if (src.files_l){
@@ -125,7 +125,7 @@ static void to_cache_vpath_to_zippath(struct directory *dir){
     const int vp0_l=VP_L()-EP_L(); /* Virtual length without Zipentry */
     //log_debug_now("VP: %s %d EP: %s %d   vp0_l: %d    ",VP(),VP_L(), EP(),EP_L(),  vp0_l);
     ASSERT(vp0_l>0);
-    mempcpy(vp,VP(),vp0_l); /* Virtual path without zipentry is common prefix */
+    memcpy(vp,VP(),vp0_l); /* Virtual path without zipentry is common prefix */
     RLOOP(i,dc->files_l){
       const char *n=dc->fname[i];
       if (!n || strchr(n,'/')) continue; /* Only ZIP entries in root directory */
@@ -150,7 +150,7 @@ static bool dircache_directory_from_cache(struct directory *dir){
     //log_debug_now(" zpath: %s %ld", ZP_RP(&dir->dir_zpath),   dir->dir_zpath.stat_rp.st_ino);
     //dir->dir_zpath.stat_rp.st_ino=0;
     directory_rp_stat(dir);
-    if (!CG_TIMESPEC_EQ(dc->dir_mtim,dir->dir_zpath.stat_rp.st_mtim)){/* Cached data not valid any more. */
+    if (!CG_TIMESPEC_EQ(dc->dir_mtim,dir->dir_zpath.stat_rp.ST_MTIMESPEC)){/* Cached data not valid any more. */
       //log_debug_now(RED_FAIL"invalid");
       e->value=NULL;
     }else{
@@ -180,5 +180,5 @@ static void maybe_evict_from_filecache(const int fdOrZero,const char *realpath,c
   }
 }
 #else
-#define maybe_evict_from_filecache(fdOrZero,realpath,realpath_l,zipentry,zipentry_l)
+#define maybe_evict_from_filecache(fdOrZero,realpath,realpath_l,zipentry,zipentry_l) {}
 #endif //WITH_EVICT_FROM_PAGECACHE

@@ -264,7 +264,7 @@ static int aimpl_run(struct autogen_files *ff){
       if (isOUTF && !stat(ff->grealpath,&st_out) && CG_STAT_B_BEFORE_A(st_fail,st_out)  || ff->rinfiles[0] && CG_STAT_B_BEFORE_A(st_fail,ff->infiles_stat[0])) return EPIPE;
     }
   }
-  IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("ff->rinfiles[0]: %s size: %ld  ac->out:%d ff->out:%d",snull(ff->rinfiles[0]), ff->infiles_stat[0].st_size,ac->out,ff->out);
+  IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("ff->rinfiles[0]: %s size: %lld  ac->out:%d ff->out:%d",snull(ff->rinfiles[0]), (LLD)ff->infiles_stat[0].st_size,ac->out,ff->out);
   unlink(ff->log);
   unlink(ff->fail);
   aimpl_wait_concurrent_begin(ac);

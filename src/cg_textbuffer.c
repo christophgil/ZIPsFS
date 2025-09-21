@@ -141,7 +141,7 @@ static int textbuffer_add_segment(const uint8_t flags,struct textbuffer *b, cons
   }
   return 0;
  enomem:
-  log_error("enomem size: %'ld",size);
+  log_error("enomem size: %'lld",(LLD)size);
 #define C(f) cg_free_null(COUNT_TXTBUF_SEGMENT_MALLOC,b->f)
   C(_segment);
   C(_segment_e);

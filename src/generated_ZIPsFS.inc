@@ -333,7 +333,7 @@ static int zipentry_placeholder_expand2(char *n,const char *zipfile);
 static void autogen_run(struct fHandle *d);
 static bool virtualpath_startswith_autogen(const char *vp, const int vp_l_or_zero);
 static const char *vp_without_pfx_autogen(const char *vp,const int vp_l_or_zero);
-static bool autogen_up_to_date(struct timespec st_mtim,const char *vp,const int vp_l);
+static bool autogen_up_to_date(struct timespec t,const char *vp,const int vp_l);
 static long autogen_estimate_filesize(const char *vp,const int vp_l);
 static bool autogen_remove_if_not_up_to_date(struct zippath *zpath);
 static bool autogen_filldir(fuse_fill_dir_t filler,void *buf, const char *name, const struct stat *stbuf,struct ht *no_dups);

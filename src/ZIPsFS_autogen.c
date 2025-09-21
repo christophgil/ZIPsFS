@@ -79,13 +79,13 @@ static const char *vp_without_pfx_autogen(const char *vp,const int vp_l_or_zero)
   rinfiles: speak real-input-files     vgenfile: speak virtual generated file
   Results are set to ff or stats
 */
-static bool autogen_up_to_date(struct timespec st_mtim,const char *vp,const int vp_l){
+static bool autogen_up_to_date(struct timespec t,const char *vp,const int vp_l){
   struct stat stats[AUTOGEN_MAX_INFILES];
   struct autogen_files ff={0};
   struct_autogen_files_init(&ff,vp,vp_l);
   bool ok=true;
   RLOOP(i,autogen_realinfiles(&ff)){
-    if (!cg_timespec_b_before_a(st_mtim, ff.infiles_stat[i].ST_MTIMESPEC)){ ok=false;break;}
+    if (!cg_timespec_b_before_a(t, ff.infiles_stat[i].ST_MTIMESPEC)){ ok=false;break;}
   }
   struct_autogen_files_destroy(&ff);
   return ok;

@@ -257,7 +257,7 @@ static bool memcache_store_try(struct fHandle *d, struct async_zipfile *zip, str
     fhandle_counter_inc(d,ok?ZIP_READ_CACHE_CRC32_SUCCESS:ZIP_READ_CACHE_CRC32_FAIL);
     msg=ok?GREEN_SUCCESS" crc32 OK":RED_WARNING" already==st_size  crc32 wrong";
   }
-  if (msg) IF_LOG_FLAG(LOG_MEMCACHE) log_exited_function("%s  %s  st_size: %ld\n",rp,msg,st_size);
+  if (msg) IF_LOG_FLAG(LOG_MEMCACHE) log_exited_function("%s  %s  st_size: %lld\n",rp,msg,(LLD)st_size);
   if (fd) close(fd); else closezip_now(zip);
   log_exited_function("rp: %s  e: %s ok: %d  contin: %d",rp,D_EP(d),ok,contin);
   return ok;

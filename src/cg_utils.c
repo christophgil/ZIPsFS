@@ -898,7 +898,7 @@ static bool cg_file_is_newer_than(const char *path1,const char *path2){
 static struct timespec cg_file_mtim(const char *path){
   struct stat st={0};
   stat(path,&st);
-  return st.st_mtim;
+  return st.ST_MTIMESPEC;
 }
 
 static time_t cg_file_mtime(const char *path){

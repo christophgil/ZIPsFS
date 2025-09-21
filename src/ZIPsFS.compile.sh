@@ -88,6 +88,7 @@ ${ANSI_INVERSE}Options:$ANSI_RESET
 .
 EOF
 }
+
 ####################
 ### Directories  ###
 ####################
@@ -113,7 +114,7 @@ WITH_RPATH=0
 CCOMPILER=${CC:-gcc}
 OPT_PROFILER=''
 
-
+CC_OPTS='-D_FILE_OFFSET_BITS=64'
 
 
 clang --version >/dev/null &&  CCOMPILER=clang
@@ -176,9 +177,9 @@ try_compile(){
     local x=$TEMP/$name
     local c=$x.c
     [[ ! -s $c ]] && echo -e "$includes\nint main(int argc,char *argv[]){\n $main; }\n" >$c.$$.tmp && mv $c.$$.tmp $c
-    local cmd="$CCOMPILER $IPATHS  $cc_opts  $c $ld_opts $LIBFUSE $LIBZIP $RPATHS $LPATHS $LL   -o $x"
-    ! { echo $cmd; echo; $cmd  2>&1; }  >$x.log && success=0
-    echo $success
+    local cmd="$CCOMPILER $CC_OPTS $IPATHS  $cc_opts  $c $ld_opts $LIBFUSE $LIBZIP $RPATHS $LPATHS $LL   -o $x"
+    ! { echo $cmd; echo; $cmd  2>&1; } >$x.log  && success=0
+    echo $success # Used for HAS_XXX=1 or 0
     return $((success==0))
 }
 ####################
@@ -200,7 +201,7 @@ detect_fuse_version(){
             press_enter
         fi
     done
-    echo "${ANSI_FG_RED}Problem $ANSI_RESET compiling with libfuse. Is it install? Possiple package names 'libfuse3-dev', 'ibfuse3', 'libfuse-dev' or  'libfuse'" >&2
+    echo "${ANSI_FG_RED}Problem $ANSI_RESET compiling with libfuse. Is it install? Possiple package names 'libfuse3-dev', 'libfuse3', 'libfuse-dev' or  'libfuse'" >&2
     press_enter
     return 1
 }
@@ -279,7 +280,7 @@ EOF
     local c=${x}_compilation.sh
     {
         echo export ASAN_OPTIONS="'${ASAN_OPTIONS:-}'"
-        echo "# This file has been created with $SRC"$'\n\n'$CCOMPILER  $NOWARN "$opts" $IPATHS -O0 -g -D_FILE_OFFSET_BITS=64  $sanitize  $DIR/ZIPsFS.c  $LIBFUSE $LIBZIP $RPATHS   $LPATHS $LL  -o $x
+        echo "# This file has been created with $SRC"$'\n\n'$CCOMPILER $CC_OPTS  $NOWARN "$opts" $IPATHS -O0 -g  $sanitize  $DIR/ZIPsFS.c  $LIBFUSE $LIBZIP $RPATHS   $LPATHS $LL  -o $x
     }|tee $c
     chmod +x $c
     ls -l $c

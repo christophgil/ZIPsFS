@@ -35,8 +35,8 @@ static void log_flags_update(){
 #undef R
   static struct stat st;
   static struct timespec t;
-  if (!stat(path,&st) && !CG_TIMESPEC_EQ(t,st.st_mtim)){
-    t=st.st_mtim;
+  if (!stat(path,&st) && !CG_TIMESPEC_EQ(t,st.ST_MTIMESPEC)){
+    t=st.ST_MTIMESPEC;
     FILE *f=fopen(path,"r");
     if (f){
       fscanf(f," ");

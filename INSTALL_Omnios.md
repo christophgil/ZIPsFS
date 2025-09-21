@@ -31,7 +31,7 @@ Please modify the path of the libfuse3.so accordingly.
 
 
 
-    wget -N $U && unzip -o main.zip &&  ZIPsFS-main/src/ZIPsFS.compile.sh -F /local/illumos-sshfs-master/libfuse/proto/usr/lib/amd64/libfuse.so.2.7.1
+    wget -N $U && unzip -o main.zip &&  ./ZIPsFS-main/src/ZIPsFS.compile.sh -F /local/illumos-sshfs-master/libfuse/proto/usr/lib/amd64/libfuse.so.2.7.1
 
 
 ## Prepare running ZIPsFS

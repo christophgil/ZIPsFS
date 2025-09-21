@@ -23,7 +23,7 @@ static bool directory_rp_stat(struct directory *dir){
 static bool readdir_now(struct directory *dir){
   if (!readdir_from_zip(dir)&&!readir_from_filesystem(dir)) return false;
   directory_rp_stat(dir);
-  dir->core.dir_mtim=dir->dir_zpath.stat_rp.st_mtim;
+  dir->core.dir_mtim=dir->dir_zpath.stat_rp.ST_MTIMESPEC;
   return (dir->dir_is_success=true);
 }
 /*
