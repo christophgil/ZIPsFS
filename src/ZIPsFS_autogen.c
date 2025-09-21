@@ -153,7 +153,7 @@ static void autogen_cleanup(void){
   }
 }
 
-static char *autogen_apply_replacements_for_argv(char *dst_or_NULL,const char *orig,const struct autogen_files *ff){ /* NOT_TO_GENERATED_HEADER */
+static char *autogen_apply_replacements_for_argv(char *dst_or_NULL,const char *orig,const struct autogen_files *ff){ /* NOT_TO_HEADER */
   if (!orig) return NULL;
   const char *rin=ff->rinfiles[0];
   char *c=(char*)orig;
