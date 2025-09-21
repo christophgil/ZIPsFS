@@ -55,68 +55,9 @@ static const int config_virtual_dirpath_to_zipfile(const char *b, const char *e,
 ///   On match return the length of the substring that together with suffix forms the zip file.
 ///
 /// See: config_skip_zipfile_show_zipentries_instead()
-///      config_containing_zipfile_of_virtual_file_test()
 ////////////////////////////////////////////////////
 #if WITH_ZIPINLINE
-static int config_containing_zipfile_of_virtual_file(const int approach,const char *path,const int path_l,char *suffix[]){
-#define A(x,c) ((d=sizeof(#x)-1),(e[-d]==c && !strcmp(e-d,#x)))
-#define C(x) A(x,'.')
-#define S(x) if (suffix)*suffix=x;return path_l-d
-  if (path_l>20){
-    const char *e=path+path_l;
-    int d=0;
-    if (suffix) *suffix=NULL;
-    if (C(.wiff) || C(.wiff2) || C(.wiff.scan)){
-      switch(approach){
-      case 0: S(".wiff.Zip");
-      case 1: S(".rawIdx.Zip");
-      case 2: S(".wiff2.Zip");
-      }
-    }else if (C(.rawIdx)){
-      switch(approach){
-      case 0: S(".rawIdx.Zip");
-      }
-    }else if (C(.raw)){
-      switch(approach){
-      case 0: S(".raw.Zip");
-      case 1: S(".wiff2.Zip");
-      case 2: S(".rawIdx.Zip");
-      }
-    }else if (C(.SSMetaData) || C(.timeseries.data) || A(_report.txt,'_')){
-      switch(approach){
-      case 0: S(".wiff.Zip");
-      case 1: S(".wiff2.Zip");
-      }
-    }
-  }
-  return 0;
-#undef S
-#undef C
-#undef A
-}
-static void config_containing_zipfile_of_virtual_file_test(void){
-  if (true) return; /* Remove to run tests */
-  char *ff[]={
-    "20230310_aaaaaaaaaaa.wiff",
-    "20230310_aaaaaaaaaaa.wiff.scan",
-    "20230310_aaaaaaaaaaa.wiff2",
-    "20230310_aaaaaaaaaaa.rawIdx",
-    "20230310_aaaaaaaaaaa.raw",
-    NULL};
-  char str[99];
-  for(char **f=ff;*f;f++){
-    const int f_l=strlen(*f);
-    fprintf(stderr,"\n\x1B[7m%s\x1B[0m\n",*f);
-    char *suffix;
-    for(int len,i=0;(len=config_containing_zipfile_of_virtual_file(i,*f,f_l, &suffix))!=0;i++){
-      strcpy(str,*f);
-      strcpy(str+len,suffix);
-      fprintf(stderr,"%d  approach=%d %s\n",i,len,str);
-    }
-  }
-  fprintf(stderr,"Going to EXIT from "__FILE_NAME__":%d\n",__LINE__);
-  EXIT(0);
-}
+#include "ZIPsFS_configuration_zipfile.c"
 #endif //WITH_ZIPINLINE
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -124,11 +65,11 @@ static void config_containing_zipfile_of_virtual_file_test(void){
 /// Unlimited for remote branches and files that are read-only files.                           ///
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 #if WITH_STAT_CACHE
-static uint64_t config_file_attribute_valid_mseconds(const int opt, const char *path,const int path_l){
+static uint64_t config_file_attribute_valid_seconds(const int opt, const char *path,const int path_l){
   /* Available Flags:
-    (opt&STAT_CACHE_ROOT_IS_WRITABLE)
-    (opt&STAT_CACHE_ROOT_IS_REMOTE)
-    (opt&STAT_CACHE_FILE_IS_READONLY)
+     (opt&STAT_CACHE_ROOT_IS_WRITABLE)
+     (opt&STAT_CACHE_ROOT_IS_REMOTE)
+     (opt&STAT_CACHE_FILE_IS_READONLY)
   */
   if ((opt&STAT_CACHE_ROOT_IS_REMOTE) && cg_endsWithZip(path,path_l)  && (strstr(path,"/fularchiv")||strstr(path,"/store/")||strstr(path,"/CHA-CHA-RALSER-RAW"))){
     return (opt&STAT_CACHE_FILE_IS_READONLY)?UINT64_MAX:1;
@@ -140,17 +81,21 @@ static uint64_t config_file_attribute_valid_mseconds(const int opt, const char *
 /// A ZIP file is shown as a folder.
 /// Convert the ZIP filename to a virtual folder name
 /////////////////////////////////////////////
-static char *config_zipfilename_to_virtual_dirname(char *dirname,const char *zipfile,const int zipfile_l){
-  strcpy(dirname,zipfile);
+
+
+static bool config_zipfilename_to_virtual_dirname(char *dirname,const char *zipfile,const int zipfile_l){
+  *dirname=0;
   const char *e=zipfile+zipfile_l;
   if (zipfile_l>4 && _is_zip(e-4)){
+    strcpy(dirname,zipfile);
     if(zipfile_l>9 && !strcmp(zipfile+zipfile_l-6,".d.Zip")){
       dirname[zipfile_l-4]=0;
     }else{
       strcat(dirname,EXT_CONTENT);
     }
+    return false; /* false: Not show zipfile itself  true: Also show zipfile*/
   }
-  return dirname;
+  return false;
 }
 #if WITH_ZIPINLINE
 static bool config_skip_zipfile_show_zipentries_instead(const char *zipfile,const int zipfile_l){
@@ -166,60 +111,48 @@ static bool config_skip_zipfile_show_zipentries_instead(const char *zipfile,cons
   }
   return false;
 }
-static bool config_also_show_zipfile_in_listing(const char *zipfile,const int zipfile_l){ /* Not only the content of the zip file but also the zip file itself. */
-  return zipfile_l>5 && _is_zip(zipfile+zipfile_l-4) && !_is_Zip(zipfile+zipfile_l-4);
-}
 #endif //WITH_ZIPINLINE
+
 /////////////////////////////////////////////////////////////////////////////////
 /// With the bruker dll, two non existing files are requested extremely often. //
 /// Improving performance by refusing those file names                         //
 /////////////////////////////////////////////////////////////////////////////////
 static bool config_not_report_stat_error(const char *path,const int path_l){
 #define I(s) ENDSWITH(path,path_l,#s)||
-  return I(/analysis.tdf-wal)  I(/analysis.tdf-journal)   I(/.ciopfs)  I(.quant)  I(/autorun.inf)  I(/.xdg-volume-info) I(/.Trash) !strncmp(path,"/ZIPsFS_",8);
+#define S(s,pfx) !strncmp(path,pfx,sizeof(pfx)-1)||
+  return I(/analysis.tdf-wal)  I(/analysis.tdf-journal)   I(/.ciopfs)  I(.quant)  I(/autorun.inf)  I(/.xdg-volume-info)  S(path,"/.Trash")  S(path,"/ZIPsFS_") false;
 #undef I
+#undef S
 }
 #if WITH_MEMCACHE
-////////////////////////////////////////////////////////////////////////////////
-/// Rules which zip entries are cached into RAM                              ///
-/// This is active when started with option                                  ///
-///      -c rule                                                             ///
-////////////////////////////////////////////////////////////////////////////////
-static bool config_advise_cache_zipentry_in_ram(const char *virtualpath,const char *realpath,const off_t filesize, const int flags){
-  const bool isCompressed=flags&ADVISE_CACHE_IS_CMPRESSED;
-  const bool isSeek=flags&ADVISE_CACHE_IS_SEEK_BW;
-  const off_t m=ramUsageForFilecontentMax();
-  off_t u=ramUsageForFilecontent();
-  const int vp_l=strlen(virtualpath);
-  if (isCompressed && isSeek && u<m) return true;
-  if (ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin")) return true;
-  if (ENDSWITH(virtualpath,vp_l,"analysis.tdf")){ /* Note: timsdata.dll opens analysis.tdf first  and then analysis.tdf_bin */
-    if (vp_l+4>=MAX_PATHLEN) return false;
-    char tdf_bin[MAX_PATHLEN]; stpcpy(stpcpy(tdf_bin,virtualpath),"_bin");
+
+
+////////////////////////////////////////////////////////////
+/// Rules which files or zip entries are cached into RAM ///
+/// This is applied for command-line-option   -c rule    ///
+/// Return value:                                        ///
+///   < 0: No cache                                      ///
+///   > 0: Cache is advised and requires n bytes         ///
+////////////////////////////////////////////////////////////
+static off_t config_advise_cache_in_ram(const int flags,const char *virtualpath, const int vp_l, const char *realpath,const int rp_l,const char *rootpath,const off_t filesize){
+  //if (!(flags&ADVISE_CACHE_IS_ZIPENTRY)) return -1;
+  const char *e=virtualpath+vp_l;
+  if (vp_l>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e') return -1; /* The exe files hold the icon for File Explorer */
+  if (flags&ADVISE_CACHE_BY_POLICY) return filesize;
+  off_t need=filesize;
+  bool cache=((flags&ADVISE_CACHE_IS_CMPRESSED)&&(flags&ADVISE_CACHE_IS_SEEK_BW)) || ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin");
+  //if (DEBUG_NOW==DEBUG_NOW && !cache) {cache=ENDSWITH(virtualpath,vp_l,".mzML"); }
+  if (!cache && ENDSWITH(virtualpath,vp_l,"analysis.tdf") && vp_l+4<MAX_PATHLEN){ /* Note: timsdata.dll opens analysis.tdf first  and then analysis.tdf_bin */
+    cache=true;
+    char tdf_bin[MAX_PATHLEN+1]; stpcpy(stpcpy(tdf_bin,virtualpath),"_bin");
     struct stat st_tdf_bin;
-    if (!virtualpathStat(&st_tdf_bin,tdf_bin)){
-      fprintf(stderr,"%s:%d Warning: Missing file %s\n",__func__,__LINE__,tdf_bin);
+    if (!statForVirtualpathAndRootpath(&st_tdf_bin,tdf_bin,rootpath)){
+      log_warn("%s:%d Warning: Missing file %s\n",__func__,__LINE__,tdf_bin);
       return false;
     }
-    while((u=ramUsageForFilecontent()+st_tdf_bin.st_size+filesize>m)){
-      usleep((1<<20));
-      fprintf(stderr,"%s:%d:  Waiting RAM usage too high for  %s  tdf:%'lld +  tdf_bin:%'lld + u:%'lld > %'lld \n",__func__,__LINE__,virtualpath,(LLD)filesize,(LLD)st_tdf_bin.st_size,(LLD)u,(LLD)m);
-    }
-
-    return true;
+    need+=st_tdf_bin.st_size;
   }
-  return false;
-}
-/////////////////////////////////////////////////////////////////////////////////////////
-/// Windows will read the beginning of exe files to get the icon                      ///
-/// With the rule  -c always, all .exe files would be loaded into RAM                 ///
-/// when a file listing is displayed in File Explorerer.                              ///
-/// Add here exceptions in case of MEMCACHE_ALWAYS selected with CLI Option -c ALWAYS ///
-/////////////////////////////////////////////////////////////////////////////////////////
-static bool config_advise_cache_zipentry_in_ram_never(const char *virtualpath,const char *realpath,const off_t filesize, const int flags){
-  const int vp_l=strlen(virtualpath);
-  const char *e=virtualpath+vp_l;
-  return vp_l>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e';
+  return cache?need:-1;
 }
 #endif //WITH_MEMCACHE
 
@@ -263,9 +196,9 @@ static bool config_not_overwrite(const char *path,const int path_l){
 /// Maybe remote folders that have not changed recently  ///
 ////////////////////////////////////////////////////////////
 #if WITH_DIRCACHE
-static bool config_advise_cache_directory_listing(const char *path,const int path_l,const bool isRemote,const bool isZipArchive, const struct timespec mtime){
-  if (isZipArchive) return true;
-  if (isRemote){
+static bool config_advise_cache_directory_listing(const char *path,const int path_l,const struct timespec mtime, const int flags){
+  if (flags&ADVISE_DIRCACHE_IS_ZIP) return true;
+  if (flags&ADVISE_DIRCACHE_IS_REMOTE){
     struct timeval tv={0};
     gettimeofday(&tv,NULL);
     return (tv.tv_sec-mtime.tv_sec)>60*60;
@@ -310,7 +243,9 @@ static bool config_readir_no_other_roots(const char *realpath,const int realpath
 /// Retry on failure.    ///
 ////////////////////////////
 static long config_num_retries_getattr(const char *path, const int path_l, int *sleep_milliseconds){
+  return 1; // FIXME
   if (_is_tdf_or_tdf_bin(path)){
+    //DIE_DEBUG_NOW("%s",path);
     *sleep_milliseconds=1000;
     return 3;
   }
@@ -381,3 +316,18 @@ static void config_exclude_files(const char *path, const int path_l, const int n
 static bool config_has_sufficient_storage_space(const char *realpath, const long availableBytes, const long totalBytes){
   return availableBytes<totalBytes*0.75;
 }
+
+
+//////////////////////////////////////////////////////////////////////
+/// Data files downloaded from the internet                        ///
+//////////////////////////////////////////////////////////////////////
+
+#if WITH_INTERNET_DOWNLOAD
+static bool config_internet_update_header(const char *url, const struct stat *st){
+  return time(NULL)-st->st_mtime>60*60;
+}
+
+static bool configuration_internet_with_date_in_filename(const char *url){
+  return true;
+}
+#endif //WITH_INTERNET_DOWNLOAD

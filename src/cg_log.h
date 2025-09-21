@@ -13,5 +13,6 @@
 #define WARN_FLAG_ERROR (1<<25)
 #define WARN_FLAG_FAIL (1<<24)
 #define WARN_FLAG_SUCCESS (1<<23)
+#define WARN_FLAG_WITHOUT_NL (1<<22)
 #define WARN_SHIFT_MAX 8
 #endif

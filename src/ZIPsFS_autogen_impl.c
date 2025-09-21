@@ -15,12 +15,30 @@
 //////////////////////////////////////////////////////////////////////
 static pthread_mutex_t _autogen_mutex[AUTOGEN_MAX_RULES];
 #define ALOCK(ac) _autogen_mutex[ac->_seqnum]
+#define R(strg) cg_fd_write_str(fd_err,strg)
+
+//#define STRUCT_AUTOGEN_FILES_INIT(ff,vp,vp_l)  struct autogen_files ff={0};
+static void struct_autogen_files_init(struct autogen_files *ff,const char *vp,const int vp_l){
+  cg_stpncpy0(ff->virtualpath,vp,ff->virtualpath_l=vp_l);
+}
+
+
+
+static void struct_autogen_files_destroy_txtbuf(struct autogen_files *ff){
+  textbuffer_destroy(ff->af_txtbuf);
+  FREE_NULL_MALLOC_ID(ff->af_txtbuf);
+}
+
+static void struct_autogen_files_destroy(struct autogen_files *ff){
+  struct_autogen_files_destroy_txtbuf(ff);
+}
+
+
 static void aimpl_wait_concurrent(const struct autogen_rule *ac, const int inc){
   assert(-1<=inc && inc<=1);
   if (ac->concurrent_computations>1){
 #define A(inc) atomic_fetch_add(count+ac->_seqnum,inc)
     static atomic_int count[AUTOGEN_MAX_RULES];
-    LF();
     int running;
     while(inc==1 && (running=A(0))>=ac->concurrent_computations){
       IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("Waiting: Rule: %d %s  Running: %d >= Max running (%d)",ac->_seqnum,ac->ext,running,ac->concurrent_computations);
@@ -35,13 +53,9 @@ static void aimpl_wait_concurrent(const struct autogen_rule *ac, const int inc){
     else pthread_mutex_unlock(&ALOCK(ac));
   }
 }
-#ifdef __cppcheck__
-#define aimpl_wait_concurrent_begin(ac)  FILE *_wait_concurrent=fopen("abc","r")
-#define aimpl_wait_concurrent_end(ac)    close(_wait_concurrent)
-#else
-#define aimpl_wait_concurrent_begin(ac) aimpl_wait_concurrent(ac,1)
-#define aimpl_wait_concurrent_end(ac) aimpl_wait_concurrent(ac,-1)
-#endif
+
+#define aimpl_wait_concurrent_begin(ac)  aimpl_wait_concurrent(ac, 1)   IF1(WITH_CPPCHECK,;FILE *_wait_concurrent=fopen("abc","r"))
+#define aimpl_wait_concurrent_end(ac)    aimpl_wait_concurrent(ac,-1)   IF1(WITH_CPPCHECK,,close(_wait_concurrent))
 //////////////////////////////////////////////////////////////////////
 /// This is run once when ZIPsFS is started.                       ///
 //////////////////////////////////////////////////////////////////////
@@ -181,18 +195,10 @@ static int _autogen_realinfiles(struct autogen_files *ff,const struct autogen_ru
         }
         NEW_ZIPPATH(vin);
         //if (find_realpath_any_root(0,zpath,NULL) || (zpath_init(zpath,vin+DIR_AUTOGEN_L),find_realpath_any_root(0,zpath,NULL))){
-        if (find_realpath_any_root(0,zpath,NULL)){
-          if ((zpath->flags&ZP_ZIP)){
-            strcpy(stpcpy(ff->rinfiles[i],_mnt),vp_without_pfx_autogen(VP(),VP_L()));
-            /* TODO entry size */
-          }else{
-            strcpy(ff->rinfiles[i],RP());
-            /* TODO recursion? */
-          }
-          ff->infiles_size_sum+=(ff->infiles_stat[i]=zpath->stat_vp).st_size;
-        }else{
-          goto end;
-        }
+        if (!find_realpath_any_root(0,zpath,NULL)) goto end;
+        if ((zpath->flags&ZP_ZIP)) strcpy(stpcpy(ff->rinfiles[i],_mnt),vp_without_pfx_autogen(VP(),VP_L()));     /* TODO entry size */
+        else strcpy(ff->rinfiles[i],RP());                                                                       /* TODO recursion? */
+        ff->infiles_size_sum+=(ff->infiles_stat[i]=zpath->stat_vp).st_size;
       }
     }
   }
@@ -221,7 +227,6 @@ static void aimpl_maybe_reset_atime_in_future(const struct fHandle *d){
   if (d && d->zpath.flags&ZP_STARTS_AUTOGEN){
     const struct stat *st=&d->zpath.stat_rp;
     if (st->st_atime>currentTimeMillis()/1000+(3600*24)){ /* future + one day */
-      LF();
       IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("Reset atime for %s atime",D_RP(d));
       struct utimbuf new_times={.actime=st->st_atime,.modtime=st->st_mtime};
       if (utime(D_RP(d),&new_times)) warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,D_RP(d),"Setting atime");
@@ -242,8 +247,8 @@ static int _aimpl_fd_open(const char *path, int *fd){
 /// ff->grealpath is not writen here. It will be created atomically from tmpoutfile elsewhere.               ///
 /// Called from  autogen_run()
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 static int aimpl_run(struct autogen_files *ff){
-  LF();
   if (!_realpath_autogen) return -EACCES;
   const struct autogen_rule *ac=ff->rule;
   if (!ac || !ff->infiles_n) return -EIO;
@@ -252,7 +257,7 @@ static int aimpl_run(struct autogen_files *ff){
 #define isMMAP (ff->out==STDOUT_TO_MMAP)
 #define isRAM  (ff->out==STDOUT_TO_MALLOC||isMMAP)
 #define isOUTF (ff->out==STDOUT_TO_OUTFILE)
-  if (isRAM &&  ac->max_infilesize_for_RAM && ac->max_infilesize_for_RAM<ff->infiles_stat[0].st_size || ramUsageForFilecontent()>ramUsageForFilecontentMax()) ff->out=STDOUT_TO_OUTFILE;
+  if (isRAM &&  ac->max_infilesize_for_RAM && ac->max_infilesize_for_RAM<ff->infiles_stat[0].st_size || ramUsageForFilecontent()>_memcache_bytes_limit) ff->out=STDOUT_TO_OUTFILE;
   {
     struct stat st_fail={0},st_out={0};
     if (!ac->ignore_errfile && !stat(ff->fail,&st_fail) && CG_STAT_B_BEFORE_A(st_fail,_thisPrgStat)){ /* Previously failed */
@@ -265,29 +270,31 @@ static int aimpl_run(struct autogen_files *ff){
   aimpl_wait_concurrent_begin(ac);
   Assert(AUTOGEN_RUN_SUCCESS==0); // cppcheck-suppress knownConditionTrueFalse
   if (!res &&  (res=config_autogen_run(ff))==AUTOGEN_RUN_NOT_APPLIED){
-    res=isOUTF?has_sufficient_storage_space(ff->grealpath):0;
+    res=isOUTF?mk_parentdir_if_sufficient_storage_space(ff->grealpath):0;
     int fd_err=-1;
     if (!res && !ac->no_redirect) res=_aimpl_fd_open(ff->log,&fd_err);
     if (!res){
-      if (fd_err>=0 && ac->info){ cg_fd_write_str(fd_err,ac->info);cg_fd_write_str(fd_err,"\n");}
+      if (fd_err>=0 && ac->info){ R(ac->info);R("\n");}
       char *cmd[AUTOGEN_ARGV+1]={0};
       FOR(i,0,AUTOGEN_ARGV){
         if (!(cmd[i]=autogen_apply_replacements_for_argv(NULL,ff->rule->cmd[i],ff))) break;
       }
       config_autogen_modify_exec_args(cmd,ff);
-      cg_log_exec_fd(STDERR_FILENO,NULL,(char const*const*)cmd);
+      cg_log_exec_fd(STDERR_FILENO,(char const*const*)cmd,NULL);
       if (isRAM){   /* Output of external prg  into textbuffer */
-        (ff->buf=textbuffer_new(MALLOC_autogen_textbuffer))->max_length=isMMAP?AUTOGEN_MMAP_MAX_BYTES:AUTOGEN_MALLOC_MAX_BYTES;
-        if ((res=textbuffer_from_exec_output(isMMAP?TEXTBUFFER_MUNMAP:0,ff->buf,(char const*const*)cmd,ac->env,ff->log))){
+        (ff->af_txtbuf=textbuffer_new(COUNT_AUTOGEN_MALLOC_TXTBUF))->max_length=isMMAP?AUTOGEN_MMAP_MAX_BYTES:AUTOGEN_MALLOC_MAX_BYTES;
+
+
+        if ((res=textbuffer_from_exec_output(isMMAP?TXTBUFSGMT_MUNMAP:0,ff->af_txtbuf,(char const*const*)cmd,ac->env,ff->log))){
           log_failed("textbuffer_from_exec_output  %s ",ff->rinfiles[0]);
-          textbuffer_destroy(ff->buf);
-          cg_free_null(MALLOC_autogen_textbuffer,ff->buf);
-        }
-        if (res==ENOMEM && has_sufficient_storage_space(ff->grealpath)){
-          ff->out=STDOUT_TO_OUTFILE;
-          errno=ENOMEM;
-          warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,ff->grealpath,"Workaround: Going to write output file");
-          errno=res=0;
+
+          if (res==ENOMEM && mk_parentdir_if_sufficient_storage_space(ff->grealpath)){
+            ff->out=STDOUT_TO_OUTFILE;
+            errno=ENOMEM;
+            warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,ff->grealpath,"Workaround: Going to write output file");
+            errno=res=0;
+          }
+          struct_autogen_files_destroy_txtbuf(ff);
         }
       }
       int fd_out=-1;
@@ -295,25 +302,25 @@ static int aimpl_run(struct autogen_files *ff){
         const pid_t pid=fork(); /* Make real file by running external prg */
         if (pid<0){
           log_errno("fork() waitpid 1 returned %d",pid);
-          cg_fd_write_str(fd_err,"fork() failed.\n");
+          R("fork() failed.\n");
           res=EIO;
         }else{
           if (!pid){
-            cg_exec(ac->env,(char const*const*)cmd,ac->no_redirect?-1:ff->out==STDOUT_MERGE_WITH_STDERR?fd_err:fd_out,ac->no_redirect?-1:fd_err);
+            cg_exec((char const*const*)cmd,ac->env,ac->no_redirect?-1:ff->out==STDOUT_MERGE_WITH_STDERR?fd_err:fd_out,ac->no_redirect?-1:fd_err);
           }else{
-            if (!(res=cg_waitpid_logtofile_return_exitcode(pid,ff->log)) && !cg_is_regular_file(ff->tmpout))  res=EIO;
-            if (ff->out!=STDOUT_MERGE_WITH_STDERR && fd_err>0){
-              if (ff->grealpath){ cg_fd_write_str(fd_err,"File: ");  cg_fd_write_str(fd_err,ff->grealpath); cg_fd_write_str(fd_err,"\n");}
-              close(fd_err);
-            }
+            int status; waitpid(pid,&status,0);
+            if (!(res=cg_log_waitpid(pid,status,ff->log,true,(char const*const*)cmd,ac->env)) && !cg_is_regular_file(ff->tmpout))  res=EIO;
+            if (ff->out!=STDOUT_MERGE_WITH_STDERR && fd_err>0 && ff->grealpath){ R("File: "); R(ff->grealpath); R("\n"); }
           }
         }
       }
+      if (fd_out>0) close(fd_out);
       autogen_free_argv((char const*const*)cmd,ac->cmd);
     }
+    if (fd_err>0) close(fd_err);
   }/* if (!res) */
   aimpl_wait_concurrent_end(ac);
-  if (res && cg_file_exists(ff->log) && rename(ff->log,ff->fail)) log_errno("rename(%s,%s)",ff->log,ff->fail);
+  if (res && cg_file_exists(ff->log)) cg_rename(ff->log,ff->fail);
   IF_LOG_FLAG(LOG_AUTOGEN) log_exited_function("%s res: %d %s",ff->grealpath,res,success_or_fail(!res));
   return -res;
 #undef isRAM
@@ -332,6 +339,7 @@ static void aimpl_cleanup(const char *root){
       if (!pid){
         if (pass) execlp("find","find",root,"-type","f","-executable","-atime","+"AUTOGEN_DELETE_FILES_AFTER_DAYS,"-delete",(char*)0);
         else execlp("find","find",root,"-name","*.autogen.tmp","-mtime","+7","-delete",(char*)0);
+        exit(errno);
       }else{
         int status;
         waitpid(pid,&status,0);
@@ -341,7 +349,9 @@ static void aimpl_cleanup(const char *root){
   }
 }
 static int _autogen_filecontent_append(const int flags, struct autogen_files *ff, const char *s,const long s_l){
-  if (!ff->buf) ff->buf=textbuffer_new(MALLOC_autogen_textbuffer);
-  return textbuffer_add_segment(flags,ff->buf,s,s_l);
+  if (!ff->af_txtbuf) ff->af_txtbuf=textbuffer_new(COUNT_AUTOGEN_MALLOC_TXTBUF);
+  return textbuffer_add_segment(flags,ff->af_txtbuf,s,s_l);
 }
 #undef ALOCK
+#undef R
+// COUNT_AUTOGEN_MALLOC_TXTBUF  af_txtbuf

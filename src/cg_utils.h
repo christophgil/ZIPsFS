@@ -1,8 +1,29 @@
+/////////////////////////////////////////////////////////////////
+/// COMPILE_MAIN=cg_utils.c                                   ///
+/////////////////////////////////////////////////////////////////
+
 // cppcheck-suppress-file unusedFunction
+
+#define _IF1_IS_1(...) __VA_ARGS__
+#define _IF1_IS_0(...)
+#define _IF0_IS_0(...) __VA_ARGS__
+#define _IF0_IS_1(...)
+#define IF1(zeroorone,...) CONCAT(_IF1_IS_,zeroorone)(__VA_ARGS__)
+#define IF0(zeroorone,...) CONCAT(_IF0_IS_,zeroorone)(__VA_ARGS__)
+#define IF01(zeroorone,codezero,...) IF0(zeroorone,codezero) IF1(zeroorone,__VA_ARGS__)
+
+
 #ifndef _cg_utils_dot_h
 #define _cg_utils_dot_h
+#include <inttypes.h>
 #include <string.h>
 #include <stdbool.h>
+////////////////////////////////////////
+#ifdef __cppcheck__
+#define WITH_CPPCHECK 1
+#else
+#define WITH_CPPCHECK 0
+#endif
 ////////////////////////////////////////
 #ifdef __USE_GNU
 #define WITH_GNU 1
@@ -35,6 +56,10 @@
 #define WITH_DEBUG_MALLOC 0
 #endif
 ////////////////////////////////////////
+#ifndef WITH_TESTING_REALLOC
+#define WITH_TESTING_REALLOC 0
+#endif
+////////////////////////////////////////
 /* Could be changed to "inline" */
 #define MAYBE_INLINE
 ////////////////////////////////////////
@@ -47,12 +72,17 @@
 /// Stat ///
 ////////////
 /* According to POSIX2008,  st_atim, st_mtim and st_ctim of the "stat" structure must be in the sys/stat.h when the _POSIX_C_SOURCE macro is defined as 200809L. */
-typedef enum yes_zero_no { YES=-1,ZERO,NO} yes_zero_no_t;
+typedef enum yes_zero_no { NO=-1,ZERO,YES} yes_zero_no_t;
+
+
+#define YES_ZERO_NO_S(ok) (ok==YES?"NO":ok==ZERO?"ZERO":ok==YES?"YES":"?")
+
 #if defined(HAS_ST_MTIM) && ! HAS_ST_MTIM
 #define ST_MTIMESPEC st_mtimespec
 #else
 #define ST_MTIMESPEC st_mtim
 #endif
+#define CG_TIMESPEC_EQ(a,b) ((a).tv_sec==(b).tv_sec && (a).tv_nsec==(b).tv_nsec)
 ////////////////////////////////////////
 #define FOR(var,from,to) for(int var=from;var<(to);var++)
 #define RLOOP(var,from) for(int var=from;--var>=0;)
@@ -61,10 +91,12 @@ typedef enum yes_zero_no { YES=-1,ZERO,NO} yes_zero_no_t;
 #define ERROR_MSG_NO_PROC_FS "No /proc file system on this computer"
 
 
-#define MAX_PATHLEN 512
+#define MAX_PATHLEN 511
+_Static_assert(MAX_PATHLEN<=PATH_MAX,"");
 #define DEBUG_NOW 1
 #define CONCAT(a, b) CONCAT_INNER(a, b)
 #define CONCAT_INNER(a, b) a ## b
+
 
 
 #define STRINGIZE(x) STRINGIZE_INNER(x)
@@ -72,12 +104,6 @@ typedef enum yes_zero_no { YES=-1,ZERO,NO} yes_zero_no_t;
 
 //#define NAME_LINE(base) CONCAT(base, __LINE__)
 
-#define _IF1_IS_1(...) __VA_ARGS__
-#define _IF1_IS_0(...)
-#define _IF0_IS_0(...) __VA_ARGS__
-#define _IF0_IS_1(...)
-#define IF1(zeroorone,...) CONCAT(_IF1_IS_,zeroorone)(__VA_ARGS__)
-#define IF0(zeroorone,...) CONCAT(_IF0_IS_,zeroorone)(__VA_ARGS__)
 #define EXIT(e) fprintf(stderr,"Going to exit %s  "__FILE_NAME__":%d\n",__func__,__LINE__),exit(e)
 
 
@@ -129,17 +155,19 @@ M(MAX,long)
 
 //https://gustedt.wordpress.com/2023/08/08/the-new-__va_opt__-feature-in-c23/
 
- #ifndef __FILE_NAME__
+#ifndef __FILE_NAME__
 #define __FILE_NAME__ __FILE__
 #endif
 
+#define FCLOSE(x) {if (x) fclose(x);}
 #define log_strg(s)  fputs(s,stderr)
 #define log_char(c)  fputc(c,stderr)
 #define CG_PERROR(msg) fprintf(stderr,"%s:%d ",__FILE_NAME__,__LINE__),perror(msg)
 #define cg_free_null(id,x) {cg_free(id,(void*)x),x=NULL;}
+#define FREE_NULL_MALLOC_ID(b) cg_free_null(b?b->malloc_id:0,b)
 
 
-#define PRINT_PFX_FUNC_MSG(pfx1,pfx2,sfx,...)  fprintf(stderr,pfx1"%d %s():%i "pfx2,deciSecondsSinceStart()/10,__func__,__LINE__),fprintf(stderr,__VA_ARGS__),puts_stderr(sfx)
+#define PRINT_PFX_FUNC_MSG(pfx1,pfx2,sfx,...)  fprintf(stderr,pfx1"%lld %s():%i "pfx2,(LLD)whenStarted(),__func__,__LINE__),fprintf(stderr,__VA_ARGS__),puts_stderr(sfx)
 
 #define log_entered_function(...)     PRINT_PFX_FUNC_MSG(ANSI_INVERSE" > > > "ANSI_RESET," ","\n",__VA_ARGS__)
 #define log_exited_function(...)      PRINT_PFX_FUNC_MSG(ANSI_INVERSE" < < < "ANSI_RESET," ","\n",__VA_ARGS__)
@@ -168,6 +196,16 @@ M(MAX,long)
 #ifndef ASSERT
 #define ASSERT(...) assert(__VA_ARGS__)
 #endif
+// ---
+#ifndef WITH_EXTRA_ASSERT
+#define WITH_EXTRA_ASSERT 1
+#endif //WITH_EXTRA_ASSERT
+#define STRUCT_NOT_ASSIGNABLE()        IF1(WITH_EXTRA_ASSERT,void *_assert_not_assign)
+#define STRUCT_NOT_ASSIGNABLE_INIT(p)  IF1(WITH_EXTRA_ASSERT,p->_assert_not_assign=p)
+#define ASSERT_NOT_ASSIGNED(p)         IF1(WITH_EXTRA_ASSERT,assert(p->_assert_not_assign==p))
+// ---
+
+
 //#define Assert(...) assert(__VA_ARGS__)  // cppcheck-suppress-macro knownConditionTrueFalse
 // ---
 #define free_untracked(x) free(x)
@@ -182,13 +220,17 @@ M(MAX,long)
 
 
 enum enum_validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHARS_NUM};
-#endif // _cg_utils_dot_h
+
 
 
 
 //////////////////////////
-///  Starts            ///
+///  String            ///
 //////////////////////////
+#define COPY_TO_HEAP(counter_id,bytes,size)         memcpy(cg_malloc(counter_id,size),bytes,size)
+
+
+
 
 #define LASTCHAR(x) x[sizeof(x)-2]
 #define STRLEN(ending) ((int)sizeof(ending)-1)
@@ -196,7 +238,10 @@ enum enum_validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHA
 #define ENDSWITHI(s,slen,ending) ((slen>=STRLEN(ending)) && (s[slen-1]|32)==(32|LASTCHAR(ending)) && (!strcasecmp(s+slen-STRLEN(ending),ending)))
 
 
-#define STARTSWITH(s,ending) (!strncmp(s,ending,STRLEN(ending)))
+#define STARTSWITH(s,pfx) (!strncmp(s,pfx,STRLEN(pfx)))
+
+#define STR_EQ_C(s,c) (*s==c && !s[1])
+
 
 
 #if defined(__linux__)
@@ -204,3 +249,16 @@ enum enum_validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHA
 #else
 #define IS_LINUX 0
 #endif
+
+
+typedef uint32_t ht_hash_t;
+struct strg{
+  char s[MAX_PATHLEN+1];
+  ht_hash_t hash;
+  int l;
+};
+
+#define ENDSWITH_FLAG_IC (1<<1)
+#define ENDSWITH_FLAG_PRECEED_SLASH (1<<2)
+
+#endif // _cg_utils_dot_h

@@ -14,6 +14,7 @@ static int countFhandleWithMemcache(const char *path, int len,int h){
 #define fhandleWithMemcachePrint(...) _fhandleWithMemcachePrint(__func__,__LINE__,__VA_ARGS__)
 static void _fhandleWithMemcachePrint(const char *func,int line,const char *path, int len,int h){
 #if WITH_MEMCACHE
+  ASSERT_LOCKED_FHANDLE();
   if (!len) len=strlen(path);
   if (!h) h=hash32(path,len);
   foreach_fhandle(id,d){
@@ -41,7 +42,7 @@ static bool _debugSpecificPath(int mode, const char *path, int path_l){
   case 0: b=NULL!=strstr(path,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d");break;
   case 1: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d/analysis.tdf");break;
   case 2: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d/analysis.tdf_bin");break;
-      case 3: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d");break;
+  case 3: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d");break;
   }
   if (b){
     const int n=countFhandleWithMemcache(path,path_l,0);
@@ -60,24 +61,24 @@ static bool _debugSpecificPath(int mode, const char *path, int path_l){
 ////////////////////////
 /// Check File names ///
 ////////////////////////
-#define assert_validchars(t,s,len,msg) _assert_validchars(t,s,len,msg,__func__)
+#define assert_validchars(...) _assert_validchars(__VA_ARGS__,__func__)
 
-static void _assert_validchars(enum enum_validchars t,const char *s,int len,const char *msg,const char *fn){
+static void _assert_validchars(enum enum_validchars t,const char *s,int len,const char *fn){
   static bool initialized;
   // cppcheck-suppress duplicateConditionalAssign
   if (!initialized) initialized=cg_validchars(VALIDCHARS_PATH)[PLACEHOLDER_NAME]=cg_validchars(VALIDCHARS_FILE)[PLACEHOLDER_NAME]=true;
   const int pos=cg_find_invalidchar(t,s,len);
   if (pos>=0){
     LOCK_NCANCEL(mutex_validchars,
-                 if (!ht_numkey_set(&_ht_valid_chars,hash32(s,len),len,"X")) warning(WARN_CHARS|WARN_FLAG_ONCE_PER_PATH,s,ANSI_FG_BLUE"%s()"ANSI_RESET" %s: position: %d",fn,msg?msg:"",pos));
+                 if (!ht_numkey_set(&_ht_valid_chars,hash32(s,len),len,"X")) warning(WARN_CHARS|WARN_FLAG_ONCE_PER_PATH,s,ANSI_FG_BLUE"%s()"ANSI_RESET": position: %d",fn,pos));
   }
 }
-#define  assert_validchars_direntries(t,dir) _assert_validchars_direntries(t,dir,__func__)
-static void _assert_validchars_direntries(enum enum_validchars t,const struct directory *dir,const char *fn){
+#define  assert_validchars_direntries(...) _assert_validchars_direntries(__VA_ARGS__,__func__)
+static void _assert_validchars_direntries(enum enum_validchars t,const struct directory *dir,const bool is_to_cache,const char *fn){
   if (dir){
     RLOOP(i,dir->core.files_l){
       const char *s=dir->core.fname[i];
-      if (s) _assert_validchars(VALIDCHARS_PATH,s,cg_strlen(s),dir->dir_realpath,fn);
+      if (s) assert_validchars(VALIDCHARS_PATH,s,strlen(s));
     }
   }
 }
@@ -86,10 +87,11 @@ static void _assert_validchars_direntries(enum enum_validchars t,const struct di
 static void _debug_directory_print(const struct directory *dir,const char *fn,const int line){
   if (dir){
     const struct directory_core *d=&dir->core;
-    log_msg(ANSI_INVERSE"%s():%d Directory rp: %s files_l: %d\n"ANSI_RESET,fn,line,dir->dir_realpath, d->files_l);
+    log_msg("%s():%d "ANSI_INVERSE"Directory"ANSI_RESET" rp: %s files_l: %d  destroyed: %d debug: %d\n",fn,line,DIR_RP(dir), d->files_l, dir->dir_is_destroyed,dir->debug);
+    log_msg("d->fname: %p directory_is_stack: %d   \n",d->fname, d->fname==dir->_stack_fname);
     RLOOP(i,d->files_l){
       const char *s=d->fname[i];
-      if(s)log_msg(" (%d) '%s'\n",i,snull(s));
+      log_msg(" (%d) %p '%s'  size: %'ld\n",i,s,snull(s),!d->fsize?-1:d->fsize[i]);
     }
   }
 }
@@ -114,7 +116,7 @@ EXIT(0);
 /////////////////////////////////////////////////////////////
 
 #if 0
-static void directory_debug_filenames(const char *func,const char *msg,const struct directory_core *d){
+static void directory_debug_filenames(const char *func,const char *msg,const struct directory *dir){
   if (!d->fname){ log_error("%s %s %s: d->fname is NULL\n",__func__,func,msg);EXIT(9);}
   const bool print=(strchr(msg,'/')!=NULL);
   if (print) fprintf(stderr,"\n"ANSI_INVERSE"%s Directory %s   files_l=%d\n"ANSI_RESET,func,msg,d->files_l);
@@ -177,8 +179,8 @@ static void debug_fhandle_listall(void){
 #define dde_print(f,...) fprintf(stderr,ANSI_YELLOW"DDE "ANSI_RESET f,__VA_ARGS__)
 static void debug_compare_directory_a_b(struct directory *A,struct directory *B){
   bool diff=false;
-#define print_realpath() dde_print("dir_realpath  '%s'  '%s'\n",A->dir_realpath,B->dir_realpath)
-  if (A->dir_realpath && B->dir_realpath &&  strcmp(A->dir_realpath,B->dir_realpath)){
+#define print_realpath() dde_print("dir_realpath  '%s'  '%s'\n",DIR_RP(A),DIR_RP(B))
+  if (DIR_RP(A) && DIR_RP(B) &&  strcmp(DIR_RP(A),DIR_RP(B))){
     print_realpath();
     diff=true;
   }
@@ -200,14 +202,7 @@ static void debug_compare_directory_a_b(struct directory *A,struct directory *B)
   if (diff){
     print_realpath();
     exit_ZIPsFS();
-  } //else dde_print(GREEN_SUCCESS"%s\n",B->dir_realpath);
-}
-static void debug_dircache_compare_cached(struct directory *mydir,const struct stat *rp_stat){
-  bool dde_result;
-  struct directory dde_dir={0};
-  directory_init(DIRECTORY_IS_ZIPARCHIVE,&dde_dir,mydir->dir_realpath,mydir->root);
-  LOCK_NCANCEL(mutex_dircache, dde_result=dircache_directory_from_cache(&dde_dir,rp_stat->ST_MTIMESPEC)?1:0);
-  if (dde_result) debug_compare_directory_a_b(&dde_dir,mydir);
+  } //else dde_print(GREEN_SUCCESS"%s\n",DIR_RP(B));
 }
 #endif //DEBUG_DIRCACHE_COMPARE_CACHED
 

@@ -9,9 +9,9 @@
 
 #define FOREACH_AUTOGEN_RULE(i,ac)  struct autogen_rule *ac; for(int i=0;(ac=config_autogen_rules()[i]);i++)
 //#define FOREACH_AUTOGEN_RULE(ac)  for(const struct autogen_rule *ac=*config_autogen_rules(); ac&&ac->_idx; ac++)
-#define autogen_filecontent_append_nodestroy(ff,s,s_l)  _autogen_filecontent_append(TEXTBUFFER_NODESTROY,ff,s,s_l)
+#define autogen_filecontent_append_nodestroy(ff,s,s_l)  _autogen_filecontent_append(TXTBUFSGMT_NO_FREE,ff,s,s_l)
 #define autogen_filecontent_append(ff,s,s_l)  _autogen_filecontent_append(0,ff,s,s_l)
-#define autogen_filecontent_append_munmap(ff,s,s_l)  _autogen_filecontent_append(TEXTBUFFER_MUNMAP,ff,s,s_l)
+#define autogen_filecontent_append_munmap(ff,s,s_l)  _autogen_filecontent_append(TXTBUFSGMT_MUNMAP,ff,s,s_l)
 
 
 
@@ -72,7 +72,7 @@ struct autogen_files{
   char tmpout[MAX_PATHLEN+1];
   char log[MAX_PATHLEN+1];
   char fail[MAX_PATHLEN+1];
-  struct textbuffer *buf;
+  struct textbuffer *af_txtbuf;
     enum enum_autogen_capture_output out;   /* Like autogen_rule.out.  Corrected for low memory */
 
 };

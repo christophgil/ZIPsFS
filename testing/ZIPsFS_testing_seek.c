@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <locale.h>
+#include <stdbool.h>
 
 #include <sys/mman.h>
 #include <unistd.h>
@@ -14,6 +15,11 @@
 #define ANSI_FG_RED "\x1B[31m"
 #define ANSI_RESET "\x1B[0m"
 #define TEST_BLOCK 5000
+
+
+#define NUM_THREADS 10
+#define NUM_READS 100
+#define INFINITE false
 
 enum fh_policy{FH_THREAD, FH_EACH_BLOCK, FH_ALL_SAME};
 static enum fh_policy _fh_policy;
@@ -40,7 +46,7 @@ static int cg_getc_tty(void){
 
 void press_enter(){
   fprintf(stderr,"Press enter to continue!");
-  cg_getc_tty();
+    cg_getc_tty();
 }
 void test_seek(long begin,const char *path,const char *bb,const size_t len,const int fh_common){
   //  pthread_mutex_lock(&_mutex);
@@ -63,8 +69,8 @@ void test_seek(long begin,const char *path,const char *bb,const size_t len,const
     printf(ANSI_FG_RED"Error "ANSI_RESET"test_seek begin=%'ld, end=%'ld   len=%'ld\n",begin,begin+TEST_BLOCK,len);
     printf("                already=%ld  TEST_BLOCK=%d n=%d   \n",already,TEST_BLOCK,n);
     printf("                path=");print_path_for_fd(fh);
-      count_errors++;
-    press_enter();
+    count_errors++;
+     press_enter();
   }
   //pthread_mutex_lock(&_mutex);
   if (fh!=fh_common) close(fh);
@@ -82,8 +88,8 @@ int _fh=0;
 void *my_thread(void *arg){
   fprintf(stderr,"\x1B[7m my_thread \x1B[0m;\n");
   const int fh=_fh_policy==FH_ALL_SAME?_fh:_fh_policy==FH_THREAD?open(path,O_RDONLY):0;
-  while(1){
-    int imax=1000;
+  do{
+    int imax=NUM_READS;
     for(int i=imax;--i>=0;){
       long begin;
       if (1){
@@ -97,7 +103,8 @@ void *my_thread(void *arg){
       if (_fh_policy==FH_ALL_SAME)  pthread_mutex_unlock(&_mutex);
       usleep(1000*500);
     }
-  }
+  } while(INFINITE);
+  return NULL;
 }
 
 int main(int argc, char *argv[]){
@@ -105,7 +112,7 @@ int main(int argc, char *argv[]){
   setlocale(LC_NUMERIC,""); /* Enables decimal grouping in printf */
   fprintf(stderr,"Testing file seek\n\
 The program reads the given file entirely into RAM.\n\
-It then reads random parts using fseek() and compars.\n\
+It then reads random parts using fseek() and compares.\n\
 A red error message will appear on error\n\
 Options:\n\
  -1: One file handle for all.\n\
@@ -118,18 +125,15 @@ Options:\n\
     case 'm': _fh_policy=FH_EACH_BLOCK;break;
     }
   }
-
   if (argc!=1+optind){
     fprintf(stderr,"argc: %d, optind: %d  Expected one parameter:   file-path     \n",argc,optind);
     fprintf(stderr,"%s ~/tmp/ZIPsFS/mnt/misc_tests/local_files/PRO3/20230612_PRO3_AF_004_MA_HEK200ng_5minHF_001_V11-20-HSoff_INF-B_1.d/analysis.tdf\n",argv[0]);
     exit(1);
   }
-
-
-    path=argv[optind];
-    if (_fh_policy==FH_ALL_SAME){ _fh=open(path,O_RDONLY); assert(_fh>0); }
+  path=argv[optind];
+  if (_fh_policy==FH_ALL_SAME){ _fh=open(path,O_RDONLY); assert(_fh>0); }
   fprintf(stderr,"path: %s,  policy: %s\n", path, _fh_policy==FH_EACH_BLOCK?"FH_EACH_BLOCK": _fh_policy==FH_ALL_SAME?"FH_ALL_SAME": _fh_policy==FH_THREAD?"FH_THREAD":"????");
-  press_enter();
+  if (INFINITE) press_enter();
   struct stat stbuf;
   stat(path,&stbuf);
   int blksize = (int)stbuf.st_blksize;
@@ -154,20 +158,13 @@ Options:\n\
     usleep(4*1000*1000);
     assert(len==already);
   }
-
-#define THREAD_NUM 10
-  pthread_t thread[THREAD_NUM];
-  for(int i=THREAD_NUM;--i>=0;){
+  pthread_t thread[NUM_THREADS];
+  for(int i=NUM_THREADS;--i>=0;){
     fprintf(stderr,"Going to start thread %d ...\n",i);
     pthread_create(thread+i,NULL,&my_thread,NULL);
   }
-  usleep(1000*1000*1000);
+  for(int i=NUM_THREADS;--i>=0;){
+    pthread_join(thread[i],NULL);
+  }
+  //  usleep(1000*1000*1000);
 }
-
-
-/*
-
-
-
-
- */

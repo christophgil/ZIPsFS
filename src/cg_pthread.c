@@ -1,3 +1,10 @@
+#if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0 || defined(__cppcheck__)
+#define WITH_ASSERT_LOCK 1
+#define mutex_fhandle 1
+#define mutex_mutex_count 10
+#endif
+
+
 #ifndef _cg_pthread_dot_c
 #define _cg_pthread_dot_c
 #include <pthread.h>
@@ -15,10 +22,9 @@
 #endif
 
 
-#define ROOTS (1<<LOG2_ROOTS)
 static pthread_mutex_t _mutex[NUM_MUTEX];
 #if WITH_ASSERT_LOCK
-static void destroy_thread_data(void *x){
+static void destroy_thread_data(void *x){  // cppcheck-suppress constParameterCallback
 }
 /* Count recursive locks with (_mutex+mutex). Maybe inc or dec. */
 static int cg_mutex_count(int mutex,int inc){
@@ -46,17 +52,22 @@ static int cg_mutex_count(int mutex,int inc){
 #define LOCK_N(mutex,code) lock(mutex); code;  unlock(mutex)
 
 #define LOCK(mutex,code) { LOCK_N(mutex,code);}
-static long _log_count_pthread_lock=0;
+
+/////////////////////
+///  __cppcheck__ ///
+/////////////////////
+#define CPPCHECK_NO_BRANCH_BEGIN() IF1(WITH_CPPCHECK,FILE *_cppcheck_rsc_leak_no_branch=fopen("mutex","r"))
+#define CPPCHECK_NO_BRANCH_END()   IF1(WITH_CPPCHECK,FCLOSE(_cppcheck_rsc_leak_no_branch))
+
 #ifdef __cppcheck__
-#define lock(mutex) FILE *_cppcheck_rsc_leak_##mutex=fopen("mutex","r")
-#define unlock(mutex) if (_cppcheck_rsc_leak_##mutex) fclose(_cppcheck_rsc_leak_##mutex)
-#define continue return
-#define continue return
-#define goto     return
-#elif ! defined(WITH_PTHREAD_LOCK) || WITH_PTHREAD_LOCK
+// cppcheck-suppress-macro [constVariablePointer,shadowVariable]
+#define lock(mutex)     FILE *_cppcheck_rsc_leak_##mutex=fopen("mutex","r")
+#define unlock(mutex)   FCLOSE(_cppcheck_rsc_leak_##mutex)
+#else /*__cppcheck__*/
+#if ! defined(WITH_PTHREAD_LOCK) || WITH_PTHREAD_LOCK
 static MAYBE_INLINE void lock(int mutex){
   if (mutex){
-    _log_count_pthread_lock++;
+    IF1(WITH_ZIPsFS_COUNTERS,COUNTER_INC(COUNT_PTHREAD_LOCK));
     pthread_mutex_lock(_mutex+mutex);
     IF1(WITH_ASSERT_LOCK,cg_mutex_count(mutex,1));
   }
@@ -67,10 +78,11 @@ static MAYBE_INLINE void unlock(int mutex){
     pthread_mutex_unlock(_mutex+mutex);
   }
 }
-#else
+#else /*WITH_PTHREAD_LOCK*/
 #define lock(mutex) {}
 #define unlock(mutex) {}
-#endif
+#endif /*WITH_PTHREAD_LOCK*/
+#endif /*__cppcheck__*/
 ///////////////////////////
 /// Debbugging / assert ///
 ///////////////////////////
@@ -93,23 +105,30 @@ static MAYBE_INLINE void unlock(int mutex){
 /////////////////
 ///  Testing  ///
 /////////////////
-#if WITH_ASSERT_LOCK
-static void cg_mutex_test_1(void){
+#if !defined(DIR_ZIPsFS) && defined(__cppcheck__) || defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
+static void cg_mutex_challenge_1(void){
   log_verbose("");
   lock(mutex_fhandle);
   log_verbose("Within mutex_fhandle");
   log_verbose("count=%d",cg_mutex_count(mutex_fhandle,0));
-  LOCK_N(mutex_fhandle,log_verbose("count2=%d",cg_mutex_count(mutex_fhandle,0)));
+  {
+    LOCK_N(mutex_fhandle, log_verbose("count2=%d",cg_mutex_count(mutex_fhandle,0)));
+  }
   ASSERT_LOCKED_FHANDLE();
   log_msg("count2=%d",cg_mutex_count(mutex_fhandle,0));
   unlock(mutex_fhandle);
   ASSERT_LOCKED_FHANDLE();
 }
-static void cg_mutex_test_2(void){
+
+static void cg_mutex_challenge_2(void){
   log_verbose("");
+    for(int i=0;i<2;i++){
   LOCK(mutex_fhandle,
        cg_thread_assert_not_locked(mutex_fhandle);
+       //       if (!time(NULL))
+       break;
        );
+   }
 }
 #endif // !WITH_ASSERT_LOCK
 
@@ -119,16 +138,14 @@ static void cg_mutex_test_2(void){
 
 /////////////////////////////////////////////////////////////////////////////////
 #if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0 || defined(__cppcheck__)
-
-
-
-
 int main(int argc, const char *argv[]){
-  IF1(WITH_ASSERT_LOCK,cg_mutex_count_test());
-#ifdef __cppcheck__
-  cppcheck_lock_challenge();
-#endif
+  {
+  static pthread_mutexattr_t _mutex_attr_recursive;
+  pthread_mutexattr_init(&_mutex_attr_recursive);
+  pthread_mutexattr_settype(&_mutex_attr_recursive,PTHREAD_MUTEX_RECURSIVE);
+  pthread_mutex_init(_mutex+mutex_fhandle,&_mutex_attr_recursive);
+  }
+  cg_mutex_challenge_1();
+  //  cg_mutex_challenge_2();
 }
-
-
 #endif

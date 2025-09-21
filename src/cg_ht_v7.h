@@ -1,3 +1,7 @@
+/////////////////////////////////
+/// COMPILE_MAIN=cg_ht_v7.c   ///
+/////////////////////////////////
+
 #ifndef _cg_ht_dot_h
 #define _cg_ht_dot_h
 #include "cg_mstore_v2.h"
@@ -7,14 +11,21 @@ struct ht_entry{
   void* value;
 };
 #define _HT_LDDIM 4
-#define _STACK_HT_ENTRY ULIMIT_S
+
+//#define _HT_DIM_STACK IF01(WITH_TESTING_REALLOC,ULIMIT_S,4)
+#define _HT_DIM_STACK 1024
+
 struct ht{
   const char *name;
     IF1(WITH_DEBUG_MALLOC,int id);
     int mutex;
-  int iinstance; /* For Debugging */
-  uint32_t flags,capacity,length;
-  struct ht_entry entry_zero,*entries,_stack_ht_entry[_STACK_HT_ENTRY];
+  int iinstance, ht_counter_malloc, key_malloc_id; /* For Debugging */
+  uint32_t flags;
+#define HT_FLAG_KEYS_ARE_STORED_EXTERN (1U<<30)
+#define HT_FLAG_NUMKEY (1U<<29)
+#define HT_FLAG_BINARY_KEY  (1U<<27)
+  uint32_t capacity,length;
+  struct ht_entry entry_zero,*_entries,_stack_ht_entry[_HT_DIM_STACK];
   struct mstore keystore_buf, *keystore, *valuestore;
 #ifdef CG_THREAD_FIELDS
   CG_THREAD_FIELDS;

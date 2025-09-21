@@ -9,13 +9,27 @@
 /////////////////////////////////////////////////////////////////////////////////////
 
 #define FHANDLE_BOTH_SHARE_TRANSIENT_CACHE(d1,d2) (d1->zpath.virtualpath_without_entry_hash==d2->zpath.virtualpath_without_entry_hash && !strcmp(D_VP0(d1),D_VP0(d2)))
+
+
+static bool zpath_exists(struct zippath *zpath){
+  if (!zpath) return false;
+  const ino_t ino=zpath->stat_rp.st_ino;
+  if ((ino!=0) != (zpath->realpath_l!=0)) warning(WARN_FLAG_ONCE|WARN_FLAG_ERROR,RP(),"Inconsistence ino: %ld  realpath_l: %d",ino,zpath->realpath_l);
+  return ino!=0;
+}
+
 static struct ht* transient_cache_get_ht(struct fHandle *d){
   struct ht *ht=d->ht_transient_cache;
   if (!ht){
-    ht_set_mutex(mutex_fhandle,ht_init(ht=d->ht_transient_cache=calloc_untracked(1,sizeof(struct ht)),"transient_cache",HT_FLAG_NUMKEY|HT_FLAG_COUNTMALLOC|5));
+    ht_set_mutex(mutex_fhandle,ht_init(ht=d->ht_transient_cache=cg_calloc(COUNT_FHANDLE_TRANSIENT_CACHE,1,sizeof(struct ht)),"transient_cache",HT_FLAG_NUMKEY|5));
+
+    assert(0==(ht->flags&HT_FLAG_KEYS_ARE_STORED_EXTERN));
+    ht->ht_counter_malloc=COUNT_HT_MALLOC_TRANSIENT_CACHE;
+    ht->key_malloc_id=COUNT_MALLOC_KEY_TRANSIENT_CACHE;
     ht_set_id(HT_MALLOC_transient_cache,ht);
-    mstore_set_mutex(mutex_fhandle,mstore_init(ht->valuestore=calloc_untracked(1,sizeof(struct mstore)),NULL,(SIZEOF_ZIPPATH*16)|MSTORE_OPT_MALLOC));
+    mstore_set_mutex(mutex_fhandle,mstore_init(ht->valuestore=calloc_untracked(1,sizeof(struct mstore)),NULL,(sizeof(struct zippath)*16)|MSTORE_OPT_MALLOC));
     //const ht_hash_t hash=d->zpath.virtualpath_without_entry_hash;
+    ht->valuestore->mstore_counter_mmap=COUNT_MSTORE_MMAP_BYTES_TRANSIENT_CACHE_VALUES;
     foreach_fhandle(ie,e){
       if (!e->ht_transient_cache && FHANDLE_BOTH_SHARE_TRANSIENT_CACHE(e,d)) e->ht_transient_cache=ht;
     }
@@ -43,12 +57,11 @@ static struct zippath *transient_cache_get_or_create_zpath(const bool create,con
       struct ht_entry *e=ht_numkey_get_entry(ht,hash,virtualpath_l,create);
       if (e){
         const bool no_value=e->value==NULL;
-        if (no_value) e->value=mstore_malloc(ht->valuestore,SIZEOF_ZIPPATH,8);
+        if (no_value) e->value=mstore_malloc(ht->valuestore,sizeof(struct zippath),8);
         struct zippath *zpath=e->value;
         if (no_value || !zpath->virtualpath || strcmp(virtualpath,VP())){ /* Accept hash_collision */
           zpath_init(zpath,virtualpath);
         }else if (!create){
-          // DEBUG_NOW  Used to be  (!maybe_same_zip which is  wrong AFAIK
           if (maybe_same_zip && (zpath->flags&ZP_DOES_NOT_EXIST)){
             return NULL; /* Did not exist before. This  is taken as evidence that it is still absent. This is because  according to path is part of same zip */
           }
@@ -69,11 +82,11 @@ static int transient_cache_find_realpath(const int opt, struct zippath *zpath, c
   const int f=cached.flags;
   if (cached.virtualpath && !(f&ZP_DOES_NOT_EXIST) && zpath_exists(&cached)){
     *zpath=cached;
-    LF();IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(ANSI_FG_GREEN"%s"ANSI_RESET,vp);
+    IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(ANSI_FG_GREEN"%s"ANSI_RESET,vp);
     return 1;
   }
   if (f&ZP_DOES_NOT_EXIST){
-    LF();IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(ANSI_FG_RED"%s"ANSI_RESET,vp);
+    IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(ANSI_FG_RED"%s"ANSI_RESET,vp);
     return -1;
   }
   return 0;
@@ -90,11 +103,16 @@ static void transient_cache_store(const bool onlyThisRoot,const struct zippath *
 
 
 static void transient_cache_destroy(struct fHandle *d){
-  if (d->ht_transient_cache){
-    foreach_fhandle(ie,e) if (d->ht_transient_cache==e->ht_transient_cache) return;
-    ht_destroy(d->ht_transient_cache);
-    cg_free(MALLOC_fhandle,d->ht_transient_cache);
-    d->ht_transient_cache=0;
+  struct ht *ht=d->ht_transient_cache;
+  if (ht){
+    {
+      foreach_fhandle(ie,e) if (d!=e && ht==e->ht_transient_cache) return;
+    }
+    ht_destroy(ht);
+    cg_free(COUNT_FHANDLE_TRANSIENT_CACHE,ht);
+    {
+      foreach_fhandle(ie,e) if (ht==e->ht_transient_cache) e->ht_transient_cache=NULL;
+    }
   }
 }
 

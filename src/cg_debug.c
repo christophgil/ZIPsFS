@@ -50,7 +50,7 @@ static bool filepath_contains_blocking(const char *p){
 static bool tdf_or_tdf_bin(const char *p){
   if (!p) return false;
   const int p_l=cg_strlen(p);
-  return cg_endsWith(p,p_l,".tdf",4) || cg_endsWith(p,p_l,".tdf_bin",8);
+  return cg_endsWith(0,p,p_l,".tdf",4) || cg_endsWith(0,p,p_l,".tdf_bin",8);
 }
 static bool filename_starts_year(const char *p,int l){
   if (l<20) return false;

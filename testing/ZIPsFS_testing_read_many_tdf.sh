@@ -3,6 +3,7 @@ export ANSI_FG_GREEN=$'\e[32m' ANSI_FG_RED=$'\e[31m' ANSI_FG_GRAY=$'\e[30;1m'  A
 set -u
 
 
+
 [[ -n ${TMUX_WINDOW_NUMBER:-} ]] && tmux rename-window -t "$TMUX_WINDOW_NUMBER" "${0##*/}"
 
 
@@ -49,7 +50,9 @@ main(){
             ls -d -l $f
 
             [[ $m != "${crc_zip}" ]] && read -r -t 9999999 -p "${ANSI_FG_RED}Warning  map_crc='${crc_zip}' m='$m'  ${ANSI_RESET}  $f Press Enter"
+
             for ((j=THREADS;--j>=0;)); do
+
                 (  m2=$($cmd) || read -r -p "Error";
                    m2=${m2%%?BAD*}
                    m2=${m2^^}

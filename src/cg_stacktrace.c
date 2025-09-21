@@ -1,5 +1,5 @@
 /* Compare https://raw.githubusercontent.com/Dexter9313/C-stacktrace/master/c-stacktrace.h by  Florian Cabot */
-/// COMPILE_MAIN=ZIPsFS                   ///
+/// xxxxxCOMPILE_MAIN=ZIPsFS                   ///
 // cppcheck-suppress-file unusedFunction
 
 #ifndef _cg_stacktrace_dot_c
@@ -55,7 +55,6 @@ static FILE *stckOut(void){ return _stckOut?_stckOut:stderr;}
 #include <sys/wait.h>
 #include <sys/prctl.h>
 static void cg_print_stacktrace_using_debugger(void){
-  return;
   puts_stderr(ANSI_INVERSE"print_trace_using_debugger"ANSI_RESET"\n");
   char pid_buf[30];
   sprintf(pid_buf, "%d", getpid());
@@ -67,7 +66,7 @@ static void cg_print_stacktrace_using_debugger(void){
 #else
     if (*path_of_this_executable()) execl("/usr/bin/gdb", "gdb", "--batch", "-f","-n", "-ex", "thread", "-ex", "bt",path_of_this_executable(),pid_buf,NULL);
 #endif
-    abort(); /* If gdb failed to start */
+    exit(errno); /* If gdb failed to start */
   } else {
     waitpid(child_pid,NULL,0);
   }
@@ -143,11 +142,12 @@ static bool addr2line_no_shell(const char *addr,const int iLine){
 #endif
   aa[0]=a0;
 #undef A
-  char cmd_flat[99];
+  char cmd_flat[999];
   *cmd_flat=0;
   FOREACH_CSTRING(s,aa){ strcat(cmd_flat,*s); strcat(cmd_flat," ");}
   IF1(WITH_POPEN_NOSHELL,struct popen_noshell_pass_to_pclose pclose_arg={0});
-  FILE *fp=IF1(WITH_POPEN_NOSHELL,popen_noshell("addr2line",(const char * const*)aa,"r",&pclose_arg,0))  IF0(WITH_POPEN_NOSHELL,popen(cmd_flat,"r"));
+  //  FILE *fp=IF1(WITH_POPEN_NOSHELL,popen_noshell("addr2line",(const char * const*)aa,"r",&pclose_arg,0))  IF0(WITH_POPEN_NOSHELL,popen(cmd_flat,"r"));
+  FILE *fp=IF01(WITH_POPEN_NOSHELL,popen(cmd_flat,"r"),{ popen_noshell("addr2line",(const char * const*)aa,"r",&pclose_arg,0)});
   bool ok=false;
   if (!fp) return false;
   while(fgets(line,sizeof(line)-1,fp)){
@@ -194,7 +194,8 @@ static bool addr2line(const char *addr, int lineNb){ // cppcheck-suppress unused
 
 // https://stackoverflow.com/questions/15129089/is-there-a-way-to-dump-stack-trace-with-line-number-from-a-linux-release-binary
 static void cg_print_stacktrace(int calledFromSigInt){
-  //log_entered_function("%d",HAS_BACKTRACE);
+
+  log_entered_function("%d",HAS_BACKTRACE);
 #if HAS_BACKTRACE
   void* buffer[MAX_BACKTRACE_LINES];
   const int nptrs=backtrace(buffer,MAX_BACKTRACE_LINES);
@@ -245,7 +246,9 @@ static void cg_print_stacktrace_test(int what){
 static void my_signal_handler(int sig){
   signal(sig,SIG_DFL);
   fprintf(stckOut(),"\x1B[41mCaught signal %s\x1B[0m\n",strsignal(sig));
+
   cg_print_stacktrace(0);
+
 #ifdef CLEANUP_BEFORE_EXIT
   CG_CLEANUP_BEFORE_EXIT();
 #else
@@ -272,7 +275,7 @@ static void my_signal_handler(int sig){
 
 
 static void init_sighandler(const char* main_argv_0, uint64_t signals,FILE *out){
-
+  log_entered_function("%s",main_argv_0);
   _stckOut=out;
   stat(_thisPrg=main_argv_0,&_thisPrgStat);
 
@@ -310,10 +313,14 @@ static void function_a(void){
 
 
 int main(int argc, char *argv[]){
-  assert(stckOut()!=NULL);
+    assert(stckOut()!=NULL);
+
   _thisPrg=argv[0];
   init_sighandler(argv[0],(1L<<SIGABRT)|(1L<<SIGFPE)|(1L<<SIGILL)|(1L<<SIGINT)|(1L<<SIGSEGV)|(1L<<SIGTERM),stderr);
-  cg_print_stacktrace_test(1);
+
+
+  //  cg_print_stacktrace_test(1);
+    function_a();
 
 }
 

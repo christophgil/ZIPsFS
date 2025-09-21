@@ -25,20 +25,31 @@ files
 .IP
 .nf
 \f[C]
-ZIPsFS [ZIPsFS-options] path-of-branch1  branch2  branch3  branch4  :  [fuse-options] mount-point
+ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse-options] mount-point
 \f[R]
 .fi
+.PP
+With a trailing slash, the folder name is not part of the virtual path.
 .SS Example
 .SS First create some example files
 .IP
 .nf
 \f[C]
-b1=\[ti]/test/ZIPsFS/writable
-b2=\[ti]/test/ZIPsFS/branch1
-b3=\[ti]/test/ZIPsFS/branch2
+b1=\[ti]/test/ZIPsFS/writable/
+b2=\[ti]/test/ZIPsFS/branch1/
+b3=\[ti]/test/ZIPsFS/branch2/
+b4=\[ti]/test/ZIPsFS/branch3
+\f[R]
+.fi
+.PP
+Without trailing slash, the folder name [STRIKEOUT:branch4] will be,
+will be retained in the virtual path.
+.IP
+.nf
+\f[C]
 mnt=\[ti]/test/ZIPsFS/mnt
 
-mkdir -p $b1 $b2 $b3 $mnt
+mkdir -p $b1 $b2 $b3 $b4 $mnt
 
 for c in a b c d e f; do echo hello world $c >$b2/$c.txt; done
 for ((i=0;i<10;i++)); do echo hello world $i >$b3/$i.txt; done
@@ -52,7 +63,7 @@ zip --fifo $b3/20250131_this_is_a_mass_spectrometry_folder.d.Zip   <(seq 10)
 .IP
 .nf
 \f[C]
-ZIPsFS   $b1 $b2 $b3 : -o allow_other  $mnt
+ZIPsFS   $b1 $b2 $b3 $b4 : -o allow_other  $mnt
 \f[R]
 .fi
 .SS Browse the virtual file tree
@@ -263,6 +274,56 @@ cat \[ti]/test/ZIPsFS/mnt/1.txt\[at]SOURCE.TXT
 .PP
 Unfortunately, on Windows clients, these metadata files are inaccessible
 because they do not appear in directory listings.
+.SS Accessing internet files
+.PP
+Computations often require files from public repositories.
+Files from the internet (http, ftp, https) can be accessed as files
+using the URL as file name.
+ZIPsFS takes care of downloading and updating.
+They are immutable and cannot be modified unintentionally.
+In DOS, a trailing colon is a signature for device names.
+Therefore, the colon and all slashes in the url need to be replaced by
+comma.
+Comma has been chosen as a replacement because it normally does not
+occur in URLs.
+Furthermore, it does not require quoting in UNIX shells.
+.PP
+Example with \f[I]mnt/\f[R] denoting the mountpoint of the ZIPsFS file
+system:
+.IP
+.nf
+\f[C]
+sudo apt-get install curl
+ls -l  mnt/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README
+more   mnt/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README
+head   mnt/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README\[at]SOURCE.TXT
+\f[R]
+.fi
+.PP
+To see the real local file path append
+\f[B]\f[BI]\[at]SOURCE.TXT\f[B]\f[R] to the file path.
+.PP
+The http-header is updated according to a time-out rule in
+\f[B]ZIPsFS_configuration.c\f[R].
+Whether the file itself needs updating is decided upon the
+\f[I]Last-Modified\f[R] attribute in the http or ftp header.
+.PP
+Additionally, the file is accessible with a file-name containing the
+data in the header.
+This feature can be conditionally deactivated.
+.SS Generation of files using programming language C
+.PP
+By modifying the file \f[I]ZIPsFS_configuration_c.c\f[R], users can
+easily implement files where the file content ist generated dynamically
+using the programming language C.
+.PP
+Here is a pre-defined minimal exampe:
+.IP
+.nf
+\f[C]
+<mount point>/example_generated_file/example_generated_file.txt
+\f[R]
+.fi
 .SS Automatic Virtual File Generation and Conversion Rules
 .PP
 ZIPsFS can generate and display virtual files automatically.

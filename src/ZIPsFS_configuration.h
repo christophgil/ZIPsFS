@@ -16,11 +16,11 @@
 /////////////////
 /// Debugging ///
 /////////////////
-#define WITH_ASSERT_LOCK  0 // Optional assertion
-#define WITH_EXTRA_ASSERT 0 // Optional assertion
+#define WITH_ASSERT_LOCK     0 // Optional assertion
+#define WITH_EXTRA_ASSERT    0 // Optional assertion
+#define WITH_TESTING_REALLOC 0 // Smaller initial size, earlier realloc
 
-
-#define WITH_PTHREAD_LOCK 1 /*  Should be true. Only if suspect deadlock set to 0 */
+#define WITH_PTHREAD_LOCK 1 /*  Should be true. Only for testing if suspect deadlock set to 0 */
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -74,9 +74,8 @@
 #define RETRY_ZIP_FREAD 2
 // Repeat zip_fread on failure
 
-
 #define WITH_ZIPINLINE 1
-#define WITH_ZIPINLINE_CACHE 1
+#define WITH_ZIPINLINE_CACHE 1 /* Caches mapping virtual path to zip file */
 // Normally, ZIP files are shown as folders with ZIP entries being the contained files.
 // This is consistent for Bruker and Agilent mass spectrometry files.
 // However,  Sciex and ThermoFisher are organized differently.
@@ -93,60 +92,97 @@
 #define WITH_STAT_CACHE 1 /* Activate a cache for file attributes */
 
 
-#define WITH_EVICT_FROM_PAGECACHE 1 // Not for MacOSX
+#define WITH_EVICT_FROM_PAGECACHE 1 // See Not for MacOSX
 
 
 ////////////
 /// Size ///
 ////////////
-#define LOG2_ROOTS 3  // How many file systems are combined. Less is better because then constructed inodes is more efficient.
+#define LOG2_FILESYSTEMS 4  // How many file systems are combined. Less is better because then constructed inodes is more efficient.
+#define ROOTS 32
 #define DIRECTORY_CACHE_SIZE (1L<<20) // Size of file of one cache segment for  directory listings file names and attributes.
 #if WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
 #define NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE 16 // Maximum number of blocks. If Exceeded, the directory cache is cleared and filled again.
 #endif
-#define MEMCACHE_READ_BYTES_NUM (64*1024*1024) // When storing zip entries in RAM, number of bytes read in one go
+#define MEMCACHE_READ_BYTES_NUM (16*1024*1024) // When storing zip entries in RAM, number of bytes read in one go
 #define SIZE_CUTOFF_MMAP_vs_MALLOC (1<<16)
-
 
 /////////////////////////////////////
 /// Periodic probing remote roots ///
 /////////////////////////////////////
 
-#define ROOT_WARN_STATFS_TOOK_LONG_SECONDS 3 /* Remote roots are probed periodically using statvfs() */
-#define ROOT_LAST_RESPONSE_MUST_BE_WITHIN_SECONDS 6 /* Roots which have rosponded within the last n seconds are used. */
-#define ROOT_SKIP_UNLESS_RESPONDED_WITHIN_SECONDS 20 // Not responded within n seconds - skip this root
+
+/////////////////////////////////////////////////
+/// Async - Avoid blocking                    ///
+/// 0 deactivated    1 activated              ///
+/// File access is performed in worker thread ///
+/// The current thread gives up after timeout ///
+/// Also see ASYNC_SLEEP_USECONDS             ///
+/////////////////////////////////////////////////
+#define WITH_TIMEOUT_STAT     1
+#define WITH_TIMEOUT_READDIR  1
+#define WITH_TIMEOUT_OPENFILE 1
+#define WITH_TIMEOUT_OPENZIP  1
 
 ////////////
 /// Time ///
 ////////////
-#define STATQUEUE_TIMEOUT_SECONDS 10 // Give up waiting for stat() result
-#define STATQUEUE_SLEEP_USECONDS 200 // Sleep microseconds after checking queue again
-#define ROOT_OBSERVE_EVERY_MSECONDS_RESPONDING 1000 // Check availability of remote roots to prevent blocking.
-#define WITH_STAT_SEPARATE_THREADS 1 /* Recommended value is 1. Then  stat() is called in another thread to avoid blocking */
 
 
-/* File operations are performed within infininty loops to avoid blocking of the user threads. The infininty loops  might get blocked by a non-returning call to the file API */
-#define UNBLOCK_AFTER_SECONDS_THREAD_DIRCACHE 100
-#define UNBLOCK_AFTER_SECONDS_THREAD_STATQUEUE 20
-#define UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE 300
-#define UNBLOCK_AFTER_SECONDS_THREAD_RESPONDING 20
+
+
+
+
+#define WITH_TESTING_TIMEOUTS 0
+#if WITH_TESTING_TIMEOUTS
+#define ROOT_RESPONSE_WITHIN_SECONDS 2
+#define ROOT_GIVEUP_AFTER_SECONDS 4
+#define STAT_TIMEOUT_SECONDS     5
+#define READDIR_TIMEOUT_SECONDS 10
+#define OPENFILE_TIMEOUT_SECONDS 5
+#define OPENZIP_TIMEOUT_SECONDS  5
+#undef NUM_MEMCACHE_STORE_RETRY
+#define NUM_MEMCACHE_STORE_RETRY 1
+#define MEMCACHE_TIMEOUT_SECONDS 2
+#else
+#define ROOT_RESPONSE_WITHIN_SECONDS 9   /* Roots which have responded within that time are used. */
+#define ROOT_GIVEUP_AFTER_SECONDS 20     /* Otherwise wait until ROOT_RESPONSE_WITHIN_SECONDS is reached and give up waiting. */
+#define STAT_TIMEOUT_SECONDS     20 // Give up waiting for stat() result
+#define READDIR_TIMEOUT_SECONDS  30 // Give up waiting for opendir()  and readdir()
+#define OPENFILE_TIMEOUT_SECONDS 30
+#define OPENZIP_TIMEOUT_SECONDS  30
+#define MEMCACHE_TIMEOUT_SECONDS 30
+#endif
+
+#define ASYNC_SLEEP_USECONDS 10    /* Sleep microseconds after checking again.  Related: WITH_TIMEOUT_xxxx  */
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// The worker threads are observed and if no activity for the specified amount of time, they are assumed to be blocked. ///
+/// Kill blocked worker thread and re-launch new instance                                                                ///
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define WITH_TESTING_UNBLOCK 0
+#if WITH_TESTING_UNBLOCK
+#define UNBLOCK_AFTER_SECONDS_THREAD_ASYNC      30
+#define UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE   300
+#else
+#define UNBLOCK_AFTER_SECONDS_THREAD_ASYNC      300
+#define UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE   300
+#endif
+
+
+
+
 
 ///////////////////////////////////
 /// Dynamically generated files ///
 ///////////////////////////////////
-#define WITH_AUTOGEN 0
-
-/* WITH_AUTOGEN depends on WITH_MEMCACHE */
-#if ! WITH_MEMCACHE
-#undef WITH_AUTOGEN
-#define WITH_AUTOGEN 0
-#endif // WITH_MEMCACHE
-
-
-
-
-
-
+#define WITH_AUTOGEN           1 /* By exec() */
+#define WITH_CCODE             1 /* By C-code */
+#define WITH_INTERNET_DOWNLOAD 1 /* Access to internet files like <mount-point>/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README */
 
 #if 0 /* Conveniently deactivate all caches for testing */
 #undef WITH_DIRCACHE
@@ -166,6 +202,7 @@
 
 
 
+
 ////////////////////////////////////////////////////////////////////////////////////
 /// Frozen threads are killed and restarted                                      ///
 /// Requires that threads have a different gettid() != getpid()                  ///
@@ -173,4 +210,5 @@
 ///  pid_t pid=gettid();  .... if (0==kill(pid,0)) { Thread still  running }     ///
 /// This is the case at least for LINUX                                          ///
 ////////////////////////////////////////////////////////////////////////////////////
-#define WITH_CANCEL_BLOCKED_THREADS IS_LINUX
+//#define WITH_CANCEL_BLOCKED_THREADS IS_LINUX
+#define WITH_CANCEL_BLOCKED_THREADS 0

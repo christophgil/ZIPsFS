@@ -28,15 +28,15 @@ const char *PLACEHOLDERS[]={
 /// Size of file  ///
 /////////////////////
 
-//static struct ht_entry *autogen_ht_fsize(const char *vp,const int vp_l){return ht_numkey_get_entry(&ht_fsize,inode_from_virtualpath(vp,vp_l),0,true);}
-#define autogen_ht_fsize(vp,vp_l) ht_numkey_get_entry(&ht_fsize,inode_from_virtualpath(vp,vp_l),0,true)
+
+
 
 static void autogen_run(struct fHandle *d){
-  LF();
   IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("%s",D_VP(d));
   const char *rp=D_RP(d);
   assert(strlen(rp)<MAX_PATHLEN-10);
-  INIT_STRUCT_AUTOGEN_FILES(ff,D_VP(d),D_VP_L(d));
+  struct autogen_files ff={0};
+  struct_autogen_files_init(&ff,D_VP(d),D_VP_L(d));
   stpcpy(stpcpy(ff.log,rp),".log");
   stpcpy(stpcpy(ff.fail,rp),".fail.txt");
   cg_recursive_mk_parentdir(ff.log);
@@ -48,24 +48,24 @@ static void autogen_run(struct fHandle *d){
   struct stat st={0};
   if (autogen_realinfiles(&ff)<0){
     d->autogen_state=AUTOGEN_FAIL;
-     IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("AUTOGEN_FAIL autogen_realinfiles(ff)");
+    IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("AUTOGEN_FAIL autogen_realinfiles(ff)");
   }else if ((d->autogen_error=-aimpl_run(&ff))){
     d->autogen_state=AUTOGEN_FAIL;
     IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("AUTOGEN_FAIL aimpl_run");
-  }else if (ff.buf){ /* Result is in RAM */
-    LOCK(mutex_fhandle, fhandle_set_text(d,ff.buf); autogen_ht_fsize(D_VP(d),D_VP_L(d))->value=(char*)textbuffer_length(ff.buf);d->autogen_state=AUTOGEN_SUCCESS);
+  }else if (ff.af_txtbuf){ /* Result is in RAM */
+    LOCK(mutex_fhandle, htentry_fsize(D_VP(d),D_VP_L(d),true)->value=(char*)textbuffer_length(ff.af_txtbuf);  fhandle_set_text(d,ff.af_txtbuf); ff.af_txtbuf=NULL;  d->autogen_state=AUTOGEN_SUCCESS);
   }else{ /*Result is in file tmpout  */
     if (stat(ff.tmpout,&st)){ /* Fail */
       warning(WARN_AUTOGEN|WARN_FLAG_ERRNO,ff.tmpout," size=%ld ino: %ld",st.st_size, st.st_ino);
       d->autogen_state=AUTOGEN_FAIL;
     }else{/* tmpout success */
       IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("Size: %lld ino: %llu, Going to rename(%s,%s)\n",(LLD)st.st_size,(LLU)st.st_ino,ff.tmpout,rp);
-      if (rename(ff.tmpout,rp)) log_errno("rename(%s,%s)",ff.tmpout,rp); /* Atomic file creation */
-      else if (chmod(rp,0777)) log_errno("chmod(%s,0777)",rp);
+      if (!cg_rename(ff.tmpout,rp) && chmod(rp,0777)) log_errno("chmod(%s,0777)",rp);  /* Atomic file creation */
       zpath_stat(&d->zpath,_root_writable);
       d->autogen_state=AUTOGEN_SUCCESS;
     }
   }
+  struct_autogen_files_destroy(&ff);
 }
 static bool virtualpath_startswith_autogen(const char *vp, const int vp_l_or_zero){
   if (!vp) return false;
@@ -79,28 +79,33 @@ static const char *vp_without_pfx_autogen(const char *vp,const int vp_l_or_zero)
   rinfiles: speak real-input-files     vgenfile: speak virtual generated file
   Results are set to ff or stats
 */
-static bool autogen_not_up_to_date(struct timespec st_mtim,const char *vp,const int vp_l){
+static bool autogen_up_to_date(struct timespec st_mtim,const char *vp,const int vp_l){
   struct stat stats[AUTOGEN_MAX_INFILES];
-  INIT_STRUCT_AUTOGEN_FILES(ff,vp,vp_l);
+  struct autogen_files ff={0};
+  struct_autogen_files_init(&ff,vp,vp_l);
+  bool ok=true;
   RLOOP(i,autogen_realinfiles(&ff)){
-    if (!cg_timespec_b_before_a(st_mtim, ff.infiles_stat[i].ST_MTIMESPEC)) return true;
+    if (!cg_timespec_b_before_a(st_mtim, ff.infiles_stat[i].ST_MTIMESPEC)){ ok=false;break;}
   }
-  return false;
+  struct_autogen_files_destroy(&ff);
+  return ok;
 }
 static long autogen_estimate_filesize(const char *vp,const int vp_l){
-  LOCK_N(mutex_fhandle,struct ht_entry *ht=autogen_ht_fsize(vp,vp_l);long size=(long)ht->value);
+  LOCK_N(mutex_fhandle,struct ht_entry *ht=htentry_fsize(vp,vp_l,true);long size=(long)ht->value);
   if (!size){
-    INIT_STRUCT_AUTOGEN_FILES(ff,vp,vp_l);
-    if (!autogen_realinfiles(&ff)) return 0;
-    bool rememberFileSize=false;
-    size=config_autogen_estimate_filesize(&ff,&rememberFileSize);
-    if (rememberFileSize){ LOCK_N(mutex_fhandle,ht->value=(void*)size);}
+    struct autogen_files ff={0};
+    struct_autogen_files_init(&ff,vp,vp_l);
+    if (autogen_realinfiles(&ff)){
+      bool rememberFileSize=false;
+      size=config_autogen_estimate_filesize(&ff,&rememberFileSize);
+      if (rememberFileSize){ LOCK(mutex_fhandle,ht->value=(void*)size);}
+      struct_autogen_files_destroy(&ff);
+    }
   }
   return size;
 }
 static bool autogen_remove_if_not_up_to_date(struct zippath *zpath){
-  LF();
-  if (autogen_not_up_to_date(zpath->stat_rp.ST_MTIMESPEC,VP(),VP_L()) || config_autogen_file_is_invalid(VP(),VP_L(),&zpath->stat_rp, _root_writable->rootpath)){
+  if (!autogen_up_to_date(zpath->stat_rp.ST_MTIMESPEC,VP(),VP_L()) || config_autogen_file_is_invalid(VP(),VP_L(),&zpath->stat_rp, _root_writable->rootpath)){
     IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("Not up-to-date. Deleting %s",RP());
     unlink(RP());
     return true;
@@ -118,16 +123,17 @@ static bool autogen_remove_if_not_up_to_date(struct zippath *zpath){
   return false;
 }
 
-
-static void autogen_filldir(fuse_fill_dir_t filler,void *buf, const char *name, const struct stat *stbuf,struct ht *no_dups){
+static bool autogen_filldir(fuse_fill_dir_t filler,void *buf, const char *name, const struct stat *stbuf,struct ht *no_dups){
+  if (!_realpath_autogen) return false;
   const int name_l=strlen(name);
-  if (ENDSWITH(name,name_l,EXT_CONTENT)) return;
-  char generated[MAX_PATHLEN+1];
-  const FOREACH_AUTOGEN_RULE(iac,ac){
-    aimpl_vgenerated_from_vinfile(generated,name,name_l,ac);
-    if (*generated) filldir(0,filler,buf,generated,stbuf,no_dups);
+  if (!ENDSWITH(name,name_l,EXT_CONTENT)){
+    char generated[MAX_PATHLEN+1];
+    const FOREACH_AUTOGEN_RULE(iac,ac){
+      aimpl_vgenerated_from_vinfile(generated,name,name_l,ac);
+      if (*generated) filler_add_no_dups(filler,buf,generated,stbuf,no_dups);
+    }
   }
-  return;
+  return true;
 }
 
 static bool autogen_cleanup_running;
@@ -194,8 +200,8 @@ static char *autogen_apply_replacements_for_argv(char *dst_or_NULL,const char *o
       const int len2=cg_str_replace(OPT_STR_REPLACE_DRYRUN,c,len,placeholder,placeholder_l,replace,replace_l);
       if (len2>capacity || c==orig){
         capacity=len2+333;
-        char *c2=strcpy(dst_or_NULL?dst_or_NULL:cg_malloc(MALLOC_autogen_argv,capacity),c);
-        if (c!=orig) cg_free(MALLOC_autogen_argv,c);
+        char *c2=strcpy(dst_or_NULL?dst_or_NULL:cg_malloc(COUNT_AUTOGEN_MALLOC_argv,capacity),c);
+        if (c!=orig) cg_free(COUNT_AUTOGEN_MALLOC_argv,c);
         c=c2;
       }
       len=cg_str_replace(0,c,len,placeholder,placeholder_l,replace,replace_l);
@@ -214,7 +220,7 @@ static bool _autogen_is_placeholder(const char *c){
 
 static void autogen_free_argv(char const * const * cmd,const char * const * cmd_orig){
   for(int i=0;cmd_orig[i];i++){
-    if (cmd[i]!=cmd_orig[i] && !_autogen_is_placeholder(cmd_orig[i])) cg_free(MALLOC_autogen_argv,cmd[i]);
+    if (cmd[i]!=cmd_orig[i] && !_autogen_is_placeholder(cmd_orig[i])) cg_free(COUNT_AUTOGEN_MALLOC_argv,cmd[i]);
   }
 }
 
@@ -231,10 +237,10 @@ static void autogen_zpath_init(struct zippath *zpath,const char *path){
 
 static bool autogen_zpath_set_stat(struct stat *stbuf,const struct zippath *zpath,const char *path,const int path_l){
   long size;
- if(_realpath_autogen && (size=autogen_estimate_filesize(path,path_l))>0){
-      stat_init(stbuf,size,&zpath->stat_rp);
-      stbuf->st_ino=inode_from_virtualpath(path,path_l);
-      return true;
-    }
- return false;
+  if(_realpath_autogen && (size=autogen_estimate_filesize(path,path_l))>0){
+    stat_init(stbuf,size,&zpath->stat_rp);
+    stbuf->st_ino=inode_from_virtualpath(path,path_l);
+    return true;
+  }
+  return false;
 }
