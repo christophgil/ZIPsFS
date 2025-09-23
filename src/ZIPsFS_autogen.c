@@ -46,7 +46,7 @@ static void autogen_run(struct fHandle *d){
     snprintf(stpncpy(ff.tmpout,rp,slash+1),MAX_PATHLEN,"autogen_tmp_%d_%llu_%s",getpid(),(LLU)currentTimeMillis(),rp+slash+1);
   }
   struct stat st={0};
-  if (autogen_realinfiles(&ff)<0){
+  if (autogen_realinfiles(&ff)<=0){
     d->autogen_state=AUTOGEN_FAIL;
     IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("AUTOGEN_FAIL autogen_realinfiles(ff)");
   }else if ((d->autogen_error=-aimpl_run(&ff))){
@@ -104,8 +104,9 @@ static long autogen_estimate_filesize(const char *vp,const int vp_l){
   }
   return size;
 }
+
 static bool autogen_remove_if_not_up_to_date(struct zippath *zpath){
-  if (!autogen_up_to_date(zpath->stat_rp.ST_MTIMESPEC,VP(),VP_L()) || config_autogen_file_is_invalid(VP(),VP_L(),&zpath->stat_rp, _root_writable->rootpath)){
+  if (!autogen_up_to_date(zpath->stat_rp.ST_MTIMESPEC,VP(),VP_L()) || config_autogen_file_is_invalid(RP(),RP_L(),&zpath->stat_rp, _root_writable->rootpath)){
     IF_LOG_FLAG(LOG_AUTOGEN) log_verbose("Not up-to-date. Deleting %s",RP());
     unlink(RP());
     return true;

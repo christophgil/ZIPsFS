@@ -314,7 +314,7 @@ static void config_exclude_files(const char *path, const int path_l, const int n
 ///     No space left on device                                                  ///
 ////////////////////////////////////////////////////////////////////////////////////
 static bool config_has_sufficient_storage_space(const char *realpath, const long availableBytes, const long totalBytes){
-  return availableBytes<totalBytes*0.75;
+  return availableBytes*16>totalBytes;
 }
 
 

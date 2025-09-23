@@ -239,7 +239,18 @@ static void root_init(const bool isWritable,struct rootdata *r, const char *path
 // ---
 #if WITH_AUTOGEN
 #include "ZIPsFS_autogen.c"
+#define autogen_filecontent_append_nodestroy(ff,s,s_l)  _autogen_filecontent_append(TXTBUFSGMT_NO_FREE,ff,s,s_l)
+#define autogen_filecontent_append(ff,s,s_l)          _autogen_filecontent_append(0,ff,s,s_l)
+#define autogen_filecontent_append_munmap(ff,s,s_l)   _autogen_filecontent_append(TXTBUFSGMT_MUNMAP,ff,s,s_l)
+#define C(ff,s,s_l)  _autogen_filecontent_append(TXTBUFSGMT_NO_FREE,ff,s,s_l)
+#define H(ff,s,s_l)  _autogen_filecontent_append(0,ff,s,s_l)
+#define M(ff,s,s_l)  _autogen_filecontent_append(TXTBUFSGMT_MUNMAP,ff,s,s_l)
 #include "ZIPsFS_configuration_autogen.c"
+#undef M
+#undef C
+#undef H
+
+
 #include "ZIPsFS_autogen_impl.c"
 #endif //WITH_AUTOGEN
 // ---
@@ -956,7 +967,7 @@ static bool find_realpath_roots_by_mask(struct zippath *zpath,const long roots){
 }/*find_realpath_roots_by_mask*/
 static bool find_realpath_any_root(const int opt,struct zippath *zpath,const struct rootdata *onlyThisRoot){
   const char *vp=VP();
-  const int vp_l=VP_L(); /* vp_l is 0 for the virtual root path */
+  const int vp_l=VP_L(); /* vp_l is 0 for the virtual root */
   const bool path_starts_autogen=false IF1(WITH_AUTOGEN, || (0!=(zpath->flags&ZP_STARTS_AUTOGEN)));
   IF1(WITH_SPECIAL_FILE,if (!onlyThisRoot && find_realpath_special_file(zpath)) return true);
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,const int trans=transient_cache_find_realpath(opt,zpath,vp,vp_l); if (trans) return trans==1);
@@ -1057,7 +1068,6 @@ static bool fhandle_currently_reading_writing(const struct fHandle *d){
   assert(d->is_busy>=0);
   return d->is_busy>0;
 }
-
 
 static void fhandle_destroy(struct fHandle *d){
   ASSERT_LOCKED_FHANDLE();
@@ -1191,7 +1201,7 @@ static int filler_readdir_zip(const int opt,struct zippath *zpath,void *buf, fus
       st->st_mtime=Nth0(dc.fmtime,i);
       if (filler){
         assert_validchars(VALIDCHARS_FILE,n,n_l);
-        IF1(WITH_AUTOGEN,if(opt&FILLDIR_AUTOGEN)autogen_filldir(filler,buf,n,st,no_dups);else) filler_add_no_dups(filler,buf,n,st,no_dups);
+        IF1(WITH_AUTOGEN,if(opt&FILLDIR_AUTOGEN) autogen_filldir(filler,buf,n,st,no_dups);else) filler_add_no_dups(filler,buf,n,st,no_dups);
       }else{ /* ---  Called from test_realpath_or_reset() to set zpath->stat_vp --- */
         zpath->stat_vp.st_uid=getuid();
         zpath->stat_vp.st_gid=getgid();
@@ -1267,7 +1277,7 @@ static int mk_parentdir_if_sufficient_storage_space(const char *rp){
   }
   const long free=st.f_frsize*st.f_bavail, total=st.f_frsize*st.f_blocks;
   if (config_has_sufficient_storage_space(rp,free,total)) return 0;
-  warning(WARN_OPEN|WARN_FLAG_ONCE_PER_PATH,parent,"%s: Available: %'ld GB  Total: %'ld GB",strerror(ENOSPC),free>>30,total>>30);
+  warning(WARN_OPEN|WARN_FLAG_ONCE_PER_PATH,parent,"config_has_sufficient_storage_space() - %s: Available: %'ld GB  Total: %'ld GB",strerror(ENOSPC),free>>30,total>>30);
   return ENOSPC;
 }
 
@@ -1321,10 +1331,8 @@ static void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_c
 
 #if VERSION_AT_LEAST(FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION, 2,10)
 #define WITH_XMP_GETATTR_FUSE_FILE_INFO 1
-//#warning "WITH_XMP_GETATTR_FUSE_FILE_INFO 1"
 #else
 #define WITH_XMP_GETATTR_FUSE_FILE_INFO 0
-//#warning "WITH_XMP_GETATTR_FUSE_FILE_INFO 0"
 #endif
 static int xmp_getattr(const char *path, struct stat *st IF1(WITH_XMP_GETATTR_FUSE_FILE_INFO,,struct fuse_file_info *fi_or_null)){
   //log_entered_function("%s",path);
@@ -1347,7 +1355,7 @@ static int _xmp_getattr(const char *path, struct stat *stbuf){
     return 0;
   }
   IF1(WITH_INTERNET_DOWNLOAD, if (net_getattr(stbuf,path,path_l)) return 0);
-  IF1(WITH_CCODE,  if (c_getattr(stbuf,path,path_l)) return 0);
+  IF1(WITH_CCODE, if (c_getattr(stbuf,path,path_l)) return 0);
   int err=0;
   bool found;FIND_REALPATH(path);
   if (found){
@@ -1361,21 +1369,8 @@ static int _xmp_getattr(const char *path, struct stat *stbuf){
   if (config_file_is_readonly(path,path_l)) stbuf->st_mode&=~(S_IWOTH|S_IWUSR|S_IWGRP); /* Does not improve performance */
   return -err;
 }/*xmp_getattr*/
-static int xmp_access(const char *path, int mask){
-  NORMALIZE_EMPTY_PATH_L(path);
-  if (!path_l) return 0;
-  //log_entered_function("%s",path);
-  LOG_FUSE(path);
-  IF1(WITH_SPECIAL_FILE,  if (is_special_file_memcache(path,path_l)) return 0);
-  NEW_ZIPPATH(path);
-  int res=find_realpath_any_root(0,zpath,NULL)?0:ENOENT;
-  if (res==-1) res=ENOENT;
-  if (!res && (mask&X_OK) && S_ISDIR(zpath->stat_vp.st_mode)) res=access(RP(),(mask&~X_OK)|R_OK);
-  if (res) report_failure_for_tdf(path);
-  LOCK(mutex_fhandle,inc_count_getattr(path,res?COUNTER_ACCESS_FAIL:COUNTER_ACCESS_SUCCESS));
-  if (debug_trigger_vp(path,path_l)) log_verbose("%s returning %d",path,minus_val_or_errno(res));
-  return minus_val_or_errno(res);
-}
+
+
 #if VERSION_AT_LEAST(FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION, 2,10) /* Not sure when parameter introduced */
 #define WITH_UTIMENS_FUSE_FILE_INFO 1
 #else
@@ -1534,6 +1529,7 @@ static int _xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_
   no_dups.keystore->mstore_counter_mmap=COUNT_MSTORE_MMAP_BYTES_NODUPS;
   no_dups.ht_counter_malloc=COUNT_HT_MALLOC_NODUPS;
   const int opt=strcmp(path,DIR_ZIPsFS)?0:FILLDIR_IS_DIR_ZIPsFS;
+  log_entered_function("path: %s",path);
   NEW_ZIPPATH(path);
   bool ok=false;
 #define A(n) filler_add_no_dups(filler,buf,n,NULL,&no_dups);
@@ -1547,13 +1543,11 @@ static int _xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_
 #endif //WITH_AUTOGEN
   IF1(WITH_INTERNET_DOWNLOAD, if (IS_DIR_INTERNET(path,VP_L())){    C(false,true); A(SPECIAL_FILES[SFILE_INTERNET_README]);});
   IF1(WITH_CCODE, c_readdir(zpath,buf,filler,&no_dups));
-
 #undef C
   if (opt&FILLDIR_IS_DIR_ZIPsFS){ /* Childs of folder ZIPsFS */
     FOR(i,1,SFILE_NUM) if (SPECIAL_FILE_IN_DEFAULT_DIR(i)) A(SPECIAL_FILES[i]);
     IF1(WITH_AUTOGEN, if (!(opt&FILLDIR_IS_DIR_ZIPsFS)) A(DIRNAME_AUTOGEN));
     IF1(WITH_INTERNET_DOWNLOAD,A(DIRNAME_INTERNET));
-    IF1(WITH_CCODE,A(DIRNAME_C_CODE_EXAMPLE));
     ok=true;
   }
   if (!VP_L()) A(&DIR_ZIPsFS[1]);
@@ -1875,7 +1869,7 @@ static int _xmp_read(const char *path, char *buf, const size_t size, const off_t
          fhandle_busy_start(d));
   if (d){
     IF1(WITH_SPECIAL_FILE, special_file_file_content_to_fhandle(d));
-    IF1(WITH_CCODE, c_file_file_content_to_fhandle(d));
+    IF1(WITH_CCODE,c_file_content_to_fhandle(d));
 #if WITH_AUTOGEN
     if ((d->flags&FHANDLE_FLAG_IS_AUTOGEN) && _realpath_autogen && !d->fh_real && !(d->memcache && d->memcache->txtbuf)){
       if (!d->autogen_state) autogen_run(d);
@@ -1994,7 +1988,7 @@ int main(const int argc,const char *argv[]){
 #define S(f) xmp_oper.f=xmp_##f
   S(init);
   S(getattr);
-  S(access);
+  //  S(access);
   S(utimens);
   S(readlink);
   S(readdir);
@@ -2038,6 +2032,7 @@ int main(const int argc,const char *argv[]){
   if (!colon){ log_error("No colon ':'  found in parameter list\n"); suggest_help(); return 1;}
   if (colon==argc-1){ log_error("Expect mount point after single colon\n"); suggest_help(); return 1;}
   _mnt_l=cg_strlen(realpath(argv[argc-1],_mnt));
+
   if (!_mnt_l) DIE("realpath(%s): '%s'",argv[argc-1],_mnt);
   {
     struct stat st;
@@ -2114,8 +2109,7 @@ int main(const int argc,const char *argv[]){
     mstore_set_mutex(mutex_dircache,mstore_init(&r->dircache_mstore,"dircache_mstore",MSTORE_OPT_MMAP_WITH_FILE|DIRECTORY_CACHE_SIZE));
 #endif
   }/* Loop roots */
-
-  log_msg("\n\n"ANSI_INVERSE"Roots:"ANSI_RESET"\n");
+  log_msg("\n\nMount point: "ANSI_FG_BLUE"'%s'"ANSI_RESET"\n\n"ANSI_INVERSE"Roots:"ANSI_RESET"\n",_mnt);
   fprintf(stderr,ANSI_UNDERLINE"No\tPath\tType\tFilesystem-Number\tFilesystem-ID\tRetained directory if root-path is not ending with slash"ANSI_RESET"\n");
   foreach_root(r){
     fprintf(stderr,"%d\t%s\t%d\t%lx\t%s\t%s\n",1+rootindex(r),rootpath(r),r->seq_fsid,r->f_fsid,!cg_strlen(rootpath(r))?"":r->remote?"Remote":(r->writable)?"Writable":"Local",r->retain_dirname);
@@ -2200,3 +2194,4 @@ int main(const int argc,const char *argv[]){
 // DIRECTORY_DIM_STACK
 // strcat strcpy strncpy stpncpy strcmp README_AUTOGENERATED.TXT realloc memcpy cgille stat_set_dir
 // HAS_ST_MTIM  st_mtim mempcpy WITH_XMP_GETATTR_FUSE_FILE_INFO   WITH_XMP_GETATTR_FUSE_FILE_INFO
+// by_example_c_code

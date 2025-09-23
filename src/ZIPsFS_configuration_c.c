@@ -30,6 +30,7 @@ static bool config_c_getattr(const int flags, const char *vp, const int vp_l, st
 
 static bool config_c_readdir(const int flags,const char *vp, const int vp_l,const int iTh, char *name, const int path_max,bool *isDirectory){
   assert(iTh<ZIPSFS_C_MAX_NUM);
+  log_debug_now("%d) vp: %s",iTh,vp);
   const char *n=NULL;
   switch(iTh){
   case 0:
@@ -68,13 +69,13 @@ static bool config_c_read(c_read_handle_t handle,const int flags,const char *vp,
     H(handle,strdup(h),0);
     {
       C(handle,"\n\n"ANSI_INVERSE"Demonstrating exec"ANSI_RESET"\n",0);
-      char *cmd[]={"/usr/bin/date",NULL};
+      char *cmd[]={"date",NULL};
       X(handle,0,cmd,NULL);
     }
     C(handle,"\n",1);
     {
       C(handle,"\n\n"ANSI_INVERSE"Demonstrating exec with environment variables"ANSI_RESET"\n",0);
-      char *cmd[]={"/usr/bin/bash","-c","set",NULL};
+      char *cmd[]={"sh","-c","echo my_environment_variable='$my_environment_variable'",NULL};
       char *env[]={"my_environment_variable=Hello world",NULL};
       X(handle,ZIPSFS_C_MMAP,cmd,env);
     }

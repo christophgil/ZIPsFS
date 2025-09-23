@@ -78,8 +78,4 @@ struct autogen_files{
 };
 
 
-enum enum_autogen_run_res{
-  AUTOGEN_RUN_SUCCESS,
-  AUTOGEN_RUN_FAIL,
-  AUTOGEN_RUN_NOT_APPLIED
-};
+enum enum_autogen_run_res{ AUTOGEN_RUN_SUCCESS,AUTOGEN_RUN_FAIL,AUTOGEN_RUN_NOT_APPLIED};

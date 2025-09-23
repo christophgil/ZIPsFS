@@ -182,7 +182,7 @@ static int c_from_exec_output(struct textbuffer **bb,const uint8_t flags,char *c
 static struct textbuffer *_zipsfs_c_init_tb(struct textbuffer **bb);
 static  int64_t c_fuse_open(const struct zippath *zpath);
 static bool c_getattr(struct stat *st, const char *vp,const int vp_l);
-static void c_file_file_content_to_fhandle(struct fHandle *d);
+static void c_file_content_to_fhandle(struct fHandle *d);
 static void c_readdir(const struct zippath *zpath,void *buf, fuse_fill_dir_t filler,struct ht *no_dups);
 static char *net_local_dir(const bool mkdir);
 static int net_internet_file_colon(const char *vp,const int vp_l);
@@ -344,6 +344,7 @@ static void autogen_free_argv(char const * const * cmd,const char * const * cmd_
 static void autogen_zpath_init(struct zippath *zpath,const char *path);
 static bool autogen_zpath_set_stat(struct stat *stbuf,const struct zippath *zpath,const char *path,const int path_l);
 static struct autogen_rule **config_autogen_rules(void);
+static bool config_autogen_exclude(const char *vp, const int vp_l,const struct autogen_rule *ac);
 static bool config_autogen_file_is_invalid(const char *path,const int path_l, const struct stat *st, const char *rootpath);
 static long config_autogen_estimate_filesize(const struct autogen_files *ff, bool *rememberFileSize);
 static int config_autogen_add_virtual_infiles(struct autogen_files *ff);
@@ -456,7 +457,6 @@ static int xmp_statfs(const char *path, struct statvfs *stbuf);
 static int mk_parentdir_if_sufficient_storage_space(const char *rp);
 static int realpath_mk_parent(char *rp,const char *vp);
 static int _xmp_getattr(const char *path, struct stat *stbuf);
-static int xmp_access(const char *path, int mask);
 static int xmp_readlink(const char *path, char *buf, size_t size);
 static int xmp_unlink(const char *path);
 static int xmp_rmdir(const char *path);

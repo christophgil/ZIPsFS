@@ -56,11 +56,6 @@
 #define DIR_INTERNET DIR_ZIPsFS"/"DIRNAME_INTERNET
 #define DIR_INTERNET_L (sizeof(DIR_INTERNET)-1)
 
-#define DIRNAME_C_CODE_EXAMPLE "by_example_c_code"
-#define DIR_C_CODE_EXAMPLE "/"DIRNAME_C_CODE_EXAMPLE
-#define DIR_C_CODE_EXAMPLE_L (sizeof(DIR_C_CODE_EXAMPLE)-1)
-
-
 
 #define FILENAME_SET_ATIME "ZIPsFS_set_file_access_time"
 

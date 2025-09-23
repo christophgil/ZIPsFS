@@ -110,13 +110,16 @@ local mnt=${1:-mnt}
     ls mnt | grep example_generated_file || echo -n  "$ANSI_FG_RED ls mnt: Missing  example_generated_file  $ANSI_RESET"
     test_pattern 1 ' heap ' $f
 
-    local size1=$(cat $f $f | wc -c)
+    local size1=$(cat $f | wc -c)
     local size2=$(stat  --format '%s' $f)
-    echo  -n 'Testing hash-map of file sizes ...'
-    if [[ "$size1" != "$size2" ]]; then
-        echo  "$ANSI_FG_GREEN OK $ANSI_RESET"
-    else
+
+#    echo "diff: $((size1-size2))  size1:'$size1' size2: '$size2'"
+    echo  -n "Testing hash-map of file sizes ... "
+
+    if ((size1-size2)); then
         echo "$ANSI_FG_RED File size $f:    $size1 != $size2 $ANSI_RESET"
+    else
+        echo  "$ANSI_FG_GREEN OK $ANSI_RESET"
     fi
 
 

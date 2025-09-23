@@ -217,7 +217,10 @@ static void textbuffer_reset(struct textbuffer *b){
     const off_t e=_TXTBFFR_E(b,i), n=e-e1;
     e1=e;
     const uint8_t f=_TXTBFFR_F(b,i);
-    if (!(f&TXTBUFSGMT_NO_FREE))  free_or_munmap(f,_TXTBFFR_S(b,i),n);  /* No free for  strings constants */
+    if (!(f&TXTBUFSGMT_NO_FREE)){
+      //log_debug_now("Going free_or_munmap %p %lld",_TXTBFFR_S(b,i),(LLD)n);
+      free_or_munmap(f,_TXTBFFR_S(b,i),n);  /* No free for  strings constants */
+    }
     if (i>=TEXTBUFFER_DIM_STACK) b->_segment[i]=NULL;
     textbuffer_memusage_change(f,b,-n);
   }
@@ -231,8 +234,9 @@ static char *textbuffer_first_segment_with_min_capacity(const int flags,struct t
 }
 static void textbuffer_destroy(struct textbuffer *b){
   if (b){
+    /*log_entered_function("%p",b);*/
     textbuffer_reset(b);
-#define C(f) if (b->f!=b->_onstack##f) cg_free_null(COUNT_TXTBUF_SEGMENT_MALLOC,b->f);
+#define C(f) if (b->f!=b->_onstack##f){ /*log_debug_now("Going free %p",b->f);*/ cg_free_null(COUNT_TXTBUF_SEGMENT_MALLOC,b->f);}
     C(_segment);
     C(_segment_e);
     C(_segment_flags);
