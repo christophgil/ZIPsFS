@@ -34,6 +34,18 @@ https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unk
 
 With a  trailing slash, the folder name is not part of the virtual path.
 
+
+## Summary
+
+
+ZIPsFS functions as a union or overlay file system, merging multiple file structures into a unified directory.
+This directory presents the underlying files and subdirectories from the specified sources (branches) as a single, cohesive structure.
+Any newly created or modified files are stored in the first file location, while all other sources remain read-only, ensuring that their files are never altered.
+ZIPsFS treats ZIP files as expandable folders, typically naming them by appending ".Contents/" to the original ZIP file name.
+However, this behavior can be customized using filename-based rules. Extensive configuration options allow adjustments. Changes can be applied without disrupting the file system.
+Additionally, ZIPsFS includes specialized features and performance optimizations tailored for efficiently storing large-scale mass spectrometry data.
+
+
 ## Example
 
 
@@ -83,16 +95,6 @@ Just append @SOURCE.TXT
 
 DESCRIPTION
 ===========
-
-## Summary
-
-
-ZIPsFS functions as a union or overlay file system, merging multiple file structures into a unified directory.
-This directory presents the underlying files and subdirectories from the specified sources (branches) as a single, cohesive structure.
-Any newly created or modified files are stored in the first file location, while all other sources remain read-only, ensuring that their files are never altered.
-ZIPsFS treats ZIP files as expandable folders, typically naming them by appending ".Contents/" to the original ZIP file name.
-However, this behavior can be customized using filename-based rules. Extensive configuration options allow adjustments. Changes can be applied without disrupting the file system.
-Additionally, ZIPsFS includes specialized features and performance optimizations tailored for efficiently storing large-scale mass spectrometry data.
 
 
 ## ZIPsFS is a Union / overlay file system
