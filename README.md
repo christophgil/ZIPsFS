@@ -203,19 +203,6 @@ Author: Christoph Gille
 Current status: Testing and Bug fixing
 If ZIPsFS crashes, please send the stack-trace together with the source code you were using.
 
-
-
-SEE ALSO
-========
-
-
-- https://github.com/openscopeproject/ZipROFS
-- https://github.com/google/fuse-archive
-- https://bitbucket.org/agalanin/fuse-zip/src
-- https://github.com/google/mount-zip
-- https://github.com/cybernoid/archivemount
-- https://github.com/mxmlnkn/ratarmount
-
 # Use case - Archive of mass spectrometry files
 
 
