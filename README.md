@@ -7,6 +7,7 @@
  - [Logging](ZIPsFS_logs.md)
  - [Fault management of remote upstream file systems](ZIPsFS_fault_management.md)
  - [Limitations and Bugs](ZIPsFS_Limitations.md)
+ - [See also related sites](ZIPsFS_related_sites.md)
 
 
 <!---
@@ -194,16 +195,15 @@ Other users are granted access.
 
 
 
-BUGS
-====
+Project status
+==============
+
+Author: Christoph Gille
 
 Current status: Testing and Bug fixing
 If ZIPsFS crashes, please send the stack-trace together with the source code you were using.
 
-AUTHOR
-======
 
-Christoph Gille
 
 SEE ALSO
 ========
