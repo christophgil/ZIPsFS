@@ -249,24 +249,6 @@ This could rescue ZIPsFS in case of threading related bugs.
 \f[B]-o \f[BI]comma separated Options\f[B]\f[R]
 .PP
 \f[B]-o allow_other\f[R] Other users are granted access.
-.SS LIMITATIONS
-.SS Hard Links
-.PP
-Hard links are not supported, though symlinks are fully functional.
-.SS Deleting Files
-.PP
-Files can only be deleted if their physical location resides in the
-first source.
-Files located in other branches are accessed in a read-only mode, and
-deletion of these files would require a mechanism to remove them from
-the system, which is currently not implemented.
-.PP
-If you require this functionality, please submit a feature request.
-.SS Reading and Writing
-.PP
-Simultaneous reading and writing of a file using the same file
-descriptor will only function correctly for files stored in the writable
-source.
 .SH BUGS
 .PP
 Current status: Testing and Bug fixing If ZIPsFS crashes, please send

@@ -2,10 +2,11 @@
 
  - [Installation](./INSTALL.md)
  - [Configuration](./ZIPsFS_configuration.md)
- - [Generated (synthetic) files](./ZIPsFS_generated_files.md)
- - [Caches](./ZIPsFS_cache.md)
+ - [Generated (synthetic) files: Automatic file conversions, Accessing web resources as regular files](./ZIPsFS_generated_files.md)
+ - [Improve performance  caching file content and meta data](./ZIPsFS_cache.md)
  - [Logging](ZIPsFS_logs.md)
- - [Fault management](ZIPsFS_fault_management.md)
+ - [Fault management of remote upstream file systems](ZIPsFS_fault_management.md)
+ - [Limitations and Bugs](ZIPsFS_Limitations.md)
 
 
 <!---
@@ -192,24 +193,6 @@ Other users are granted access.
 
 
 
-## LIMITATIONS
-
-### Hard Links
-
-Hard links are not supported, though symlinks are fully functional.
-
-### Deleting Files
-
-Files can only be deleted if their physical location resides in the first source. Files located in
-other branches are accessed in a read-only mode, and deletion of these files would require a
-mechanism to remove them from the system, which is currently not implemented.
-
-If you require this functionality, please submit a feature request.
-
-### Reading and Writing
-
-Simultaneous reading and writing of a file using the same file descriptor will only function
-correctly for files stored in the writable source.
 
 BUGS
 ====
