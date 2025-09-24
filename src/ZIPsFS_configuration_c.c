@@ -30,7 +30,7 @@ static bool config_c_getattr(const int flags, const char *vp, const int vp_l, st
 
 static bool config_c_readdir(const int flags,const char *vp, const int vp_l,const int iTh, char *name, const int path_max,bool *isDirectory){
   assert(iTh<ZIPSFS_C_MAX_NUM);
-  log_debug_now("%d) vp: %s",iTh,vp);
+  //log_debug_now("%d) vp: %s",iTh,vp);
   const char *n=NULL;
   switch(iTh){
   case 0:

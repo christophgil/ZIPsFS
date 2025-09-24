@@ -15,6 +15,7 @@
 #define ANSI_FG_RED "\x1B[31m"
 #define ANSI_RESET "\x1B[0m"
 #define TEST_BLOCK 5000
+#define LLD long long
 
 
 #define NUM_THREADS 10
@@ -31,7 +32,7 @@ static void print_path_for_fd(int fd){
   sprintf(buf,"/proc/%d/fd/%d",getpid(),fd);
   const ssize_t n=readlink(buf,path,511);
   if (n<0){
-    printf(ANSI_FG_RED"Warning %s  No path\n"ANSI_RESET,buf);
+    printf(ANSI_FG_RED "Warning %s  No path\n" ANSI_RESET,buf);
     perror(" ");
   }else{
     printf("Path for %d:  %s\n",fd,path);
@@ -54,7 +55,7 @@ void test_seek(long begin,const char *path,const char *bb,const size_t len,const
   //  pthread_mutex_unlock(&_mutex);
   assert(fh);
   static int seqn,count_errors;
-  printf("#%d Errors: %d begin=%ld\n",seqn++, count_errors, begin);
+  printf("#%d Errors: %d begin=%lld\n",seqn++, count_errors, (LLD)begin);
   assert(begin+TEST_BLOCK<len);
   lseek(fh,begin,SEEK_SET);
   char buf[TEST_BLOCK];
@@ -66,8 +67,8 @@ void test_seek(long begin,const char *path,const char *bb,const size_t len,const
     already+=n;
   }
   if (already!=TEST_BLOCK){
-    printf(ANSI_FG_RED"Error "ANSI_RESET"test_seek begin=%'ld, end=%'ld   len=%'ld\n",begin,begin+TEST_BLOCK,len);
-    printf("                already=%ld  TEST_BLOCK=%d n=%d   \n",already,TEST_BLOCK,n);
+    printf(ANSI_FG_RED "Error " ANSI_RESET "test_seek begin=%'ld, end=%'ld   len=%'ld\n",begin,begin+TEST_BLOCK,len);
+    printf("                already=%lld  TEST_BLOCK=%d n=%d   \n",(LLD)already,TEST_BLOCK,n);
     printf("                path=");print_path_for_fd(fh);
     count_errors++;
      press_enter();
@@ -77,7 +78,7 @@ void test_seek(long begin,const char *path,const char *bb,const size_t len,const
   //pthread_mutex_unlock(&_mutex);
 
   if (memcmp(buf,bb+begin,TEST_BLOCK)){
-    printf(ANSI_FG_RED"Error memcmp\n"ANSI_RESET);
+    printf(ANSI_FG_RED "Error memcmp\n" ANSI_RESET);
     count_errors++;
     press_enter();
   }
@@ -139,8 +140,13 @@ Options:\n\
   int blksize = (int)stbuf.st_blksize;
   len=stbuf.st_size;
   if (len<=TEST_BLOCK) { printf(" File len must be much larger than %d\n",TEST_BLOCK); return 1;}
-  fprintf(stderr,"path=%s blksize=%d\n",path,blksize);
-  bb=mmap(NULL,len+blksize,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,0,0);
+  fprintf(stderr,"path=%s len: %lld blksize=%d   Going mmap() ...\n",path,(LLD)len,blksize);
+  bb=(char*)mmap(NULL,len+blksize,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+  if (bb==MAP_FAILED){
+    fprintf(stderr,"mmap returned MAP_FAILED\n");
+    perror(path);
+    exit(1);
+  }
   {
     const int fh=open(path,O_RDONLY);
     long already=0;
@@ -154,7 +160,7 @@ Options:\n\
       already+=n;
     }
     close(fh);
-    printf("len=%ld already=%ld\n",len,already);
+    printf("len=%lld already=%lld\n",(LLD)len,(LLD)already);
     usleep(4*1000*1000);
     assert(len==already);
   }

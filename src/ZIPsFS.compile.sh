@@ -108,7 +108,7 @@ done
 #############################
 LIBFUSE=''
 LIBZIP=''
-WITH_SANITIZER=0
+WITH_SANITIZER=1
 WITH_PROFILER=0
 WITH_RPATH=0
 CCOMPILER=${CC:-gcc}

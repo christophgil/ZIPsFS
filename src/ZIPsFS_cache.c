@@ -81,7 +81,7 @@ static void dircache_directory_to_cache(struct directory *dir){
   directory_remove_unused_fields(dir);
   //log_entered_function("%s",DIR_RP(dir));
   cg_thread_assert_locked(mutex_dircache);
-  debug_assert_crc32_not_null(dir);
+  // debug_assert_crc32_not_null(dir); // DEBUG_NOW
   struct rootdata *r=DIR_ROOT(dir);
   IF1(WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,dircache_clear_if_reached_limit(false,0xFFFF,r,NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE));
   assert_validchars_direntries(VALIDCHARS_PATH,dir,true);

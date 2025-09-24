@@ -123,7 +123,7 @@
 #define WITH_TIMEOUT_READDIR  1
 #define WITH_TIMEOUT_OPENFILE 1
 #define WITH_TIMEOUT_OPENZIP  1
-
+#define WITH_CANCEL_BLOCKED_THREADS 0
 ////////////
 /// Time ///
 ////////////
@@ -154,7 +154,7 @@
 #define MEMCACHE_TIMEOUT_SECONDS 30
 #endif
 
-#define ASYNC_SLEEP_USECONDS 10    /* Sleep microseconds after checking again.  Related: WITH_TIMEOUT_xxxx  */
+#define ASYNC_SLEEP_USECONDS 5000    /* Sleep microseconds after checking again. Too low values increase idle CPU consumption.  Related: WITH_TIMEOUT_xxxx  DEBUG_NOW */
 
 
 
@@ -163,8 +163,8 @@
 /// The worker threads are observed and if no activity for the specified amount of time, they are assumed to be blocked. ///
 /// Kill blocked worker thread and re-launch new instance                                                                ///
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 #define WITH_TESTING_UNBLOCK 0
+#if WITH_CANCEL_BLOCKED_THREADS
 #if WITH_TESTING_UNBLOCK
 #define UNBLOCK_AFTER_SECONDS_THREAD_ASYNC      30
 #define UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE   300
@@ -172,7 +172,7 @@
 #define UNBLOCK_AFTER_SECONDS_THREAD_ASYNC      300
 #define UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE   300
 #endif
-
+#endif // WITH_CANCEL_BLOCKED_THREADS
 
 
 
@@ -211,4 +211,3 @@
 /// This is the case at least for LINUX                                          ///
 ////////////////////////////////////////////////////////////////////////////////////
 //#define WITH_CANCEL_BLOCKED_THREADS IS_LINUX
-#define WITH_CANCEL_BLOCKED_THREADS 0

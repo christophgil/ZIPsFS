@@ -471,6 +471,7 @@ struct rootdata{
 ///////////////
 #define IF_LOG_FLAG_OR(f,or) if (f && _log_flags&(1<<f)||or)
 #define IF_LOG_FLAG(f) if (f && _log_flags&(1<<f))
+
 #define LOG_FUSE(path)          IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER)log_entered_function("%s",path)
 #define LOG_FUSE_RES(path,res)  IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER)log_entered_function("%s res:%d",path,res)
 //

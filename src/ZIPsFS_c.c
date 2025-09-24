@@ -53,17 +53,14 @@ static  int64_t c_fuse_open(const struct zippath *zpath){
   return fh;
 }
 static bool c_getattr(struct stat *st, const char *vp,const int vp_l){
-  log_entered_function("vp: %s",vp);
   a(vp,vp_l);
   stat_init(st,0,NULL);
   st->st_mtime=time(NULL);
   if (!config_c_getattr(f(),vp+o(),vp_l-o(),st)){
-        log_exited_function("vp: %s fail",vp);
     return false;
   }
   if (st->st_mode&S_IFDIR) stat_set_dir(st);
   if (!st->st_ino) st->st_ino=inode_from_virtualpath(vp+o(),vp_l-o());
-    log_exited_function("vp: %s success",vp);
   return true;
 }
 
@@ -89,7 +86,7 @@ static void c_file_content_to_fhandle(struct fHandle *d){
 }
 static void c_readdir(const struct zippath *zpath,void *buf, fuse_fill_dir_t filler,struct ht *no_dups){
   a(VP(),VP_L());
-  log_entered_function("%s inDirA: %d",VP(),inDirA);
+  //log_entered_function("%s inDirA: %d",VP(),inDirA);
   char fname[MAX_PATHLEN+1];
   bool isDirectory[1];
   FOR(i,0,ZIPSFS_C_MAX_NUM){

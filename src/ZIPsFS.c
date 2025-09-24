@@ -455,7 +455,6 @@ static void root_start_thread(struct rootdata *r,const enum enum_root_thread ith
   }
   const int count=r->thread_count_started[ithread]++;
   if (count) warning(WARN_THREAD,report_rootpath(r),"pthread_start %s function: %p",PTHREAD_S[ithread],f);
-  ASSERT(f!=NULL);
   if (f){
     if (pthread_create(&r->thread[ithread],NULL,f,(void*)r)){
 #define C "Failed thread_create '%s'  Root: %d",PTHREAD_S[ithread],rootindex(r)
@@ -838,10 +837,12 @@ static void *infloop_async(void *arg){
   init_infloop(r,PTHREAD_ASYNC);
   long nanos=ASYNC_SLEEP_USECONDS*1000;
   for(int loop=0; ;loop++){
+    cg_nanosleep(nanos);
+    if (nanos<ASYNC_SLEEP_USECONDS*1000) nanos++;
     bool success=false;
     IF1(WITH_DIRCACHE, if (!(loop&255)) success|=async_periodically_dircache(r));
     if (r->remote){
-      IF1(WITH_TIMEOUT_STAT, if ((success=async_periodically_stat(r))){ nanos=ASYNC_SLEEP_USECONDS*100; unblock_update_time(r,PTHREAD_ASYNC); sched_yield();});
+      IF1(WITH_TIMEOUT_STAT, if ((success=async_periodically_stat(r))){ nanos=ASYNC_SLEEP_USECONDS*10; unblock_update_time(r,PTHREAD_ASYNC); sched_yield();});
       if (!(loop&15)){ /* less often */
 #define C(with,fn) IF1(with,if (fn(r)){success=true;});
         C(WITH_TIMEOUT_READDIR,async_periodically_readdir);
@@ -861,8 +862,6 @@ static void *infloop_async(void *arg){
     if (success){
       unblock_update_time(r,PTHREAD_ASYNC);
     }
-    cg_nanosleep(nanos);
-    if (nanos<ASYNC_SLEEP_USECONDS*1000) nanos++;
   }
 }
 
@@ -1277,7 +1276,7 @@ static int mk_parentdir_if_sufficient_storage_space(const char *rp){
   }
   const long free=st.f_frsize*st.f_bavail, total=st.f_frsize*st.f_blocks;
   if (config_has_sufficient_storage_space(rp,free,total)) return 0;
-  warning(WARN_OPEN|WARN_FLAG_ONCE_PER_PATH,parent,"config_has_sufficient_storage_space() - %s: Available: %'ld GB  Total: %'ld GB",strerror(ENOSPC),free>>30,total>>30);
+  warning(WARN_OPEN|WARN_FLAG_ONCE_PER_PATH,parent,"%s: config_has_sufficient_storage_space(Available=%'ld GB, Total=%'ld GB)",strerror(ENOSPC),free>>30,total>>30);
   return ENOSPC;
 }
 
@@ -1497,7 +1496,6 @@ static int xmp_truncate(const char *path, off_t size IF1(WITH_FUSE_3,,struct fus
 #endif
 
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi IF1(WITH_XMP_READDIR_FLAGS,,enum fuse_readdir_flags flags)){
-  log_entered_function("%s",path);
   LOG_FUSE(path);
   const int res=_xmp_readdir(path,buf,filler,offset,fi);
   LOG_FUSE_RES(path,res);
@@ -1505,7 +1503,6 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t
 }
 
 static bool _xmp_readdir_roots(const bool cut_autogen, const bool from_network_header, int opt, struct zippath *zpath, void *buf, fuse_fill_dir_t filler, struct ht *no_dups){
-  log_entered_function("%s",VP());
   bool ok=false;
   const char *vp=VP();
   foreach_root(r){ /* FINDRP_AUTOGEN_CUT_NOT means only without cut.  Giving 0 means cut and not cut. */
@@ -1529,7 +1526,6 @@ static int _xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_
   no_dups.keystore->mstore_counter_mmap=COUNT_MSTORE_MMAP_BYTES_NODUPS;
   no_dups.ht_counter_malloc=COUNT_HT_MALLOC_NODUPS;
   const int opt=strcmp(path,DIR_ZIPsFS)?0:FILLDIR_IS_DIR_ZIPsFS;
-  log_entered_function("path: %s",path);
   NEW_ZIPPATH(path);
   bool ok=false;
 #define A(n) filler_add_no_dups(filler,buf,n,NULL,&no_dups);
@@ -1648,30 +1644,6 @@ static int xmp_rename(const char *old_path, const char *neu_path IF1(WITH_FUSE_3
 //////////////////////////////////
 // Functions for reading bytes ///
 //////////////////////////////////
-#if WITH_FUSE_3
-static off_t xmp_lseek(const char *path, const off_t off, const int whence, struct fuse_file_info *fi){ // cppcheck-suppress [constParameterCallback]
-  LOG_FUSE(path);
-  ASSERT(fi!=NULL);
-  int ret=off;
-  lock(mutex_fhandle);
-  struct fHandle* d=fhandle_get(path,fi->fh);
-  if (d){
-    switch(whence){
-#if WITH_GNU
-    case SEEK_HOLE:ret=(d->offset=d->zpath.stat_vp.st_size);break;
-    case SEEK_DATA:
-#endif // WITH_GNU
-    case SEEK_SET: ret=d->offset=off;break;
-    case SEEK_CUR: ret=(d->offset+=off);break;
-    case SEEK_END: ret=(d->offset=d->zpath.stat_vp.st_size+off);break;
-    }
-  };
-  unlock(mutex_fhandle);
-  if (!d) warning(WARN_SEEK|WARN_FLAG_ONCE,path,"d is NULL");
-  return ret;
-}
-#endif
-/* Read size bytes from zip entry.   Invoked only from fhandle_read() unless zpath_advise_cache_in_ram() */
 
 
 
@@ -1853,7 +1825,7 @@ static uint64_t fd_for_fhandle(long *fd, struct fHandle *d,const int open_flags)
 static int xmp_read(const char *path, char *buf, const size_t size, const off_t offset,struct fuse_file_info *fi){
   IF_LOG_FLAG(LOG_READ_BLOCK)log_entered_function("%s Offset: %'ld +%'d ",path,(long)offset,(int)size);
   const int bytes=_xmp_read(path,buf,size,offset,fi);
-  IF_LOG_FLAG_OR(LOG_READ_BLOCK,bytes<=0)log_exited_function("%s Offset: %'ld +%'d Bytes: %'d %s",path,(long)offset,(int)size,bytes,success_or_fail(bytes>0));
+  IF_LOG_FLAG_OR(LOG_READ_BLOCK,bytes<=0)log_exited_function("%s  %'ld +%'d Bytes: %'d %s",path,(long)offset,(int)size,bytes,success_or_fail(bytes>0));
   return bytes;
 }
 static int _xmp_read(const char *path, char *buf, const size_t size, const off_t offset,struct fuse_file_info *fi){
@@ -1862,7 +1834,6 @@ static int _xmp_read(const char *path, char *buf, const size_t size, const off_t
   if (ENDSWITH(path,path_l,"mzML")) log_entered_function("%s offset %'lld  size %'lld",path,(LLD)offset,(LLD)size);
   long fd=fi->fh;
   int nread=0;
-  //log_entered_function("%s offset %'ld  size %'ld",path,offset,size);
   LOCK_N(mutex_fhandle,
          struct fHandle *d=fhandle_get(path,fd);
          if (d){ d->accesstime=time(NULL); if (d->fh_real) fd=d->fh_real;}
@@ -1885,7 +1856,8 @@ static int _xmp_read(const char *path, char *buf, const size_t size, const off_t
     }
 
     IF1(WITH_MEMCACHE,if (d->flags&FHANDLE_FLAG_MEMCACHE_COMPLETE){ /*_fhandle_busy*/
-        LOCK(mutex_fhandle,nread=memcache_read(buf,d,offset,offset+size)); goto done_d; }); /*_fhandle_busy*/ // CPPCHECK-SUPPRESS [unreadVariable]
+        //log_debug_now("Going memcache_read: %lld +%lld",(LLD)offset,(LLD)size);
+        LOCK(mutex_fhandle,nread=memcache_read(buf,d,offset,offset+size)); /* log_debug_now("memcache_read: %lld",(LLD)nread);*/ goto done_d; }); /*_fhandle_busy*/ // CPPCHECK-SUPPRESS [unreadVariable]
     // resourceLeak
     assert(d->is_busy>=0);
     {
@@ -1899,6 +1871,7 @@ static int _xmp_read(const char *path, char *buf, const size_t size, const off_t
         pthread_mutex_unlock(&d->mutex_read);
       }
     }
+    //log_debug_now("d->memcache: %p d->memcache->txtbuf: %p   flag:%d",d->memcache, (!d->memcache?NULL:d->memcache->txtbuf),(d->flags&FHANDLE_FLAG_WITH_MEMCACHE));
     LOCK_N(mutex_fhandle, const char *status=IF01(WITH_MEMCACHE,"!WITH_MEMCACHE",MEMCACHE_STATUS_S[memcache_get_status(d)]); if (nread>0) d->n_read+=nread);
     if (nread<0 && !config_not_report_stat_error(path,path_l)){
       warning(WARN_READ|WARN_FLAG_ONCE_PER_PATH,path,"nread<0:  d=%p  off=%ld size=%zu  nread=%d  n_read=%llu  memcache_status:%s"ANSI_RESET,d,offset,size,nread,d->n_read,status);
@@ -1997,7 +1970,7 @@ int main(const int argc,const char *argv[]){
   S(open);    S(create);    S(read);  S(write);   S(release); S(releasedir); S(statfs);
   S(flush);
   /* Not needed (opendir) */
-  IF1(WITH_FUSE_3,S(lseek));
+  //  IF1(WITH_FUSE_3,S(lseek));
 #undef S
   static const struct option l_option[]={{"help",0,NULL,'h'}, {"version",0,NULL,'V'}, {NULL,0,NULL,0}};
   bool isBackground=false;
@@ -2132,7 +2105,9 @@ int main(const int argc,const char *argv[]){
     int misc_started=0;
     foreach_root(r){
       for(enum enum_root_thread t=PTHREAD_LEN; --t>0;){
-        if (t==PTHREAD_MISC? (!misc_started++) : t==PTHREAD_MEMCACHE || t==PTHREAD_ASYNC || r->remote) root_start_thread(r,t);
+        if (t==PTHREAD_MISC? (!misc_started++) : t==PTHREAD_MEMCACHE || t==PTHREAD_ASYNC || r->remote){
+          root_start_thread(r,t);
+        }
       }
     }
   }
@@ -2194,4 +2169,4 @@ int main(const int argc,const char *argv[]){
 // DIRECTORY_DIM_STACK
 // strcat strcpy strncpy stpncpy strcmp README_AUTOGENERATED.TXT realloc memcpy cgille stat_set_dir
 // HAS_ST_MTIM  st_mtim mempcpy WITH_XMP_GETATTR_FUSE_FILE_INFO   WITH_XMP_GETATTR_FUSE_FILE_INFO
-// by_example_c_code
+// by_example_c_code  mmap MAP_FAILED

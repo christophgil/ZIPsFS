@@ -123,7 +123,7 @@ static void fprint_strerror(FILE *f,int err){
 #define cg_malloc(id,...) malloc_untracked(__VA_ARGS__)
 #define cg_calloc(id,...) calloc_untracked(__VA_ARGS__)
 #define cg_strdup(id,...) strdup_untracked(__VA_ARGS__)
-#define cg_mmap(id,...) _cg_mmap(0,__VA_ARGS__)
+#define cg_mmap(id,...) _cg_mmap(0,__VA_ARGS__,__FILE_NAME__,__LINE__)
 #define cg_munmap(id,...) _cg_munmap(0,__VA_ARGS__)
 #define cg_realloc_array(id,...) _cg_realloc_array(0,__VA_ARGS__)
 #define COUNTER_ADD(id,n)
@@ -136,7 +136,7 @@ static atomic_long _counters1[COUNT_NUM],_counters2[COUNT_PAIRS_END];
 #define COUNTER2_ADD(id,n) if (id) atomic_fetch_add(_counters2+id,n)
 #define COUNTER_INC(id)  COUNTER_ADD(id,1)
 #define COUNTER2_INC(id)  COUNTER2_ADD(id,1)
-#define cg_mmap(...) _cg_mmap(__VA_ARGS__)
+#define cg_mmap(...) _cg_mmap(__VA_ARGS__,__FILE_NAME__,__LINE__)
 #define cg_munmap(...) _cg_munmap(__VA_ARGS__)
 #define cg_realloc_array(...) _cg_realloc_array(__VA_ARGS__)
 static bool _malloc_is_count_mstore[MALLOC_ID_COUNT];
@@ -176,12 +176,15 @@ static void *_cg_realloc_array(const int id,const int size1AndOpt,const void *pO
   return pNew;
 }
 
-static void *_cg_mmap(const int id, const size_t length, const int fd_or_zero){
+static void *_cg_mmap(const int id, const size_t length, const int fd_or_zero, const char *file, const int line){
   const int fd=fd_or_zero?fd_or_zero:-1;
   const off_t offset=0;
-  const int flags=fd==-1?(MAP_SHARED|MAP_ANONYMOUS):MAP_SHARED;
+  const int flags=fd==-1?(MAP_SHARED|MAP_ANONYMOUS):MAP_SHARED;  /* FreeBSD requires fd -1 for MAP_ANONYMOUS. Otherwise EINVAL */
   void *ptr=mmap(NULL,length,PROT_READ|PROT_WRITE,flags,fd, offset);
   if (ptr) COUNTER_ADD(id,length);
+  if (ptr==MAP_FAILED){
+    fprintf(stderr,"%s:%d  ",file,line);    perror(__func__);
+  }
   return ptr;
 }
 static int _cg_munmap(const int id,const void *ptr,size_t length){
@@ -438,6 +441,12 @@ static void _cg_sleep_ms(const int millisec, const char *msg, const char *func,c
 
 static void cg_nanosleep(long nanos){
   struct timespec ts={nanos>>30,(nanos&((1<<30)-1))};
+  nanosleep(&ts,NULL);
+}
+
+static void cg_usleep(int usec){
+  struct timespec ts={usec>>20,((usec&((1<<20)-1)))<<10};
+  //log_debug_now("ts=%ld   %'ld ", ts.tv_sec,ts.tv_nsec);
   nanosleep(&ts,NULL);
 }
 
@@ -1058,6 +1067,9 @@ static bool cg_pid_exists_proc(const pid_t pid){
 }
 int main(int argc, char *argv[]){
 
+  cg_usleep(atoi(argv[1]));
+
+  return 1;
   struct stat stbuf, *st=&stbuf;
   stat_init(st,0,NULL);
   st->st_mtime=time(NULL);

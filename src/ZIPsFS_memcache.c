@@ -46,7 +46,6 @@ static bool statForVirtualpathAndRootpath(struct stat *st, const char *vp, const
 }
 
 static bool advise_cache_in_ram(const struct zippath *zpath, const int additional_flags,const bool wait_for_free_mem){
-  log_entered_function("VP: %s",VP());
   cg_thread_assert_not_locked(mutex_fhandle);
   if (_memcache_policy==MEMCACHE_NEVER) return false;
   const bool c=zpath->flags&ZP_IS_COMPRESSED, z=zpath->flags&ZP_ZIP;
@@ -56,7 +55,7 @@ static bool advise_cache_in_ram(const struct zippath *zpath, const int additiona
                                                     ((_memcache_policy==MEMCACHE_COMPRESSED&&c || z&&_memcache_policy==MEMCACHE_ALWAYS)?ADVISE_CACHE_BY_POLICY:0),
                                                     VP(),VP_L(),RP(),RP_L(),zpath->root->rootpath,zpath->stat_vp.st_size);
 
-  //log_debug_now("VP: %s need_bytes: %ld",VP(),need_bytes);
+  log_debug_now("VP: %s need_bytes: %lld",VP(),(LLD)need_bytes);
   if (need_bytes<0) return false;
   if (need_bytes>_memcache_bytes_limit){
     warning(WARN_MEMCACHE|WARN_FLAG_ONCE,VP(),"%'lld>%'lld. Consider set byte limit for RAM cache with  "ANSI_FG_BLUE"-l <gigabytes>G"ANSI_RESET,(LLD)need_bytes,(LLD)_memcache_bytes_limit);
@@ -182,8 +181,10 @@ static off_t memcache_read(char *buf,const struct fHandle *d,const off_t from,of
 
 /* Invoked from xmp_read, where struct fHandle *d=fhandle_get(path,fd) */
 static off_t memcache_wait_and_read(char *buf, const off_t size, const off_t offset,struct fHandle *d,struct fuse_file_info *fi){
-  //log_entered_function("%s ",D_VP(d));
+  log_entered_function("%s ",D_VP(d));
+
   const bool ok=memcache_wait(d,offset+size);
+  log_debug_now("%s  ok: %d",D_VP(d),ok);
   LOCK_N(mutex_fhandle,const off_t memcache_l=is_memcache(d,NULL)? d->memcache->memcache_l: -1); /* Otherwise md5sum fails with EPERM */
   if (memcache_l<0 || !ok) return -1;
   if (offset==memcache_l) return 0;
@@ -268,7 +269,7 @@ static bool memcache_store_try(struct fHandle *d, struct async_zipfile *zip, str
 static void memcache_now(struct fHandle *d, struct rootdata *r){
   cg_thread_assert_not_locked(mutex_fhandle);
   const struct zippath *zpath=&d->zpath;
-  //log_entered_function("%s",VP());
+  log_entered_function("%s",VP());
   _Static_assert(NUM_MEMCACHE_STORE_RETRY>0,"");
   FOR(retry,0,NUM_MEMCACHE_STORE_RETRY){
     struct async_zipfile zip;
@@ -287,7 +288,10 @@ static void memcache_now(struct fHandle *d, struct rootdata *r){
       }
       unlock(mutex_fhandle);
     }
-    if (!contin || ok) return;
+    if (!contin || ok){
+      log_exited_function("%s",VP());
+      return;
+    }
   }/*for retry*/
 }
 /////////////////////////////////////////////////////////////////////////////////
@@ -397,11 +401,12 @@ static void *infloop_memcache(void *arg){
       LOCK_N(mutex_fhandle,const bool q=(memcache_queued==memcache_get_status(d)));
       if (q){
         LOCK(mutex_fhandle,memcache_set_status(d,memcache_reading); atomic_fetch_add(&d->is_memcache_store,1));
+        log_debug_now("%s",D_VP(d));
         memcache_now(d,r);
         LOCK(mutex_fhandle,memcache_set_status(d,memcache_done); atomic_fetch_add(&d->is_memcache_store,-1));
       }
     }
-    usleep(20*1000);
+    usleep(100*1000);
   }
 }
 

@@ -141,13 +141,14 @@ static off_t config_advise_cache_in_ram(const int flags,const char *virtualpath,
   if (flags&ADVISE_CACHE_BY_POLICY) return filesize;
   off_t need=filesize;
   bool cache=((flags&ADVISE_CACHE_IS_CMPRESSED)&&(flags&ADVISE_CACHE_IS_SEEK_BW)) || ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin");
+  //log_debug_now("%s   need: %lld cache: %d  compr: %d  ends: %d",virtualpath,(LLD)need,cache,  (flags&ADVISE_CACHE_IS_CMPRESSED),  ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin"));
   //if (DEBUG_NOW==DEBUG_NOW && !cache) {cache=ENDSWITH(virtualpath,vp_l,".mzML"); }
   if (!cache && ENDSWITH(virtualpath,vp_l,"analysis.tdf") && vp_l+4<MAX_PATHLEN){ /* Note: timsdata.dll opens analysis.tdf first  and then analysis.tdf_bin */
     cache=true;
     char tdf_bin[MAX_PATHLEN+1]; stpcpy(stpcpy(tdf_bin,virtualpath),"_bin");
     struct stat st_tdf_bin;
     if (!statForVirtualpathAndRootpath(&st_tdf_bin,tdf_bin,rootpath)){
-      log_warn("%s:%d Warning: Missing file %s\n",__func__,__LINE__,tdf_bin);
+      //log_warn("%s:%d Warning: Missing file %s\n",__func__,__LINE__,tdf_bin);
       return false;
     }
     need+=st_tdf_bin.st_size;
@@ -316,8 +317,6 @@ static void config_exclude_files(const char *path, const int path_l, const int n
 static bool config_has_sufficient_storage_space(const char *realpath, const long availableBytes, const long totalBytes){
   return availableBytes*16>totalBytes;
 }
-
-
 //////////////////////////////////////////////////////////////////////
 /// Data files downloaded from the internet                        ///
 //////////////////////////////////////////////////////////////////////

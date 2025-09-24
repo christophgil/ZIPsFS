@@ -1,5 +1,12 @@
 # ZIPsFS - FUSE-based  overlay file system which expands  ZIP files
-See [Installation](./INSTALL.md)
+
+ - [Installation](./INSTALL.md)
+ - [Configuration](./ZIPsFS_configuration.md)
+ - [Generated](synthetic) files](./ZIPsFS_generated_files.md)
+ - [Caches](./ZIPsFS_cache.md)
+ - [Logging](ZIPsFS_logs.md)
+ - [Fault management](ZIPsFS_fault_management.md)
+
 
 <!---
 (defun Make-man()
@@ -37,7 +44,7 @@ With a  trailing slash, the folder name is not part of the virtual path.
     b3=~/test/ZIPsFS/branch2/
     b4=~/test/ZIPsFS/branch3
 
-Without trailing slash, the folder name ~~branch4~~ will be, will be retained in the virtual path.
+Without trailing slash, the folder name will be retained in the virtual path. This is the case for ~branch3~.  Virtual file paths in that branch will start with ~<mount point>/branch3/~.
 
     mnt=~/test/ZIPsFS/mnt
 
@@ -62,6 +69,7 @@ Open a file browser or another terminal and  browse the files in
     ~/test/ZIPsFS/mnt/
 
 ### Create a file in the virtual tree
+The first file tree stores files. All others are read-only.
 
     echo "This file will be stored in ~/test/ZIPsFS/writable "> ~/test/ZIPsFS/mnt/my_file.txt
 
@@ -69,7 +77,9 @@ Open a file browser or another terminal and  browse the files in
 
 ### Real storage place of the created file
 
-    ls -l ~/test/ZIPsFS/writable/
+Just append @SOURCE.TXT
+
+    cat ~/test/ZIPsFS/mnt/my_file.txt@SOURCE.TXT
 
 DESCRIPTION
 ===========
@@ -85,63 +95,7 @@ However, this behavior can be customized using filename-based rules. Extensive c
 Additionally, ZIPsFS includes specialized features and performance optimizations tailored for efficiently storing large-scale mass spectrometry data.
 
 
-## Logs
-
-ZIPsFS typically runs as a foreground process.  To keep it active and monitor its output, it is
-recommended to use a persistent terminal multiplexer such as tmux. This enables continuous
-observation of all messages and facilitates long-running sessions.
-Additional log files are stored in:
-
-    ~/.ZIPsFS
-
-For each mount point there are files specifying more  logs.
-
-    log_flags.conf
-
-See readme for details:
-
-    log_flags.conf.readme
-
-
-ZIPsFS dynamically generates an HTML status file within the virtual file system.
-You can find it under the path: <Mount-Point>/ZIPsFS/
-For example:
-
-    ~/test/ZIPsFS/mnt/ZIPsFS/file_system_info.html
-
-This file provides real-time information about the system’s current state.
-
-## Configuration
-
-Configuration files, identified
-by the prefix **ZIPsFS_configuration**, are written in C. Any changes require recompilation and a
-restart of ZIPsFS to take effect.
-
-With the -s option, the updated ZIPsFS can seamlessly replace running instances without disrupting the virtual file system.
-
-To illustrate how this works, let MNT represent the apparent mount point of the FUSE file system.
-Suppose we are in the parent directory of MNT, enabling the use of relative paths.
-Users access files through this apparent mount point, but in reality, MNT is a symbolic link to the actual mount point.
-The real mount point is not directly accessed by users, as it changes each time a new instance of ZIPsFS is launched.
-
-For example, assume the obsolete ZIPsFS instance is mounted at ./.mountpoints/MNT/1.
-When a new instance replaces it, it may use any empty directory as   mount point. ZIPsFS must be started with the following command line  option:
-
-    -s MNT
-
-Once the new instance is running, the symbolic link is updated to point to the new mount
-location. From the user's perspective, nothing changes - the apparent mount point remains MNT. To
-ensure uninterrupted access, the obsolete instance should remain active for a short period to allow
-ongoing file operations to complete.
-
-If MNT  is within an exported  SAMBA or NFS path the real mount points should be in the exported file tree as well.
-Include into */etc/samba/smb.conf*:
-
-    follow symlinks = yes
-
-
-
-## Union / overlay file system
+## ZIPsFS is a Union / overlay file system
 
 
 ZIPsFS functions as a union (overlay) file system.
@@ -153,8 +107,20 @@ in the example setup.
 If a file exists in multiple source locations, the version from the leftmost source (the first one listed) takes precedence.
 To make the file system read-only, you can specify an empty string ("") as the first source. This disables file creation and modification and automatic virtual file generation.
 
+The physical file path, i.e., the actual storage location of a file, can be retrieved from a special
+metadata file created by appending ***@SOURCE.TXT*** to the filename.
 
-## ZIP file Presentation
+For example, to determine the real location of:
+
+    ~/test/ZIPsFS/mnt/1.txt
+
+Run the following command:
+
+    cat ~/test/ZIPsFS/mnt/1.txt@SOURCE.TXT
+
+
+
+## ZIPsFS expands ZIP file entries
 
 By default, ZIP files are displayed as folders with the suffix ***.Content***.
 This behavior can be customized in the ***ZIPsFS_configuration.c file***.
@@ -168,146 +134,8 @@ The default configuration includes a few exceptions tailored to specific use cas
     as a nested folder.
 
 
-## File content cache
+## ZIPsFS Options
 
-
-
-ZIPsFS optionally supports caching specific ZIP entries entirely in RAM, allowing data segments to
-be served from memory in any order.
-This feature significantly improves performance for software that performs random-access reads.
-The ***-l*** option sets an upper limit on memory usage for the ZIP RAM cache.
-When available memory runs low, ZIPsFS can either pause,  proceed without caching file data or just ignore the
-memory restriction depending on the configuration.
-These caching behaviors - such as which files to cache and how to handle memory pressure - are defined in the configuration.
-
-
-## File attribute cache
-
-
-Additional caching mechanisms are designed to accelerate file listing in large directories.
-
-
-## Real file location
-
-
-The physical file path, i.e., the actual storage location of a file, can be retrieved from a special
-metadata file created by appending ***@SOURCE.TXT*** to the filename.
-
-For example, to determine the real location of:
-
-    ~/test/ZIPsFS/mnt/1.txt
-
-Run the following command:
-
-    cat ~/test/ZIPsFS/mnt/1.txt@SOURCE.TXT
-
-Unfortunately, on Windows clients, these metadata files are inaccessible because they do not appear in directory listings.
-
-## Accessing internet files
-
-Computations often require files from public repositories.
-Files from the internet (http, ftp, https) can be accessed as files using the URL as file name. ZIPsFS takes care of downloading and updating.
-They are immutable and cannot be modified  unintentionally.
-In DOS, a trailing colon is a signature for device names. Therefore, the colon and all slashes in the url need to be replaced by comma.
-Comma  has been chosen as a replacement because it normally does not  occur in URLs. Furthermore, it does not require quoting in UNIX shells.
-
-Example with *mnt/*  denoting the  mountpoint of the ZIPsFS file system:
-
-    sudo apt-get install curl
-    ls -l  mnt/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README
-    more   mnt/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README
-    head   mnt/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README@SOURCE.TXT
-
-To see the real local file path append ***@SOURCE.TXT*** to the file path.
-
-The http-header is updated according to a time-out rule in **ZIPsFS_configuration.c**.
-Whether the file itself needs updating is decided upon the *Last-Modified* attribute in the http or ftp header.
-
-Additionally, the file is accessible with a file-name containing the data in the header.
-This feature can be conditionally deactivated.
-
-## Generation of files using programming language C
-
-By modifying the file *ZIPsFS_configuration_c.c*, users can easily implement
-files where the file content ist generated dynamically using the programming language C.
-
-Here is a pre-defined minimal exampe:
-
-    <mount point>/example_generated_file/example_generated_file.txt
-
-
-
-## Automatic Virtual File Generation and Conversion Rules
-
-ZIPsFS can generate and display virtual files automatically. This feature is enabled by setting the preprocessor macro **WITH_AUTOGEN** to **1** in *ZIPsFS_configuration.h*.
-Generated files are stored in the first file branch, allowing them to be served instantly upon repeated requests.
-A common use case for this feature is file conversion. The default rules, defined in *ZIPsFS_configuration_autogen.c*, include:
-
-- **Image files (JPG, JPEG, PNG, GIF):**  Smaller versions at 25% and 50% scaling.
-- **Image files (OCR):** Extracted text using Optical Character Recognition (OCR).
-- **PDF files:** Extracted ASCII text.
-- **ZIP files:** Consistency check reports, including checksums.
-- **Mass spectrometry files:**  **mgf (Mascot)** and **msML** formats.
-- **wiff files:** Extract ASCII text.
-- **Apache Parquet files:**  **TSV** and **TSV.BZ2** formats.
-
-
-
-For testing, copy an image file with the following command:
-
-    cp file.png ~/test/ZIPsFS/mnt/
-
-Auto-generated files can be viewed in the example configuration by listing the contents of:
-
-    ls ~/test/ZIPsFS/mnt/ZIPsFS/a/
-
-
-Note that some of the conversions may require Docker support.  ZIPsFS must be run by a user belonging to the *docker* group.
-
-
-### Handling Unknown File Sizes in Virtual File Systems
-
-The system cannot determine the size of files whose content has not yet been generated.
-In kernel-managed virtual file systems such as */proc* and */sys*, virtual files typically report a size
-of zero via *stat()*. Despite this, they are not empty and  contain dynamically generated content when read.
-
-However, this behavior does not translate well to FUSE-based file systems.
-
-For FUSE, returning a file size of zero to represent an unknown or dynamic size is not
-recommended. Many programs interpret a size of 0 as an empty file and will not attempt to read from
-it at all.
-In ZIPsFS,  a placeholder or estimated size is returned if the file content has not been generated  at the time of stat().
-The estimate should be large enough to allow reading the full content.
-If the size is underestimated, data may be read incompletely, leading to truncated output or application errors.
-This workaround allows programs to read the file as if it had content,
-even though the size isn’t known in advance.
-However, it may still break software that relies on accurate size reporting for buffering or memory allocation.
-
-
-
-### Windows Console Compatibility: External Queue Workaround
-
-Some Windows command-line executables do not behave reliably when launched directly from compiled programs.
-This issue stems from  Windows Console API which is used in long-running mass spectrometry CLI programs to implement progress reports.
-Like traditional  escape sequences, the Windows Console API allows free cursor positioning.
-In headless environments, i.e. ZIPsFS not started from a desktop environment,
-respective  programs block unless without a  console device. A virtual  frame-buffer like ***xvfb*** can solve this issue.
-
-Nevertheless, programs may still not be runnable using the UNIX fork() and exec() paradigm.
-To work around this, ZIPsFS supports delegating such tasks to an external shell script.
-When the special symbol ***PLACEHOLDER_EXTERNAL_QUEUE*** is specified instead of a direct executable path, ZIPsFS:
-
- - Pushes the task details to a queue.
- - Waits for the result.
-
-The actual execution of these tasks is handled by the shell script ZIPsFS_autogen_queue.sh,
-which must be started manually by the user. This script polls the queue and performs the requested conversions or operations.
-Multiple instances of the script can run in parallel, allowing concurrent task handling.
-
-
-
-ZIPsFS Options
---------------
 
 **-h**
 
@@ -346,21 +174,6 @@ Specifies a limit for the cache.  For example *-l  8G* would limit the size of t
  Run in background
 
 
-Debug Options
--------------
-
-**-T**
-
-Checks whether ZIPsFS can generate and print a backtrace in case of errors or crashes.  This feature
-elies on external tools to translate memory addresses into source code locations: On Linux and
-FreeBSD, it uses addr2line, typically located in /usr/bin/.  On macOS, it uses the atos tool
-instead.  Ensure these tools are installed and accessible in your system's PATH for backtraces to
-work correctly.
-
-
-
-See ZIPsFS.compile.sh for activation of sanitizers.
-
 FUSE Options
 ------------
 
@@ -374,52 +187,6 @@ Disable multi-threaded operation. This could rescue ZIPsFS in case of threading 
 
 **-o allow_other**
 Other users are granted access.
-
-
-## Fault Management for Remote File Access
-
-Accessing remote files inherently carries a higher risk of failure. Requests may either:
-
- - Fail immediately with an error code, or
-
- - Block indefinitely, causing potential hangs.
-
-In many FUSE file systems, a blocking access can render the entire virtual file system unresponsive.
-ZIPsFS addresses this with built-in fault management for remote branches.
-
-Remote roots in ZIPsFS are specified using a double-slash prefix, similar to UNC paths (//server/share/...).
-Each remote branch is isolated in terms of fault handling and threading and has its own thread pool, ensuring faults in one do not affect others.
-To avoid blocking the main file system thread, remote file operations are executed asynchronously in dedicated worker threads.
-
-ZIPsFS remains responsive even if a remote file access hangs.  For redundantly stored files (i.e.,
-available on multiple branches), another branch may take over transparently if one fails or becomes
-unresponsive.
-
-If a thread becomes unresponsive, ZIPsFS will try to terminate the stalled thread after a timeout.
-As soon as the old thread does not exist any more, a new thread is started, attempting to restore
-functionality to the affected branch.
-
-If the stalled thread cannot be terminated, ZIPsFS will not create a new thread.
-To check whether all threads are responding, activate logging. For details see
-
-    ~/.ZIPsFS/.../log_flags.conf.readme
-
-This is best resolved by restarting ZIPsFS without interrupting ongoing file accesses.
-
-Another possibility is to start a new thread irrespectively of the still existing blocked thread.
-There is a shell script ***ZIPsFS_CTRL.sh*** for this in ***~/.ZIPsFS/***.  When the blocked thread
-which had been scheduled for termination wakes up, it will be terminated by the system.  However,
-there is no guaranty that termination will be perforemd immediately.  For a short time, the two
-threads may be active concurrently with  undefined behaviour and the risk of segmentation faults.
-
-
-## Data Integrity for ZIP Entries
-
-For ZIP entries loaded entirely into RAM:
-ZIPsFS performs CRC checksum validation.
-Any detected inconsistencies are logged, helping to detect corruption or transmission errors.
-
-
 
 
 

@@ -110,7 +110,7 @@ static void closezip_now(struct async_zipfile *z){
 /* That is the most simple as nothing needs to be closed or destructed */
 static inline bool async_periodically_stat(struct rootdata *r){
   if (!G) return false;
-  assert(r->async_stat_path.s!=NULL);
+    assert(r->async_stat_path.s!=NULL);
   struct stat st=r->async_stat=empty_stat;
   struct strg path=r->async_stat_path;
   SET_PICKED();

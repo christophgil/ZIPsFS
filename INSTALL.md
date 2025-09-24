@@ -3,7 +3,7 @@
 
 Please visit the page for your OS.
 
- - MS-Windows: Install ZIPsFS in a WSL environment.
+ - [ MS-Windows](./ZIPsFS_MS_WINDOWS.md)
  - Linux
    - [Ubuntu, Debian and friends](./INSTALL_Ubuntu.md)
  - BSD

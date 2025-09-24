@@ -262,3 +262,5 @@ struct strg{
 #define ENDSWITH_FLAG_PRECEED_SLASH (1<<2)
 
 #endif // _cg_utils_dot_h
+
+#define MMAP_FD -1   // FreeBSD MAP_ANONYMOUS requires -1 rather than 0
