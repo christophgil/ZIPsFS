@@ -2,7 +2,7 @@
 
  - [Installation](./INSTALL.md)
  - [Configuration](./ZIPsFS_configuration.md)
- - [Generated](synthetic) files](./ZIPsFS_generated_files.md)
+ - [Generated (synthetic) files](./ZIPsFS_generated_files.md)
  - [Caches](./ZIPsFS_cache.md)
  - [Logging](ZIPsFS_logs.md)
  - [Fault management](ZIPsFS_fault_management.md)
