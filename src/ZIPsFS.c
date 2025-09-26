@@ -1505,13 +1505,11 @@ static bool _xmp_readdir_roots(const bool cut_autogen, const bool from_network_h
       if (ht_only_once(no_dups,r->retain_dirname,r->retain_dirname_l)) filler(buf,r->retain_dirname+1,NULL,0 COMMA_FILL_DIR_PLUS);
       ok=true;
     }else if (find_realpath_any_root(opt|(cut_autogen?FINDRP_AUTOGEN_CUT:FINDRP_AUTOGEN_CUT_NOT),zpath,r)){
-
       opt|=FINDRP_NOT_TRANSIENT_CACHE; /* Transient cache only once */
       filler_readdir(from_network_header?FILLDIR_STRIP_NET_HEADER:0,zpath,buf,filler,no_dups);
       IF1(WITH_AUTOGEN, if (zpath->flags&ZP_STARTS_AUTOGEN) filler_readdir(FILLDIR_AUTOGEN,zpath,buf,filler,no_dups));
       ok=true;
-      IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,if (zpath->flags&ZP_FROM_TRANSIENT_CACHE){ if (0) DIE_DEBUG_NOW("ZP_FROM_TRANSIENT_CACHE %s",RP()); break;});
-      //      if (!cut_autogen && !ENDSWITH(vp,VP_L(),EXT_CONTENT) && config_readir_no_other_roots(RP(),RP_L())) continue; // DEBUG_NOW
+      IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,if (zpath->flags&ZP_FROM_TRANSIENT_CACHE)break);
     }
   }
   return ok;

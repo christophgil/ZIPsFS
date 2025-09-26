@@ -81,7 +81,7 @@ Without trailing slash, the folder name will be retained in the virtual path. Th
 
 
 ### Start ZIPsFS
-It is recommended to start ZIPsFS in tmux. For testing, just use your terminal emulator.
+It is recommended to start ZIPsFS in tmux. For testing, just use your regular command line.
 
     ZIPsFS   $b1 $b2 $b3 $b4 : -o allow_other  $mnt
 
