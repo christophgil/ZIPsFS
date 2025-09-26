@@ -97,9 +97,7 @@ The first file tree stores files. All others are read-only.
 
     cat ~/test/ZIPsFS/mnt/my_file.txt
 
-### Real storage place of the file
-
-Just append @SOURCE.TXT
+To get the real storage place of the file, append ~@SOURCE.TXT~
 
     cat ~/test/ZIPsFS/mnt/my_file.txt@SOURCE.TXT
 
