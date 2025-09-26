@@ -204,7 +204,8 @@ Project status
 
 Author: Christoph Gille
 
-Current status: Testing and Bug fixing
+Current status: Testing and Bug fixing. Already running very busy for several weeks without interruption.
+
 If ZIPsFS crashes, please send the stack-trace together with the source code you were using.
 
 # Use case - Archive of mass spectrometry files
