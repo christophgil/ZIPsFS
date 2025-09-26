@@ -29,8 +29,9 @@ ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse
 \f[R]
 .fi
 .PP
+ZIPsFS is best run in a tmux session.
 With a trailing slash, the folder name is not part of the virtual path,
-in accordance with the trailing slash sematics of many UNIX tools.
+in accordance with the trailing slash semantics of many UNIX tools.
 .SS Summary
 .PP
 ZIPsFS functions as a union or overlay file system, merging multiple
@@ -79,7 +80,10 @@ zip --fifo $b3/zipfile2.zip <(hostname)  <(ls /)
 zip --fifo $b3/20250131_this_is_a_mass_spectrometry_folder.d.Zip   <(seq 10)
 \f[R]
 .fi
-.SS Now start ZIPsFS
+.SS Start ZIPsFS
+.PP
+It is recommended to start ZIPsFS in tmux.
+For testing, just use your terminal emulator.
 .IP
 .nf
 \f[C]

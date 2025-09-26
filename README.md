@@ -34,7 +34,9 @@ https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unk
 
     ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse-options] mount-point
 
-With a  trailing slash, the folder name is not part of the virtual path, in accordance with  the trailing slash sematics of many UNIX tools.
+ZIPsFS is best run in a tmux session.
+With a trailing slash, the folder name is not part of the virtual path, in accordance with  the trailing slash semantics of many UNIX tools.
+
 
 
 
@@ -73,7 +75,8 @@ Without trailing slash, the folder name will be retained in the virtual path. Th
     zip --fifo $b3/20250131_this_is_a_mass_spectrometry_folder.d.Zip   <(seq 10)
 
 
-### Now start ZIPsFS
+### Start ZIPsFS
+It is recommended to start ZIPsFS in tmux. For testing, just use your terminal emulator.
 
     ZIPsFS   $b1 $b2 $b3 $b4 : -o allow_other  $mnt
 
