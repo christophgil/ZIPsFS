@@ -63,7 +63,7 @@ static struct zippath *transient_cache_get_or_create_zpath(const bool create,con
         const char *vp=D_VP(d);
         const int path_without_entry_path_l=vp_l-D_EP_L(d)-1;
     const bool maybe_same_zip=path_without_entry_path_l && cg_path_equals_or_is_parent(vp,path_without_entry_path_l,virtualpath,virtualpath_l);
-    if (maybe_same_zip && !maybe_same_zip) continue;
+    if (must_be_same_zip && !maybe_same_zip) continue;
     /* maybe_same_zip: path_without_entry_path is part of virtualpath indicating that virtualpath is likely to be in the same ZIP file. */
     const bool ok=(maybe_same_zip || vp_l>0 && cg_path_equals_or_is_parent(virtualpath,virtualpath_l,vp,vp_l));  /* || virtualpath is a parent of vp */
     //log_debug_now("Virtualpath: %s vp: %s ok: %d",virtualpath,vp,ok);
@@ -75,7 +75,6 @@ static struct zippath *transient_cache_get_or_create_zpath(const bool create,con
     struct ht_entry *e=ht_numkey_get_entry(ht,hash,virtualpath_l,false);
     if (!e || !e->key || !e->value) continue;
     struct zippath *zpath=e->value;
-    if (!zpath) continue;
     if (!zpath->virtualpath
         || strcmp(virtualpath,VP())){ /* Accept hash_collision */
       zpath_init(zpath,virtualpath);
@@ -128,9 +127,11 @@ static void transient_cache_store(const struct zippath *zpath, const char *vp,co
       zp->flags|=ZP_DOES_NOT_EXIST; /* Not found in any root. */
     }else if (!zp->virtualpath){
       *zp=*zpath;
-      const struct zippath *wiedergefunden=transient_cache_get_or_create_zpath(false,false,vp,vp_l); // DEBUG_NOW
+#if WITH_EXTRA_ASSERT
+      const struct zippath *wiedergefunden=transient_cache_get_or_create_zpath(false,false,vp,vp_l);
       assert(NULL!=wiedergefunden);
       //log_debug_now("Wiederfinden: %p %s",wiedergefunden,wiedergefunden?ZP_VP(wiedergefunden):NULL);
+#endif //WITH_EXTRA_ASSERT
     }
   }
 }

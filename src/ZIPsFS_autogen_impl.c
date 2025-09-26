@@ -133,7 +133,8 @@ static bool _aimpl_patterns_match(const char *vp, const int vp_l,const char ** c
 static bool _aimpl_matches(const char *vp, const int vp_l,const struct autogen_rule *ac){
   int count=0;
   const bool match=_aimpl_patterns_match(vp,vp_l,ac->_patterns, ac->_patterns_l,&count);
-  return (!count||match) && !_aimpl_patterns_match(vp,vp_l,ac->_xpatterns,ac->_xpatterns_l,&count) && !config_autogen_exclude(vp,vp_l,ac);
+  return (!count||match) && !_aimpl_patterns_match(vp,vp_l,ac->_xpatterns,ac->_xpatterns_l,&count)
+    && !config_autogen_exclude(vp,vp_l,ac); // cppcheck-suppress knownConditionTrueFalse
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// What files can be computed from given virtual path                                                 ///

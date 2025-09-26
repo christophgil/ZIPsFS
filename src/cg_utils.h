@@ -264,3 +264,5 @@ struct strg{
 #endif // _cg_utils_dot_h
 
 #define MMAP_FD -1   // FreeBSD MAP_ANONYMOUS requires -1 rather than 0
+
+#define WITH_POPEN_NOSHELL 0

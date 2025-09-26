@@ -109,7 +109,7 @@ static char tmp[PATH_MAX+1];
   while (fgets(buf, sizeof(buf)-1, fp))    printf("Got line: %s", buf);
 
 */
-#define WITH_POPEN_NOSHELL 0
+
 #if WITH_POPEN_NOSHELL
 #include "rarely_needed/github_popen_noshell.c"
 #endif

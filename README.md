@@ -52,7 +52,7 @@ However, this behavior can be customized using filename-based rules. Extensive c
 
 
 ZIPsFS includes specialized features like automatic file conversions and performance optimizations tailored for efficiently storing and accessing large-scale mass spectrometry data.
-
+It has a programming interface to create synthetic file content programmatically.
 
 ## Mini tutorial
 
@@ -101,6 +101,13 @@ The first file tree stores files. All others are read-only.
 To get the real storage place of the file, append ***@SOURCE.TXT***
 
     cat ~/test/ZIPsFS/mnt/my_file.txt@SOURCE.TXT
+
+### Access web resources as regular files
+Make sure the UNIX tool curl is installed. Note that "//:" in the URL is replaced by commas.
+
+    curl --version
+    less  ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
+
 
 DESCRIPTION
 ===========

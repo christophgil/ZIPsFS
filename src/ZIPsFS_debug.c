@@ -174,7 +174,6 @@ static void debug_fhandle_listall(void){
   .
   Clearing the cache resolves.
 */
-#define DEBUG_DIRCACHE_COMPARE_CACHED 0 /*TO_HEADER*/
 #if DEBUG_DIRCACHE_COMPARE_CACHED
 #define dde_print(f,...) fprintf(stderr,ANSI_YELLOW"DDE "ANSI_RESET f,__VA_ARGS__)
 static void debug_compare_directory_a_b(struct directory *A,struct directory *B){
@@ -208,7 +207,7 @@ static void debug_compare_directory_a_b(struct directory *A,struct directory *B)
 
 
 
-#define DEBUG_TRACK_FALSE_GETATTR_ERRORS 0
+
 #if DEBUG_TRACK_FALSE_GETATTR_ERRORS
 static void debug_track_false_getattr_errors(const char *vp,const int vp_l){
   if ((ENDSWITH(vp,vp_l,".SSMetaData") || ENDSWITH(vp,vp_l,".raw")  )){

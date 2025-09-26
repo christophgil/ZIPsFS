@@ -1,8 +1,20 @@
 /////////////////////////////////////////////////////////////////
-/// COMPILE_MAIN=ZIPsFS                                       ///
+/// COMPILE _MAIN=ZIPsFS                                      ///
 /// Exit if incorrect settings for specific mountpoint        ///
 /// Maybe I have forgotten to restore after debugging ...     ///
 /////////////////////////////////////////////////////////////////
+
+
+#if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
+#define T(var,x)  if (!(var x)) warn=true, printf("%s  (IS operator SHOULD-BE) is false:   (%d%s)\n",#var,var,#x)
+#include "ZIPsFS_configuration.h"
+#include "ZIPsFS_early.h"
+#include "cg_utils.h"
+#include <stdio.h>
+#else // __INCLUDE_LEVEL__ IIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+#define T(var,x)  if (!(var x)) warn=true,warning(WARN_CONFIG|WARN_FLAG_WITHOUT_NL,"","%s  (IS operator SHOULD-BE) is false:   (%d%s)",#var,var,#x)
+#endif //__INCLUDE_LEVEL__
+
 #define CHECK_DEBUG_OFF()\
   T(DEBUG_DIRCACHE_COMPARE_CACHED,==0);\
   T(DEBUG_TRACK_FALSE_GETATTR_ERRORS,==0);\
@@ -28,22 +40,8 @@
   T(WITH_STAT_CACHE,==1);\
   T(WITH_TRANSIENT_ZIPENTRY_CACHES,==1)
 
-static bool check_configuration(const char *mnt){
-  char *m=strdup_untracked(mnt);
-  cg_str_replace(0,m,0,".charite.de",0,"",0);
-  cg_str_replace(0,m,0,"//",2,"/",1);
-  bool warn=false;
-#define T(var,x)  if (!(var x)) warn=true,warning(WARN_CONFIG|WARN_FLAG_WITHOUT_NL,"","%s  (IS operator SHOULD-BE) is false:   (%d%s)",#var,var,#x)
-  {
-    const char *M="/s-mcpb-ms03/union/.mountpoints/is/";
-    if (!strncmp(m,M,strlen(M))){
-      log_verbose("Recognized mount-point %s",M);
-      T(WITH_AUTOGEN,==0);
-      T(WITH_ZIPINLINE,==1);
-    }
-  }
-  //log_debug_now("m: %s mnt: %s",m,mnt);
-  free_untracked(m);
+static bool check_configuration1(){
+ bool warn=false;
   CHECK_DEBUG_OFF();
   CHECK_CACHES_ON();
   CHECK_TIMEOUT_ON_OFF(0);
@@ -54,7 +52,25 @@ static bool check_configuration(const char *mnt){
   T(WITH_AUTOGEN,==1);
   T(WITH_POPEN_NOSHELL,==0);
   T(READDIR_TIMEOUT_SECONDS,>9);
-#undef T
+  return warn;
+}
+#if !(defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0)
+static bool check_configuration(const char *mnt){
+  bool warn=check_configuration1();
+  char *m=strdup_untracked(mnt);
+  cg_str_replace(0,m,0,".charite.de",0,"",0);
+  cg_str_replace(0,m,0,"//",2,"/",1);
+  {
+    const char *M="/s-mcpb-ms03/union/.mountpoints/is/";
+    if (!strncmp(m,M,strlen(M))){
+      log_verbose("Recognized mount-point %s",M);
+      T(WITH_AUTOGEN,==0);
+      T(WITH_ZIPINLINE,==1);
+    }
+  }
+  //log_debug_now("m: %s mnt: %s",m,mnt);
+  free_untracked(m);
+
 
   if (!HAS_BACKTRACE){
     fprintf(stderr,"Warning: No stack-traces can be written in case of a program error.\n");
@@ -88,3 +104,15 @@ static bool check_configuration(const char *mnt){
   IF1(WITH_AUTOGEN,if (!cg_is_member_of_group("docker")){ log_warn(HINT_GRP_DOCKER); warn=true;});
   return warn;
 }
+#else //__INCLUDE_LEVEL__
+
+
+
+int main(int argc, char *argv[]){
+
+  return check_configuration1();
+}
+
+
+#endif //__INCLUDE_LEVEL__
+#undef T

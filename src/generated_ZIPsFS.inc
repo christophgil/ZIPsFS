@@ -382,6 +382,7 @@ static void async_openzip(struct async_zipfile *zip);
 static void directory_copy(struct directory *dst,const struct directory *src);
 static inline bool async_periodically_readdir(struct rootdata *r);
 static bool readdir_async(struct directory *dir);
+static bool check_configuration1();
 static bool check_configuration(const char *mnt);
 static struct ht_entry *ht_get_entry(struct ht *ht, const char* key,const ht_keylen_t key_l,ht_hash_t hash,const bool create);
 static void *ht_set(struct ht *ht,const char* key,const ht_keylen_t key_l,ht_hash_t hash, const void* value);
@@ -412,7 +413,7 @@ static void unblock_update_time(struct rootdata *r, const enum enum_root_thread 
 static void root_start_thread(struct rootdata *r,const enum enum_root_thread ithread);
 static void *infloop_misc(void *arg);
 static void init_infloop(struct rootdata *r, const enum enum_root_thread ithread);
-static void *infloop_unblock(void *arg);
+static void *infloop_unblock( void *arg);
 static void log_root_blocked(struct rootdata *r,const bool blocked);
 static bool wait_for_root_timeout(struct rootdata *r);
 static void stat_set_dir(struct stat *s);

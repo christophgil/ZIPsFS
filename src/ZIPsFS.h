@@ -59,8 +59,6 @@
 
 #define FILENAME_SET_ATIME "ZIPsFS_set_file_access_time"
 
-#define PLACEHOLDER_NAME 0x07
-//#define PLACEHOLDER_NAME '*'
 #define DEBUG_ABORT_MISSING_TDF 1
 #define IS_STAT_READONLY(st) !(st.st_mode&(S_IWUSR|S_IWGRP|S_IWOTH))
 
@@ -225,6 +223,8 @@ static const char *ASYNC_S[]={A10()NULL};
 #undef A11
 #undef A12
 #undef A13
+
+
 
 
 struct counter_rootdata{

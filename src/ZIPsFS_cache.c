@@ -60,6 +60,7 @@ static void dircache_clear_if_reached_limit(const bool always,const int mask,str
 #undef M
 }
 #endif //WITH_CLEAR_CACHE
+#if 0
 static void debug_assert_crc32_not_null(const struct directory *dir){
   if (!dir || !DIR_IS_ZIP(dir)) return;
   RLOOP(i,dir->core.files_l){
@@ -69,6 +70,7 @@ static void debug_assert_crc32_not_null(const struct directory *dir){
     }
   }
 }
+#endif//0
 /*
   Not the entire struct directory only the directory_core is stored
   RAM: &r->dircache_mstore

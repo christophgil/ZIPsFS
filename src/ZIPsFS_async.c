@@ -7,8 +7,11 @@
 
 #define ASYNC_SLEEP_LOOP(path,timeout,time0)  for(int j=1; G==2 && ((j%255) || time(NULL)-(time0)<=timeout);j++)  usleep(256);\
   lock(mutex_async); const bool finished=!G; r->async_task_id[A]++; unlock(mutex_async);\
-  if (!finished) log_warn("Timeout %s '%s': '%s'",ASYNC_S[A],rootpath(r),path)\
-                   //                   ; else  log_succes("NO_TIMEOUT %s '%s': '%s'",ASYNC_S[A],rootpath(r),path);
+  if (!finished) log_warn("Timeout %s '%s': '%s'",ASYNC_S[A],rootpath(r),path)
+
+
+
+// Timeout ASYNC_STAT '/s-mcpb-ms03.charite.de/fulnas1/1': '/s-mcpb-ms03.charite.de/fulnas1/1/A1/Data/30-0155/20250527_A1_KTT_036_30-0155_JohannaFicht-BY4741protroph-CLSsamples_P03_B05_dia.raw.Zip.Content'
 
 #define ASYNC_SLEEP(path,timeout)  WAIT_PICKED(timeout);  time0=time(NULL); ASYNC_SLEEP_LOOP(path,timeout,time0)
 #define R()  struct rootdata *r=zpath->root; if (!r || ROOT_NOT_RESPONDING(r)) continue  // r is null e.g. for warnings.log
@@ -135,7 +138,11 @@ static bool async_stat(const struct strg *path,struct stat *st,struct rootdata *
   L();
   r->async_stat_path=*path;
   //log_debug_now("Going ASYNC_SLEEP: %s  STAT_TIMEOUT_SECONDS: %d",path->s,STAT_TIMEOUT_SECONDS);
-  ASYNC_SLEEP(path->s,STAT_TIMEOUT_SECONDS);
+  //  ASYNC_SLEEP(path->s,STAT_TIMEOUT_SECONDS);
+
+  WAIT_PICKED(STAT_TIMEOUT_SECONDS);  atomic_store(r->async_when+A,time(NULL)); ASYNC_SLEEP_LOOP(path->s,STAT_TIMEOUT_SECONDS,atomic_load(r->async_when+A));
+  if (!finished) DIE_DEBUG_NOW("!finished %s",path->s);
+
   //log_debug_now("After ASYNC_SLEEP: %s finished: %d",path->s,finished);
   *st=finished?r->async_stat:empty_stat;
   UL();

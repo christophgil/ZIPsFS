@@ -50,6 +50,8 @@ Changes can be applied without disrupting the file system.
 ZIPsFS includes specialized features like automatic file conversions and
 performance optimizations tailored for efficiently storing and accessing
 large-scale mass spectrometry data.
+It has a programming interface to create synthetic file content
+programmatically.
 .SS Mini tutorial
 .PP
 Please Install ZIPsFS.
@@ -121,6 +123,17 @@ To get the real storage place of the file, append
 .nf
 \f[C]
 cat \[ti]/test/ZIPsFS/mnt/my_file.txt\[at]SOURCE.TXT
+\f[R]
+.fi
+.SS Access web resources as regular files
+.PP
+Make sure the UNIX tool curl is installed.
+Note that \[lq]//:\[rq] in the URL is replaced by commas.
+.IP
+.nf
+\f[C]
+curl --version
+less  \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
 \f[R]
 .fi
 .SH DESCRIPTION
