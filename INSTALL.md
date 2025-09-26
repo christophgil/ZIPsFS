@@ -24,7 +24,9 @@ ZIPsFS can automatically convert certain file types. This feature requires the f
   - poppler-utils pdftotext
 
 
-# If your OS is not listed, continue with the generic instructions here.
+# Installation any OS
+
+If your OS is not listed above, continue with the generic instructions here.
 
 
 # Dependencies
