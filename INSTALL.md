@@ -57,12 +57,17 @@ To compile ZIPsFS, run
     src/ZIPsFS_testing.sh  <Path to ZIPsFS executable>
 
 
+
 # TroubleShooting
 
 
 Are the shared libraries found on the system?
 The option -fuse3 refers to libfuse3.so. Is this found in the library search paths.
 Are the include files in the include file search paths?
+
+
+No permission to access FUSE:  Check whether other FUSE based file systems like sshfs  exhibit the same problem.
+Try as root.
 
 
 # Trouble shooting Detect problems of fuse
