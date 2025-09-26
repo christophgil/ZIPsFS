@@ -93,7 +93,7 @@ The first file tree stores files. All others are read-only.
 
     cat ~/test/ZIPsFS/mnt/my_file.txt
 
-### Real storage place of the created file
+### Real storage place of the file
 
 Just append @SOURCE.TXT
 
@@ -131,7 +131,7 @@ Run the following command:
 ## ZIPsFS expands ZIP file entries
 
 By default, ZIP files are displayed as folders with the suffix ***.Content***.
-This behavior can be customized in the ***ZIPsFS_configuration.c file***.
+This behavior can be customized.
 The default configuration includes a few exceptions tailored to specific use cases in Mass Spectrometry Compatibility:
 
   - For ZIP files whose names start with a year and end with *.d.Zip*, the virtual folder will instead
@@ -167,7 +167,7 @@ Policy for ZIP entries  cached in RAM.
 |           |                                                                                    |
 |   SEEK    | ZIP entries are cached when the file position jumps backward. This is the default  |
 |           |                                                                                    |
-|   RULE    | ZIP entries are cached according to rules in **configuration.c**.                  |
+|   RULE    | ZIP entries are cached according to customizable rules                             |
 |           |                                                                                    |
 |COMPRESSED | All compressed ZIP entries are cached.                                             |
 |           |                                                                                    |

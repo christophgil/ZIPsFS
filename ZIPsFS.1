@@ -111,7 +111,7 @@ echo \[dq]This file will be stored in \[ti]/test/ZIPsFS/writable \[dq]> \[ti]/te
 cat \[ti]/test/ZIPsFS/mnt/my_file.txt
 \f[R]
 .fi
-.SS Real storage place of the created file
+.SS Real storage place of the file
 .PP
 Just append \[at]SOURCE.TXT
 .IP
@@ -164,8 +164,7 @@ cat \[ti]/test/ZIPsFS/mnt/1.txt\[at]SOURCE.TXT
 .PP
 By default, ZIP files are displayed as folders with the suffix
 \f[B]\f[BI].Content\f[B]\f[R].
-This behavior can be customized in the \f[B]\f[BI]ZIPsFS_configuration.c
-file\f[B]\f[R].
+This behavior can be customized.
 The default configuration includes a few exceptions tailored to specific
 use cases in Mass Spectrometry Compatibility:
 .IP \[bu] 2
@@ -211,7 +210,7 @@ T}
 T{
 RULE
 T}@T{
-ZIP entries are cached according to rules in \f[B]configuration.c\f[R].
+ZIP entries are cached according to customizable rules
 T}
 T{
 T}@T{
