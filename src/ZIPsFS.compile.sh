@@ -178,8 +178,10 @@ try_compile(){
     local c=$x.c
     [[ ! -s $c ]] && echo -e "$includes\nint main(int argc,char *argv[]){\n $main; }\n" >$c.$$.tmp && mv $c.$$.tmp $c
     local cmd="$CCOMPILER $CC_OPTS $IPATHS  $cc_opts  $c $ld_opts $LIBFUSE $LIBZIP $RPATHS $LPATHS $LL   -o $x"
-    ! { echo $cmd; echo; $cmd  2>&1; } >$x.log  && success=0
+    ! { echo $cmd; echo; $cmd  2>&1; } >$x.log  && success=0 && echo "Probing failed$ANSI_FG_RED:$ANSI_RESET See   '$x.log'" >&2
+    ((success)) &&  echo "${ANSI_FG_GREEN}Probing succeeded$ANSI_RESET '$x.log'" >&2
     echo $success # Used for HAS_XXX=1 or 0
+
     return $((success==0))
 }
 ####################

@@ -1,4 +1,4 @@
-## Fault Management for Remote File Access
+# Fault Management for Remote File Access
 
 Accessing remote files inherently carries a higher risk of failure. Requests may either:
 
@@ -13,13 +13,20 @@ Remote roots in ZIPsFS are specified using a double-slash prefix, similar to UNC
 Each remote branch is isolated in terms of fault handling and threading and has its own thread pool, ensuring faults in one do not affect others.
 To avoid blocking the main file system thread, remote file operations are executed asynchronously in dedicated worker threads.
 
-ZIPsFS remains responsive even if a remote file access hangs.  For redundantly stored files (i.e.,
-available on multiple branches), another branch may take over transparently if one fails or becomes
-unresponsive.
+## Timeouts
 
-If a thread becomes unresponsive, ZIPsFS will try to terminate the stalled thread after a timeout.
-As soon as the old thread does not exist any more, a new thread is started, attempting to restore
-functionality to the affected branch.
+ZIPsFS remains responsive even if a remote file access hangs.
+The fuse thread delegates the file operation to another thread and waits for its completion.
+After the configurable timeout it gives up.
+
+## Duplicated file paths
+
+For redundantly stored files (i.e., available on multiple branches), another branch may take over
+transparently if one fails or becomes unresponsive.
+
+
+## Blocked worker threads
+The worker thread may block permanently. In this case it can be killed automatically and restarted. However killing this thread sometimes does not work.
 
 If the stalled thread cannot be terminated, ZIPsFS will not create a new thread.
 To check whether all threads are responding, activate logging. For details see
@@ -28,17 +35,17 @@ To check whether all threads are responding, activate logging. For details see
 
 This is best resolved by restarting ZIPsFS without interrupting ongoing file accesses.
 
-Another possibility is to start a new thread irrespectively of the still existing blocked thread.
-There is a shell script ***ZIPsFS_CTRL.sh*** for this in ***~/.ZIPsFS/***.  When the blocked thread
-which had been scheduled for termination wakes up, it will be terminated by the system.  However,
-there is no guaranty that termination will be perforemd immediately.  For a short time, the two
-threads may be active concurrently with  undefined behaviour and the risk of segmentation faults.
+
+
+
+
+
 
 
 
 ## Debug Options
 
-### The ZIPsFS  **-T**
+### The ZIPsFS option  **-T**
 
 Checks whether ZIPsFS can generate and print a backtrace in case of errors or crashes.  This feature
 elies on external tools to translate memory addresses into source code locations: On Linux and

@@ -17,7 +17,7 @@ Please visit the page for your OS.
    - [Omnios](./INSTALL_Omnios.md) Compiles. No files are seen at mount point.
    - [OpenIndiana](./INSTALL_OpenIndiana.md)  Works as root, but not as normal user.
 
-For automatically generated files consider installing
+ZIPsFS can automatically convert certain file types. This feature requires the following
   - docker
   - tesseract-ocr-eng
   - imagemagick
@@ -30,7 +30,7 @@ For automatically generated files consider installing
 # Dependencies
 
 ZIPsFS is written in standard C according to the POSIX industry strandard.
-It has been developed on Linux and works on NetBSD, FreeBSD and MacOSX
+It has been developed and tested on Linux and compiles and works on other UNIX like systems including MacOSX.
 
 First install the required libraries and packages.
 

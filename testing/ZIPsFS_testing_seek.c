@@ -56,7 +56,7 @@ void test_seek(long begin,const char *path,const char *bb,const size_t len,const
   assert(fh);
   static int seqn,count_errors;
   printf("#%d Errors: %d begin=%lld\n",seqn++, count_errors, (LLD)begin);
-  assert(begin+TEST_BLOCK<len);
+
   lseek(fh,begin,SEEK_SET);
   char buf[TEST_BLOCK];
   long already=0;
@@ -94,8 +94,12 @@ void *my_thread(void *arg){
     for(int i=imax;--i>=0;){
       long begin;
       if (1){
-        long rand=random();
-        begin=rand*(len-TEST_BLOCK)/RAND_MAX;
+        long rnd=random();
+        begin=rnd*(len-TEST_BLOCK)/(1L<<31);
+        if(begin>=len-TEST_BLOCK){
+          printf("begin too big:  rand: %ld  MAX=%ld  begin: %lld TEST_BLOCK: %d len: %lld \n",rnd, 1L<<31, (LLD)begin,TEST_BLOCK, (LLD)len);
+          begin=len-TEST_BLOCK-1;
+        }
       }else{
         begin=i*(len-TEST_BLOCK)/imax;
       }
@@ -137,7 +141,8 @@ Options:\n\
   if (INFINITE) press_enter();
   struct stat stbuf;
   stat(path,&stbuf);
-  int blksize = (int)stbuf.st_blksize;
+  int blksize =(int)stbuf.st_blksize; // DEBUG_NOW
+
   len=stbuf.st_size;
   if (len<=TEST_BLOCK) { printf(" File len must be much larger than %d\n",TEST_BLOCK); return 1;}
   fprintf(stderr,"path=%s len: %lld blksize=%d   Going mmap() ...\n",path,(LLD)len,blksize);
@@ -149,10 +154,12 @@ Options:\n\
   }
   {
     const int fh=open(path,O_RDONLY);
+    printf("bb=%p  fd=%d\n",bb,fh);
     long already=0;
     while(already<len){
+      printf("going to read blksize: %d already: %lld\n",blksize,(LLD)already);
       const int n=read(fh,bb+already,blksize);
-      //printf("Read n=%d blksize=%d\n",n,blksize);
+      printf("Read n=%d blksize=%d\n",n,blksize);
       if (n<0){
         printf("n<0  %d fh=%d \n",n,fh);
         break;

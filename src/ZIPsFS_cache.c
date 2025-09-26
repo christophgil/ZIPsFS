@@ -8,7 +8,7 @@
 static const char *zinline_cache_vpath_to_zippath(const char *vp,const int vp_l){
   cg_thread_assert_locked(mutex_dircache);
   const char *zip=ht_numkey_get(&ht_zinline_cache_vpath_to_zippath,hash32(vp,vp_l),vp_l);
-  //static int count; if (zip && !count++) log_debug_now("%s vp: %s zip: %s",zip?GREEN_SUCCESS:RED_FAIL,vp,zip);
+  //static int count; if (zip && !count++)log_debug_now("%s vp: %s zip: %s",zip?GREEN_SUCCESS:RED_FAIL,vp,zip);
   if (!zip) return NULL;
   /* validation because we rely on hash only */
   const char *vp_name=vp+cg_last_slash(vp)+1;

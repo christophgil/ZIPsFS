@@ -49,34 +49,40 @@ static bool async_periodically_dircache(struct rootdata *r){
   bool success=false;
   char path[PATH_MAX+1];
   struct stat stbuf={0};
-  *path=0;
-  { /*Pick path from an entry and put in stack variable path */
-    lock_ncancel(mutex_dircache_queue);
-    struct ht_entry *ee=HT_ENTRIES(&r->dircache_queue);
-    RLOOP(i,r->dircache_queue.capacity){
-      if (ee[i].key){
-        cg_strncpy0(path,ee[i].key,MAX_PATHLEN);
-        ht_clear_entry(&r->dircache_queue, ee+i);
-        break;
-      }}
-    unlock_ncancel(mutex_dircache_queue);
-  }
-  if (*path){
-    struct strg strg={0};    strg_init(&strg,path);
-    if (IF1(WITH_STAT_CACHE,stat_from_cache(&stbuf,&strg,r)||)  stat_direct(&stbuf,&strg,r)){
-      struct directory mydir={0}, *dir=&mydir;
-      struct zippath *zpath=directory_init_zpath(dir,NULL);
-      zpath->stat_rp=stbuf;
-      zpath->realpath=zpath_newstr(zpath);
-      zpath_strcat(zpath,path);
-      RP_L()=zpath_commit(zpath);
-      zpath->root=r;
-      zpath->flags|=ZP_ZIP;
-      dir->async_never=true;
-      if ((success=readdir_now(dir))){
-        LOCK_NCANCEL(mutex_dircache,dircache_directory_to_cache(dir));
+
+  while(true){
+    *path=0;
+    { /*Pick path from an entry and put in stack variable path */
+      lock_ncancel(mutex_dircache_queue);
+      struct ht_entry *ee=HT_ENTRIES(&r->dircache_queue);
+      RLOOP(i,r->dircache_queue.capacity){
+        if (ee[i].key){
+          cg_strncpy0(path,ee[i].key,MAX_PATHLEN);
+          ht_clear_entry(&r->dircache_queue, ee+i);
+          break;
+        }}
+      unlock_ncancel(mutex_dircache_queue);
+    }
+    if (!*path) break;
+    //if (*path)
+      {
+      struct strg strg={0};    strg_init(&strg,path);
+      if (IF1(WITH_STAT_CACHE,stat_from_cache(&stbuf,&strg,r)||)  stat_direct(&stbuf,&strg,r)){
+        struct directory mydir={0}, *dir=&mydir;
+        struct zippath *zpath=directory_init_zpath(dir,NULL);
+        zpath->stat_rp=stbuf;
+        zpath->realpath=zpath_newstr(zpath);
+        zpath_strcat(zpath,path);
+        RP_L()=zpath_commit(zpath);
+        zpath->root=r;
+        zpath->flags|=ZP_ZIP;
+        dir->async_never=true;
+        if (readdir_now(dir)){
+          success=true;
+          LOCK_NCANCEL(mutex_dircache,dircache_directory_to_cache(dir));
+        }
+        directory_destroy(dir);
       }
-      directory_destroy(dir);
     }
   }
   return success;
@@ -110,7 +116,7 @@ static void closezip_now(struct async_zipfile *z){
 /* That is the most simple as nothing needs to be closed or destructed */
 static inline bool async_periodically_stat(struct rootdata *r){
   if (!G) return false;
-    assert(r->async_stat_path.s!=NULL);
+  assert(r->async_stat_path.s!=NULL);
   struct stat st=r->async_stat=empty_stat;
   struct strg path=r->async_stat_path;
   SET_PICKED();

@@ -28,7 +28,7 @@
   T(WITH_STAT_CACHE,==1);\
   T(WITH_TRANSIENT_ZIPENTRY_CACHES,==1)
 
-static void check_configuration(const char *mnt){
+static bool check_configuration(const char *mnt){
   char *m=strdup_untracked(mnt);
   cg_str_replace(0,m,0,".charite.de",0,"",0);
   cg_str_replace(0,m,0,"//",2,"/",1);
@@ -86,8 +86,5 @@ static void check_configuration(const char *mnt){
     fprintf(stderr,"The first root-path is an empty string.\n%s\n",EXPLAIN_WRITABLE);
   }
   IF1(WITH_AUTOGEN,if (!cg_is_member_of_group("docker")){ log_warn(HINT_GRP_DOCKER); warn=true;});
-  if (warn && !strstr(_mnt,"/cgille/")){
-    fprintf(stderr,"Press enter\n");
-    cg_getc_tty();
-  }
+  return warn;
 }

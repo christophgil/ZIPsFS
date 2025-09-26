@@ -38,7 +38,7 @@ static bool _stat_from_cache(struct stat *stbuf, const struct strg *path, const 
 static bool stat_from_cache(struct stat *stbuf, const struct strg *path, const struct rootdata *r){
   //if (path)log_entered_function("%s",path->s);
   bool ok=_stat_from_cache(stbuf, path,r);
-  //  if (path)    log_exited_function("%s",path->s);
+  //  if (path)log_exited_function("%s",path->s);
   return ok;
 }
 static void stat_to_cache(const struct stat *stbuf, const struct strg *path){

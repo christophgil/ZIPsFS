@@ -330,18 +330,25 @@ struct directory{
 #define ZP_ZIP            (1<<3)
 #define ZP_DOES_NOT_EXIST (1<<4)
 #define ZP_IS_COMPRESSED  (1<<5)
+#define ZP_FROM_TRANSIENT_CACHE (1<<6)
 
 
 
 #define ZPATH_IS_ZIP() ((zpath->flags&ZP_ZIP)!=0)
 #define ZPATH_ROOT_WRITABLE() (zpath->root && 0!=(zpath->root->writable))
 #define LOG_FILE_STAT() cg_log_file_stat(zpath->realpath,&zpath->stat_rp),log_file_stat(zpath->virtualpath,&zpath->stat_vp)
-#define VP() (zpath->strgs+zpath->virtualpath)
+//#define VP() (zpath->strgs+zpath->virtualpath)
 #define EP() (zpath->strgs+zpath->entry_path)
 #define EP_L() zpath->entry_path_l
 #define VP_L() zpath->virtualpath_l
 #define ZP_RP(zpath) ((zpath)->strgs+(zpath)->realpath)
+#define ZP_VP(zpath) ((zpath)->strgs+(zpath)->virtualpath)
+
 #define RP() ZP_RP(zpath)
+#define VP() ZP_VP(zpath)
+
+//#define RP() ZP_RP(zpath)
+
 #define RP_L() (zpath->realpath_l)
 #define VP0() (zpath->strgs+zpath->virtualpath_without_entry)
 #define VP0_L() zpath->virtualpath_without_entry_l
@@ -469,8 +476,23 @@ struct rootdata{
 ///////////////
 /// Logging ///
 ///////////////
-#define IF_LOG_FLAG_OR(f,or) if (f && _log_flags&(1<<f)||or)
-#define IF_LOG_FLAG(f) if (f && _log_flags&(1<<f))
+
+#if 1
+#define LOG_FLAG_P(f)  (f && _log_flags&(1<<f))
+#else
+// Initiates excessive logging
+#define LOG_FLAG_P(f)  (f && (LOG_OPENDIR|LOG_READ_BLOCK|LOG_STAT|LOG_OPENDIR|LOG_MEMCACHE)&(1<<f))
+#endif
+
+
+
+
+
+
+
+#define IF_LOG_FLAG(f) if (LOG_FLAG_P(f))
+#define IF_LOG_FLAG_OR(f,or) if (LOG_FLAG_P(f)||or)
+
 
 #define LOG_FUSE(path)          IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER)log_entered_function("%s",path)
 #define LOG_FUSE_RES(path,res)  IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER)log_entered_function("%s res:%d",path,res)
@@ -502,3 +524,4 @@ struct memcache{
 #define FILLDIR_STRIP_NET_HEADER (1<<2)
 #define  directory_update_time(success,dir)  root_update_time(ASYNC_READDIR,success,DIR_ROOT(dir))
 #define filler_add_no_dups(filler,buf,name,st,no_dups) {if (ht_only_once(no_dups,name,0)) filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);}
+#define stat_direct(...) _stat_direct(__VA_ARGS__,__func__)

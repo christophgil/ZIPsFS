@@ -293,8 +293,8 @@ static bool cg_startsWith(const char* s,int s_l,const char* e,int e_l){
 }
 
 
-static bool cg_endsWithZip(const char *s, int len){
-  if(!len)len=cg_strlen(s);
+static bool cg_endsWithZip(const char *s, const int len_or_0){
+  const int len=len_or_0?len_or_0:cg_strlen(s);
   return s && ENDSWITHI(s,len,".zip");
 }
 

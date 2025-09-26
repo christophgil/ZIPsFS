@@ -240,18 +240,6 @@ static bool config_readir_no_other_roots(const char *realpath,const int realpath
   return C(.wiff2.Zip) || C(.wiff.Zip) || C(.rawIdx.Zip) || C(.raw.Zip) || C(.d.Zip);
 #undef C
 }
-////////////////////////////
-/// Retry on failure.    ///
-////////////////////////////
-static long config_num_retries_getattr(const char *path, const int path_l, int *sleep_milliseconds){
-  return 1; // FIXME
-  if (_is_tdf_or_tdf_bin(path)){
-    //DIE_DEBUG_NOW("%s",path);
-    *sleep_milliseconds=1000;
-    return 3;
-  }
-  return 1;
-}
 
 
 //////////////////////////////////////////////

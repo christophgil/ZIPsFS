@@ -3,7 +3,7 @@
 Computations often require files from public repositories.
 Files from the internet (http, ftp, https) can be accessed as files using the URL as file name. ZIPsFS takes care of downloading and updating.
 They are immutable and cannot be modified  unintentionally.
-In DOS, a trailing colon is a signature for device names. Therefore, the colon and all slashes in the url need to be replaced by comma.
+In DOS, a trailing colon is a signature for device names. Therefore, the colon and all slashes in the URL need to be replaced by comma.
 Comma  has been chosen as a replacement because it normally does not  occur in URLs. Furthermore, it does not require quoting in UNIX shells.
 
 Example with *mnt/*  denoting the  mountpoint of the ZIPsFS file system:
@@ -21,12 +21,16 @@ Whether the file itself needs updating is decided upon the *Last-Modified* attri
 Additionally, the file is accessible with a file-name containing the data in the header.
 This feature can be conditionally deactivated.
 
+
+This works also when the FUSE file system is accessed remotely  via SMB or NFS.
+However, Windows PCs fail to access these files. This is because files do not exist for Windows, when they are not listed in the file list of the parent.
+
 ## Generation of files using programming language C
 
 By modifying the file *ZIPsFS_configuration_c.c*, users can easily implement
-files where the file content ist generated dynamically using the programming language C.
+files where the file content is generated dynamically using the programming language C.
 
-Here is a pre-defined minimal exampe which explains how it works:
+Here is a predefined minimal example which explains how it works:
 
     <mount point>/example_generated_file/example_generated_file.txt
 
@@ -42,7 +46,7 @@ A common use case for this feature is file conversion. The default rules, define
 - **Image files (OCR):** Extracted text using Optical Character Recognition (OCR).
 - **PDF files:** Extracted ASCII text.
 - **ZIP files:** Consistency check reports, including checksums.
-- **Mass spectrometry files:**  **mgf (Mascot)** and **msML** formats.
+- **Mass spectrometry files:**  **mgf (Mascot)** and **mzML** formats.
 - **wiff files:** Extract ASCII text.
 - **Apache Parquet files:**  **TSV** and **TSV.BZ2** formats.
 
@@ -77,3 +81,15 @@ If the size is underestimated, data may be read incompletely, leading to truncat
 This workaround allows programs to read the file as if it had content,
 even though the size isn’t known in advance.
 However, it may still break software that relies on accurate size reporting for buffering or memory allocation.
+
+Example Fragpipe: Fragpipe is a software to process mass-spectrometry files. Processing
+Thermo-Fisher mass-spectrometry files with the suffix raw, those are converted by Fragpipe into the
+free file format mzML.  Since ZIPsFS can also convert raw files to mzML, we tried to give the
+virtual mzML files as input. Initially, their reported file size is 99,999,999,999 Bytes.  This
+large number was chosen to make sure that the estimated file size is larger than the real yet
+unknown size. Initially Fragpipe attempts to read some bytes from the end of the file.  To determine
+the reading position, it uses the overestimated file size. In this specific case it tried to read at
+file position 99,999,997,952.  ZIPsFS will perform the conversion when serving the first read
+request.  Since the converted mzML file is much smaller than the read position, there will be no
+data and Fragpipe will fail. When however, at least one byte of the mzML files is read to initiate the
+conversion process before Fragpipe is started, computation will succeeds.

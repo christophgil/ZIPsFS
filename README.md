@@ -3,9 +3,9 @@
  - [Installation](./INSTALL.md)
  - [Configuration](./ZIPsFS_configuration.md)
  - [Generated (synthetic) files: Automatic file conversions, Accessing web resources as regular files](./ZIPsFS_generated_files.md)
- - [Improve performance  caching file content and meta data](./ZIPsFS_cache.md)
  - [Logging](ZIPsFS_logs.md)
- - [Fault management of remote upstream file systems](ZIPsFS_fault_management.md)
+ - [Fault management. Timouts for remote upstream file systems. Duplicated remote trees](ZIPsFS_fault_management.md)
+ - [Improve performance  caching file content and meta data](./ZIPsFS_cache.md)
  - [Limitations and Bugs](ZIPsFS_Limitations.md)
  - [See also related sites](ZIPsFS_related_sites.md)
 
@@ -34,7 +34,8 @@ https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unk
 
     ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse-options] mount-point
 
-With a  trailing slash, the folder name is not part of the virtual path.
+With a  trailing slash, the folder name is not part of the virtual path, in accordance with  the trailing slash sematics of many UNIX tools.
+
 
 
 ## Summary

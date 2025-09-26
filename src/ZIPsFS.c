@@ -149,7 +149,7 @@ static char _fWarningPath[2][MAX_PATHLEN+1];
 static float _ucpu_usage,_scpu_usage;/* user and system */
 static int64_t _memcache_bytes_limit=3L*1000*1000*1000;
 static int _unused_int;
-static bool _thread_unblock_ignore_existing_pid, _fuse_started;
+static bool _thread_unblock_ignore_existing_pid, _fuse_started, _isBackground;
 
 static struct rootdata _root[ROOTS]={0}, *_root_writable=NULL;
 
@@ -359,12 +359,11 @@ static void directory_add_file(uint8_t flags,struct directory *dir, int64_t inod
 /// stat ///
 ////////////
 
-static bool stat_direct(struct stat *stbuf,const struct strg *path, const struct rootdata *r){
-  //log_entered_function("%s",path->s);
+static bool _stat_direct(struct stat *stbuf,const struct strg *path, const struct rootdata *r, const char *callerFunc){
+  //static int count;log_entered_function(ANSI_MAGENTA"%s #%d %s"ANSI_RESET,callerFunc,count++,path->s);
   cg_thread_assert_not_locked(mutex_fhandle);
   const char *rp=path->s;
   if (!rp) return false;
-  assert(rp!=NULL);
   assert(*rp);
   const int res=lstat(rp,stbuf);
   LOCK(mutex_fhandle,inc_count_getattr(rp,res?COUNTER_STAT_FAIL:COUNTER_STAT_SUCCESS));
@@ -398,7 +397,8 @@ static bool stat_from_cache_or_direct_or_async(const char *rp, struct stat *stbu
 static void mkSymlinkAfterStartPrepare(){
   if (*_mkSymlinkAfterStart){
     _mkSymlinkAfterStart[cg_pathlen_ignore_trailing_slash(_mkSymlinkAfterStart)]=0;
-    if (*_mkSymlinkAfterStart=='/') fprintf(stderr,RED_WARNING": "ANSI_FG_BLUE"%s"ANSI_RESET" is an absolute path. You might be unable to export the file tree with NFS and Samba. Press Enter to continue anyway!\n",_mkSymlinkAfterStart); cg_getc_tty();
+    if (*_mkSymlinkAfterStart=='/') fprintf(stderr,RED_WARNING": "ANSI_FG_BLUE"%s"ANSI_RESET" is an absolute path. You might be unable to export the file tree with NFS and Samba.\n",_mkSymlinkAfterStart);
+    if (!_isBackground){ fputs("Press Enter to continue anyway!\n",stderr); cg_getc_tty();}
     const int err=cg_symlink_overwrite_atomically(_mnt,_mkSymlinkAfterStart);
     char rp[PATH_MAX+1];
     if (err || !realpath(_mkSymlinkAfterStart,rp)){
@@ -409,7 +409,7 @@ static void mkSymlinkAfterStartPrepare(){
       warning(WARN_MISC,_mkSymlinkAfterStart," not a symlink");
       EXIT(1);
     }else{
-      log_msg(GREEN_SUCCESS"Created symlink %s -->%s\n",_mkSymlinkAfterStart,rp);
+      //log_msg(GREEN_SUCCESS"Created symlink %s -->%s\n",_mkSymlinkAfterStart,rp);
     }
     *_mkSymlinkAfterStart=0;
   }
@@ -433,7 +433,7 @@ static void unblock_update_time(struct rootdata *r, const enum enum_root_thread 
     thread==PTHREAD_MEMCACHE?LOG_INFINITY_LOOP_MEMCACHE:
     thread==PTHREAD_ASYNC?LOG_INFINITY_LOOP_DIRCACHE:
     thread==PTHREAD_MISC?LOG_INFINITY_LOOP_MISC: 0;
-  if (flag) IF_LOG_FLAG(flag) log_verbose("Thread: %s  Root: %s ",PTHREAD_S[thread],rootpath(r));
+  IF_LOG_FLAG(flag) log_verbose("Thread: %s  Root: %s ",PTHREAD_S[thread],rootpath(r));
   while(r->thread_pretend_blocked[thread]) usleep(1000*100);
   atomic_store(r->thread_when_success+thread,time(NULL));
 }
@@ -680,7 +680,6 @@ static void zpath_init(struct zippath *zpath, const char *vp){
 }
 static bool zpath_stat(struct zippath *zpath,struct rootdata *r){
   if (zpath && !zpath->stat_rp.st_ino){
-    //log_entered_function("'%s'  r: '%s'",RP(),r->rootpath);
     if (!stat_from_cache_or_direct_or_async(RP(),&zpath->stat_rp,r)) return false;
     zpath->stat_vp=zpath->stat_rp;
     if (!(zpath->flags&ZP_ZIP)) zpath->stat_vp.st_ino=make_inode(zpath->stat_rp.st_ino,r,0,RP());
@@ -835,32 +834,36 @@ static void *infloop_async(void *arg){
   struct rootdata *r=arg;
   assert(r!=NULL);
   init_infloop(r,PTHREAD_ASYNC);
-  long nanos=ASYNC_SLEEP_USECONDS*1000;
+  long nanos=ASYNC_SLEEP_USECONDS*1000; /* The shorter the higher the responsiveness, but increased CPU usage */
   for(int loop=0; ;loop++){
     cg_nanosleep(nanos);
-    if (nanos<ASYNC_SLEEP_USECONDS*1000) nanos++;
-    bool success=false;
-    IF1(WITH_DIRCACHE, if (!(loop&255)) success|=async_periodically_dircache(r));
+    if (nanos<ASYNC_SLEEP_USECONDS*1000)      nanos++;
+    IF1(WITH_DIRCACHE, if (!(loop&255) && async_periodically_dircache(r)) unblock_update_time(r,PTHREAD_ASYNC));
     if (r->remote){
-      IF1(WITH_TIMEOUT_STAT, if ((success=async_periodically_stat(r))){ nanos=ASYNC_SLEEP_USECONDS*10; unblock_update_time(r,PTHREAD_ASYNC); sched_yield();});
+      /* Reduce waiting when many subsequent request */
+      IF1(WITH_TIMEOUT_STAT, if ((async_periodically_stat(r))){ nanos=MAX(ASYNC_SLEEP_USECONDS*1000L/50,1000*400);  unblock_update_time(r,PTHREAD_ASYNC); sched_yield();});
       if (!(loop&15)){ /* less often */
+        bool success=false;
 #define C(with,fn) IF1(with,if (fn(r)){success=true;});
         C(WITH_TIMEOUT_READDIR,async_periodically_readdir);
-        C(WITH_TIMEOUT_OPENFILE,async_periodically_openfile);
         C(WITH_TIMEOUT_OPENZIP,async_periodically_openzip);
+        C(WITH_TIMEOUT_OPENFILE,async_periodically_openfile);
 #undef C
-        if (!success){
+        if (success){
+          unblock_update_time(r,PTHREAD_ASYNC);
+        }else if (!(loop&255)){
           const time_t diff=ROOT_SUCCESS_SECONDS_AGO(r);
           if (diff>MAX(1,ROOT_RESPONSE_WITHIN_SECONDS/4)){
             IF1(WITH_TESTING_TIMEOUTS,log_verbose("Bfore statvfs %s ",rootpath(r)));
-            if (!(success=!statvfs(rootpath(r),&r->statvfs))) log_verbose(RED_FAIL"statvfs(%s)",rootpath(r));
+            if (statvfs(rootpath(r),&r->statvfs)){
+              log_verbose(RED_FAIL"statvfs(%s)",rootpath(r));
+            }else{
+              unblock_update_time(r,PTHREAD_ASYNC);
+            }
             IF1(WITH_TESTING_TIMEOUTS,log_verbose("After statvfs %s ",rootpath(r)));
           }
         }
       }
-    }
-    if (success){
-      unblock_update_time(r,PTHREAD_ASYNC);
     }
   }
 }
@@ -967,33 +970,25 @@ static bool find_realpath_roots_by_mask(struct zippath *zpath,const long roots){
 static bool find_realpath_any_root(const int opt,struct zippath *zpath,const struct rootdata *onlyThisRoot){
   const char *vp=VP();
   const int vp_l=VP_L(); /* vp_l is 0 for the virtual root */
+  //if (strstr(vp,"PRO3"))log_entered_function("%s",vp);
   const bool path_starts_autogen=false IF1(WITH_AUTOGEN, || (0!=(zpath->flags&ZP_STARTS_AUTOGEN)));
   IF1(WITH_SPECIAL_FILE,if (!onlyThisRoot && find_realpath_special_file(zpath)) return true);
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,const int trans=transient_cache_find_realpath(opt,zpath,vp,vp_l); if (trans) return trans==1);
   const int virtualpath=zpath->virtualpath;
   bool found=false; /* which_roots==01 means only Zero-th root */
-  //  FOR(cut01,0,path_starts_autogen?2:1){
   FOR(cut01,0,2){
     if (cut01 && !path_starts_autogen) continue;
     if (0!=(opt&(cut01?FINDRP_AUTOGEN_CUT_NOT:FINDRP_AUTOGEN_CUT))) continue;
     const long roots=(onlyThisRoot?(1<<rootindex(onlyThisRoot)):-1) & ((path_starts_autogen&&!cut01)?01:search_file_which_roots(vp,vp_l,path_starts_autogen));
     if (!roots && !cut01) continue;
     IF1(WITH_AUTOGEN, if(cut01){ zpath->virtualpath=virtualpath+DIR_AUTOGEN_L; zpath->virtualpath_l=vp_l-DIR_AUTOGEN_L;});
-    int sleep_ms=0;
-    FOR(i,0,cut01?1:config_num_retries_getattr(vp,vp_l,&sleep_ms)){
-      if (i) cg_sleep_ms(sleep_ms,"");
-      if ((found=find_realpath_roots_by_mask(zpath, roots))){
-        if (i) warning(WARN_RETRY,vp,"find_realpath_any_root succeeded on retry %d",i);
-        goto found;
-      }
-
-    }
+    if ((found=find_realpath_roots_by_mask(zpath, roots))) goto found;
   }
   if (found) assert(zpath->realpath!=0);
  found:
   zpath->virtualpath=virtualpath;/*Restore*/
   zpath->virtualpath_l=vp_l;
-  IF1(WITH_TRANSIENT_ZIPENTRY_CACHES, LOCK(mutex_fhandle,transient_cache_store(onlyThisRoot,found?zpath:NULL,vp,vp_l)));
+  IF1(WITH_TRANSIENT_ZIPENTRY_CACHES, if (!onlyThisRoot||found){ LOCK(mutex_fhandle,transient_cache_store(found?zpath:NULL,vp,vp_l);}));
   if (!found && !path_starts_autogen && !onlyThisRoot && !config_not_report_stat_error(vp,vp_l)){
     warning(WARN_STAT|WARN_FLAG_ONCE_PER_PATH,vp,"Not found");
   }
@@ -1430,7 +1425,7 @@ static int _xmp_open(const char *path, struct fuse_file_info *fi){
     found=find_realpath_any_root(0,zpath,NULL);
     IF1(WITH_AUTOGEN, if (found && _realpath_autogen && (zpath->flags&ZP_STARTS_AUTOGEN) && autogen_remove_if_not_up_to_date(zpath)) found=false);
     if (found){
-      if (ENDSWITH(path,path_l,".tdf") || ENDSWITH(path,path_l,".tdf_bin")) log_debug_now("path: %s  RP: %s ZPATH_IS_ZIP:%d Root:%s  ",path,RP(),ZPATH_IS_ZIP(), rootpath(zpath->root));
+      //if (ENDSWITH(path,path_l,".tdf") || ENDSWITH(path,path_l,".tdf_bin")) log_debug_now("path: %s  RP: %s ZPATH_IS_ZIP:%d Root:%s  ",path,RP(),ZPATH_IS_ZIP(), rootpath(zpath->root));
       if (ZPATH_IS_ZIP() IF1(WITH_MEMCACHE,||zpath_advise_cache_in_ram(zpath))){
         while(zpath){
           LOCK(mutex_fhandle, if (fhandle_create(0,handle=next_fh(),zpath)) zpath=NULL); /* zpath is now stored in fHandle */
@@ -1510,11 +1505,13 @@ static bool _xmp_readdir_roots(const bool cut_autogen, const bool from_network_h
       if (ht_only_once(no_dups,r->retain_dirname,r->retain_dirname_l)) filler(buf,r->retain_dirname+1,NULL,0 COMMA_FILL_DIR_PLUS);
       ok=true;
     }else if (find_realpath_any_root(opt|(cut_autogen?FINDRP_AUTOGEN_CUT:FINDRP_AUTOGEN_CUT_NOT),zpath,r)){
+
       opt|=FINDRP_NOT_TRANSIENT_CACHE; /* Transient cache only once */
       filler_readdir(from_network_header?FILLDIR_STRIP_NET_HEADER:0,zpath,buf,filler,no_dups);
       IF1(WITH_AUTOGEN, if (zpath->flags&ZP_STARTS_AUTOGEN) filler_readdir(FILLDIR_AUTOGEN,zpath,buf,filler,no_dups));
       ok=true;
-      if (!cut_autogen && !ENDSWITH(vp,VP_L(),EXT_CONTENT) && config_readir_no_other_roots(RP(),RP_L())) continue;
+      IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,if (zpath->flags&ZP_FROM_TRANSIENT_CACHE){ if (0) DIE_DEBUG_NOW("ZP_FROM_TRANSIENT_CACHE %s",RP()); break;});
+      //      if (!cut_autogen && !ENDSWITH(vp,VP_L(),EXT_CONTENT) && config_readir_no_other_roots(RP(),RP_L())) continue; // DEBUG_NOW
     }
   }
   return ok;
@@ -1831,7 +1828,7 @@ static int xmp_read(const char *path, char *buf, const size_t size, const off_t 
 static int _xmp_read(const char *path, char *buf, const size_t size, const off_t offset,struct fuse_file_info *fi){
   ASSERT(fi!=NULL);
   NORMALIZE_EMPTY_PATH_L(path);
-  if (ENDSWITH(path,path_l,"mzML")) log_entered_function("%s offset %'lld  size %'lld",path,(LLD)offset,(LLD)size);
+  //if (ENDSWITH(path,path_l,"mzML"))log_entered_function("%s offset %'lld  size %'lld",path,(LLD)offset,(LLD)size);
   long fd=fi->fh;
   int nread=0;
   LOCK_N(mutex_fhandle,
@@ -1857,7 +1854,7 @@ static int _xmp_read(const char *path, char *buf, const size_t size, const off_t
 
     IF1(WITH_MEMCACHE,if (d->flags&FHANDLE_FLAG_MEMCACHE_COMPLETE){ /*_fhandle_busy*/
         //log_debug_now("Going memcache_read: %lld +%lld",(LLD)offset,(LLD)size);
-        LOCK(mutex_fhandle,nread=memcache_read(buf,d,offset,offset+size)); /* log_debug_now("memcache_read: %lld",(LLD)nread);*/ goto done_d; }); /*_fhandle_busy*/ // CPPCHECK-SUPPRESS [unreadVariable]
+        LOCK(mutex_fhandle,nread=memcache_read(buf,d,offset,offset+size)); goto done_d; }); /*_fhandle_busy*/ // CPPCHECK-SUPPRESS [unreadVariable]
     // resourceLeak
     assert(d->is_busy>=0);
     {
@@ -1973,12 +1970,11 @@ int main(const int argc,const char *argv[]){
   //  IF1(WITH_FUSE_3,S(lseek));
 #undef S
   static const struct option l_option[]={{"help",0,NULL,'h'}, {"version",0,NULL,'V'}, {NULL,0,NULL,0}};
-  bool isBackground=false;
   for(int c;(c=getopt_long(argc,(char**)argv,"+bqT:nkhVs:c:l:L:",l_option,NULL))!=-1;){  /* The initial + prevents permutation of argv */
     switch(c){
     case 'V': exit(0);break;
     case 'T': cg_print_stacktrace_test(atoi(optarg)); exit_ZIPsFS();break;
-    case 'b': isBackground=true; break;
+    case 'b': _isBackground=true; break;
     case 'q': _logIsSilent=true; break;
     case 'k': _killOnError=true; break;
     case 's': cg_strncpy0(_mkSymlinkAfterStart,optarg,MAX_PATHLEN); break;
@@ -1999,7 +1995,7 @@ int main(const int argc,const char *argv[]){
   }
   if (!getuid() || !geteuid()){
     log_strg("Running ZIPsFS as root opens unacceptable security holes.\n");
-    if (isBackground) DIE("It is only allowed in foreground mode  with option -f.");
+    if (_isBackground) DIE("It is only allowed in foreground mode  with option -f.");
     fprintf(stderr,"Do you accept the risks [Enter / Ctrl-C] ?\n");cg_getc_tty();
   }
   if (!colon){ log_error("No colon ':'  found in parameter list\n"); suggest_help(); return 1;}
@@ -2010,8 +2006,8 @@ int main(const int argc,const char *argv[]){
   {
     struct stat st;
     if (PROFILED(stat)(_mnt,&st)){
-      if (isBackground) DIE("Directory does not exist: %s",_mnt);
-      fprintf(stderr,"Create non-existing folder %s  [Enter / Ctrl-C] ?\n",_mnt);
+      if (_isBackground) DIE("Directory does not exist: %s",_mnt);
+      fprintf(stderr,"Going to create non-existing folder %s  [Enter / Ctrl-C] ?\n",_mnt);
       cg_getc_tty();
       cg_recursive_mkdir(_mnt);
     }else{
@@ -2084,10 +2080,20 @@ int main(const int argc,const char *argv[]){
   }/* Loop roots */
   log_msg("\n\nMount point: "ANSI_FG_BLUE"'%s'"ANSI_RESET"\n\n"ANSI_INVERSE"Roots:"ANSI_RESET"\n",_mnt);
   fprintf(stderr,ANSI_UNDERLINE"No\tPath\tType\tFilesystem-Number\tFilesystem-ID\tRetained directory if root-path is not ending with slash"ANSI_RESET"\n");
+  bool has_retained=false;
   foreach_root(r){
     fprintf(stderr,"%d\t%s\t%d\t%lx\t%s\t%s\n",1+rootindex(r),rootpath(r),r->seq_fsid,r->f_fsid,!cg_strlen(rootpath(r))?"":r->remote?"Remote":(r->writable)?"Writable":"Local",r->retain_dirname);
+    has_retained|=cg_strlen(r->retain_dirname);
   }
   fputc('\n',stderr);
+  if (has_retained){
+    fprintf(stderr,ANSI_UNDERLINE"Note on retained directory names:" ANSI_RESET "\n"
+            "If upstream file paths are not given with a trailing slash then\n"
+            "the last path component will be part of the virtual path.\n"
+            "This is consistent with the trailing slash sematics of UNIX tools like rsync, scp and cp.\n\n");
+
+
+  }
   { /* Storing information per file type for the entire run time */
     mstore_set_mutex(mutex_fhandle,mstore_init(&mstore_persistent,"persistent",0x10000));
     ht_set_mutex(mutex_fhandle,ht_init_interner(&ht_intern_fileext,"ht_intern_fileext",8,4096));
@@ -2098,9 +2104,9 @@ int main(const int argc,const char *argv[]){
   IF1(WITH_ZIPINLINE_CACHE, ht_set_mutex(mutex_dircache,ht_init(&ht_zinline_cache_vpath_to_zippath,"zinline_cache_vpath_to_zippath",HT_FLAG_NUMKEY|16)));
   IF1(WITH_STAT_CACHE,ht_set_mutex(mutex_dircache,ht_init(&stat_ht,"stat",16)));
   if (!_root_n){ log_error("Missing root directories\n");return 1;}
-  check_configuration(argv[argc-1]);
+  if (check_configuration(argv[argc-1]) && !strstr(_mnt,"/cgille/") && !_isBackground){ fprintf(stderr,"Press enter\n"); cg_getc_tty();}
   mkSymlinkAfterStartPrepare();
-  if (isBackground)  _logIsSilent=_logIsSilentFailed=_logIsSilentWarn=_logIsSilentError=_cg_is_none_interactive=true;
+  if (_isBackground)  _logIsSilent=_logIsSilentFailed=_logIsSilentWarn=_logIsSilentError=_cg_is_none_interactive=true;
   {
     int misc_started=0;
     foreach_root(r){
@@ -2119,7 +2125,7 @@ int main(const int argc,const char *argv[]){
   log_msg("Running %s with PID %d. Going to fuse_main() ...\n",argv[0],_pid);
   cg_free(COUNT_MALLOC_TESTING,cg_malloc(COUNT_MALLOC_TESTING,10));
   _fuse_argv[_fuse_argc++]="";
-  if (!isBackground) _fuse_argv[_fuse_argc++]="-f";
+  if (!_isBackground) _fuse_argv[_fuse_argc++]="-f";
   FOR(i,colon+1,argc) _fuse_argv[_fuse_argc++]=argv[i];
   const int fuse_stat=fuse_main(_fuse_argc,(char**)_fuse_argv,&xmp_oper,NULL);
   _fuse_started=true;

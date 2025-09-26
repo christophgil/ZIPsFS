@@ -234,8 +234,8 @@ enum enum_validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHA
 
 #define LASTCHAR(x) x[sizeof(x)-2]
 #define STRLEN(ending) ((int)sizeof(ending)-1)
-#define ENDSWITH(s,slen,ending)  ((slen>=STRLEN(ending)) && s[slen-1]==LASTCHAR(ending) && (!memcmp(s+slen-STRLEN(ending),ending,STRLEN(ending))))
-#define ENDSWITHI(s,slen,ending) ((slen>=STRLEN(ending)) && (s[slen-1]|32)==(32|LASTCHAR(ending)) && (!strcasecmp(s+slen-STRLEN(ending),ending)))
+#define ENDSWITH(s,s_l,ending)  (((s_l)>=STRLEN(ending)) && s[(s_l)-1]==LASTCHAR(ending) && (!memcmp(s+(s_l)-STRLEN(ending),ending,STRLEN(ending))))
+#define ENDSWITHI(s,s_l,ending) (((s_l)>=STRLEN(ending)) && (s[(s_l)-1]|32)==(32|LASTCHAR(ending)) && (!strcasecmp(s+(s_l)-STRLEN(ending),ending)))
 
 
 #define STARTSWITH(s,pfx) (!strncmp(s,pfx,STRLEN(pfx)))

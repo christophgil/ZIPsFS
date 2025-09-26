@@ -124,6 +124,9 @@
 #define WITH_TIMEOUT_OPENFILE 1
 #define WITH_TIMEOUT_OPENZIP  1
 #define WITH_CANCEL_BLOCKED_THREADS 0
+
+
+#define ASYNC_SLEEP_USECONDS 5000    /* Sleep microseconds after checking again. Too low values increase idle CPU consumption.  Related: WITH_TIMEOUT_xxxx  DEBUG_NOW */
 ////////////
 /// Time ///
 ////////////
@@ -154,7 +157,7 @@
 #define MEMCACHE_TIMEOUT_SECONDS 30
 #endif
 
-#define ASYNC_SLEEP_USECONDS 5000    /* Sleep microseconds after checking again. Too low values increase idle CPU consumption.  Related: WITH_TIMEOUT_xxxx  DEBUG_NOW */
+
 
 
 
