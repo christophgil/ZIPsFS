@@ -53,7 +53,9 @@ However, this behavior can be customized using filename-based rules. Extensive c
 ZIPsFS includes specialized features like automatic file conversions and performance optimizations tailored for efficiently storing and accessing large-scale mass spectrometry data.
 
 
-## Example
+## Mini tutorial
+
+   Please [Install](./INSTALL.md)  ZIPsFS.
 
 
 ### First create some example files
