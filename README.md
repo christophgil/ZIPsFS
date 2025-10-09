@@ -104,8 +104,8 @@ Make sure the UNIX tool curl is installed. Note that "//:" in the URL is replace
     less  ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
 
 
-DESCRIPTION
-===========
+# DESCRIPTION
+
 
 
 ## ZIPsFS is a Union / overlay file system
@@ -186,8 +186,8 @@ Specifies a limit for the cache.  For example *-l  8G* would limit the size of t
  Execution in background (Not recommended). We recommend running ZIPsFS in foreground in *tmux*.
 
 
-FUSE Options
-------------
+### FUSE Options
+
 
 Options for the FUSE system  come after the **colon** in the command line.
 
@@ -199,8 +199,8 @@ Other users are granted access.
 
 
 
-Project status
-==============
+# Project status
+
 
 Author: Christoph Gille
 
