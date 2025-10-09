@@ -2,7 +2,7 @@
 
     pkg_add -u zip unzip libzip fuse-unionfs perfuse bash wget tmux lynx
 
-#  Compile ZIPsFS
+##  Compile ZIPsFS
 
 To compile ZIPsFS, run
 

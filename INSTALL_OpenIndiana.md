@@ -10,7 +10,7 @@ pkg install tmux fuse libzip build-essential
 
 
 
-#  Compile ZIPsFS
+##  Compile ZIPsFS
 
 To compile ZIPsFS, run
 

@@ -46,7 +46,7 @@ If not then run
 
 
 
-#  Compile ZIPsFS
+##  Compile ZIPsFS
 
 To compile ZIPsFS, run
 

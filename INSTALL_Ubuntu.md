@@ -10,7 +10,7 @@ or
 
     apt-get install clang
 
-#  Compile ZIPsFS
+##  Compile ZIPsFS
 
 To compile ZIPsFS, run
 

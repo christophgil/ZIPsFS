@@ -45,7 +45,7 @@ First install the required libraries and packages.
 
 
 
-#  Compile ZIPsFS
+##  Compile ZIPsFS
 
 To compile ZIPsFS, run
 

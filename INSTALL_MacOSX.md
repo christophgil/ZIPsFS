@@ -36,7 +36,7 @@ In another terminal check whether you see the content of the home directory at t
 
 
 
-#  Compile ZIPsFS
+##  Compile ZIPsFS
 
 To compile ZIPsFS, run
 
