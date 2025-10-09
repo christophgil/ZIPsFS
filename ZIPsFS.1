@@ -21,14 +21,14 @@
 .PP
 \f[B]ZIPsFS\f[R] - FUSE-based overlay union file system expanding ZIP
 files
-.SS SYNOPSIS
+.SH SYNOPSIS
 .IP
 .nf
 \f[C]
 ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse-options] mount-point
 \f[R]
 .fi
-.SS Description
+.SH Summary
 .PP
 ZIPsFS functions as a \f[B]union or overlay\f[R] file system, merging
 multiple file structures into a unified directory.
@@ -53,7 +53,7 @@ conversions\f[R] and performance optimizations tailored for efficiently
 storing and accessing \f[B]large-scale mass spectrometry\f[R] data.
 It has a programming interface to create synthetic file content
 programmatically.
-.SS Mini tutorial
+.SH Mini tutorial
 .PP
 Please Install ZIPsFS.
 .SS First create some example files
@@ -85,12 +85,12 @@ zip --fifo $b3/20250131_this_is_a_mass_spectrometry_folder.d.Zip   <(seq 10)
 .fi
 .SS Start ZIPsFS
 .PP
-It is recommended to start ZIPsFS in tmux.
+In production, it is recommended to start ZIPsFS in \f[I]tmux\f[R].
 For testing, just use your regular command line.
 .IP
 .nf
 \f[C]
-ZIPsFS   $b1 $b2 $b3 $b4 : -o allow_other  $mnt
+ZIPsFS   $b1 $b2 $b3 $b4  :  -o allow_other  $mnt
 \f[R]
 .fi
 .SS Browse the virtual file tree
@@ -150,14 +150,12 @@ tree - e.g.,
 in the example setup.
 If a file exists in multiple source locations, the version from the
 leftmost source (the first one listed) takes precedence.
-To make the file system read-only, you can specify an empty string
-(\[lq]\[lq]) as the first source.
-This disables file creation and modification and automatic virtual file
-generation.
+With an empty string as the first source, the ZIPsFS file system
+read-only and file creation and modification is disabled.
 .PP
 The physical file path, i.e., the actual storage location of a file, can
-be retrieved from a special metadata file created by appending
-\f[V]\[at]SOURCE.TXT\f[R] to the filename.
+be retrieved from a file formed by appending \f[V]\[at]SOURCE.TXT\f[R]
+to the filename.
 .PP
 For example, to determine the real location of:
 .IP
@@ -185,9 +183,10 @@ use cases in Mass Spectrometry Compatibility:
 For ZIP files whose names start with a year and end with
 \f[I].d.Zip\f[R], the virtual folder will instead end with \f[I].d\f[R].
 .IP \[bu] 2
-Flat File Display: For some mass spectrometry formats where files are
-not organized into subfolders within the ZIP archive, the contents are
-shown directly in the file list, rather than as a nested folder.
+Flat File Display: For Sciex instruments, each mass spectrometry record
+is stored in a group of files which are not organized in subfolders.
+When the respective archived ZIP files are virtually expanded, the ZIP
+entries of all ZIP files in the folder need to form a flat file list.
 .SS ZIPsFS Options
 .PP
 \f[B]-h\f[R]
@@ -254,15 +253,12 @@ Specifies a limit for the cache.
 For example \f[I]-l 8G\f[R] would limit the size of the cache to 8
 Gigabyte.
 .PP
-\f[B]-b\f[R] Run in background
+\f[B]-b\f[R] Execution in background (Not recommended).
+We recommend running ZIPsFS in foreground in \f[I]tmux\f[R].
 .SS FUSE Options
 .PP
-These come after the colon in the command line.
-.PP
-\f[B]-s\f[R]
-.PP
-Disable multi-threaded operation.
-This could rescue ZIPsFS in case of threading related bugs.
+Options for the FUSE system come after the \f[B]colon\f[R] in the
+command line.
 .PP
 \f[B]-o \f[BI]comma separated Options\f[B]\f[R]
 .PP

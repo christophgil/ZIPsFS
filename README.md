@@ -27,13 +27,13 @@ https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unk
 -->
 
 
-## SYNOPSIS
+# SYNOPSIS
 
 
     ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse-options] mount-point
 
 
-## Description
+# Summary
 
 
 ZIPsFS functions as a **union or overlay** file system, merging multiple file structures into a unified directory.
@@ -48,7 +48,7 @@ With a trailing slash, the folder name is not part of the virtual path, in accor
 ZIPsFS includes specialized features like **automatic file conversions** and performance optimizations tailored for efficiently storing and accessing **large-scale mass spectrometry** data.
 It has a programming interface to create synthetic file content programmatically.
 
-## Mini tutorial
+# Mini tutorial
 
    Please [Install](./INSTALL.md)  ZIPsFS.
 
@@ -76,9 +76,9 @@ Virtual file paths in that branch will start with *mount point*``/branch3/``.
 
 
 ### Start ZIPsFS
-It is recommended to start ZIPsFS in tmux. For testing, just use your regular command line.
+In production, it is recommended to start ZIPsFS in *tmux*. For testing, just use your regular command line.
 
-    ZIPsFS   $b1 $b2 $b3 $b4 : -o allow_other  $mnt
+    ZIPsFS   $b1 $b2 $b3 $b4  :  -o allow_other  $mnt
 
 ### Browse the virtual file tree
 
@@ -118,10 +118,10 @@ When files are created or modified, they are stored in the first file tree - e.g
 
 in the example setup.
 If a file exists in multiple source locations, the version from the leftmost source (the first one listed) takes precedence.
-To make the file system read-only, you can specify an empty string ("") as the first source. This disables file creation and modification and automatic virtual file generation.
+With an empty string as the first source,  the ZIPsFS file system read-only and file creation and modification is disabled.
 
-The physical file path, i.e., the actual storage location of a file, can be retrieved from a special
-metadata file created by appending ``@SOURCE.TXT`` to the filename.
+The physical file path, i.e., the actual storage location of a file, can be retrieved from a
+file formed by appending ``@SOURCE.TXT`` to the filename.
 
 For example, to determine the real location of:
 
@@ -142,9 +142,8 @@ The default configuration includes a few exceptions tailored to specific use cas
   - For ZIP files whose names start with a year and end with *.d.Zip*, the virtual folder will instead
     end with *.d*.
 
-  - Flat File Display: For some mass spectrometry formats where files are not organized into
-    subfolders within the ZIP archive, the contents are shown directly in the file list, rather than
-    as a nested folder.
+  - Flat File Display: For  Sciex instruments, each mass spectrometry record  is stored in a group of files which are not organized in
+    subfolders. When the respective archived ZIP files are virtually expanded, the ZIP entries  of all ZIP files in the folder need to form a flat file list.
 
 
 ## ZIPsFS Options
@@ -184,17 +183,13 @@ Policy for ZIP entries  cached in RAM.
 Specifies a limit for the cache.  For example *-l  8G* would limit the size of the cache to 8 Gigabyte.
 
 **-b**
- Run in background
+ Execution in background (Not recommended). We recommend running ZIPsFS in foreground in *tmux*.
 
 
 FUSE Options
 ------------
 
-These come after the colon in the command line.
-
-**-s**
-
-Disable multi-threaded operation. This could rescue ZIPsFS in case of threading related bugs.
+Options for the FUSE system  come after the **colon** in the command line.
 
 **-o *comma separated Options***
 
