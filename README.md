@@ -55,12 +55,13 @@ It has a programming interface to create synthetic file content programmatically
 
 ### First create some example files
 
+Without trailing slash, the folder name will be retained in the virtual path. This is the case for ``branch3``.
+Virtual file paths in that branch will start with *<mount point>*``/branch3/``.
+
     b1=~/test/ZIPsFS/writable/
     b2=~/test/ZIPsFS/branch1/
     b3=~/test/ZIPsFS/branch2/
     b4=~/test/ZIPsFS/branch3
-
-Without trailing slash, the folder name will be retained in the virtual path. This is the case for *branch3*.  Virtual file paths in that branch will start with *<mount point>/branch3/*.
 
     mnt=~/test/ZIPsFS/mnt
 

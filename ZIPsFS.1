@@ -57,6 +57,12 @@ programmatically.
 .PP
 Please Install ZIPsFS.
 .SS First create some example files
+.PP
+Without trailing slash, the folder name will be retained in the virtual
+path.
+This is the case for \f[V]branch3\f[R].
+Virtual file paths in that branch will start with
+\f[I]\f[R]\f[V]/branch3/\f[R].
 .IP
 .nf
 \f[C]
@@ -64,16 +70,7 @@ b1=\[ti]/test/ZIPsFS/writable/
 b2=\[ti]/test/ZIPsFS/branch1/
 b3=\[ti]/test/ZIPsFS/branch2/
 b4=\[ti]/test/ZIPsFS/branch3
-\f[R]
-.fi
-.PP
-Without trailing slash, the folder name will be retained in the virtual
-path.
-This is the case for \f[I]branch3\f[R].
-Virtual file paths in that branch will start with \f[I]/branch3/\f[R].
-.IP
-.nf
-\f[C]
+
 mnt=\[ti]/test/ZIPsFS/mnt
 
 mkdir -p $b1 $b2 $b3 $b4 $mnt
