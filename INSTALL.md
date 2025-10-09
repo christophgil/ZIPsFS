@@ -29,7 +29,7 @@ ZIPsFS can automatically convert certain file types. This feature requires the f
 If your OS is not listed above, continue with the generic instructions here.
 
 
-# Dependencies
+## Dependencies
 
 ZIPsFS is written in standard C according to the POSIX industry strandard.
 It has been developed and tested on Linux and compiles and works on other UNIX like systems including MacOSX.
@@ -52,13 +52,13 @@ To compile ZIPsFS, run
      ./ZIPsFS.compile.sh
 
 
-# Testing the installed ZIPsFS
+## Testing the installed ZIPsFS
 
     src/ZIPsFS_testing.sh  <Path to ZIPsFS executable>
 
 
 
-# TroubleShooting
+## TroubleShooting
 
 
 Are the shared libraries found on the system?
