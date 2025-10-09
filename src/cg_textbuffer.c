@@ -278,38 +278,45 @@ static int exec_on_file(const enum enum_exec_on_file type, char *output, const i
   struct textbuffer b={0};
   const char *cmd[9];
   int i=0, skipLines=0;
-  bool trim=true;
+  bool trim_to_last_spc=false, trim=true;
   switch(type){
-  case EXECF_SEQ: C("seq"); C("-s"); C(" "); C("20"); break;
-  case EXECF_MOUNTPOINT_USING_DF: skipLines=1; C("df"); C("--output=target"); C(path); break;
+  case EXECF_MOUNTPOINT_USING_DF: trim_to_last_spc=1; C("df"); C(path); break;
   case EXECF_MOUNTPOINT_USING_FINDMNT: C("findmnt"); C("-n"); C("-o"); C("TARGET"); C("--target"); C(path); break;
   default: return -1;
   }
   C(NULL);
 #undef C
+#define T()  if (trim){ while (len && isspace(output[len-1])) len--; output[len]=0;}
   textbuffer_reset(&b);
   b.read_bufsize=1024;
   textbuffer_from_exec_output(0,&b,cmd,NULL,"/home/cgille/test/out_err.txt");
   //  fprintf(stderr," Read %lld bytes \n",(LLD)textbuffer_length(&b));
   int len=textbuffer_copy_to(&b,0,output_max,output);
   textbuffer_destroy(&b);
+  char *src=output;
+  T();
   if(skipLines){
-    char *src=output;
     while(skipLines--){
       if (!(src=strchr(src,'\n'))){ *output=0;  return -1;}
       src++;
     }
+  }
+  T();
+  if (trim_to_last_spc){
+    char *spc=strrchr(output,' ');
+    if (spc) src=spc+1;
+  }
+  if (src){
     len-=(src-output);
     char *dst=output;
     while ((*dst++=*src++));
   }
-  if (trim){
-    while (len && isspace(output[len-1])) len--;
-  }
+  T();
   output[len]=0;
+  if ((type==EXECF_MOUNTPOINT_USING_DF || type==EXECF_MOUNTPOINT_USING_FINDMNT) && *output!='/') len=*output=0;
   return len;
 }
-
+#undef T
 
 #endif // cg_textbuffer_dot_c
 #if __INCLUDE_LEVEL__ == 0 && ! defined(__cppcheck__)
@@ -344,14 +351,12 @@ static void test_write_bytes_block(const int fd,const struct textbuffer *b){
 #undef BUF
 }
 static void test_exec(void){
-      FOR(i,0,EXECF_NUM){
-      char output[4444]={0};
-      exec_on_file(i,output,sizeof(output)-1,"/etc/fstab");
-      printf("output='%s';\n",output);
-    }
+  FOR(i,0,EXECF_NUM){
+    char output[4444]={0};
+    exec_on_file(i,output,sizeof(output)-1,"/etc/fstab");
+    printf("output='%s';\n",output);
+  }
 }
-
-
 
 static void _argc_n(const int n, const int argc){
   if (argc!=n+1){
@@ -362,7 +367,6 @@ static void _argc_n(const int n, const int argc){
 static void _test_write_file(int argc,  char *argv[]){
   bool dup=false;
   struct textbuffer b={0};
-
   FOR(i,1,argc){
     const char *txt=argv[i];
     textbuffer_add_segment(dup?0:TXTBUFSGMT_NO_FREE,&b,dup?strdup_untracked(txt):txt,strlen(txt));

@@ -41,7 +41,7 @@ With a trailing slash, the folder name is not part of the virtual path, in accor
 
 
 
-## Summary
+## Description
 
 
 ZIPsFS functions as a union or overlay file system, merging multiple file structures into a unified directory.
@@ -66,7 +66,7 @@ It has a programming interface to create synthetic file content programmatically
     b3=~/test/ZIPsFS/branch2/
     b4=~/test/ZIPsFS/branch3
 
-Without trailing slash, the folder name will be retained in the virtual path. This is the case for ~branch3~.  Virtual file paths in that branch will start with ~<mount point>/branch3/~.
+Without trailing slash, the folder name will be retained in the virtual path. This is the case for *branch3*.  Virtual file paths in that branch will start with *<mount point>/branch3/*.
 
     mnt=~/test/ZIPsFS/mnt
 

@@ -1892,7 +1892,7 @@ static int _xmp_read(const char *path, char *buf, const size_t size, const off_t
     //log_debug_now("d->memcache: %p d->memcache->txtbuf: %p   flag:%d",d->memcache, (!d->memcache?NULL:d->memcache->txtbuf),(d->flags&FHANDLE_FLAG_WITH_MEMCACHE));
     LOCK_N(mutex_fhandle, const char *status=IF01(WITH_MEMCACHE,"!WITH_MEMCACHE",MEMCACHE_STATUS_S[memcache_get_status(d)]); if (nread>0) d->n_read+=nread);
     if (nread<0 && !config_not_report_stat_error(path,path_l)){
-      warning(WARN_READ|WARN_FLAG_ONCE_PER_PATH,path,"nread<0:  d=%p  off=%ld size=%zu  nread=%d  n_read=%llu  memcache_status:%s"ANSI_RESET,d,offset,size,nread,d->n_read,status);
+      warning(WARN_READ|WARN_FLAG_ONCE_PER_PATH,path,"nread<0:  d=%p  off=%ld size=%lld  nread=%d  n_read=%llu  memcache_status:%s"ANSI_RESET,d,offset,(LLD)size,nread,d->n_read,status);
     }
   }
  done_d:
@@ -2195,3 +2195,4 @@ int main(const int argc,const char *argv[]){
 // by_example_c_code  mmap MAP_FAILED  Timeout ASYNC_STAT _assert_validchars_direntries
 // character invalide 202411
 // transient_cache_store at /home/cgille/git_projects/ZIPsFS/src/ZIPsFS_transient_zipentry_cache.c:135
+// zu

@@ -134,11 +134,10 @@ static void _directory_debug_filenames(const char *func,const int line,const cha
           char encoded[PATH_MAX];
       const bool invalid=len!=url_encode(encoded,PATH_MAX,n);
       //        fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'zu\t%s\t%u\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), Nth0(d->fsize,i),encoded,hash_value_strg(n));
-      fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'zu\t%s\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), Nth0(d->fsize,i),encoded);
+      fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'lld\t%s\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), (LLD)Nth0(d->fsize,i),encoded);
     }
   }
 }
-
 
 
 

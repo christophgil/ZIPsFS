@@ -33,7 +33,7 @@ Shared libs libzip and libfuse were not found.  This could be fixed with
 
 ### Problems with FUSE
 
-One might first check whether FUSE works by testing  fuse-unionfs. The following will mount /etc onto ~/mnt/test-unionfs.
+One might first check whether FUSE works by testing  fuse-unionfs. The following will mount */etc* onto *~/mnt/test-unionfs*.
 This test may be performed as a normal user or as ROOT.
 
    m=~/mnt/test-unionfs/
