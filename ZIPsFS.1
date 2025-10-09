@@ -38,8 +38,8 @@ Any newly created or modified files are stored in the first file
 location, while all other sources remain read-only, ensuring that their
 files are never altered.
 ZIPsFS treats \f[B]ZIP files as expandable folders\f[R], typically
-naming them by appending \[lq]\f[V].Contents/\f[R]\[rq] to the original
-ZIP file name.
+naming them by appending \f[V].Contents/\f[R] to the original ZIP file
+name.
 However, this behavior can be customized using filename-based rules.
 Extensive configuration options allow adjustments.
 Changes can be applied without disrupting the file system.
@@ -119,7 +119,7 @@ cat \[ti]/test/ZIPsFS/mnt/my_file.txt
 .fi
 .PP
 To get the real storage place of the file, append
-\f[B]\f[BI]\[at]SOURCE.TXT\f[B]\f[R]
+\f[V]\[at]SOURCE.TXT\f[R]
 .IP
 .nf
 \f[C]
@@ -160,7 +160,7 @@ generation.
 .PP
 The physical file path, i.e., the actual storage location of a file, can
 be retrieved from a special metadata file created by appending
-\f[B]\f[BI]\[at]SOURCE.TXT\f[B]\f[R] to the filename.
+\f[V]\[at]SOURCE.TXT\f[R] to the filename.
 .PP
 For example, to determine the real location of:
 .IP
@@ -180,7 +180,7 @@ cat \[ti]/test/ZIPsFS/mnt/1.txt\[at]SOURCE.TXT
 .SS ZIPsFS expands ZIP file entries
 .PP
 By default, ZIP files are displayed as folders with the suffix
-\f[B]\f[BI].Content\f[B]\f[R].
+\f[V].Content\f[R].
 This behavior can be customized.
 The default configuration includes a few exceptions tailored to specific
 use cases in Mass Spectrometry Compatibility:

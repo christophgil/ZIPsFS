@@ -39,7 +39,7 @@ https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unk
 ZIPsFS functions as a **union or overlay** file system, merging multiple file structures into a unified directory.
 This directory presents the underlying files and subdirectories from the specified sources (branches) as a single, cohesive structure.
 Any newly created or modified files are stored in the first file location, while all other sources remain read-only, ensuring that their files are never altered.
-ZIPsFS treats **ZIP files as expandable folders**, typically naming them by appending "``.Contents/``" to the original ZIP file name.
+ZIPsFS treats **ZIP files as expandable folders**, typically naming them by appending ``.Contents/`` to the original ZIP file name.
 However, this behavior can be customized using filename-based rules. Extensive configuration options allow adjustments. Changes can be applied without disrupting the file system.
 
 ZIPsFS is best run in a **tmux** session.
@@ -92,7 +92,7 @@ The first file tree stores files. All others are read-only.
 
     cat ~/test/ZIPsFS/mnt/my_file.txt
 
-To get the real storage place of the file, append ***@SOURCE.TXT***
+To get the real storage place of the file, append ``@SOURCE.TXT``
 
     cat ~/test/ZIPsFS/mnt/my_file.txt@SOURCE.TXT
 
@@ -120,7 +120,7 @@ If a file exists in multiple source locations, the version from the leftmost sou
 To make the file system read-only, you can specify an empty string ("") as the first source. This disables file creation and modification and automatic virtual file generation.
 
 The physical file path, i.e., the actual storage location of a file, can be retrieved from a special
-metadata file created by appending ***@SOURCE.TXT*** to the filename.
+metadata file created by appending ``@SOURCE.TXT`` to the filename.
 
 For example, to determine the real location of:
 
@@ -134,7 +134,7 @@ Run the following command:
 
 ## ZIPsFS expands ZIP file entries
 
-By default, ZIP files are displayed as folders with the suffix ***.Content***.
+By default, ZIP files are displayed as folders with the suffix ``.Content``.
 This behavior can be customized.
 The default configuration includes a few exceptions tailored to specific use cases in Mass Spectrometry Compatibility:
 
