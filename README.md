@@ -27,31 +27,25 @@ https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unk
 -->
 
 
-
-
 ## SYNOPSIS
 
 
-
     ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse-options] mount-point
-
-ZIPsFS is best run in a tmux session.
-With a trailing slash, the folder name is not part of the virtual path, in accordance with  the trailing slash semantics of many UNIX tools.
-
-
 
 
 ## Description
 
 
-ZIPsFS functions as a union or overlay file system, merging multiple file structures into a unified directory.
+ZIPsFS functions as a **union or overlay** file system, merging multiple file structures into a unified directory.
 This directory presents the underlying files and subdirectories from the specified sources (branches) as a single, cohesive structure.
 Any newly created or modified files are stored in the first file location, while all other sources remain read-only, ensuring that their files are never altered.
-ZIPsFS treats ZIP files as expandable folders, typically naming them by appending ".Contents/" to the original ZIP file name.
+ZIPsFS treats **ZIP files as expandable folders**, typically naming them by appending "``.Contents/``" to the original ZIP file name.
 However, this behavior can be customized using filename-based rules. Extensive configuration options allow adjustments. Changes can be applied without disrupting the file system.
 
+ZIPsFS is best run in a **tmux** session.
+With a trailing slash, the folder name is not part of the virtual path, in accordance with  the trailing slash semantics of many UNIX tools.
 
-ZIPsFS includes specialized features like automatic file conversions and performance optimizations tailored for efficiently storing and accessing large-scale mass spectrometry data.
+ZIPsFS includes specialized features like **automatic file conversions** and performance optimizations tailored for efficiently storing and accessing **large-scale mass spectrometry** data.
 It has a programming interface to create synthetic file content programmatically.
 
 ## Mini tutorial

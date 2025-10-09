@@ -28,28 +28,29 @@ files
 ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse-options] mount-point
 \f[R]
 .fi
-.PP
-ZIPsFS is best run in a tmux session.
-With a trailing slash, the folder name is not part of the virtual path,
-in accordance with the trailing slash semantics of many UNIX tools.
 .SS Description
 .PP
-ZIPsFS functions as a union or overlay file system, merging multiple
-file structures into a unified directory.
+ZIPsFS functions as a \f[B]union or overlay\f[R] file system, merging
+multiple file structures into a unified directory.
 This directory presents the underlying files and subdirectories from the
 specified sources (branches) as a single, cohesive structure.
 Any newly created or modified files are stored in the first file
 location, while all other sources remain read-only, ensuring that their
 files are never altered.
-ZIPsFS treats ZIP files as expandable folders, typically naming them by
-appending \[lq].Contents/\[rq] to the original ZIP file name.
+ZIPsFS treats \f[B]ZIP files as expandable folders\f[R], typically
+naming them by appending \[lq]\f[V].Contents/\f[R]\[rq] to the original
+ZIP file name.
 However, this behavior can be customized using filename-based rules.
 Extensive configuration options allow adjustments.
 Changes can be applied without disrupting the file system.
 .PP
-ZIPsFS includes specialized features like automatic file conversions and
-performance optimizations tailored for efficiently storing and accessing
-large-scale mass spectrometry data.
+ZIPsFS is best run in a \f[B]tmux\f[R] session.
+With a trailing slash, the folder name is not part of the virtual path,
+in accordance with the trailing slash semantics of many UNIX tools.
+.PP
+ZIPsFS includes specialized features like \f[B]automatic file
+conversions\f[R] and performance optimizations tailored for efficiently
+storing and accessing \f[B]large-scale mass spectrometry\f[R] data.
 It has a programming interface to create synthetic file content
 programmatically.
 .SS Mini tutorial
