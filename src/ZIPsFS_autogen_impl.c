@@ -54,8 +54,8 @@ static void aimpl_wait_concurrent(const struct autogen_rule *ac, const int inc){
   }
 }
 
-#define aimpl_wait_concurrent_begin(ac)  aimpl_wait_concurrent(ac, 1)   IF1(WITH_CPPCHECK,;FILE *_wait_concurrent=fopen("abc","r"))
-#define aimpl_wait_concurrent_end(ac)    aimpl_wait_concurrent(ac,-1)   IF1(WITH_CPPCHECK,,close(_wait_concurrent))
+#define aimpl_wait_concurrent_begin(ac)  aimpl_wait_concurrent(ac, 1)   IF1(IS_CHECKING_CODE,;FILE *_wait_concurrent=fopen("abc","r"))
+#define aimpl_wait_concurrent_end(ac)    aimpl_wait_concurrent(ac,-1)   IF1(IS_CHECKING_CODE,,close(_wait_concurrent))
 //////////////////////////////////////////////////////////////////////
 /// This is run once when ZIPsFS is started.                       ///
 //////////////////////////////////////////////////////////////////////

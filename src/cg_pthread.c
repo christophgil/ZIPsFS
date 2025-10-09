@@ -56,8 +56,8 @@ static int cg_mutex_count(int mutex,int inc){
 /////////////////////
 ///  __cppcheck__ ///
 /////////////////////
-#define CPPCHECK_NO_BRANCH_BEGIN() IF1(WITH_CPPCHECK,FILE *_cppcheck_rsc_leak_no_branch=fopen("mutex","r"))
-#define CPPCHECK_NO_BRANCH_END()   IF1(WITH_CPPCHECK,FCLOSE(_cppcheck_rsc_leak_no_branch))
+#define CPPCHECK_NO_BRANCH_BEGIN() IF1(IS_CHECKING_CODE,FILE *_cppcheck_rsc_leak_no_branch=fopen("mutex","r"))
+#define CPPCHECK_NO_BRANCH_END()   IF1(IS_CHECKING_CODE,FCLOSE(_cppcheck_rsc_leak_no_branch))
 
 #ifdef __cppcheck__
 // cppcheck-suppress-macro [constVariablePointer,shadowVariable]

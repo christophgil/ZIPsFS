@@ -54,7 +54,7 @@ static bool readdir_inline_from_cache(const struct zippath *zpath, const char *u
         st.st_ino=make_inode(zpath->stat_rp.st_ino,zpath->root,Nth(dir.core.finode,j,j),RP());
         char n[MAX_PATHLEN+1];
         const int n_l=zipentry_placeholder_expand(n,n2,u);
-        if (config_containing_zipfile_of_virtual_file(0,n,n_l,NULL)) filler_add_no_dups(filler,buf,n,&st,no_dups);
+        if (config_containing_zipfile_of_virtual_file(0,n,n_l,NULL)) filler_add(filler,buf,n,n_l,&st,no_dups);
       }
     }
     directory_destroy(&dir);

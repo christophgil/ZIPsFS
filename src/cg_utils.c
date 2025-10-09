@@ -142,13 +142,13 @@ static atomic_long _counters1[COUNT_NUM],_counters2[COUNT_PAIRS_END];
 static bool _malloc_is_count_mstore[MALLOC_ID_COUNT];
 static void *cg_malloc(const int id, const size_t size){
   COUNTER_INC(id);
- void *p=malloc_untracked(size);
+  void *p=malloc_untracked(size);
   assert(p!=NULL);
   return p;
 }
 static void *cg_calloc(const int id,size_t nmemb, size_t size){
   COUNTER_INC(id);
- void *p=calloc_untracked(nmemb,size);
+  void *p=calloc_untracked(nmemb,size);
   assert(p!=NULL);
   return p;
 }
@@ -196,6 +196,8 @@ static int _cg_munmap(const int id,const void *ptr,size_t length){
 //////////////
 /// String ///
 //////////////
+
+
 static uint32_t hash32(const char* key, const uint32_t len){
   uint32_t hash=2166136261U;
   RLOOP(i,len){
@@ -252,6 +254,7 @@ static char *_cg_strncpy(const bool stpcpy,char *dst,const char *src,const int n
 static uint32_t cg_strlen(const char *s){
   return s?strlen(s):0;
 }
+
 
 
 
@@ -331,9 +334,9 @@ static int cg_last_slash(const char *path){
   return -1;
 }
 static int cg_leading_slashes(const char *s){
-    int c=-1;
-    if (s) while(s[++c]=='/');
-    return c;
+  int c=-1;
+  if (s) while(s[++c]=='/');
+  return c;
 }
 
 
@@ -379,8 +382,6 @@ static int cg_str_replace(const int opt,char *haystack, const int h_l_or_zero, c
   if (0==(opt&OPT_STR_REPLACE_DRYRUN) && ends_null) haystack[h_l]=0;
   return h_l;
 }
-
-
 
 
 #define OPT_CG_STRSPLIT_WITH_EMPTY_TOKENS (1<<8)
@@ -483,7 +484,7 @@ static bool *cg_validchars(enum enum_validchars type){
         cc['=']=cc['+']=cc['-']=cc['_']=cc['$']=cc['@']=cc['.']=cc['~']=true;
       }
     }
-    ccc[VALIDCHARS_PATH]['/']=ccc[VALIDCHARS_PATH][' ']=ccc[VALIDCHARS_FILE][' ']=ccc[VALIDCHARS_NOQUOTE]['/']=true;
+    ccc[VALIDCHARS_PATH]['/']=ccc[VALIDCHARS_PATH][' ']=ccc[VALIDCHARS_FILE][' ']=ccc[VALIDCHARS_NOQUOTE]['/']=ccc[VALIDCHARS_NOQUOTE]['%']=true;
     ccc[VALIDCHARS_NOQUOTE][':']=true;
 
     initialized=true;
@@ -495,14 +496,30 @@ static int cg_find_invalidchar(enum enum_validchars type,const char *s,const int
   if (s){
     const bool *bb=cg_validchars(type);
     FOR(i,0,len){
-
       if (s[i]<0||s[i]>127||!bb[s[i]]) return i;
     }
   }
   return -1;
 }
 
+static int url_encode(char *dst, const int dst_l, const char *name){
+  static const bool *bb;
+  bb=cg_validchars(VALIDCHARS_FILE);
+  int i=0;
+  for(const char *t=name; *t; t++){
+    const unsigned char c=*t;
 
+    if (c<128 && bb[c]){
+      if (i+1<dst_l) dst[i]=c;
+      i++;
+    }else{
+      if (i+3<dst_l) sprintf(dst+i,"%%%02x",c);
+      i+=3;
+    }
+  }
+  dst[i]=0;
+  return i;
+}
 
 
 static void cg_path_for_fd(const char *title, char *path, int fd){
@@ -666,13 +683,17 @@ static void stat_init(struct stat *st, int64_t size,const struct stat *uid_gid){
 
 #define cg_log_file_stat(...) _cg_log_file_stat(__func__,__VA_ARGS__)
 static void _cg_log_file_stat(const char *func,const char * name,const struct stat *s){
+
   const char *color=ANSI_FG_BLUE;
 #ifdef SHIFT_INODE_ROOT
   if (s->st_ino>(1L<<SHIFT_INODE_ROOT)) color=ANSI_FG_MAGENTA;
 #endif
-  fprintf(stderr,"%s('%s')  size=%lld blksize=%lld blocks=%lld links=%u inode=%s%llu"ANSI_RESET" dir=%s uid=%u gid=%u ",func,name,(LLD)s->st_size,(LLD)s->st_blksize,(LLD)s->st_blocks,  (uint32_t) s->st_nlink,color,(LLU)s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
-  //st_blksize st_blocks f_bsize
-  cg_log_file_mode(s->st_mode);
+  fprintf(stderr,"%s('%s') stat: %s",func,name,s?" ":"NULL");
+  if (s){
+    fprintf(stderr,"size=%lld blksize=%lld blocks=%lld links=%u inode=%s%llu"ANSI_RESET" dir=%s uid=%u gid=%u ",(LLD)s->st_size,(LLD)s->st_blksize,(LLD)s->st_blocks,  (uint32_t) s->st_nlink,color,(LLU)s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
+    //st_blksize st_blocks f_bsize
+    cg_log_file_mode(s->st_mode);
+  }
   fputc('\n',stderr);
 }
 static void cg_log_open_flags(int flags){
@@ -1000,11 +1021,11 @@ static int _cg_log_waitpid(const int pid, const int status, const char *err,cons
   if (pid<0 || cg_log_waitpid_status(stderr,status,func)){
     FILE *f=fopen(err,"a");
     if (f){
-    if (pid==-1) fputs("waitpid() failed.\n",f);
-    if (pid==-2) fputs("Output file missing.\n",f);
-    if (cmd || env) cg_log_exec_fd(fileno(f),cmd,env);
-    fprint_strerror(f,errno);
-    fclose(f);
+      if (pid==-1) fputs("waitpid() failed.\n",f);
+      if (pid==-2) fputs("Output file missing.\n",f);
+      if (cmd || env) cg_log_exec_fd(fileno(f),cmd,env);
+      fprint_strerror(f,errno);
+      fclose(f);
     }
   }
   return pid<0?-1:WIFEXITED(status)?WEXITSTATUS(status):INT_MIN;
@@ -1015,7 +1036,7 @@ static void cg_exec(char const * const * const cmd,char const * const * const en
   if(fd_err>0) dup2(fd_err,STDERR_FILENO);
   if(fd_out>0) close(fd_out);
   //  if(fd_err>0 && fd_err!=fd_out) close(fd_err);
-    cg_log_exec_fd(STDERR_FILENO,cmd,env);
+  cg_log_exec_fd(STDERR_FILENO,cmd,env);
 #if defined(HAS_EXECVPE) && HAS_EXECVPE
   execvpe(cmd[0],(char *const *)cmd,(char *const *)env);
 #elif ! defined(HAS_UNDERSCORE_ENVIRON) || HAS_UNDERSCORE_ENVIRON
@@ -1067,9 +1088,6 @@ static bool cg_pid_exists_proc(const pid_t pid){
 }
 int main(int argc, char *argv[]){
 
-  cg_usleep(atoi(argv[1]));
-
-  return 1;
   struct stat stbuf, *st=&stbuf;
   stat_init(st,0,NULL);
   st->st_mtime=time(NULL);
@@ -1138,7 +1156,7 @@ int main(int argc, char *argv[]){
     if (!tmp){fprintf(stderr,"realloc failed.\n"); EXIT(1);};
     s=tmp;
   } break;
- case 6:{
+  case 6:{
     int a=atoi(argv[1]),b=atoi(argv[2]);
     int c=(2);
     printf("max(%d,%d)=%d\n",a,b,c);

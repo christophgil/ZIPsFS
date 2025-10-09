@@ -1,9 +1,7 @@
-///////////////////////////////////
-/// COMPILE_MAIN=ZIPsFS        ///
-/// Customizations by the user  ///
-///////////////////////////////////
-
-
+/********************************/
+/* COMPILE_MAIN=ZIPsFS          */
+/* Customizations by the user   */
+/********************************/
 
 
 #define EXT_CONTENT  ".Content"                    /* ZIP files appear as folders. This is appended to form the folder name. */
@@ -23,16 +21,17 @@
 #define WITH_PTHREAD_LOCK 1 /*  Should be true. Only for testing if suspect deadlock set to 0 */
 
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/// With the following switches, optional features like caches can be (de)activated. Active: 1 Incactive: 0
-/// Tey helped to identify the source of problems during software development.
-/// They also help to identify non-essential optional parts in the source code.
-/// To improve readablility, deactivated code can be grayed out in the IDE.
-/// See hide-ifdef-mode of EMACS.
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/***********************************************************************************************************/
+/* With the following switches, optional features like caches can be (de)activated. Active: 1 Incactive: 0 */
+/* Tey helped to identify the source of problems during software development.                              */
+/* They also help to identify non-essential optional parts in the source code.                             */
+/* To improve readablility, deactivated code can be grayed out in the IDE.                                 */
+/* See hide-ifdef-mode of EMACS.                                                                           */
+/***********************************************************************************************************/
 
 #define WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT 0 // Better not yet. Needs more testing!
-#define WITH_CLEAR_CACHE 1
+#define WITH_CLEAR_CACHE 0
 // The caches of file attributes  grow  during run-time.
 // The cache is a bundle of memory mapped files in ~/.ZIPsFS/. See cg_mstore*.c. The OS can use  disk space to save RAM.
 // Eventually, the caches get cleared when the size exceeds the limit given by  DIRECTORY_CACHE_SIZE and  NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE.
@@ -40,7 +39,7 @@
 
 
 #define WITH_DIRCACHE 1
-// This activates sorage of the ZIP file index and the file listing of rarely changing file directories in a cache.
+// This activates storage of the ZIP file index and the file listing of rarely changing file directories in a cache.
 // The cache key is the filepath of the ZIP file or directory  plus the last-modified file  attribute.
 
 #define WITH_ZIPENTRY_PLACEHOLDER 1
@@ -112,45 +111,44 @@
 /////////////////////////////////////
 
 
-/////////////////////////////////////////////////
-/// Async - Avoid blocking                    ///
-/// 0 deactivated    1 activated              ///
-/// File access is performed in worker thread ///
-/// The current thread gives up after timeout ///
-/// Also see ASYNC_SLEEP_USECONDS             ///
-/////////////////////////////////////////////////
+
+
+
+ /******************************************************************************************************************************************************************/
+ /* Avoid blocking        0 deactivated    1 activated        Applies  to rootpaths that starting with three slashs                                                */
+ /* Activate this feature if  upstream file systems suffer from becoming blocked/unresonsive                                                                       */
+ /* File access is performed in worker thread.  The current thread gives up after timeout.                                                                         */
+ /*                                                                                                                                                                */
+ /* If a remote file system blocks then start the path with three slashes and activate the following:                                                              */
+ /* Disadvantage: ZIPsFS is less responsive.  Not yet fully tested.                                                                                                */
+ /* Also see ASYNC_SLEEP_USECONDS                                                                                                                                  */
+ /******************************************************************************************************************************************************************/
 #define WITH_TIMEOUT_STAT     0
 #define WITH_TIMEOUT_READDIR  0
 #define WITH_TIMEOUT_OPENFILE 0
 #define WITH_TIMEOUT_OPENZIP  0
 #define WITH_CANCEL_BLOCKED_THREADS 0
-
-
 #define ASYNC_SLEEP_USECONDS 5000    /* Sleep microseconds after checking again. Too low values increase idle CPU consumption.  Related: WITH_TIMEOUT_xxxx  DEBUG_NOW */
-////////////
-/// Time ///
-////////////
 
-
-
-
-
+/////////////
+/// Times ///
+/////////////
 
 #define WITH_TESTING_TIMEOUTS 0
 #if WITH_TESTING_TIMEOUTS
 #define ROOT_RESPONSE_WITHIN_SECONDS 2
 #define ROOT_GIVEUP_AFTER_SECONDS 10
-#define STAT_TIMEOUT_SECONDS      100
-#define READDIR_TIMEOUT_SECONDS 100
+#define STAT_TIMEOUT_SECONDS      1000
+#define READDIR_TIMEOUT_SECONDS  100
 #define OPENFILE_TIMEOUT_SECONDS 100
-#define OPENZIP_TIMEOUT_SECONDS  100
+#define OPENZIP_TIMEOUT_SECONDS  50
 #undef NUM_MEMCACHE_STORE_RETRY
 #define NUM_MEMCACHE_STORE_RETRY 1
 #define MEMCACHE_TIMEOUT_SECONDS 2
 #else
 #define ROOT_RESPONSE_WITHIN_SECONDS 9   /* Roots which have responded within that time are used. */
-#define ROOT_GIVEUP_AFTER_SECONDS 20     /* Otherwise wait until ROOT_RESPONSE_WITHIN_SECONDS is reached and give up waiting. */
-#define STAT_TIMEOUT_SECONDS     20 // Give up waiting for stat() result
+#define ROOT_GIVEUP_AFTER_SECONDS 30     /* Otherwise wait until ROOT_RESPONSE_WITHIN_SECONDS is reached and give up waiting. */
+#define STAT_TIMEOUT_SECONDS     30 // Give up waiting for stat() result
 #define READDIR_TIMEOUT_SECONDS  30 // Give up waiting for opendir()  and readdir()
 #define OPENFILE_TIMEOUT_SECONDS 30
 #define OPENZIP_TIMEOUT_SECONDS  30
@@ -183,8 +181,8 @@
 ///////////////////////////////////
 /// Dynamically generated files ///
 ///////////////////////////////////
-#define WITH_AUTOGEN           1 /* By exec() */
-#define WITH_CCODE             1 /* By C-code */
+#define WITH_AUTOGEN           1 /* Generate files based on rules of file extensions */
+#define WITH_CCODE             1 /* Generate files by C-code */
 #define WITH_INTERNET_DOWNLOAD 1 /* Access to internet files like <mount-point>/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README */
 
 #if 0 /* Conveniently deactivate all caches for testing */

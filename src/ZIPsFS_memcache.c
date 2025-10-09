@@ -9,6 +9,7 @@
 ////////////////////////////////////
 /// Parameters from command line ///
 ////////////////////////////////////
+#define  MEMCACHE_ROOT_UPDATE_TIME(d,r,success)   if (is_memcache(d,r))  root_update_time(PTHREAD_MEMCACHE,success,r?r:d->zpath.root);
 static bool memcache_set_maxbytes(const char *s){
   if ((_memcache_bytes_limit=cg_atol_kmgt(s))<(1<<22)){
     log_error("Option -l: _memcache_bytes_limit is too small %s\n",s);
@@ -227,7 +228,7 @@ static bool memcache_store_try(struct fHandle *d, struct async_zipfile *zip, str
   if (!zip->zf && fd<=0){ warning(WARN_MEMCACHE|WARN_FLAG_ERRNO|WARN_FLAG_ERROR,rp,"Failed %s() d=%p",isZIP?"zip_open":"open",d); return false; }
   const off_t st_size=d->zpath.stat_vp.st_size;
   off_t already=0;
-  LOCK(mutex_fhandle,if ((ok=contin=is_memcache(d,r))) async_memcache_update_time(d,r));
+  LOCK(mutex_fhandle,if ((ok=contin=is_memcache(d,r))) MEMCACHE_ROOT_UPDATE_TIME(d,r,true));
   char *buf=cg_malloc(COUNT_MEMCACHE_MALLOC,MEMCACHE_READ_BYTES_NUM);
   for(;st_size>already;){
     const off_t n_max=MIN_long(MEMCACHE_READ_BYTES_NUM,st_size-already);
@@ -241,7 +242,7 @@ static bool memcache_store_try(struct fHandle *d, struct async_zipfile *zip, str
         if ((ok=(dst!=NULL))){
           memcpy(dst+already,buf,n);
           if ((already+=n)>d->memcache->memcache_already)  d->memcache->memcache_already=already;
-          async_memcache_update_time(d,r);
+          MEMCACHE_ROOT_UPDATE_TIME(d,r,true);
         }
       }
       unlock(mutex_fhandle);
@@ -313,22 +314,12 @@ static bool fhandle_set_text(struct fHandle *d, struct textbuffer *b){
 ///////////////
 /// Timeout ///
 ///////////////
-static void async_memcache_update_time(struct fHandle *d, struct rootdata *r){
-  ASSERT_LOCKED_FHANDLE();
-  if (is_memcache(d,r)){
-    const time_t t=time(NULL);
-    if (r) atomic_store(r->thread_when_success+PTHREAD_MEMCACHE,t);
-    else r=d->zpath.root;
-    assert(r!=NULL);
-    atomic_store(r->async_when+ASYNC_MEMCACHE,t);
-  }
-}
 #if MEMCACHE_TIMEOUT_SECONDS
 static time_t memcache_time_exceeded(const struct fHandle *d){
   lock(mutex_fhandle);
   struct rootdata *r=d->zpath.root;
   assert(r!=NULL);
-  time_t t=time(NULL)-atomic_load(r->async_when+ASYNC_MEMCACHE);
+  time_t t=time(NULL)-atomic_load(r->thread_when+PTHREAD_MEMCACHE);
   unlock(mutex_fhandle);
   return t>MEMCACHE_TIMEOUT_SECONDS;
 }
@@ -344,7 +335,7 @@ static bool memcache_wait(struct fHandle *d, const off_t min_fill){
       memcache_new(d);
       d->memcache->txtbuf=textbuffer_new(COUNT_MALLOC_MEMCACHE_TXTBUF);
       memcache_set_status(d,memcache_queued);
-      async_memcache_update_time(d,NULL);
+      MEMCACHE_ROOT_UPDATE_TIME(d,NULL,false);
     }
     unlock(mutex_fhandle);
   }
@@ -368,7 +359,7 @@ static bool memcache_wait(struct fHandle *d, const off_t min_fill){
         lock(mutex_fhandle);
         d->memcache->m_zpath=zp;
         d->memcache->memcache_already=0;
-        async_memcache_update_time(d,NULL);
+        MEMCACHE_ROOT_UPDATE_TIME(d,NULL,false);
         memcache_set_status(d,memcache_queued);
         unlock(mutex_fhandle);
         goto again_with_other_root;

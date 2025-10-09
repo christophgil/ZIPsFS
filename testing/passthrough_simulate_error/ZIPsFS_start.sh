@@ -24,7 +24,7 @@ main(){
     mountpoint $mnt && umount -l $mnt >/dev/null
     mountpoint  $mnt 2>&1 | grep 'not connected' &&  sudo umount $mnt
     tmux rename-window   ZIPsFS
-    root2=/$ME/$(realpath $ROOT1)
+    root2=//$ME/$(realpath $ROOT1)
 
     echo root1=$ROOT1; ls $ROOT1
     echo root2=$root2; ls $root2

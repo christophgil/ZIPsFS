@@ -26,6 +26,7 @@
 #define NUM_MUTEX   (mutex_roots+ROOTS)
 #define DIRENT_ISDIR (1<<0)
 #define DIRENT_IS_COMPRESSED (1<<1)
+#define DIRENT_DIRECT_NAME (1<<2)
 //#define DEBUG_DIRECTORY_HASH32_OF_FNAME(s)    hash32((char*)s->fname,s->files_l*sizeof(char*))
 
 #define MALLOC_TYPE_SHIFT 8
@@ -148,7 +149,7 @@ enum enum_autogen_state{AUTOGEN_UNINITILIZED,AUTOGEN_SUCCESS,AUTOGEN_FAIL};
        C(LOG_STAT)C(LOG_OPEN)C(LOG_OPENDIR)\
        C(LOG_INFINITY_LOOP_RESPONSE)C(LOG_INFINITY_LOOP_STAT)C(LOG_INFINITY_LOOP_MEMCACHE)C(LOG_INFINITY_LOOP_DIRCACHE)C(LOG_INFINITY_LOOP_MISC)  C(LOG_FLAG_LENGTH)
 
-#define A10(x) C(ASYNC_NIL)C(ASYNC_STAT)C(ASYNC_READDIR)C(ASYNC_OPENFILE)C(ASYNC_OPENZIP)C(ASYNC_MEMCACHE)C(ASYNC_LENGTH)
+#define A10(x) C(ASYNC_NIL)C(ASYNC_STAT)C(ASYNC_READDIR)C(ASYNC_OPENFILE)C(ASYNC_OPENZIP)   C(ASYNC_LENGTH)
 
 
 #define A12() C(COUNT_UNDEFINED) C(COUNT_MALLOC_TESTING)\
@@ -238,6 +239,7 @@ typedef struct counter_rootdata counter_rootdata_t;
 
 struct autogen_files;
 // ---
+
 #if ! WITH_DIRCACHE
 #undef WITH_ZIPINLINE
 #define WITH_ZIPINLINE 0
@@ -319,6 +321,7 @@ struct directory{
   bool debug, dir_is_dircache, dir_is_destroyed, dir_is_success;
   /* The following concern asynchronized reading */
   bool async_never;
+  IF1(WITH_TIMEOUT_READDIR, struct ht *ht_intern_names);
 };
 
 #define ROOT_WHEN_SUCCESS(r,t) atomic_load(r->thread_when_success+t)
@@ -439,13 +442,13 @@ struct fHandle{
 //////////////////////////////////////////////////////////////////////////
 #define foreach_root(r)    for(struct rootdata *r=_root; r<_root+_root_n; r++)
 struct rootdata{
-  char rootpath[MAX_PATHLEN+1];
+  char rootpath[MAX_PATHLEN+1],rootpath_mountpoint[MAX_PATHLEN+1];
   char retain_dirname[MAX_PATHLEN+1]; /* last path component with a leading slash without trailing slash   or "" */
   int rootpath_l,retain_dirname_l;
   struct statvfs statvfs;
   uint32_t log_count_delayed,log_count_delayed_periods,log_count_restarted;
   struct ht dircache_queue,dircache_ht,ht_inodes; // !!
-#if WITH_DIRCACHE || WITH_STAT_CACHE
+#if WITH_DIRCACHE || WITH_STAT_CACHE || WITH_TIMEOUT_READDIR
   struct ht dircache_ht_fname, dircache_ht_fnamearray;
   struct mstore dircache_mstore;
 #endif
@@ -458,13 +461,13 @@ struct rootdata{
   bool thread_is_run[PTHREAD_LEN];
   pid_t thread_pid[PTHREAD_LEN];
   counter_rootdata_t filetypedata_dummy,filetypedata_all, filetypedata[FILETYPEDATA_NUM],filetypedata_frequent[FILETYPEDATA_FREQUENT_NUM];
-  bool filetypedata_initialized, blocked, writable, remote;
+  bool filetypedata_initialized, blocked, writable, remote,with_timeout;
   int seq_fsid;
   unsigned long f_fsid; /* From statvfs.f_fsid */
   pthread_mutex_t async_mtx[ASYNC_LENGTH];
-  atomic_int async_go[ASYNC_LENGTH];
+  int async_go[ASYNC_LENGTH];
   int async_task_id[ASYNC_LENGTH];
-  volatile atomic_ulong async_when_success[ASYNC_LENGTH],async_when[ASYNC_LENGTH],thread_when_success[PTHREAD_LEN]; _Static_assert(sizeof(atomic_ulong)>=sizeof(time_t),"");
+  volatile atomic_ulong thread_when[PTHREAD_LEN],thread_when_success[PTHREAD_LEN]; _Static_assert(sizeof(atomic_ulong)>=sizeof(time_t),"");
   IF1(WITH_TIMEOUT_OPENFILE,int  async_openfile_fd,async_openfile_flags;  char async_openfile_path[MAX_PATHLEN+1]);
   IF1(WITH_TIMEOUT_STAT,    struct stat async_stat;  struct strg async_stat_path);
   IF1(WITH_TIMEOUT_READDIR, struct directory *async_dir);
@@ -495,7 +498,10 @@ struct rootdata{
 
 
 #define LOG_FUSE(path)          IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER)log_entered_function("%s",path)
-#define LOG_FUSE_RES(path,res)  IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER)log_entered_function("%s res:%d",path,res)
+#define LOG_FUSE_RES(path,res)  IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER)log_exited_function("%s res:%d",path,res)
+//#define LOG_FUSE(path)          log_entered_function("%s",path)
+//#define LOG_FUSE_RES(path,res)  log_exited_function("%s res:%d",path,res)
+
 //
 #define ADVISE_DIRCACHE_IS_ZIP              (1<<1)
 #define ADVISE_DIRCACHE_IS_REMOTE           (1<<2)
@@ -522,6 +528,6 @@ struct memcache{
 #define FILLDIR_AUTOGEN (1<<0)
 #define FILLDIR_IS_DIR_ZIPsFS (1<<1)
 #define FILLDIR_STRIP_NET_HEADER (1<<2)
-#define  directory_update_time(success,dir)  root_update_time(ASYNC_READDIR,success,DIR_ROOT(dir))
-#define filler_add_no_dups(filler,buf,name,st,no_dups) {if (ht_only_once(no_dups,name,0)) filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);}
+//#define filler_add(filler,buf,name,st,no_dups) {if (ht_only_once(no_dups,name,0)){ filler(buf,name,st,0 COMMA_FILL_DIR_PLUS); cg_log_file_stat(name,st);}}
+//#define filler_add(filler,buf,name,st,no_dups) {if (ht_only_once(no_dups,name,0)) filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);}
 #define stat_direct(...) _stat_direct(__VA_ARGS__,__func__)

@@ -3,18 +3,33 @@
 /// running stat() asynchronously in separate thread to avoid blocking ///
 /// COMPILE_MAIN=ZIPsFS                                                ///
 //////////////////////////////////////////////////////////////////////////
-#define TIMEOUT_OR_NOT(code_yes,code_no)  lock(mutex_async); if (id==r->async_task_id[A]){code_no; atomic_store(r->async_go+A,0);}else{code_yes;} unlock(mutex_async)
+enum enum_async_job_status{ASYNC_JOB_IDLE,ASYNC_JOB_SUBMITTED,ASYNC_JOB_PICKED};
+#define OK_OR_TIMEOUT(code_ok,code_timeout)    LOCK(mutex_async,if (id==ID){code_ok;G=0;}else{code_timeout;})
+//#define DIE_IF_TIMEOUT(path) IF0(IS_CHECKING_CODE, if (!finished) DIE_DEBUG_NOW("!finished %s ",path))
+#define DIE_IF_TIMEOUT(path)
+#define ASYNC_WAIT(path,t)  for(int j=1; G==ASYNC_JOB_PICKED && ((j%255) || (time(NULL)-(t)<=TO));j++) usleep(256);\
+  LOCK_N(mutex_async, const bool finished=!G; ID++);\
+  if (!finished) log_warn("Timeout G=%d  %s root: '%s': path: '%s'   %'ld  <= %d",G,ASYNC_S[A],rootpath(r),path   ,time(NULL)-(t),TO)
 
-#define ASYNC_SLEEP_LOOP(path,timeout,time0)  for(int j=1; G==2 && ((j%255) || time(NULL)-(time0)<=timeout);j++)  usleep(256);\
-  lock(mutex_async); const bool finished=!G; r->async_task_id[A]++; unlock(mutex_async);\
-  if (!finished) log_warn("Timeout %s '%s': '%s'",ASYNC_S[A],rootpath(r),path)
-
-
-
-// Timeout ASYNC_STAT '/s-mcpb-ms03.charite.de/fulnas1/1': '/s-mcpb-ms03.charite.de/fulnas1/1/A1/Data/30-0155/20250527_A1_KTT_036_30-0155_JohannaFicht-BY4741protroph-CLSsamples_P03_B05_dia.raw.Zip.Content'
-
-#define ASYNC_SLEEP(path,timeout)  WAIT_PICKED(timeout);  time0=time(NULL); ASYNC_SLEEP_LOOP(path,timeout,time0)
+#define TO (A==ASYNC_STAT?STAT_TIMEOUT_SECONDS:A==ASYNC_OPENFILE?OPENFILE_TIMEOUT_SECONDS:A==ASYNC_OPENZIP?OPENZIP_TIMEOUT_SECONDS:A==ASYNC_READDIR?READDIR_TIMEOUT_SECONDS:0)
 #define R()  struct rootdata *r=zpath->root; if (!r || ROOT_NOT_RESPONDING(r)) continue  // r is null e.g. for warnings.log
+#define L() pthread_mutex_lock(r->async_mtx+A)
+#define UL() LOCK(mutex_async, G=0); pthread_mutex_unlock(r->async_mtx+A)
+#define G           r->async_go[A]
+#define ID     r->async_task_id[A]
+/*
+  This variant leads to timeout on     find mnt/
+  #define WAIT_PICKED() { time_t time0=time(NULL); for(int j=1; G==ASYNC_JOB_SUBMITTED && ((j%255) || ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC)-time0<=TO);j++) usleep(256);}
+*/
+#define WAIT_PICKED(code) LOCK_N(mutex_async,++ID;code;G=ASYNC_JOB_SUBMITTED);\
+  for(int j=1; G==ASYNC_JOB_SUBMITTED  && ((j%255) || time(NULL)-ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC)<=TO);j++) usleep(256)
+#define SET_PICKED(code)\
+  int id;\
+  lock(mutex_async);\
+  const int go=G;\
+  if (go==ASYNC_JOB_SUBMITTED){ code; id=ID;G=ASYNC_JOB_PICKED;}\
+  unlock(mutex_async);\
+  if (go!=ASYNC_JOB_SUBMITTED) return false;
 
 static bool directory_rp_stat(struct directory *dir){
   if (dir->dir_zpath.stat_rp.st_ino) return true;
@@ -24,7 +39,7 @@ static bool directory_rp_stat(struct directory *dir){
   return false;
 }
 static bool readdir_now(struct directory *dir){
-  if (!readdir_from_zip(dir)&&!readir_from_filesystem(dir)) return false;
+  if (!readdir_from_zip(dir) && !readir_from_filesystem(dir)) return false;
   directory_rp_stat(dir);
   dir->core.dir_mtim=dir->dir_zpath.stat_rp.ST_MTIMESPEC;
   return (dir->dir_is_success=true);
@@ -33,16 +48,10 @@ static bool readdir_now(struct directory *dir){
   G_on is set in async_xxx() to signal async_periodically_xxx() to perform task.
   async_xxx() waits till G_picked has been invoked by async_periodically_xxx().
   From know on wait till timeout.
-  Increment r->async_task_id[A]. Then async_periodically_xxx() must not write back results any more.
+  Increment ID. Then async_periodically_xxx() must not write back results any more.
   When finished async_periodically_xxx(). async_xxx() knows that finished.
-  Cleanup resources: if Time-out (id!=r->async_task_id[A]) then async_periodically_xxx() is responsible for cleaning up
+  Cleanup resources: if Time-out (id!=ID) then async_periodically_xxx() is responsible for cleaning up
 */
-#define L() pthread_mutex_lock(r->async_mtx+A);assert(!G);r->async_task_id[A]++
-#define UL() atomic_store(r->async_go+A,0);pthread_mutex_unlock(r->async_mtx+A)
-#define G           atomic_load(r->async_go+A)
-
-#define WAIT_PICKED(timeout) atomic_store(r->async_go+A,1); time_t time0=time(NULL); for(int j=1; G==1 && ((j%255) ||ROOT_WHEN_SUCCESS(r,A)-time0<=timeout);j++) usleep(256)
-#define SET_PICKED()  const int id=r->async_task_id[A];atomic_store(r->async_go+A,2)
 
 #if WITH_DIRCACHE
 static void directory_to_queue(const struct directory *dir){
@@ -52,7 +61,6 @@ static bool async_periodically_dircache(struct rootdata *r){
   bool success=false;
   char path[PATH_MAX+1];
   struct stat stbuf={0};
-
   while(true){
     *path=0;
     { /*Pick path from an entry and put in stack variable path */
@@ -67,36 +75,32 @@ static bool async_periodically_dircache(struct rootdata *r){
       unlock_ncancel(mutex_dircache_queue);
     }
     if (!*path) break;
-    //if (*path)
-      {
-      struct strg strg={0};    strg_init(&strg,path);
-      if (IF1(WITH_STAT_CACHE,stat_from_cache(&stbuf,&strg,r)||)  stat_direct(&stbuf,&strg,r)){
-        struct directory mydir={0}, *dir=&mydir;
-        struct zippath *zpath=directory_init_zpath(dir,NULL);
-        zpath->stat_rp=stbuf;
-        zpath->realpath=zpath_newstr(zpath);
-        zpath_strcat(zpath,path);
-        RP_L()=zpath_commit(zpath);
-        zpath->root=r;
-        zpath->flags|=ZP_ZIP;
-        dir->async_never=true;
-        if (readdir_now(dir)){
-          success=true;
-          LOCK_NCANCEL(mutex_dircache,dircache_directory_to_cache(dir));
-        }
-        directory_destroy(dir);
+    struct strg strg={0};    strg_init(&strg,path);
+    if (IF1(WITH_STAT_CACHE,stat_from_cache(&stbuf,&strg,r)||)  stat_direct(&stbuf,&strg,r)){
+      struct directory mydir={0}, *dir=&mydir;
+      struct zippath *zpath=directory_init_zpath(dir,NULL);
+      zpath->stat_rp=stbuf;
+      zpath->realpath=zpath_newstr(zpath);
+      zpath_strcat(zpath,path);
+      RP_L()=zpath_commit(zpath);
+      zpath->root=r;
+      zpath->flags|=ZP_ZIP;
+      dir->async_never=true;
+      assert(DIR_ROOT(dir)==r);
+      if (readdir_now(dir)){
+        success=true;
+        LOCK_NCANCEL(mutex_dircache,dircache_directory_to_cache(dir));
       }
+      directory_destroy(dir);
     }
   }
   return success;
 }
 #endif //WITH_DIRCACHE
-
 static void async_zipfile_init(struct async_zipfile *zip,const struct zippath *zpath){
   *zip=async_zipfile_empty;
   zip->azf_zpath=*zpath;
 }
-
 static void openzip_now(struct async_zipfile *zip){
   if (!zip) return;
   struct zippath *zpath=&zip->azf_zpath;
@@ -118,32 +122,24 @@ static void closezip_now(struct async_zipfile *z){
 #if WITH_TIMEOUT_STAT
 /* That is the most simple as nothing needs to be closed or destructed */
 static inline bool async_periodically_stat(struct rootdata *r){
-  if (!G) return false;
-  assert(r->async_stat_path.s!=NULL);
-  struct stat st=r->async_stat=empty_stat;
-  struct strg path=r->async_stat_path;
-  SET_PICKED();
+  struct stat st=empty_stat;
+  struct strg path;
+  SET_PICKED(r->async_stat=empty_stat; path=r->async_stat_path; assert(path.s!=NULL));
   const bool success=stat_direct(&st,&path,r);
-  TIMEOUT_OR_NOT(,r->async_stat=st);
+  OK_OR_TIMEOUT(r->async_stat=success?st:empty_stat,);
   return success;
 }
 #endif //WITH_TIMEOUT_STAT
 static bool async_stat(const struct strg *path,struct stat *st,struct rootdata *r){
-  //log_entered_function(" %s",path->s);
   if (r && ROOT_NOT_RESPONDING(r)) return false;
-  //log_debug_now(" %s remote: %d",path->s,isRootRemote(r));
   IF1(WITH_TIMEOUT_STAT,if (!isRootRemote(r))) return stat_direct(st,path,r);
 #if WITH_TIMEOUT_STAT
   assert(path); assert(path->s); assert(*path->s);
   L();
-  r->async_stat_path=*path;
-  //log_debug_now("Going ASYNC_SLEEP: %s  STAT_TIMEOUT_SECONDS: %d",path->s,STAT_TIMEOUT_SECONDS);
-  //  ASYNC_SLEEP(path->s,STAT_TIMEOUT_SECONDS);
-
-  WAIT_PICKED(STAT_TIMEOUT_SECONDS);  atomic_store(r->async_when+A,time(NULL)); ASYNC_SLEEP_LOOP(path->s,STAT_TIMEOUT_SECONDS,atomic_load(r->async_when+A));
-  if (!finished) DIE_DEBUG_NOW("!finished %s",path->s);
-
-  //log_debug_now("After ASYNC_SLEEP: %s finished: %d",path->s,finished);
+  WAIT_PICKED(r->async_stat_path=*path);
+  const time_t t0=time(NULL);
+  ASYNC_WAIT(path->s,t0);
+  DIE_IF_TIMEOUT(path->s);
   *st=finished?r->async_stat:empty_stat;
   UL();
   return st->st_ino!=0;
@@ -152,25 +148,29 @@ static bool async_stat(const struct strg *path,struct stat *st,struct rootdata *
 #undef A
 /* ================================================================================ */
 #define A ASYNC_OPENFILE
+
+
 #if WITH_TIMEOUT_OPENFILE
 static inline bool async_periodically_openfile(struct rootdata *r){
-  if (!G) return false;
-  char path[PATH_MAX+1]; strncpy(path,r->async_openfile_path,PATH_MAX);  assert(*path);
-  const int flags=r->async_openfile_flags;
-  SET_PICKED();
+  char path[PATH_MAX+1];
+  int flags;
+  //log_entered_function("'%s' G:%d",rootpath(r),G);
+  SET_PICKED(strncpy(path,r->async_openfile_path,PATH_MAX);  assert(*path);    flags=r->async_openfile_flags);
   const int fd=open(path,flags);
-  TIMEOUT_OR_NOT(if (fd>0) close(fd), r->async_openfile_fd=fd);
+  bool timeout=false;
+  OK_OR_TIMEOUT(r->async_openfile_fd=fd,timeout=true);
+  if (timeout && fd>0) close(fd);
   return fd>0;
 }
 static int async_openfile(struct zippath *zpath,const int flags){
-  //log_entered_function("rp: %s",RP());
   do{
     R();
     if (!isRootRemote(r)) return open(RP(),flags);
     L();
-    r->async_openfile_flags=flags;
-    strcpy(r->async_openfile_path,RP());
-    ASYNC_SLEEP(RP(),OPENFILE_TIMEOUT_SECONDS);
+    WAIT_PICKED(r->async_openfile_flags=flags;  strcpy(r->async_openfile_path,RP()));
+    const time_t t0=time(NULL);
+    ASYNC_WAIT(RP(),t0);
+    DIE_IF_TIMEOUT(RP());
     const int fd=finished?r->async_openfile_fd:0;
     UL();
     if (fd>0) return fd;
@@ -185,12 +185,12 @@ static int async_openfile(struct zippath *zpath,const int flags){
 #define A ASYNC_OPENZIP
 #if WITH_TIMEOUT_OPENZIP
 static inline bool async_periodically_openzip(struct rootdata *r){
-  if (!G) return false;
-  struct async_zipfile zip=*r->async_zipfile;
-  SET_PICKED();
+  struct async_zipfile zip;
+  //log_debug_now("%s",rootpath(r));
+  SET_PICKED(zip=*r->async_zipfile);
   openzip_now(&zip);
   const bool success=zip.zf!=NULL;
-  TIMEOUT_OR_NOT(closezip_now(&zip),*r->async_zipfile=zip);
+  OK_OR_TIMEOUT(*r->async_zipfile=zip,closezip_now(&zip);zip.zf=NULL);
   return success;
 }
 static void async_openzip(struct async_zipfile *zip){
@@ -198,16 +198,16 @@ static void async_openzip(struct async_zipfile *zip){
   struct zippath *zpath=&zip->azf_zpath;
   do{
     R();
-    //log_entered_function("rp: '%s' entry: '%s' remote: %d",RP(),EP(),  isRootRemote(r));
     if (!r->remote){ openzip_now(zip);break;}
     L();
-    assert(RP_L());  ASSERT(EP_L());
-    r->async_zipfile=zip;
-    ASYNC_SLEEP(RP(),OPENZIP_TIMEOUT_SECONDS);
+    ASSERT(EP_L());
+    WAIT_PICKED(r->async_zipfile=zip);
+    const time_t t0=time(NULL);
+    ASYNC_WAIT(RP(),t0);
     UL();
     if (finished && zip->zf) break;
-    //log_exited_function("rp: %s remote: %d %s",RP(),isRootRemote(r), zip->zf?GREEN_SUCCESS:RED_FAIL);
-  }while(find_realpath_other_root(zpath));
+    DIE_IF_TIMEOUT(RP());
+    }while(find_realpath_other_root(zpath));
 }
 #else
 #define async_openzip(zip) openzip_now(zip)
@@ -217,40 +217,47 @@ static void async_openzip(struct async_zipfile *zip){
 /* For a small number of member files the arrays are not stored on the heap but within the struct.  */
 #define A ASYNC_READDIR
 #if WITH_TIMEOUT_READDIR
-static void directory_copy(struct directory *dst,const struct directory *src){
-  *dst=*src;
-#define C(f,type)  dst->core.f=dst->_stack_##f;
-  if (src->core.fname==src->_stack_fname){ C_FILE_DATA(); }
-#undef C
-  STRUCT_NOT_ASSIGNABLE_INIT(dst);
+
+static void directory_copy(struct directory *dst,const struct directory *src, struct rootdata *r){
+  lock(mutex_dircache);
+  const int n=src->core.files_l;
+  directory_ensure_capacity(dst,n,n);
+  const struct directory_core *d=&src->core;
+  assert(NULL!=src->ht_intern_names);
+  FOR(i,0,n){
+    directory_add(Nth0(d->fflags,i)|DIRENT_DIRECT_NAME,dst,  Nth0(d->finode,i), d->fname[i],Nth0(d->fsize,i),Nth0(d->fmtime,i),Nth0(d->fcrc,0));
+  }
+  dst->dir_is_success=src->dir_is_success;
+  ASSERT(src->core.files_l==dst->core.files_l);
+  unlock(mutex_dircache);
 }
 
 static inline bool async_periodically_readdir(struct rootdata *r){
-  if (!G) return false;
-  struct directory dir;
-  directory_copy(&dir,r->async_dir);
-  SET_PICKED();
-  readdir_now(&dir);
-  TIMEOUT_OR_NOT(directory_destroy(&dir),directory_copy(r->async_dir,&dir));
-  return dir.dir_is_success;
+  static struct directory dir={0}; dir.ht_intern_names=&r->dircache_ht_fname;
+  SET_PICKED(assert(r->async_dir!=NULL); directory_init_zpath(&dir,&r->async_dir->dir_zpath));
+  const bool success=readdir_now(&dir);
+  OK_OR_TIMEOUT(if (success) directory_copy(r->async_dir,&dir,r),);
+  //log_debug_now("'%s'  %s",DIR_RP(&dir),success?GREEN_SUCCESS:RED_FAIL);
+  if (success)  directory_debug_filenames("&dir/",&dir);
+  return success;
 }
-
 static bool readdir_async(struct directory *dir){
   assert(dir!=NULL);
   struct zippath *zpath=&dir->dir_zpath;
   do{
     R();
     ASSERT(RP_L());
-    if (!r->remote||dir->async_never) return readdir_now(dir);
+    if (!r->with_timeout||dir->async_never) return readdir_now(dir);
     L();
-    r->async_dir=dir;
-    WAIT_PICKED(READDIR_TIMEOUT_SECONDS);
-    directory_update_time(false,dir);
-    ASYNC_SLEEP_LOOP(RP(),READDIR_TIMEOUT_SECONDS,atomic_load(r->async_when+A));
+    WAIT_PICKED(r->async_dir=dir);
+    root_update_time(PTHREAD_ASYNC,false,r);
+    ASYNC_WAIT(RP(),atomic_load(r->thread_when+PTHREAD_ASYNC));
+    // log_debug_now("'%s'  finished:%d  success:%d",DIR_RP(dir),finished,dir->dir_is_success);
+    //directory_debug_filenames("dir/",dir);
     UL();
     if (finished) return dir->dir_is_success;
+    DIE_IF_TIMEOUT(RP());
   }while(find_realpath_other_root(&dir->dir_zpath));
-
   return false;
 }
 #else
@@ -258,11 +265,28 @@ static bool readdir_async(struct directory *dir){
 #endif //WITH_TIMEOUT_READDIR
 #undef A
 /* ================================================================================ */
-#undef ASYNC_SLEEP
-#undef ASYNC_SLEEP_LOOP
-#undef TIMEOUT_OR_NOT
+#undef ASYNC_WAIT
+#undef OK_OR_TIMEOUT
 #undef L
 #undef UL
 #undef R
 #undef G
+#undef ID
+#undef TO
 #undef WAIT_PICKED
+static void unblock_update_time(struct rootdata *r, const enum enum_root_thread thread){
+  const int flag=
+    thread==PTHREAD_MEMCACHE?LOG_INFINITY_LOOP_MEMCACHE:
+    thread==PTHREAD_ASYNC?LOG_INFINITY_LOOP_DIRCACHE:
+    thread==PTHREAD_MISC?LOG_INFINITY_LOOP_MISC: 0;
+  IF_LOG_FLAG(flag) log_verbose("Thread: %s  Root: %s ",PTHREAD_S[thread],rootpath(r));
+  while(r->thread_pretend_blocked[thread]) usleep(1000*100);
+  atomic_store(r->thread_when_success+thread,time(NULL));
+}
+
+static void root_update_time(const enum enum_root_thread t,const bool success, struct rootdata *r){
+  assert(r!=NULL);
+  const time_t now=time(NULL);
+  if (success)  atomic_store(r->thread_when_success+t,now);
+  atomic_store(r->thread_when+t,now);
+}

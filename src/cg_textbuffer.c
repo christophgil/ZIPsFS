@@ -273,6 +273,43 @@ static int textbuffer_differs_from_filecontent_fd(const struct textbuffer *b,con
   return n<0||pos<textbuffer_length(b)?-1:0;
 }
 
+static int exec_on_file(const enum enum_exec_on_file type, char *output, const int output_max, const char *path ){
+#define C(p) cmd[i++]=p
+  struct textbuffer b={0};
+  const char *cmd[9];
+  int i=0, skipLines=0;
+  bool trim=true;
+  switch(type){
+  case EXECF_SEQ: C("seq"); C("-s"); C(" "); C("20"); break;
+  case EXECF_MOUNTPOINT_USING_DF: skipLines=1; C("df"); C("--output=target"); C(path); break;
+  case EXECF_MOUNTPOINT_USING_FINDMNT: C("findmnt"); C("-n"); C("-o"); C("TARGET"); C("--target"); C(path); break;
+  default: return -1;
+  }
+  C(NULL);
+#undef C
+  textbuffer_reset(&b);
+  b.read_bufsize=1024;
+  textbuffer_from_exec_output(0,&b,cmd,NULL,"/home/cgille/test/out_err.txt");
+  //  fprintf(stderr," Read %lld bytes \n",(LLD)textbuffer_length(&b));
+  int len=textbuffer_copy_to(&b,0,output_max,output);
+  textbuffer_destroy(&b);
+  if(skipLines){
+    char *src=output;
+    while(skipLines--){
+      if (!(src=strchr(src,'\n'))){ *output=0;  return -1;}
+      src++;
+    }
+    len-=(src-output);
+    char *dst=output;
+    while ((*dst++=*src++));
+  }
+  if (trim){
+    while (len && isspace(output[len-1])) len--;
+  }
+  output[len]=0;
+  return len;
+}
+
 
 #endif // cg_textbuffer_dot_c
 #if __INCLUDE_LEVEL__ == 0 && ! defined(__cppcheck__)
@@ -307,20 +344,15 @@ static void test_write_bytes_block(const int fd,const struct textbuffer *b){
 #undef BUF
 }
 static void test_exec(void){
-  char const * const cmd[]={"/usr/bin/seq","-s"," ","20",NULL};
-  //char *cmd[]={"/usr/bin/ls","/",NULL};
-  const char *path_stderr="/home/cgille/tmp/test/cg_textbuffer_stderr.txt";
-  struct textbuffer b={0};
-  RLOOP(i,10){
-    textbuffer_reset(&b);
-    b.read_bufsize=5;
-    textbuffer_from_exec_output(0,&b,cmd,NULL,path_stderr);
-  }
-  fprintf(stderr," Read %lld bytes \n",(LLD)textbuffer_length(&b));
-  //  test_write_bytes_block(-1,&b);
-  test_write_bytes_block(STDOUT_FILENO,&b);
-  textbuffer_destroy(&b);
+      FOR(i,0,EXECF_NUM){
+      char output[4444]={0};
+      exec_on_file(i,output,sizeof(output)-1,"/etc/fstab");
+      printf("output='%s';\n",output);
+    }
 }
+
+
+
 static void _argc_n(const int n, const int argc){
   if (argc!=n+1){
     fprintf(stderr,"Need %d parameters\n",n);
@@ -343,6 +375,7 @@ static void _test_write_file(int argc,  char *argv[]){
 }
 
 int main(int argc,char *argv[]){
+
   /*
     struct textbuffer b={0};
     FOR(i,0,10){
@@ -352,7 +385,7 @@ int main(int argc,char *argv[]){
     textbuffer_destroy(&b);
     return 0;
   */
-  switch(3){
+  switch(0){
   case 0: test_exec();break;
   case 1: test_ps_pid(getpid());break;
   case 2:{

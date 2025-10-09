@@ -41,8 +41,6 @@ static void enable_core_dumps(void){
 /// recognize certain file names ///
 ////////////////////////////////////
 
-
-
 static bool filepath_contains_blocking(const char *p){
   return p && strstr(p,"blocking");
 }

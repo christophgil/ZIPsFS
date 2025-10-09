@@ -306,21 +306,71 @@ static int log_print_fuse_argv(int n){
   PRINTINFO("</OL>\n");
   return n;
 }
-static int log_print_roots(int n){
-  PRINTINFO("<H1>Roots</H1>\n<TABLE border=\"1\"><THEAD><TR>"TH("Path")TH("Writable")TH("Last response")TH("Blocked")TH("Free[GB]")TH("Dir-Cache[kB]")"</TR></THEAD>\n");
-  foreach_root(r){
-    const int freeGB=(int)((r->statvfs.f_frsize*r->statvfs.f_bfree)>>30), last_response=ROOT_SUCCESS_SECONDS_AGO(r);
-    PRINTINFO("<TR>"sTDl()sTDc(),rootpath(r),yes_no(r->writable));
-    if (r->remote){
-      PRINTINFO(TD("%'d s ago")TD("%'u times"), last_response,r->log_count_delayed);
-    }else{
-      PRINTINFO(TD("Local")TD(""));
-    }
-    uint64_t u=0; IF1(WITH_DIRCACHE,LOCK(mutex_dircache, u=mstore_usage(&r->dircache_mstore)/1024));
-    PRINTINFO(dTD()luTD()"</TR>\n",freeGB,(LLU)u);
+
+#define U(code) cg_unicode(unicode,code,n!=0)
+#define P() if (n) {PRINTINFO("%s",unicode);} else fputs(unicode,stderr)
+static int table_draw_horizontal(int n, const int type, const int nColumn, const int *width){ /* n==0 for UNIX console with UTF8 else for HTML with unicode */
+  static const int ccc[4][4]={
+    {BD_HEAVY_DOWN_AND_RIGHT,BD_HEAVY_HORIZONTAL,BD_HEAVY_DOWN_AND_HORIZONTAL,BD_HEAVY_DOWN_AND_LEFT}, /* above header */
+    {BD_HEAVY_VERTICAL_AND_RIGHT,BD_HEAVY_HORIZONTAL,BD_HEAVY_VERTICAL_AND_HORIZONTAL,BD_HEAVY_VERTICAL_AND_LEFT}, /* below header */
+    {BD_VERTICAL_HEAVY_AND_RIGHT_LIGHT,BD_LIGHT_HORIZONTAL,BD_VERTICAL_HEAVY_AND_HORIZONTAL_LIGHT,BD_VERTICAL_HEAVY_AND_LEFT_LIGHT}, /* body */
+    {BD_HEAVY_UP_AND_RIGHT,BD_HEAVY_HORIZONTAL,BD_HEAVY_UP_AND_HORIZONTAL,BD_HEAVY_UP_AND_LEFT}}; /*bottom */ // cppcheck-suppress constVariable
+  const int *cc=ccc[type];
+  char unicode[9];
+  U(cc[0]); P();
+  FOR(ic,0,nColumn){
+    U(cc[1]); RLOOP(iTimes,width[ic]+2) P();
+    U(cc[ic<nColumn-1?2:3]); P();
   }
-  PRINTINFO("</TABLE>\n");
+  if (n){ PRINTINFO("\n"); } else fputc('\n',stderr);
   return n;
+}
+#undef P
+#undef U
+static int log_print_roots(int n){ /* n==0 for UNIX console with UTF8 else for HTML with unicode */
+  if (n) PRINTINFO("<H1>Roots</H1><PRE>\n\n"); /* if n==0 then output to UNIX console */
+#define C(title,format,...) posOld=pos;\
+  pos+=r?S(format,__VA_ARGS__):S("%s",title);\
+  spaces=width[col]-pos+posOld;\
+  if (print){ memset(line+pos,' ',spaces); pos+=spaces; pos+=S(" %s ",colsep);} else width[col]=MAX_int(width[col],pos-posOld);\
+  col++
+#define S(...) snprintf(line+pos,sizeof(line)-pos,__VA_ARGS__)
+  int width[33]={0};
+  char line[1024], colsep[9];
+  cg_unicode(colsep,BD_HEAVY_VERTICAL,n!=0);
+  FOR(print,0,2){
+    FOR(ir,-1,_root_n){
+      char tmp[MAX_PATHLEN+1];
+      struct rootdata *r=ir<0?NULL:_root+ir;
+      if (!r && !n) fputs(ANSI_BOLD,stderr);
+      int posOld=0,col=0,spaces, pos=cg_unicode(line,BD_HEAVY_VERTICAL,n!=0);
+      line[pos++]=' ';
+      C("No","%2d",1+rootindex(r));
+      C("Path","%s",r->rootpath);
+      if (r){ if (*r->rootpath_mountpoint) sprintf(tmp,"(%d) %s",1+r->seq_fsid,r->rootpath_mountpoint); else sprintf(tmp,"(%d) %16lx",1+r->seq_fsid,r->f_fsid);}
+      C("Filesystem","%s",tmp);
+      if (r) sprintf(tmp,"%s%s%s%s",r->remote?"R ":"",r->writable?"W ":"",r->with_timeout?"T ":"",r->blocked?"B ":"");
+      C("Features","%s",tmp);
+      C("Retained directory","%s",r->retain_dirname);
+      C("Free [GB]","%'9ld",((r->statvfs.f_frsize*r->statvfs.f_bfree)>>30));
+      if (n){
+        if (r){ if (ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC)) sprintf(tmp,"%'ld seconds ago",ROOT_SUCCESS_SECONDS_AGO(r)/10); else strcpy(tmp,"Never");}
+        C("Last response","%s", tmp);
+        C("Blocked","%'u times",r->log_count_delayed);
+      }
+      if (!print) continue;
+      if (!r) n=table_draw_horizontal(n,0,col,width);
+      line[sizeof(line)-1]=0;
+      if (n){ PRINTINFO("%s\n",line);} else fprintf(stderr,"%s"ANSI_RESET"\n",line);
+      n=table_draw_horizontal(n,ir==-1?1:ir<_root_n-1?2:3,col,width);
+    }
+  }
+  static const char *info="Explain table:\n    Retained directory: When no trailing slash in path then the last path-component will be part of the virtual path.\n"
+    "    Feature flags: W=Writable (First path)   R=Remote (Path starts with two slashes)     T=Supports timeout (Path starts with three slashes)";
+  if (n){ PRINTINFO("%s   B=Blocked (frozen)\n</PRE>",info);} else fprintf(stderr,ANSI_FG_GRAY"%s"ANSI_RESET"\n\n",info);
+  return n;
+#undef C
+#undef S
 }
 static int repeat_chars_info(int n,char c, int i){
   if (i>0 && n+i<_info_capacity)  memset(_info+n,c,i);

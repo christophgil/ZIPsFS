@@ -127,7 +127,7 @@ static void transient_cache_store(const struct zippath *zpath, const char *vp,co
       zp->flags|=ZP_DOES_NOT_EXIST; /* Not found in any root. */
     }else if (!zp->virtualpath){
       *zp=*zpath;
-#if WITH_EXTRA_ASSERT
+#if 0 //WITH_EXTRA_ASSERT
       const struct zippath *wiedergefunden=transient_cache_get_or_create_zpath(false,false,vp,vp_l);
       assert(NULL!=wiedergefunden);
       //log_debug_now("Wiederfinden: %p %s",wiedergefunden,wiedergefunden?ZP_VP(wiedergefunden):NULL);
@@ -151,7 +151,6 @@ static void transient_cache_destroy(struct fHandle *d){
 }
 
 static void transient_cache_activate(struct fHandle *d){
-
   if ((d->zpath.flags&ZP_ZIP) && config_advise_transient_cache_for_zipentries(D_VP(d),D_VP_L(d))){
     d->flags|=FHANDLE_FLAG_WITH_TRANSIENT_ZIPENTRY_CACHES;
     foreach_fhandle(ie,e){

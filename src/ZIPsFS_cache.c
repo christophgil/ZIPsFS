@@ -50,7 +50,7 @@ static void dircache_clear_if_reached_limit(const bool always,const int mask,str
     IF1(WITH_DIRCACHE,warning(WARN_DIRCACHE,r->rootpath,"Clearing directory cache. Cached segments: %zu (%zu) bytes: %zu. %s",ss,limit,mstore_usage(&r->dircache_mstore),!limit?"":"Consider to increase NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE"));
     if M(CLEAR_DIRCACHE){
         _clear_ht(&r->dircache_ht);
-        IF1(WITH_DIRCACHE, if (_clear_ht(&r->dircache_ht_fname)) mstore_clear(&r->dircache_mstore));
+        IF0(WITH_TIMEOUT_READDIR, IF1(WITH_DIRCACHE, if (_clear_ht(&r->dircache_ht_fname)) mstore_clear(&r->dircache_mstore)));
       }
     if (!rootindex(r)){
       IF1(WITH_ZIPINLINE_CACHE, if M(CLEAR_ZIPINLINE_CACHE) _clear_ht(&ht_zinline_cache_vpath_to_zippath));
@@ -83,10 +83,10 @@ static void dircache_directory_to_cache(struct directory *dir){
   directory_remove_unused_fields(dir);
   //log_entered_function("%s",DIR_RP(dir));
   cg_thread_assert_locked(mutex_dircache);
-  // debug_assert_crc32_not_null(dir); // DEBUG_NOW
+  //debug_assert_crc32_not_null(dir);
   struct rootdata *r=DIR_ROOT(dir);
   IF1(WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,dircache_clear_if_reached_limit(false,0xFFFF,r,NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE));
-  assert_validchars_direntries(VALIDCHARS_PATH,dir,true);
+  assert_validchars_direntries(dir);
   struct directory_core src=dir->core, *d=mstore_add(&r->dircache_mstore,&src,sizeof(struct directory_core),SIZEOF_POINTER);
   if (!d->dir_mtim.tv_sec){
     directory_rp_stat(dir);
@@ -158,7 +158,7 @@ static bool dircache_directory_from_cache(struct directory *dir){
     }else{
       //log_debug_now(GREEN_SUCCESS"valid");
       dir->core=*dc;
-      assert_validchars_direntries(VALIDCHARS_PATH,dir,false);
+      assert_validchars_direntries(dir);
       dir->dir_is_dircache=true;
       return true;
     }

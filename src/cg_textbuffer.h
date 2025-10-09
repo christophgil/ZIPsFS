@@ -29,5 +29,6 @@ struct textbuffer{
 };
 #define  textbuffer_first_segment(b)  b->_onstack_segment[0]
 
+enum enum_exec_on_file{EXECF_SEQ,EXECF_MOUNTPOINT_USING_DF,EXECF_MOUNTPOINT_USING_FINDMNT, EXECF_NUM};
 
 #endif

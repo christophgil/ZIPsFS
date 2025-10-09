@@ -131,7 +131,7 @@ static bool autogen_filldir(fuse_fill_dir_t filler,void *buf, const char *name, 
     char generated[MAX_PATHLEN+1];
     const FOREACH_AUTOGEN_RULE(iac,ac){
       aimpl_vgenerated_from_vinfile(generated,name,name_l,ac);
-      if (*generated) filler_add_no_dups(filler,buf,generated,stbuf,no_dups);
+      if (*generated) filler_add(filler,buf,generated,0,stbuf,no_dups);
     }
   }
   return true;

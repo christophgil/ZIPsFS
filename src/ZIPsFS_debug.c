@@ -63,18 +63,20 @@ static bool _debugSpecificPath(int mode, const char *path, int path_l){
 ////////////////////////
 #define assert_validchars(...) _assert_validchars(__VA_ARGS__,__func__)
 
-static void _assert_validchars(enum enum_validchars t,const char *s,int len,const char *fn){
-  static bool initialized;
-  // cppcheck-suppress duplicateConditionalAssign
-  if (!initialized) initialized=cg_validchars(VALIDCHARS_PATH)[PLACEHOLDER_NAME]=cg_validchars(VALIDCHARS_FILE)[PLACEHOLDER_NAME]=true;
-  const int pos=cg_find_invalidchar(t,s,len);
-  if (pos>=0){
-    LOCK_NCANCEL(mutex_validchars,
-                 if (!ht_numkey_set(&_ht_valid_chars,hash32(s,len),len,"X")) warning(WARN_CHARS|WARN_FLAG_ONCE_PER_PATH,s,ANSI_FG_BLUE"%s()"ANSI_RESET": position: %d",fn,pos));
+static void _assert_validchars(enum enum_validchars t,const char *s,int s_l,const char *fn){
+  if (t==VALIDCHARS_PATH||t==VALIDCHARS_FILE) cg_validchars(t)[PLACEHOLDER_NAME]=true;
+  const int pos=cg_find_invalidchar(t,s,s_l);
+  if (pos<0) return;
+  lock(mutex_validchars);
+  if (!ht_numkey_set(&_ht_valid_chars,hash32(s,s_l),s_l,"X")){
+    char encoded[PATH_MAX];
+    url_encode(encoded,PATH_MAX,s);
+    warning(WARN_CHARS|WARN_FLAG_ONCE_PER_PATH,encoded,ANSI_FG_BLUE"%s()"ANSI_RESET": position: %d",fn,pos);
+    unlock(mutex_validchars);
   }
 }
 #define  assert_validchars_direntries(...) _assert_validchars_direntries(__VA_ARGS__,__func__)
-static void _assert_validchars_direntries(enum enum_validchars t,const struct directory *dir,const bool is_to_cache,const char *fn){
+static void _assert_validchars_direntries(const struct directory *dir,const char *fn){
   if (dir){
     RLOOP(i,dir->core.files_l){
       const char *s=dir->core.fname[i];
@@ -83,18 +85,18 @@ static void _assert_validchars_direntries(enum enum_validchars t,const struct di
   }
 }
 
-#define debug_directory_print(dir) _debug_directory_print(dir,__func__,__LINE__);
-static void _debug_directory_print(const struct directory *dir,const char *fn,const int line){
-  if (dir){
-    const struct directory_core *d=&dir->core;
-    log_msg("%s():%d "ANSI_INVERSE"Directory"ANSI_RESET" rp: %s files_l: %d  destroyed: %d debug: %d\n",fn,line,DIR_RP(dir), d->files_l, dir->dir_is_destroyed,dir->debug);
-    log_msg("d->fname: %p directory_is_stack: %d   \n",d->fname, d->fname==dir->_stack_fname);
-    RLOOP(i,d->files_l){
-      const char *s=d->fname[i];
-      log_msg(" (%d) %p '%s'  size: %'lld\n",i,s,snull(s),(LLD)(!d->fsize?-1:d->fsize[i]));
-    }
-  }
-}
+/* #define debug_directory_print(dir) _debug_directory_print(dir,__func__,__LINE__); */
+/*   static void _debug_directory_print(const struct directory *dir,const char *fn,const int line){ */
+/*     if (dir){ */
+/*       const struct directory_core *d=&dir->core; */
+/*       log_msg("%s():%d "ANSI_INVERSE"Directory"ANSI_RESET" rp: %s files_l: %d  destroyed: %d debug: %d\n",fn,line,DIR_RP(dir), d->files_l, dir->dir_is_destroyed,dir->debug); */
+/*       log_msg("d->fname: %p directory_is_stack: %d   \n",d->fname, d->fname==dir->_stack_fname); */
+/*       RLOOP(i,d->files_l){ */
+/*         const char *s=d->fname[i]; */
+/*         log_msg(" (%d) %p '%s'  size: %'lld\n",i,s,snull(s),(LLD)(!d->fsize?-1:d->fsize[i])); */
+/*       } */
+/*     } */
+/*   } */
 
 ////////////////////////////
 /// File name extension ///
@@ -115,21 +117,28 @@ EXIT(0);
 
 /////////////////////////////////////////////////////////////
 
-#if 0
-static void directory_debug_filenames(const char *func,const char *msg,const struct directory *dir){
-  if (!d->fname){ log_error("%s %s %s: d->fname is NULL\n",__func__,func,msg);EXIT(9);}
+#define directory_debug_filenames(msg,dir) _directory_debug_filenames(__func__,__LINE__,msg,dir)
+static void _directory_debug_filenames(const char *func,const int line,const char *msg,const struct directory *dir){
+  const struct directory_core *d=&dir->core;
+  if (!d->fname){ log_error("%s:%d %s %s: d->fname is NULL\n",__func__,line,func,msg);EXIT(9);}
   const bool print=(strchr(msg,'/')!=NULL);
-  if (print) fprintf(stderr,"\n"ANSI_INVERSE"%s Directory %s   files_l=%d\n"ANSI_RESET,func,msg,d->files_l);
+  const struct ht *hti=IF01(WITH_TIMEOUT_READDIR,NULL,dir->ht_intern_names);
+  fprintf(stderr,"\n"ANSI_INVERSE"%s:%d  Directory %s   files_l: %d/%d  destroyed: %s success: %s  ht-intern: %s\n"ANSI_RESET,func,line,msg,d->files_l,  dir->files_capacity, yes_no(dir->dir_is_destroyed), yes_no(dir->dir_is_success),yes_no(NULL!=hti));
+  assert(d->files_l<=dir->files_capacity);
   FOR(i,0,d->files_l){
     const char *n=d->fname[i];
     if (!n) continue;
     const int len=strnlen(n,MAX_PATHLEN);
-    if (len>=MAX_PATHLEN){ log_error("%s %s %s: strnlen d->fname[%d] is %d\n",__func__,func,msg,i,len);EXIT(9);}
-    const char *s=Nth0(d->fname,i);
-    if (print) fprintf(stderr," (%d)\t%"PRIu64"\t%'zu\t%s\t%p\t%lu\n",i,Nth0(d->finode,i), Nth0(d->fsize,i),s,s,hash_value_strg(s));
+    if (len>=MAX_PATHLEN){ log_error("%s %s %s: strnlen d->fname[%d] is %d\n",__func__,func,msg,i,len);}
+    if (print){
+          char encoded[PATH_MAX];
+      const bool invalid=len!=url_encode(encoded,PATH_MAX,n);
+      //        fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'zu\t%s\t%u\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), Nth0(d->fsize,i),encoded,hash_value_strg(n));
+      fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'zu\t%s\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), Nth0(d->fsize,i),encoded);
+    }
   }
 }
-#endif
+
 
 
 

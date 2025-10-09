@@ -20,9 +20,9 @@
 #include <stdbool.h>
 ////////////////////////////////////////
 #ifdef __cppcheck__
-#define WITH_CPPCHECK 1
+#define IS_CHECKING_CODE 1
 #else
-#define WITH_CPPCHECK 0
+#define IS_CHECKING_CODE 0
 #endif
 ////////////////////////////////////////
 #ifdef __USE_GNU

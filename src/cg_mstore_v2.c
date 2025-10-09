@@ -181,7 +181,7 @@ static int _mstore_openfile(struct mstore *m,const uint32_t block,const off_t ad
 static char *_mstore_block_try_allocate(struct mstore *m,char *block,const off_t bytes,const int align){
   if (!block) return NULL;
   //  char not_used=block[0];
-  off_t not_used_off=((off_t*)block)[0];
+  //off_t not_used_off=((off_t*)block)[0];
   const off_t begin=NEXT_MULTIPLE(MSTORE_OFFSET_NEXT_FREE(block),align);
   if (begin+bytes>MSTORE_BLOCK_CAPACITY(block)) return NULL;
   MSTORE_OFFSET_NEXT_FREE(block)=begin+bytes;

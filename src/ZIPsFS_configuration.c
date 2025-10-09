@@ -135,14 +135,11 @@ static bool config_not_report_stat_error(const char *path,const int path_l){
 ///   > 0: Cache is advised and requires n bytes         ///
 ////////////////////////////////////////////////////////////
 static off_t config_advise_cache_in_ram(const int flags,const char *virtualpath, const int vp_l, const char *realpath,const int rp_l,const char *rootpath,const off_t filesize){
-  //if (!(flags&ADVISE_CACHE_IS_ZIPENTRY)) return -1;
   const char *e=virtualpath+vp_l;
   if (vp_l>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e') return -1; /* The exe files hold the icon for File Explorer */
   if (flags&ADVISE_CACHE_BY_POLICY) return filesize;
   off_t need=filesize;
   bool cache=((flags&ADVISE_CACHE_IS_CMPRESSED)&&(flags&ADVISE_CACHE_IS_SEEK_BW)) || ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin");
-  //log_debug_now("%s   need: %lld cache: %d  compr: %d  ends: %d",virtualpath,(LLD)need,cache,  (flags&ADVISE_CACHE_IS_CMPRESSED),  ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin"));
-  //if (DEBUG_NOW==DEBUG_NOW && !cache) {cache=ENDSWITH(virtualpath,vp_l,".mzML"); }
   if (!cache && ENDSWITH(virtualpath,vp_l,"analysis.tdf") && vp_l+4<MAX_PATHLEN){ /* Note: timsdata.dll opens analysis.tdf first  and then analysis.tdf_bin */
     cache=true;
     char tdf_bin[MAX_PATHLEN+1]; stpcpy(stpcpy(tdf_bin,virtualpath),"_bin");
