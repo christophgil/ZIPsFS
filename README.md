@@ -192,14 +192,14 @@ Other users are granted access.
 
 
 
-# Project status
-
+<details><summary>Project status</summary>
 
 Author: Christoph Gille
 
-Current status: Testing and Bug fixing. Already running very busy for several weeks without interruption.
+**Current status**: Testing and Bug fixing. Already running very busy for several weeks without interruption.
 
 If ZIPsFS crashes, please send the stack-trace together with the source code you were using.
+</details>
 
  - [Installation](./INSTALL.md)
 
