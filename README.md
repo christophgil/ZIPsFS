@@ -45,7 +45,7 @@ If MNT  is within an exported  SAMBA or NFS path the real mount points should be
 Include into */etc/samba/smb.conf*:
 
     follow symlinks = yes
-/details>
+</details>
 <details><summary>Generated (synthetic) files: Automatic file conversions, Accessing web resources as regular files</summary>
 ## Accessing internet files
 
@@ -142,7 +142,7 @@ file position 99,999,997,952.  ZIPsFS will perform the conversion when serving t
 request.  Since the converted mzML file is much smaller than the read position, there will be no
 data and Fragpipe will fail. When however, at least one byte of the mzML files is read to initiate the
 conversion process before Fragpipe is started, computation will succeeds.
-/details>
+</details>
 <details><summary>Logging</summary>
 ## Logs
 
@@ -169,7 +169,7 @@ For example:
     ~/test/ZIPsFS/mnt/ZIPsFS/file_system_info.html
 
 This file provides real-time information about the system’s current state.
-/details>
+</details>
 <details><summary>Fault management. Timouts for remote upstream file systems. Duplicated remote trees</summary>
 # Fault Management for Remote File Access
 
@@ -227,7 +227,7 @@ instead.  Ensure these tools are installed and accessible in your system's PATH 
 work correctly.
 
 See ZIPsFS.compile.sh for activation of sanitizers.
-/details>
+</details>
 <details><summary>Improve performance  caching file content and meta data</summary>
 ## File content cache
 
@@ -255,7 +255,7 @@ Additional caching mechanisms are designed to accelerate file listing in large d
 For ZIP entries loaded entirely into RAM:
 ZIPsFS performs CRC checksum validation.
 Any detected inconsistencies are logged, helping to detect corruption or transmission errors.
-/details>
+</details>
 <details><summary>Use-case - application for high-throughput mass-spectrometry</summary>
 # Use case - Archive of mass spectrometry files
 
@@ -414,7 +414,7 @@ File attributes need to be cached.
 </SPAN>
 
 
-/details>
+</details>
 <details><summary>Limitations and Bugs</summary>
 ## LIMITATIONS
 
@@ -434,7 +434,7 @@ If you require this functionality, please submit a feature request.
 
 Simultaneous reading and writing of a file using the same file descriptor will only function
 correctly for files stored in the writable source.
-/details>
+</details>
 <details><summary>See also related sites</summary>
 SEE ALSO
 ========
@@ -446,7 +446,7 @@ SEE ALSO
 - https://github.com/google/mount-zip
 - https://github.com/cybernoid/archivemount
 - https://github.com/mxmlnkn/ratarmount
-/details>
+</details>
 
 
 <!---
