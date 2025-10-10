@@ -1,7 +1,7 @@
 # ZIPsFS - FUSE-based  overlay file system which expands  ZIP files
 
  - [Installation](./INSTALL.md)
-<details>Configuration</summary>
+<details><summary>Configuration</summary>
 ## ZIPsFS Configuration
 
 ZIPsFS can be customized:
@@ -46,7 +46,7 @@ Include into */etc/samba/smb.conf*:
 
     follow symlinks = yes
 /details>
-<details>Generated (synthetic) files: Automatic file conversions, Accessing web resources as regular files</summary>
+<details><summary>Generated (synthetic) files: Automatic file conversions, Accessing web resources as regular files</summary>
 ## Accessing internet files
 
 Computations often require files from public repositories.
@@ -143,7 +143,7 @@ request.  Since the converted mzML file is much smaller than the read position, 
 data and Fragpipe will fail. When however, at least one byte of the mzML files is read to initiate the
 conversion process before Fragpipe is started, computation will succeeds.
 /details>
-<details>Logging</summary>
+<details><summary>Logging</summary>
 ## Logs
 
 ZIPsFS typically runs as a foreground process.  To keep it active and monitor its output, it is
@@ -170,7 +170,7 @@ For example:
 
 This file provides real-time information about the system’s current state.
 /details>
-<details>Fault management. Timouts for remote upstream file systems. Duplicated remote trees</summary>
+<details><summary>Fault management. Timouts for remote upstream file systems. Duplicated remote trees</summary>
 # Fault Management for Remote File Access
 
 Accessing remote files inherently carries a higher risk of failure. Requests may either:
@@ -228,7 +228,7 @@ work correctly.
 
 See ZIPsFS.compile.sh for activation of sanitizers.
 /details>
-<details>Improve performance  caching file content and meta data</summary>
+<details><summary>Improve performance  caching file content and meta data</summary>
 ## File content cache
 
 ZIPsFS optionally supports caching specific files and ZIP entries entirely in RAM, allowing data segments to
@@ -256,7 +256,7 @@ For ZIP entries loaded entirely into RAM:
 ZIPsFS performs CRC checksum validation.
 Any detected inconsistencies are logged, helping to detect corruption or transmission errors.
 /details>
-<details>Use-case - application for high-throughput mass-spectrometry</summary>
+<details><summary>Use-case - application for high-throughput mass-spectrometry</summary>
 # Use case - Archive of mass spectrometry files
 
 
@@ -415,7 +415,7 @@ File attributes need to be cached.
 
 
 /details>
-<details>Limitations and Bugs</summary>
+<details><summary>Limitations and Bugs</summary>
 ## LIMITATIONS
 
 ### Hard Links
@@ -435,7 +435,7 @@ If you require this functionality, please submit a feature request.
 Simultaneous reading and writing of a file using the same file descriptor will only function
 correctly for files stored in the writable source.
 /details>
-<details>See also related sites</summary>
+<details><summary>See also related sites</summary>
 SEE ALSO
 ========
 
