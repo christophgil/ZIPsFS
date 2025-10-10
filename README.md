@@ -1,14 +1,452 @@
 # ZIPsFS - FUSE-based  overlay file system which expands  ZIP files
 
  - [Installation](./INSTALL.md)
- - [Configuration](./ZIPsFS_configuration.md)
- - [Generated (synthetic) files: Automatic file conversions, Accessing web resources as regular files](./ZIPsFS_generated_files.md)
- - [Logging](ZIPsFS_logs.md)
- - [Fault management. Timouts for remote upstream file systems. Duplicated remote trees](ZIPsFS_fault_management.md)
- - [Improve performance  caching file content and meta data](./ZIPsFS_cache.md)
- - [Use-case - application for high-throughput mass-spectrometry](USE_CASE.md)
- - [Limitations and Bugs](ZIPsFS_Limitations.md)
- - [See also related sites](ZIPsFS_related_sites.md)
+<details>Configuration</summary>
+## ZIPsFS Configuration
+
+ZIPsFS can be customized:
+
+ - optional features can be (de)-activated with  preprocessor macros "WITH_SOME_FEATURE"  which take the values 0 or 1.
+ - Rules can be given
+     - which files are cached in the main memory
+     - which ZIP entries are inlined
+ - Timeout values for accessing (remote) files
+ - Automatic file conversions
+
+Configuration files of ZIPsFS, are files written in the programming language C.
+They have the prefix **ZIPsFS_configuration** and the suffix **.h** of **.c**.
+
+
+ZIPsFS is customized for our needs - accessing archived high throughput data such that it can be
+directly used for mass spectrometry software. These settings can be used as a sample to customize it
+for other needs.
+
+
+Changes require recompilation and take effect after restart of ZIPsFS.
+
+With the -s option, the updated ZIPsFS can seamlessly replace running instances without disrupting the virtual file system.
+
+To illustrate how this works, let MNT represent the apparent mount point of the FUSE file system.
+Suppose we are in the parent directory of MNT, enabling the use of relative paths.
+Users access files through this apparent mount point, but in reality, MNT is a symbolic link to the actual mount point.
+The real mount point is not directly accessed by users, as it changes each time a new instance of ZIPsFS is launched.
+
+For example, assume the obsolete ZIPsFS instance is mounted at ./.mountpoints/MNT/1.
+When a new instance replaces it, it may use any empty directory as   mount point. ZIPsFS must be started with the following command line  option:
+
+    -s MNT
+
+Once the new instance is running, the symbolic link is updated to point to the new mount
+location. From the user's perspective, nothing changes - the apparent mount point remains MNT. To
+ensure uninterrupted access, the obsolete instance should remain active for a short period to allow
+ongoing file operations to complete.
+
+If MNT  is within an exported  SAMBA or NFS path the real mount points should be in the exported file tree as well.
+Include into */etc/samba/smb.conf*:
+
+    follow symlinks = yes
+/details>
+<details>Generated (synthetic) files: Automatic file conversions, Accessing web resources as regular files</summary>
+## Accessing internet files
+
+Computations often require files from public repositories.
+Files from the internet (http, ftp, https) can be accessed as files using the URL as file name. ZIPsFS takes care of downloading and updating.
+They are immutable and cannot be modified  unintentionally.
+In DOS, a trailing colon is a signature for device names. Therefore, the colon and all slashes in the URL need to be replaced by comma.
+Comma  has been chosen as a replacement because it normally does not  occur in URLs. Furthermore, it does not require quoting in UNIX shells.
+
+Example with *mnt/*  denoting the  mountpoint of the ZIPsFS file system:
+
+    sudo apt-get install curl
+    ls -l  mnt/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README
+    more   mnt/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README
+    head   mnt/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README@SOURCE.TXT
+
+To see the real local file path append ***@SOURCE.TXT*** to the file path.
+
+The http-header is updated according to a time-out rule in **ZIPsFS_configuration.c**.
+Whether the file itself needs updating is decided upon the *Last-Modified* attribute in the http or ftp header.
+
+Additionally, the file is accessible with a file-name containing the data in the header.
+This feature can be conditionally deactivated.
+
+
+This works also when the FUSE file system is accessed remotely  via SMB or NFS.
+However, Windows PCs fail to access these files. This is because files do not exist for Windows, when they are not listed in the file list of the parent.
+
+## Generation of files using programming language C
+
+By modifying the file *ZIPsFS_configuration_c.c*, users can easily implement
+files where the file content is generated dynamically using the programming language C.
+
+Here is a predefined minimal example which explains how it works:
+
+    <mount point>/example_generated_file/example_generated_file.txt
+
+
+
+## Automatic Virtual File Generation and Conversion Rules
+
+ZIPsFS can generate and display virtual files automatically. This feature is enabled by setting the preprocessor macro **WITH_AUTOGEN** to **1** in *ZIPsFS_configuration.h*.
+Generated files are stored in the first file branch, allowing them to be served instantly upon repeated requests.
+A common use case for this feature is file conversion. The default rules, defined in *ZIPsFS_configuration_autogen.c*, include:
+
+- **Image files (JPG, JPEG, PNG, GIF):**  Smaller versions at 25% and 50% scaling.
+- **Image files (OCR):** Extracted text using Optical Character Recognition (OCR).
+- **PDF files:** Extracted ASCII text.
+- **ZIP files:** Consistency check reports, including checksums.
+- **Mass spectrometry files:**  **mgf (Mascot)** and **mzML** formats.
+- **wiff files:** Extract ASCII text.
+- **Apache Parquet files:**  **TSV** and **TSV.BZ2** formats.
+
+
+
+For testing, copy an image file with the following command:
+
+    cp file.png ~/test/ZIPsFS/mnt/
+
+Auto-generated files can be viewed in the example configuration by listing the contents of:
+
+    ls ~/test/ZIPsFS/mnt/ZIPsFS/a/
+
+
+Note that some of the conversions may require Docker support.  ZIPsFS must be run by a user belonging to the *docker* group.
+
+
+### Handling Unknown File Sizes in Virtual File Systems
+
+The system cannot determine the size of files whose content has not yet been generated.
+In kernel-managed virtual file systems such as */proc* and */sys*, virtual files typically report a size
+of zero via *stat()*. Despite this, they are not empty and  contain dynamically generated content when read.
+
+However, this behavior does not translate well to FUSE-based file systems.
+
+For FUSE, returning a file size of zero to represent an unknown or dynamic size is not
+recommended. Many programs interpret a size of 0 as an empty file and will not attempt to read from
+it at all.
+In ZIPsFS,  a placeholder or estimated size is returned if the file content has not been generated  at the time of stat().
+The estimate should be large enough to allow reading the full content.
+If the size is underestimated, data may be read incompletely, leading to truncated output or application errors.
+This workaround allows programs to read the file as if it had content,
+even though the size isn’t known in advance.
+However, it may still break software that relies on accurate size reporting for buffering or memory allocation.
+
+Example Fragpipe: Fragpipe is a software to process mass-spectrometry files. Processing
+Thermo-Fisher mass-spectrometry files with the suffix raw, those are converted by Fragpipe into the
+free file format mzML.  Since ZIPsFS can also convert raw files to mzML, we tried to give the
+virtual mzML files as input. Initially, their reported file size is 99,999,999,999 Bytes.  This
+large number was chosen to make sure that the estimated file size is larger than the real yet
+unknown size. Initially Fragpipe attempts to read some bytes from the end of the file.  To determine
+the reading position, it uses the overestimated file size. In this specific case it tried to read at
+file position 99,999,997,952.  ZIPsFS will perform the conversion when serving the first read
+request.  Since the converted mzML file is much smaller than the read position, there will be no
+data and Fragpipe will fail. When however, at least one byte of the mzML files is read to initiate the
+conversion process before Fragpipe is started, computation will succeeds.
+/details>
+<details>Logging</summary>
+## Logs
+
+ZIPsFS typically runs as a foreground process.  To keep it active and monitor its output, it is
+recommended to use a persistent terminal multiplexer such as tmux. This enables continuous
+observation of all messages and facilitates long-running sessions.
+Additional log files are stored in:
+
+    ~/.ZIPsFS
+
+For each mount point there are files specifying more  logs.
+
+    log_flags.conf
+
+See readme for details:
+
+    log_flags.conf.readme
+
+
+ZIPsFS dynamically generates an HTML status file within the virtual file system.
+You can find it under the path: <Mount-Point>/ZIPsFS/
+For example:
+
+    ~/test/ZIPsFS/mnt/ZIPsFS/file_system_info.html
+
+This file provides real-time information about the system’s current state.
+/details>
+<details>Fault management. Timouts for remote upstream file systems. Duplicated remote trees</summary>
+# Fault Management for Remote File Access
+
+Accessing remote files inherently carries a higher risk of failure. Requests may either:
+
+ - Fail immediately with an error code, or
+
+ - Block indefinitely, causing potential hangs.
+
+In many FUSE file systems, a blocking access can render the entire virtual file system unresponsive.
+ZIPsFS addresses this with built-in fault management for remote branches.
+
+Remote roots in ZIPsFS are specified using a double-slash prefix, similar to UNC paths (//server/share/...).
+Each remote branch is isolated in terms of fault handling and threading and has its own thread pool, ensuring faults in one do not affect others.
+To avoid blocking the main file system thread, remote file operations are executed asynchronously in dedicated worker threads.
+
+## Timeouts
+
+ZIPsFS remains responsive even if a remote file access hangs.
+The fuse thread delegates the file operation to another thread and waits for its completion.
+After the configurable timeout it gives up.
+
+## Duplicated file paths
+
+For redundantly stored files (i.e., available on multiple branches), another branch may take over
+transparently if one fails or becomes unresponsive.
+
+
+## Blocked worker threads
+The worker thread may block permanently. In this case it can be killed automatically and restarted. However killing this thread sometimes does not work.
+
+If the stalled thread cannot be terminated, ZIPsFS will not create a new thread.
+To check whether all threads are responding, activate logging. For details see
+
+    ~/.ZIPsFS/.../log_flags.conf.readme
+
+This is best resolved by restarting ZIPsFS without interrupting ongoing file accesses.
+
+
+
+
+
+
+
+
+
+## Debug Options
+
+### The ZIPsFS option  **-T**
+
+Checks whether ZIPsFS can generate and print a backtrace in case of errors or crashes.  This feature
+elies on external tools to translate memory addresses into source code locations: On Linux and
+FreeBSD, it uses addr2line, typically located in /usr/bin/.  On macOS, it uses the atos tool
+instead.  Ensure these tools are installed and accessible in your system's PATH for backtraces to
+work correctly.
+
+See ZIPsFS.compile.sh for activation of sanitizers.
+/details>
+<details>Improve performance  caching file content and meta data</summary>
+## File content cache
+
+ZIPsFS optionally supports caching specific files and ZIP entries entirely in RAM, allowing data segments to
+be served from memory in any order.
+This feature significantly improves performance for software that performs random-access reads for remote files and for
+ZIP entries.
+
+The ***-l*** option sets an upper limit on memory usage for the ZIP RAM cache.
+When available memory runs low, ZIPsFS can either pause,  proceed without caching file data or just ignore the
+memory restriction depending on the configuration.
+These caching behaviors - such as which files to cache and how to handle memory pressure - are defined in the configuration.
+
+
+## File attribute cache
+
+Additional caching mechanisms are designed to accelerate file listing in large directories for ZIP entries.
+
+
+
+
+
+## Data Integrity for ZIP Entries
+
+For ZIP entries loaded entirely into RAM:
+ZIPsFS performs CRC checksum validation.
+Any detected inconsistencies are logged, helping to detect corruption or transmission errors.
+/details>
+<details>Use-case - application for high-throughput mass-spectrometry</summary>
+# Use case - Archive of mass spectrometry files
+
+
+We use closed-source proprietary Windows software to read large experimental data from various types
+of mass spectrometry machines. The data is immediatly copied into an intermediate storage on the processing PC and
+eventually archived in a read-only WORM file
+system.
+
+To reduce the number of individual files and disk usage and to allow for data integrity checks, all files from a single mass spectrometry
+measurement are bundled into one ZIP archive. With fewer individual files, searching through the
+entire directory hierarchy takes less than 1 hour.
+
+We initially hoped that files inside ZIP archives would be  accessed using
+
+ - Pipes
+ - Named pipes
+ - Process substitution
+ - FUSE file systems with which transparently expand multiple ZIP files
+ - Unzipping and storing  extracted files on disk
+
+Unfortunately, these techniques did not work for our use case. Mounting individual ZIP files was initially the only solution. But when sample size
+of large experiments got large, even this was not feasable.
+
+ZIPsFS was developed to solve the following problems:
+
+- **Growing Number of ZIP Files**: Recently, the size of our experiments - and therefore the number of ZIP files - has increased enormously. Mounting thousands of individual ZIP files results in a very long <i>/etc/mtab</i> file and puts a significant strain on the operating system.
+
+- **Write Access Requirements**: Some proprietary software requires write access to both files and their parent directories.
+
+- **Inefficiency in Random File Access**: Some mass spectrometry files are read from varying positions. Random access  is particularly inefficient for compressed ZIP entries, in particular with backward seeks. Buffering of file content is required.
+
+- **Multiple Storage Locations**: Experimental records are initially stored in an intermediate storage location and, after verification, are moved to the final archive. Consequently, we need a union file system.
+
+- **Resilience of storage systems:** Sometimes access to the archive gets blocked. Otherwise there are several alternative entry points which will continue to work. This adds requirement for
+fault management.
+
+- **Redundant File System Requests**: Some proprietary software generates millions of redundant requests to the file system, which is problematic for both remote files and mounted ZIP files.
+File attributes need to be cached.
+
+
+<SPAN>
+
+
+
+ <DIV style="padding:1em;border:2px solid gray;float:left;">
+       File tree with zip files on hard disk:
+ <BR>
+       <PRE style="font-family: monospace,courier,ariel,sans-serif;">
+ ├── <B style="color:#1111FF;">src</B>
+ │   ├── <B style="color:#1111FF;">InstallablePrograms</B>
+ │   │   └── some_software.zip
+ │   │   └── my_manuscript.zip
+ └── <B style="color:#1111FF;">read-write</B>
+    ├── my_manuscript.zip.Content
+            ├── my-modified-text.txt
+       </PRE>
+ </div>
+
+ <DIV style="padding:1em;border:2px solid gray;float:right;">
+       Virtual file tree presented by ZIPsFS:
+       <PRE style="font-family: monospace,courier,ariel,sans-serif;">
+ ├── <B style="color:#1111FF;">InstallablePrograms</B>
+ │   ├── some_software.zip
+ │   └── <B style="color:#1111FF;">some_software.zip.Content</B>
+ │       ├── help.html
+ │       ├── program.dll
+ │       └── program.exe
+ │   ├── my_manuscript.zip
+ │   └── <B style="color:#1111FF;">my_manuscript.zip.Content</B>
+ │       ├── my_text.tex
+ │       ├── my_lit.bib
+ │       ├── fig1.png
+ │       └── fig2.png
+       </PRE>
+ </DIV>
+
+ <DIV style="clear:both;">
+     The file tree can be adapted to specific needs by editing <I>ZIPsFS_configuration.c</I>.
+     Our mass-spectrometry files are processed with special software.
+     It expects a file tree in its original form i.e. as files would not have been zipped.
+     Furthermore, write permission is required for files and containing folders while files are permanently stored and cannot be modified any more.
+     The folder names need to be ".d" instead of ".d.Zip.Content".
+     For Sciex (zenotof) machines, all files must be in one folder without intermediate folders.
+ </DIV>
+
+ <DIV style="padding:1em;border:2px solid gray;float:left;">
+                     File tree with zip files on our NAS server:
+       <PRE style="font-family: monospace,courier,ariel,sans-serif;">
+ ├── <B style="color:#1111FF;">brukertimstof</B>
+ │   └── <B style="color:#1111FF;">202302</B>
+ │       ├── 20230209_hsapiens_Sample_001.d.Zip
+ │       ├── 20230209_hsapiens_Sample_002.d.Zip
+ │       └── 20230209_hsapiens_Sample_003.d.Zip
+
+ ...
+
+ │       └── 20230209_hsapiens_Sample_099.d.Zip
+ └── <B style="color:#1111FF;">zenotof</B>
+    └── <B style="color:#1111FF;">202304</B>
+    ├── 20230402_hsapiens_Sample_001.wiff2.Zip
+    ├── 20230402_hsapiens_Sample_002.wiff2.Zip
+    └── 270230402_hsapiens_Sample_003.wiff2.Zip
+ ...
+         └── 270230402_hsapiens_Sample_099.wiff2.Zip
+       </PRE>
+ </DIV>
+
+
+ <DIV style="padding:1em;border:2px solid gray;float:right;">
+             Virtual file tree presented by ZIPsFS:
+             <PRE style="font-family: monospace,courier,ariel,sans-serif;">
+ ├── <B style="color:#1111FF;">brukertimstof</B>
+ │   └── <B style="color:#1111FF;">202302</B>
+ │       ├── <B style="color:#1111FF;">20230209_hsapiens_Sample_001.d</B>
+ │       │   ├── analysis.tdf
+ │       │   └── analysis.tdf_bin
+ │       ├── <B style="color:#1111FF;">20230209_hsapiens_Sample_002.d</B>
+ │       │   ├── analysis.tdf
+ │       │   └── analysis.tdf_bin
+ │       └── <B style="color:#1111FF;">20230209_hsapiens_Sample_003.d</B>
+ │           ├── analysis.tdf
+ │           └── analysis.tdf_bin
+
+ ...
+
+ │       └── <B style="color:#1111FF;">20230209_hsapiens_Sample_099.d</B>
+ │           ├── analysis.tdf
+ │           └── analysis.tdf_bin
+ └── <B style="color:#1111FF;">zenotof</B>
+     └── <B style="color:#1111FF;">202304</B>
+           ├── 20230402_hsapiens_Sample_001.timeseries.data
+           ├── 20230402_hsapiens_Sample_001.wiff
+           ├── 20230402_hsapiens_Sample_001.wiff2
+           ├── 20230402_hsapiens_Sample_001.wiff.scan
+           ├── 20230402_hsapiens_Sample_002.timeseries.data
+           ├── 20230402_hsapiens_Sample_002.wiff
+           ├── 20230402_hsapiens_Sample_002.wiff2
+           ├── 20230402_hsapiens_Sample_002.wiff.scan
+           ├── 20230402_hsapiens_Sample_003.timeseries.data
+           ├── 20230402_hsapiens_Sample_003.wiff
+           ├── 20230402_hsapiens_Sample_003.wiff2
+           └── 20230402_hsapiens_Sample_003.wiff.scan
+
+ ...
+
+           ├── 20230402_hsapiens_Sample_099.timeseries.data
+           ├── 20230402_hsapiens_Sample_099.wiff
+           ├── 20230402_hsapiens_Sample_099.wiff2
+           └── 20230402_hsapiens_Sample_099.wiff.scan
+ </PRE>
+ </DIV>
+
+ <DIV style="clear:both;"></DIV>
+
+</SPAN>
+
+
+/details>
+<details>Limitations and Bugs</summary>
+## LIMITATIONS
+
+### Hard Links
+
+Hard links are not supported, though symlinks are fully functional.
+
+### Deleting Files
+
+Files can only be deleted if their physical location resides in the first source. Files located in
+other branches are accessed in a read-only mode, and deletion of these files would require a
+mechanism to remove them from the system, which is currently not implemented.
+
+If you require this functionality, please submit a feature request.
+
+### Reading and Writing
+
+Simultaneous reading and writing of a file using the same file descriptor will only function
+correctly for files stored in the writable source.
+/details>
+<details>See also related sites</summary>
+SEE ALSO
+========
+
+
+- https://github.com/openscopeproject/ZipROFS
+- https://github.com/google/fuse-archive
+- https://bitbucket.org/agalanin/fuse-zip/src
+- https://github.com/google/mount-zip
+- https://github.com/cybernoid/archivemount
+- https://github.com/mxmlnkn/ratarmount
+/details>
 
 
 <!---
