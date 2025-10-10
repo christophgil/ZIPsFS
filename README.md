@@ -201,7 +201,6 @@ Author: Christoph Gille
 If ZIPsFS crashes, please send the stack-trace together with the source code you were using.
 </details>
 
- - [Installation](./INSTALL.md)
 
 <details><summary>Configuration</summary>
 ## ZIPsFS Configuration
@@ -726,3 +725,4 @@ SEE ALSO
 - https://github.com/mxmlnkn/ratarmount
 </details>
 
+ - [Installation](./INSTALL.md)
