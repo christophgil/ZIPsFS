@@ -350,11 +350,11 @@ static int log_print_roots(int n){ /* n==0 for UNIX console with UTF8 else for H
       if (r) sprintf(tmp,"%s%s%s%s",r->remote?"R ":"",r->writable?"W ":"",r->with_timeout?"T ":"",r->blocked?"B ":"");
       C("Features","%s",tmp);
       C("Retained directory","%s",r->retain_dirname);
-            if (r){ if (*r->rootpath_mountpoint) sprintf(tmp,"(%d) %s",1+r->seq_fsid,r->rootpath_mountpoint); else sprintf(tmp,"(%d) %16lx",1+r->seq_fsid,r->f_fsid);}
+      if (r){ if (*r->rootpath_mountpoint) sprintf(tmp,"(%d) %s",1+r->seq_fsid,r->rootpath_mountpoint); else sprintf(tmp,"(%d) %16lx",1+r->seq_fsid,r->f_fsid);}
       C("Filesystem","%s",tmp);
       C("Free [GB]","%'9ld",((r->statvfs.f_frsize*r->statvfs.f_bfree)>>30));
       if (n){
-        if (r){ if (ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC)) sprintf(tmp,"%'ld seconds ago",ROOT_SUCCESS_SECONDS_AGO(r)/10); else strcpy(tmp,"Never");}
+        if (r){ if (ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC)) sprintf(tmp,"%'ld seconds ago",ROOT_SUCCESS_SECONDS_AGO(r)); else strcpy(tmp,"Never");}
         C("Last response","%s", tmp);
         C("Blocked","%'u times",r->log_count_delayed);
       }

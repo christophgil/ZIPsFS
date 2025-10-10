@@ -23,7 +23,7 @@ This seems to be a common
 problem of UNIX and Linux. See
 https://fuse-devel.narkive.com/tkGi5trJ/trouble-with-samba-fuse-for-files-of-unknown-size.  Suggestions are welcome.
 
-
+pip install grip
 -->
 
 
@@ -131,7 +131,9 @@ Run the following command:
 
     cat ~/test/ZIPsFS/mnt/1.txt@SOURCE.TXT
 
-
+If a  remote upstream file system gets frozen, the current file access is blocked.
+This upstream file tree will be avoided to prevent that subsequent file accesses get blocked too.
+Optionally, timeouts can be activated for various file operations for selected upstream file trees to prevent blocking.
 
 ## ZIPsFS expands ZIP file entries
 

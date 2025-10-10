@@ -172,6 +172,13 @@ Run the following command:
 cat \[ti]/test/ZIPsFS/mnt/1.txt\[at]SOURCE.TXT
 \f[R]
 .fi
+.PP
+If a remote upstream file system gets frozen, the current file access is
+blocked.
+This upstream file tree will be avoided to prevent that subsequent file
+accesses get blocked too.
+Optionally, timeouts can be activated for various file operations for
+selected upstream file trees to prevent blocking.
 .SS ZIPsFS expands ZIP file entries
 .PP
 By default, ZIP files are displayed as folders with the suffix

@@ -1,82 +1,355 @@
 # Installation of ZIPsFS
 
-
-Please visit the page for your OS.
-
- - [ MS-Windows](./ZIPsFS_MS_WINDOWS.md)
- - Linux
-   - [Ubuntu, Debian and friends](./INSTALL_Ubuntu.md)
- - BSD
-   - [MacOSX](./INSTALL_MacOSX.md)
-   - [FreeBSD](./INSTALL_FreeBSD.md)
-   - [NetBSD](./INSTALL_NetBSD.md)
-   - [OpenBSD](./INSTALL_OpenBSD.md)
- - Solaris / Illumos
-   On  Solaris getting FUSE file systems to work seems tricky.
-   More work is needed to understand the permission. At least, ZIPsFS compiles.
-   - [Omnios](./INSTALL_Omnios.md) Compiles. No files are seen at mount point.
-   - [OpenIndiana](./INSTALL_OpenIndiana.md)  Works as root, but not as normal user.
-
-ZIPsFS can automatically convert certain file types. This feature requires the following
-  - docker
-  - tesseract-ocr-eng
-  - imagemagick
-  - poppler-utils pdftotext
+Installation of dependencies is OS dependent.
 
 
-# Installation any OS
+## Requirements
 
-If your OS is not listed above, continue with the generic instructions here.
-
-
-## Dependencies
-
-ZIPsFS is written in standard C according to the POSIX industry strandard.
-It has been developed and tested on Linux and compiles and works on other UNIX like systems including MacOSX.
-
-First install the required libraries and packages.
-
- - bash unzip tmux
- - libfuse3 or libfuse2
+ - POSIX C-compiler gcc or clang. GNU extensions not needed.
+ - bash, unzip, tmux
+ - libfuse any version
  - libzip
- - C compiler gcc or clang
+
+
+<details>
+<summary>Optional requirements</summary>
+
  - binutils       (Provides /usr/bin/addr2line, which is used for debugging.  Back-traces show location in source code)
- - It does not need the GNU extensions
+
+ZIPsFS allows transparent on-the-fly file conversion which requires the following:
+
+ - docker
+ - tesseract-ocr-eng
+ - imagemagick
+ - poppler-utils
+ - pdftotext
+</details>
+
+<details>
+<summary>MS-Window</summary>
+ZIPsFS can probably not be installed directly in MS-Windows.
+It may can be installed in WSL.
+The mountpoint can be exported as a SAMBA share.
+
+### Problem: Files that are not listed in the parent are not accessible
+
+In Windows files are not accessible when they are not listed in the parent folder.
+
+A textfile can be formed By appending the suffix ***@SOURCE.TXT*** to a virtual file name which tells the real location of that file.
+
+The physical file path, i.e., the actual storage location of a file, can be retrieved from a special
+metadata file created by appending ***@SOURCE.TXT*** to the filename.
+
+These virtual files will not be accessible in Windows.
+
+### Microsoft-Windows Console Compatibility: External Queue Workaround
+
+Some Windows command-line executables do not behave reliably when launched directly from compiled programs.
+This issue stems from  Windows Console API which is used in long-running mass spectrometry CLI programs to implement progress reports.
+Like traditional  escape sequences, the Windows Console API allows free cursor positioning.
+In headless environments, i.e. ZIPsFS not started from a desktop environment,
+respective  programs block unless without a  console device. A virtual  frame-buffer like ***xvfb*** can solve this issue.
+
+Nevertheless, programs may still not be runnable using the UNIX fork() and exec() paradigm.
+To work around this, ZIPsFS supports delegating such tasks to an external shell script.
+When the special symbol ***PLACEHOLDER_EXTERNAL_QUEUE*** is specified instead of a direct executable path, ZIPsFS:
+
+ - Pushes the task details to a queue.
+ - Waits for the result.
+
+The actual execution of these tasks is handled by the shell script ZIPsFS_autogen_queue.sh,
+which must be started manually by the user. This script polls the queue and performs the requested conversions or operations.
+Multiple instances of the script can run in parallel, allowing concurrent task handling.
+</details>
 
 
 
-##  Compile ZIPsFS
 
-To compile ZIPsFS, run
+<details>
+<summary>Ubuntu, Debian and friends (Linux)</summary>
 
-     ./ZIPsFS.compile.sh
+    apt-get update
+    apt-get install fuse-zip   libfuse3-dev  libzip-dev  unzip lynx tmux
+    addr2line -H || apt-get install binutils
+
+    apt-get install gcc
+
+or
+
+    apt-get install clang
 
 
-## Testing the installed ZIPsFS
 
-    src/ZIPsFS_testing.sh  <Path to ZIPsFS executable>
+# Trouble shooting Detect problems of fuse
+
+If ZIPsFS does not work you need to exclude general problem of the  FUSE system.
+This can be done by testing another FUSE file system like **sshfs** or **fuse-zip**.
+The following shows how  fuse-zip can be tested. First it needs to be installed. On Debian or Ubuntu type
+
+    sudo apt get install fuse-zip
+
+In the following, an empty folder is created which serves as mount point. Then a ZIP file is made and mounted with fuse-zip.
+Finally, the files at the mount point are shown.
+
+    mkdir -p ~/test/fuse-zip/mnt
+    zip --fifo  ~/test/fuse-zip/test.zip  <(date)
+    fuse-zip  ~/test/fuse-zip/test.zip ~/test/fuse-zip/mnt
+    ls -R  ~/test/fuse-zip/mnt
+</details>
+
+
+
+<details>
+<summary>Apple Macintosh OSX</summary>
+
+Download and install MacPorts https://www.macports.org/
+Download and install macFUSE https://osxfuse.github.io/
+
+Open terminal and run:
+
+    sudo port install libzip bindfs wget unzip tmux lynx
+
+Load the kernel. Give the correct OSX version, here 15.
+
+    sudo kextload /Library/Filesystems/macfuse.fs/Contents/Extensions/15/macfuse.kext && echo Success
+
+An error box might pop up:
+
+  The system extension required for mounting macFUSE volumes could not be loaded.  Please open the
+  Security & Privacy System Preferences pane, go to the General preferences and allow loading system
+  software from developer "Benjamin Fleischer". A restart might be required before the system
+  extension can be loaded.
+  Then try mounting the volume again.
+
+Maybe you need to restart and try again.
+
+
+To check whether fuse is working try bindfs it  is a simple FUSE file system.
+
+    mkdir -p ~/mnt/test_bindfs
+    bindfs -f ~ ~/mnt/test_bindfs
+
+The -f option means that bindfs runs in foreground.
+In another terminal check whether you see the content of the home directory at the mount point.
+
+     ls ~/mnt/test_bindfs
+</details>
+
+
+
+
+
+<details>
+<summary>FreeBSD</summary>
+
+## Setup FUSE
+
+Become root.
+
+    pkg install fuse-zip unzip zip lynx tmux sysutils/fusefs-libs3 libzip bash wget
+
+Check whether fuse file systems works as root. fuse-zip is a simple FUSE file system for testing.
+
+    mkdir -p ~/mnt/test_fuse
+    fuse-zip  <path-any-zip-file> ~/mnt/test_fuse
+
+If it does not please check fuse kernel module
+
+    kldstat
+
+You shoud see a line with fusefs. If not
+
+    kldload fusefs
+
+To load it automatically on boot, add the line to /etc/rc.conf
+
+    kldload fusefs
+    kld_list="fusefs"
+
+## Try FUSE as root
+
+    mkdir -p ~/mnt/zip ~/test &&  zip -j ~/test/test.zip /etc/os-release &&  fuse-zip ~/test/test.zip ~/mnt/zip
+
+The zip file is mounted here:
+
+    ls ~/mnt/zip
+
+
+## Allow FUSE for normal user
+
+Now check whether fuse-zip  works if run as a normal user.
+If not then run
+
+    sysctl vfs.usermount=1
+    echo vfs.usermount=1 >>  /etc/sysctl.conf
+    pw groupadd fuse
+    chgrp fuse /dev/fuse
+    pw groupmod group -m <user-id>
+</details>
+
+
+
+<details>
+<summary>NetBSD</summary>
+
+    pkg_add -u zip unzip libzip fuse-unionfs perfuse bash wget tmux lynx
 
 
 
 ## TroubleShooting
 
+### Problem running as normal user.
+
+Running ZIPsFS as root worked well.  Normally, ZIPsFS will not run as root unless the option -r is
+given.  However, we could not run ZIPsFS as a normal user because of acceess failure for /dev/puffs.
+We added the user to group wheel and did
+
+    chmod go+rw /dev/puffs
+
+without success.
+
+Related:  https://minux.hu/mounting-webdav-under-netbsd-unprivileged-user
+
+Please tell me your solutions to this problem.
+
+### Problem finding shared libraries
+
+Shared libs libzip and libfuse were not found.  This could be fixed with
+
+   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/pkg/lib
+
+</details>
+<details>
+
+<summary>OpenBSD</summary>
+
+    pkg_add fuse-zip libzip
+    pkg_add  rsync lynx
+    pkg_info -Q    ## Search
+
+It was not possible to run ZIPsFS and other fuse filesystems  as non-root.
+If you know how this can be done please tell me.
+</details>
+
+<details>
+<summary>Omnios (BSD)</summary>
+
+Omnios  is an Illumos distribution and a descendant of OpenSolaris
+
+I was able to compile ZIPsFS.
+However, it did not work.
+
+
+
+    pkg install fuse libzip
+    pkg install tmux
+    clang || pkg install developer/clang-18 # You can specify any clang version here.
+
+
+## Installing fuse
+There seems to be no fuse package.
+
+    pkg search fuse
+
+This software provides FUSE. Please install it.
+[Please install solaris-sparc-fuse](https://github.com/myaut/solaris-sparc-fuse)
+
+
+
+## Install ZIPsFS
+
+
+    U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
+
+Please modify the path of the libfuse3.so accordingly.
+
+
+
+    wget -N $U && unzip -o main.zip &&  ./ZIPsFS-main/src/ZIPsFS.compile.sh -F /local/illumos-sshfs-master/libfuse/proto/usr/lib/amd64/libfuse.so.2.7.1
+
+
+## Prepare running ZIPsFS
+
+    export PATH=$PATH:/local/illumos-sshfs-master/libfuse/:/local/illumos-sshfs-master/libfuse/amd64
+    mkdir -p /usr/lib/fs/fuse
+    cp /local/illumos-sshfs-master/libfuse/amd64/fusermount.bin /usr/lib/fs/fuse/
+    echo user_allow_other >>/etc/fuse.conf
+
+## TroubleShooting
+
+
+For me ZIPsFS started only as root.
+I changed the permissions of /dev/fuse without success.
+</details>
+
+<details>
+<summary>OpenIndiana (Solaris)</summary>
+
+OpenIndiana is an Illumos distribution and a descendant of OpenSolaris
+
+
+     pkg update
+     pkg install tmux fuse libzip pkg:/metapackages/build-essential
+     pkg install tmux fuse libzip build-essential
+
+<!-- OpenSolaris -->
+<!-- * https://artemis.sh/2022/03/07/pkgsrc-openindiana-illumos.html -->
+<!-- * https://www.openindiana.org/packages/ -->
+<!-- pkg publisher -->
+<!-- To add a publisher to your system (requires privileges): -->
+<!-- pkg set-publisher -g http://path/to/repo_uri publisher -->
+<!--/var/pkg/cache -->
+<!-- pkg set-property flush-content-cache-on-success True -->
+<!-- https://github.com/jurikm/illumos-fusefs/raw/master/lib/libfuse-20100615.tgz -->
+</details>
+
+<details>
+<summary>Illumos (Solaris)</summary>
+  On  Solaris getting FUSE file systems to work seems tricky.
+More work is needed to understand the permission. At least, ZIPsFS compiles.
+</details>
+
+
+# Compilation
+
+Run
+
+     ./ZIPsFS.compile.sh
+
+This creates the executable file **ZIPsFS**.
+
+
+## Trouble Shooting Compilation
 
 Are the shared libraries found on the system?
 The option -fuse3 refers to libfuse3.so. Is this found in the library search paths.
 Are the include files in the include file search paths?
 
 
-No permission to access FUSE:  Check whether other FUSE based file systems like sshfs  exhibit the same problem.
-Try as root.
+# Testing the installed ZIPsFS
+
+    src/ZIPsFS_testing.sh  <Path to ZIPsFS executable>
+
+    Or run the Mini tutorial in the README
 
 
-# Trouble shooting Detect problems of fuse
+## Trouble Shooting Running
 
+For us  ZIPsFS  worked only  as **root** for Omnios, OpenBSD, FreeBSD.
+Probably, this can be fixed with altering permissions of the FUSE device.
+
+<details>
+<summary>Check whether other  FUSE file systems</summary>
 
 If ZIPsFS does not work you need to exclude general problem of the  FUSE system.
-This can be done by testing another FUSE file system like **sshfs** or **fuse-zip**.
-The following shows how  fuse-zip can be tested. First it needs to be installed. On Debian or Ubuntu type
 
+This can be done by testing another FUSE file system like **sshfs** or **fuse-zip** or **unionfs-fuse**.
+
+
+<details>
+<summary>Testing fuse-zip</summary>
+
+Install fuse-zip. Ubuntu, Debian ...
     sudo apt get install fuse-zip
 
 
@@ -88,10 +361,24 @@ Finally, the files at the mount point are shown.
     zip --fifo  ~/test/fuse-zip/test.zip  <(date)
     fuse-zip  ~/test/fuse-zip/test.zip ~/test/fuse-zip/mnt
     ls -R  ~/test/fuse-zip/mnt
+</details>
 
 
+<details>
+<summary>fuse-unionfs</summary>
+
+Install fuse-unionfs.
+
+The following will mount */etc* onto *~/mnt/test-unionfs*.
+This test may be performed as a normal user or as **root**.
+
+   m=~/mnt/test-unionfs/
+   unionfs-fuse /etc=RO $m
+   ls $m
+
+</details>
+
+If those fail try as root.
 
 
-
-
-If this fails, and there is a permission problem, try as root.
+</details>

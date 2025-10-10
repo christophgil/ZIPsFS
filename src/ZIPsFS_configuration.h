@@ -123,6 +123,7 @@
  /* Disadvantage: ZIPsFS is less responsive.  Not yet fully tested.                                                                                                */
  /* Also see ASYNC_SLEEP_USECONDS                                                                                                                                  */
  /******************************************************************************************************************************************************************/
+// /home/_cache/cgille/build/find-master/find.c  mnt/ | grep Mai
 #define WITH_TIMEOUT_STAT     0
 #define WITH_TIMEOUT_READDIR  0
 #define WITH_TIMEOUT_OPENFILE 0
