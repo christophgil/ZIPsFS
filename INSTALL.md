@@ -1,8 +1,5 @@
 # Installation of ZIPsFS
 
-Installation of dependencies is OS dependent.
-
-
 ## Requirements
 
  - POSIX C-compiler gcc or clang. GNU extensions not needed.
@@ -11,8 +8,7 @@ Installation of dependencies is OS dependent.
  - libzip
 
 
-<details>
-<summary>Optional requirements</summary>
+<details><summary>Optional requirements</summary>
 
  - binutils       (Provides /usr/bin/addr2line, which is used for debugging.  Back-traces show location in source code)
 
@@ -23,10 +19,9 @@ ZIPsFS allows transparent on-the-fly file conversion which requires the followin
  - imagemagick
  - poppler-utils
  - pdftotext
-</details>
+</details><!--- Optional -->
 
-<details>
-<summary>MS-Window</summary>
+<details><summary>MS-Window</summary>
 ZIPsFS can probably not be installed directly in MS-Windows.
 It may can be installed in WSL.
 The mountpoint can be exported as a SAMBA share.
@@ -60,13 +55,12 @@ When the special symbol ***PLACEHOLDER_EXTERNAL_QUEUE*** is specified instead of
 The actual execution of these tasks is handled by the shell script ZIPsFS_autogen_queue.sh,
 which must be started manually by the user. This script polls the queue and performs the requested conversions or operations.
 Multiple instances of the script can run in parallel, allowing concurrent task handling.
-</details>
+</details><!--- Windows -->
 
 
 
 
-<details>
-<summary>Ubuntu, Debian and friends (Linux)</summary>
+<details><summary>Ubuntu, Debian and friends (Linux)</summary>
 
     apt-get update
     apt-get install fuse-zip   libfuse3-dev  libzip-dev  unzip lynx tmux
@@ -77,30 +71,11 @@ Multiple instances of the script can run in parallel, allowing concurrent task h
 or
 
     apt-get install clang
+</details><!--- Ubuntu -->
 
 
 
-# Trouble shooting Detect problems of fuse
-
-If ZIPsFS does not work you need to exclude general problem of the  FUSE system.
-This can be done by testing another FUSE file system like **sshfs** or **fuse-zip**.
-The following shows how  fuse-zip can be tested. First it needs to be installed. On Debian or Ubuntu type
-
-    sudo apt get install fuse-zip
-
-In the following, an empty folder is created which serves as mount point. Then a ZIP file is made and mounted with fuse-zip.
-Finally, the files at the mount point are shown.
-
-    mkdir -p ~/test/fuse-zip/mnt
-    zip --fifo  ~/test/fuse-zip/test.zip  <(date)
-    fuse-zip  ~/test/fuse-zip/test.zip ~/test/fuse-zip/mnt
-    ls -R  ~/test/fuse-zip/mnt
-</details>
-
-
-
-<details>
-<summary>Apple Macintosh OSX</summary>
+<details><summary>Apple Macintosh OSX</summary>
 
 Download and install MacPorts https://www.macports.org/
 Download and install macFUSE https://osxfuse.github.io/
@@ -133,14 +108,10 @@ The -f option means that bindfs runs in foreground.
 In another terminal check whether you see the content of the home directory at the mount point.
 
      ls ~/mnt/test_bindfs
-</details>
+</details><!--- MacOSX -->
 
 
-
-
-
-<details>
-<summary>FreeBSD</summary>
+<details><summary>FreeBSD</summary>
 
 ## Setup FUSE
 
@@ -185,12 +156,11 @@ If not then run
     pw groupadd fuse
     chgrp fuse /dev/fuse
     pw groupmod group -m <user-id>
-</details>
+</details><!--- FreeBSD -->
 
 
 
-<details>
-<summary>NetBSD</summary>
+<details><summary>NetBSD</summary>
 
     pkg_add -u zip unzip libzip fuse-unionfs perfuse bash wget tmux lynx
 
@@ -218,9 +188,8 @@ Shared libs libzip and libfuse were not found.  This could be fixed with
 
    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/pkg/lib
 
-</details>
+</details><!--- NetBSD -->
 <details>
-
 <summary>OpenBSD</summary>
 
     pkg_add fuse-zip libzip
@@ -229,10 +198,9 @@ Shared libs libzip and libfuse were not found.  This could be fixed with
 
 It was not possible to run ZIPsFS and other fuse filesystems  as non-root.
 If you know how this can be done please tell me.
-</details>
+</details><!--- OpenBSD -->
 
-<details>
-<summary>Omnios (BSD)</summary>
+<details><summary>Omnios (BSD)</summary>
 
 Omnios  is an Illumos distribution and a descendant of OpenSolaris
 
@@ -280,10 +248,9 @@ Please modify the path of the libfuse3.so accordingly.
 
 For me ZIPsFS started only as root.
 I changed the permissions of /dev/fuse without success.
-</details>
+</details><!--- Omnios -->
 
-<details>
-<summary>OpenIndiana (Solaris)</summary>
+<details><summary>OpenIndiana (OpenSolaris)</summary>
 
 OpenIndiana is an Illumos distribution and a descendant of OpenSolaris
 
@@ -301,13 +268,12 @@ OpenIndiana is an Illumos distribution and a descendant of OpenSolaris
 <!--/var/pkg/cache -->
 <!-- pkg set-property flush-content-cache-on-success True -->
 <!-- https://github.com/jurikm/illumos-fusefs/raw/master/lib/libfuse-20100615.tgz -->
-</details>
+</details><!--- OpenIndiana -->
 
-<details>
-<summary>Illumos (Solaris)</summary>
+<details><summary>Illumos (Solaris)</summary>
   On  Solaris getting FUSE file systems to work seems tricky.
 More work is needed to understand the permission. At least, ZIPsFS compiles.
-</details>
+</details><!--- Illumos -->
 
 
 # Compilation
@@ -318,13 +284,12 @@ Run
 
 This creates the executable file **ZIPsFS**.
 
-
-## Trouble Shooting Compilation
+<details><summary>Trouble-Shooting Compilation</summary>
 
 Are the shared libraries found on the system?
 The option -fuse3 refers to libfuse3.so. Is this found in the library search paths.
 Are the include files in the include file search paths?
-
+</details>
 
 # Testing the installed ZIPsFS
 
@@ -333,21 +298,19 @@ Are the include files in the include file search paths?
     Or run the Mini tutorial in the README
 
 
-## Trouble Shooting Running
+<details><summary>Trouble Shooting Running ZIPsFS</summary>
 
 For us  ZIPsFS  worked only  as **root** for Omnios, OpenBSD, FreeBSD.
 Probably, this can be fixed with altering permissions of the FUSE device.
 
-<details>
-<summary>Check whether other  FUSE file systems</summary>
+<details><summary>Check whether other  FUSE file systems</summary>
 
 If ZIPsFS does not work you need to exclude general problem of the  FUSE system.
 
 This can be done by testing another FUSE file system like **sshfs** or **fuse-zip** or **unionfs-fuse**.
 
 
-<details>
-<summary>Testing fuse-zip</summary>
+<details><summary>Testing fuse-zip</summary>
 
 Install fuse-zip. Ubuntu, Debian ...
     sudo apt get install fuse-zip
@@ -361,11 +324,10 @@ Finally, the files at the mount point are shown.
     zip --fifo  ~/test/fuse-zip/test.zip  <(date)
     fuse-zip  ~/test/fuse-zip/test.zip ~/test/fuse-zip/mnt
     ls -R  ~/test/fuse-zip/mnt
-</details>
+</details><!--- fuse-zip --><!--- -->
 
 
-<details>
-<summary>fuse-unionfs</summary>
+<details><summary>fuse-unionfs</summary>
 
 Install fuse-unionfs.
 
@@ -376,9 +338,9 @@ This test may be performed as a normal user or as **root**.
    unionfs-fuse /etc=RO $m
    ls $m
 
-</details>
+</details><!--- fuse-unionfs -->
 
 If those fail try as root.
 
 
-</details>
+</details><!--- Trouble Shooting Running ZIPsFS -->
