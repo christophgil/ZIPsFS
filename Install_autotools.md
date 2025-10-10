@@ -1,9 +1,10 @@
 # Installation with autotools
 
 
+This is not the prefered way to install ZIPsFS.
 
-This is less flexible and will only work on Linux and only with  fuse3.
-It requires *make* which is in the package  build-essential.
+It is less flexible and will only work on Linux and only with  fuse3.
+
 
     ./configure
     cd src

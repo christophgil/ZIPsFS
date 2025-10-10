@@ -1,5 +1,6 @@
 # ZIPsFS - FUSE-based  overlay file system which expands  ZIP files
 
+ - [Installation](./INSTALL.md)
 
 <!---
 (defun Make-man()
@@ -201,6 +202,7 @@ Current status: Testing and Bug fixing. Already running very busy for several we
 If ZIPsFS crashes, please send the stack-trace together with the source code you were using.
 
  - [Installation](./INSTALL.md)
+
 <details><summary>Configuration</summary>
 ## ZIPsFS Configuration
 
@@ -456,9 +458,7 @@ For ZIP entries loaded entirely into RAM:
 ZIPsFS performs CRC checksum validation.
 Any detected inconsistencies are logged, helping to detect corruption or transmission errors.
 </details>
-<details><summary>Use-case - application for high-throughput mass-spectrometry</summary>
-# Use case - Archive of mass spectrometry files
-
+<details><summary>Use case - Archive of high throughput mass spectrometry files</summary>
 
 We use closed-source proprietary Windows software to read large experimental data from various types
 of mass spectrometry machines. The data is immediatly copied into an intermediate storage on the processing PC and
@@ -612,7 +612,6 @@ File attributes need to be cached.
  <DIV style="clear:both;"></DIV>
 
 </SPAN>
-
 
 </details>
 <details><summary>Implementation</summary>
