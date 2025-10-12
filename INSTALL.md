@@ -41,20 +41,20 @@ This breaks the following ZIPsFS features:
 
 ### Problems dynamically generating files with Windows executables
 
-ZIPsFS can generate files dynamically. The file content can be generated with commands.
+ZIPsFS can generate files dynamically. The virtual file content can be the output of a command.
 
-This may also work for Windows executables with the compatibility layer Wine.
+This also works for Windows executables with the compatibility layer Wine.
 
 However, we found the following problems:
 
- - Usually, ZIPsFS is started in a headless environment rather than from a   desktop environment.
+ - Usually, ZIPsFS is started in a headless environment i. e. not from a desktop environment.
    Some Windows CLI programs require a graphical display.
 
-   Workaround: A virtual  frame-buffer like ***xvfb*** can solve this issue.
+   Workaround: A virtual  frame-buffer like ***xvfb*** and setting the DISPLAY environment variable accordingly
 
 
- - Some Windows command-line executables do not behave reliably when launched directly from compiled programs.
-   This issue stems from  Windows Console API which is used in  CLI programs to implement progress reports.
+ - Some Windows command-line executables do not behave reliably when launched from another executable (here ZIPsFS).
+   This issue stems from the  Windows Console API which is used in  CLI programs to implement progress reports.
    Like traditional  escape sequences, the Windows Console API allows free cursor positioning.
 
    Workaround:
@@ -209,8 +209,6 @@ Shared libs libzip and libfuse were not found.  This could be fixed with
     pkg_add  rsync lynx
     pkg_info -Q    ## Search
 
-It was not possible to run ZIPsFS and other fuse filesystems  as non-root.
-If you know how this can be done please tell me.
 </details><!--- OpenBSD -->
 
 <details><summary>Omnios (BSD)</summary>
@@ -374,9 +372,9 @@ Install fuse-unionfs.
 The following will mount */etc* onto *~/mnt/test-unionfs*.
 This test may be performed as a normal user or as **root**.
 
-   m=~/mnt/test-unionfs/
-   unionfs-fuse /etc=RO $m
-   ls $m
+    m=~/mnt/test-unionfs/
+    unionfs-fuse /etc=RO $m
+    ls $m
 
 </details><!--- fuse-unionfs -->
 

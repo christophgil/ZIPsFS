@@ -54,9 +54,7 @@ Virtual file paths in that branch will start with *mount point*``/branch3/``.
     b3=~/test/ZIPsFS/branch2/
     b4=~/test/ZIPsFS/branch3
 
-    mnt=~/test/ZIPsFS/mnt
-
-    mkdir -p $b1 $b2 $b3 $b4 $mnt
+    mkdir -p $b1 $b2 $b3 $b4 ~/test/ZIPsFS/mnt
 
     for c in a b c d e f; do echo hello world $c >$b2/$c.txt; done
     for ((i=0;i<10;i++)); do echo hello world $i >$b3/$i.txt; done
@@ -69,7 +67,7 @@ Virtual file paths in that branch will start with *mount point*``/branch3/``.
 ### Start ZIPsFS
 In production, it is recommended to start ZIPsFS in *tmux*. For testing, just use your regular command line.
 
-    ZIPsFS   $b1 $b2 $b3 $b4  :  -o allow_other  $mnt
+    ZIPsFS   $b1 $b2 $b3 $b4  :  ~/test/ZIPsFS/mnt
 
 ### Browse the virtual file tree
 
