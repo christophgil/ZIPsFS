@@ -23,38 +23,51 @@ ZIPsFS allows transparent on-the-fly file conversion which requires the followin
 
 <details><summary>MS-Window</summary>
 ZIPsFS can probably not be installed directly in MS-Windows.
-It may can be installed in WSL.
+It may be installed in WSL.
 The mountpoint can be exported as a SAMBA share.
 
 ### Problem: Files that are not listed in the parent are not accessible
 
-In Windows files are not accessible when they are not listed in the parent folder.
+In Windows, network  files are generally not accessible when they are not listed in the parent folder.
 
-A textfile can be formed By appending the suffix ***@SOURCE.TXT*** to a virtual file name which tells the real location of that file.
+This breaks the following ZIPsFS features:
 
-The physical file path, i.e., the actual storage location of a file, can be retrieved from a special
-metadata file created by appending ***@SOURCE.TXT*** to the filename.
+ - Appending the suffix ***@SOURCE.TXT*** to a virtual file path forms a file telling the real physical  location.
 
-These virtual files will not be accessible in Windows.
+ - Accessing Internet files as regular files
 
-### Microsoft-Windows Console Compatibility: External Queue Workaround
 
-Some Windows command-line executables do not behave reliably when launched directly from compiled programs.
-This issue stems from  Windows Console API which is used in long-running mass spectrometry CLI programs to implement progress reports.
-Like traditional  escape sequences, the Windows Console API allows free cursor positioning.
-In headless environments, i.e. ZIPsFS not started from a desktop environment,
-respective  programs block unless without a  console device. A virtual  frame-buffer like ***xvfb*** can solve this issue.
 
-Nevertheless, programs may still not be runnable using the UNIX fork() and exec() paradigm.
-To work around this, ZIPsFS supports delegating such tasks to an external shell script.
-When the special symbol ***PLACEHOLDER_EXTERNAL_QUEUE*** is specified instead of a direct executable path, ZIPsFS:
 
- - Pushes the task details to a queue.
- - Waits for the result.
+### Problems dynamically generating files with Windows executables
 
-The actual execution of these tasks is handled by the shell script ZIPsFS_autogen_queue.sh,
-which must be started manually by the user. This script polls the queue and performs the requested conversions or operations.
-Multiple instances of the script can run in parallel, allowing concurrent task handling.
+ZIPsFS can generate files dynamically. The file content can be generated with commands.
+
+This may also work for Windows executables with the compatibility layer Wine.
+
+However, we found the following problems:
+
+ - Usually, ZIPsFS is started in a headless environment rather than from a   desktop environment.
+   Some Windows CLI programs require a graphical display.
+
+   Workaround: A virtual  frame-buffer like ***xvfb*** can solve this issue.
+
+
+ - Some Windows command-line executables do not behave reliably when launched directly from compiled programs.
+   This issue stems from  Windows Console API which is used in  CLI programs to implement progress reports.
+   Like traditional  escape sequences, the Windows Console API allows free cursor positioning.
+
+   Workaround:
+
+   When the special symbol ***PLACEHOLDER_EXTERNAL_QUEUE*** is specified instead of a direct executable path, ZIPsFS:
+
+    - Pushes the task details to a queue.
+    - Waits for the result.
+
+   The actual execution of these tasks is handled by the shell script ZIPsFS_autogen_queue.sh,
+   which must be started manually by the user. This script polls the queue and performs the requested conversions or operations.
+   Multiple instances of the script can run in parallel, allowing concurrent task handling.
+
 </details><!--- Windows -->
 
 
