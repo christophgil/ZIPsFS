@@ -5,8 +5,8 @@
 #define NET_SFX_HEADER ".HeaDeR"
 #define NET_SFX_FAIL   ".FaiLeD"
 #define NET_SFX_HEADER_L (sizeof(NET_SFX_HEADER)-1)
-#define IN_DIR_INTERNET(vp,vp_l) (_root_writable && vp_l> DIR_INTERNET_L+7 && vp[DIR_ZIPsFS_L]=='/' && vp[DIR_INTERNET_L]=='/' && !strncmp(vp,DIR_INTERNET,DIR_INTERNET_L))
-#define IS_DIR_INTERNET(vp,vp_l) (_root_writable && vp_l==DIR_INTERNET_L   && vp[DIR_ZIPsFS_L]=='/' && !strcmp(vp,DIR_INTERNET))
+#define IN_DIR_INTERNET(vp,vp_l) (_root_writable && _root_writable && vp_l> DIR_INTERNET_L+7 && vp[DIR_ZIPsFS_L]=='/' && vp[DIR_INTERNET_L]=='/' && !strncmp(vp,DIR_INTERNET,DIR_INTERNET_L))
+#define IS_DIR_INTERNET(vp,vp_l) (_root_writable && _root_writable && vp_l==DIR_INTERNET_L   && vp[DIR_ZIPsFS_L]=='/' && !strcmp(vp,DIR_INTERNET))
 
 #define net_filepath_l(isHeader,vp,vp_l) (_root_writable->rootpath_l+vp_l+(isHeader?NET_SFX_HEADER_L:0))
 #define net_filepath(rp,isHeader,vp,vp_l) stpcpy(stpcpy(stpcpy(rp,_root_writable->rootpath),vp),(isHeader?NET_SFX_HEADER:""))
@@ -109,7 +109,6 @@ static bool net_call_curl(const bool header,const char *url, const char *outfile
 }
 
 static bool net_getattr(struct stat *st, const char *vp,const int vp_l){
-  //log_debug_now("vp: %s ",vp);
   if (!net_is_internetfile(vp,vp_l)) return false;
   stat_init(st,0,NULL);
   char rph[net_filepath_l(true,vp,vp_l)+1]; net_filepath(rph,true,vp,vp_l);

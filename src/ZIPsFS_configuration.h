@@ -14,11 +14,29 @@
 /////////////////
 /// Debugging ///
 /////////////////
+#define WITH_PTHREAD_LOCK 1 /*  Should be true. Only for testing if suspect deadlock set to 0 */
 #define WITH_ASSERT_LOCK     0 // Optional assertion
 #define WITH_EXTRA_ASSERT    0 // Optional assertion
 #define WITH_TESTING_REALLOC 0 // Smaller initial size, earlier realloc
+#define WITH_TESTING_UNBLOCK 0
 
-#define WITH_PTHREAD_LOCK 1 /*  Should be true. Only for testing if suspect deadlock set to 0 */
+ /******************************************************************************************************************************************************************/
+ /* Avoid blocking        0 deactivated    1 activated        Applies  to rootpaths that starting with three slashs                                                */
+ /* Activate this feature if  upstream file systems suffer from becoming blocked/unresonsive                                                                       */
+ /* File access is performed in worker thread.  The current thread gives up after timeout.                                                                         */
+ /*                                                                                                                                                                */
+ /* If a remote file system blocks then start the path with three slashes and activate the following:                                                              */
+ /* Disadvantage: ZIPsFS is less responsive.  Not yet fully tested.                                                                                                */
+ /* Also see ASYNC_SLEEP_USECONDS                                                                                                                                  */
+ /******************************************************************************************************************************************************************/
+// /home/_cache/cgille/build/find-master/find.c  mnt/ | grep Mai
+#define WITH_TIMEOUT_STAT     0
+#define WITH_TIMEOUT_READDIR  0
+#define WITH_TIMEOUT_OPENFILE 0
+#define WITH_TIMEOUT_OPENZIP  0
+#define WITH_CANCEL_BLOCKED_THREADS 0
+#define ASYNC_SLEEP_USECONDS 5000    /* Sleep microseconds after checking again. Too low values increase idle CPU consumption.  Related: WITH_TIMEOUT_xxxx  DEBUG_NOW */
+
 
 
 
@@ -41,12 +59,6 @@
 #define WITH_DIRCACHE 1
 // This activates storage of the ZIP file index and the file listing of rarely changing file directories in a cache.
 // The cache key is the filepath of the ZIP file or directory  plus the last-modified file  attribute.
-
-#define WITH_ZIPENTRY_PLACEHOLDER 1
-// When the  base name of the ZIP file  is part of  ZIP entry names, storage space can be saved.
-// The base name is replaced by a specific symbol denoted here as "*" asterisk. Consider for example a Zipfile my_record_1234.Zip containing my_record_1234.wiff and
-// my_record_1234.rawIdx and my_record_1234.raw.  Substitution of the ZIP file name "my_record_1234" by "*" results in  *.wiff and *.rawIdx and *.raw.
-// After substitution, the file list will be shared by many ZIP files which allows efficient storing in the cache.
 
 #define WITH_MEMCACHE 1
 #define NUM_MEMCACHE_STORE_RETRY 2
@@ -114,22 +126,6 @@
 
 
 
- /******************************************************************************************************************************************************************/
- /* Avoid blocking        0 deactivated    1 activated        Applies  to rootpaths that starting with three slashs                                                */
- /* Activate this feature if  upstream file systems suffer from becoming blocked/unresonsive                                                                       */
- /* File access is performed in worker thread.  The current thread gives up after timeout.                                                                         */
- /*                                                                                                                                                                */
- /* If a remote file system blocks then start the path with three slashes and activate the following:                                                              */
- /* Disadvantage: ZIPsFS is less responsive.  Not yet fully tested.                                                                                                */
- /* Also see ASYNC_SLEEP_USECONDS                                                                                                                                  */
- /******************************************************************************************************************************************************************/
-// /home/_cache/cgille/build/find-master/find.c  mnt/ | grep Mai
-#define WITH_TIMEOUT_STAT     0
-#define WITH_TIMEOUT_READDIR  0
-#define WITH_TIMEOUT_OPENFILE 0
-#define WITH_TIMEOUT_OPENZIP  0
-#define WITH_CANCEL_BLOCKED_THREADS 0
-#define ASYNC_SLEEP_USECONDS 5000    /* Sleep microseconds after checking again. Too low values increase idle CPU consumption.  Related: WITH_TIMEOUT_xxxx  DEBUG_NOW */
 
 /////////////
 /// Times ///
@@ -165,7 +161,7 @@
 /// The worker threads are observed and if no activity for the specified amount of time, they are assumed to be blocked. ///
 /// Kill blocked worker thread and re-launch new instance                                                                ///
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#define WITH_TESTING_UNBLOCK 0
+
 #if WITH_CANCEL_BLOCKED_THREADS
 #if WITH_TESTING_UNBLOCK
 #define UNBLOCK_AFTER_SECONDS_THREAD_ASYNC      30

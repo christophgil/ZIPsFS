@@ -6,7 +6,7 @@
 
 #define MAGIC_SFX_SET_ATIME  ".magicSfxSetAccessTime"
 
-enum enum_ctrl_action{ACT_NIL,ACT_KILL_ZIPSFS,ACT_BLOCK_THREAD,/*ACT_UNBLOCK_THREAD,*/ACT_FORCE_UNBLOCK,ACT_CANCEL_THREAD,ACT_NO_LOCK,ACT_BAD_LOCK,ACT_CLEAR_CACHE};
+enum enum_ctrl_action{ACT_NIL,ACT_KILL_ZIPSFS,ACT_FORCE_UNBLOCK,ACT_CANCEL_THREAD,ACT_NO_LOCK,ACT_BAD_LOCK,ACT_CLEAR_CACHE};
 
 static char *ctrl_file_end(){
   static char s[222]={0};
@@ -30,11 +30,8 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
     const int thread=PTHREAD_NIL<para && para<PTHREAD_LEN?para:0;
     warning(WARN_DEBUG,path,"Triggered action: %d  para: %d ",action,para);
     if (action>0){
-      struct rootdata *one_root=_root;
       foreach_root(r){
-        if (r->remote) one_root=r;
         switch(action){
-          //case ACT_UNBLOCK_THREAD:          memset(r->thread_pretend_blocked,0,sizeof(r->thread_pretend_blocked));          return true;
         case ACT_FORCE_UNBLOCK: _thread_unblock_ignore_existing_pid=true; break;
         case ACT_CANCEL_THREAD:
           if (thread && r->thread[thread]) pthread_cancel(r->thread[thread]);
@@ -79,10 +76,6 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
           return true;
         }/*switch*/
       }/* foreach_root*/
-      if (action==ACT_BLOCK_THREAD && thread && one_root){
-        warning(WARN_THREAD,rootpath(one_root),"Going to simulate block %s",PTHREAD_S[thread]);
-        one_root->thread_pretend_blocked[thread]=true;
-      }
       return true;
     }/*if(action)*/
   }

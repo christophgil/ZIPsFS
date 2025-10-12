@@ -11,7 +11,7 @@ static bool find_realpath_try_inline(struct zippath *zpath, const char *vp, stru
   if (!zpath_strcat(zpath,vp+cg_last_slash(vp)+1)) return false;
   EP_L()=zpath_commit(zpath);
   const bool ok=test_realpath_or_reset(zpath,r);
-  IF_LOG_FLAG(LOG_ZIP_INLINE) if (cg_is_regular_file(RP()))    log_exited_function("rp: %s vp: %s ep: %s ok: %s",RP(),vp,EP(),yes_no(ok));
+  IF_LOG_FLAG(LOG_ZIP_INLINE) if (cg_is_regular_file(RP()))log_exited_function("rp: %s vp: %s ep: %s ok: %s",RP(),vp,EP(),yes_no(ok));
   return ok;
 }
 static yes_zero_no_t find_realpath_try_inline_rules(struct zippath *zpath,char *append, struct rootdata *r){
@@ -53,7 +53,7 @@ static bool readdir_inline_from_cache(const struct zippath *zpath, const char *u
         stat_init(&st,(Nth0(dir.core.fflags,j)&DIRENT_ISDIR)?-1:Nth0(dir.core.fsize,j),&zpath->stat_rp);
         st.st_ino=make_inode(zpath->stat_rp.st_ino,zpath->root,Nth(dir.core.finode,j,j),RP());
         char n[MAX_PATHLEN+1];
-        const int n_l=zipentry_placeholder_expand(n,n2,u);
+        const int n_l=zipentry_placeholder_expand(n,n2,u,NULL);
         if (config_containing_zipfile_of_virtual_file(0,n,n_l,NULL)) filler_add(filler,buf,n,n_l,&st,no_dups);
       }
     }

@@ -117,23 +117,23 @@ EXIT(0);
 
 /////////////////////////////////////////////////////////////
 
-#define directory_debug_filenames(msg,dir) _directory_debug_filenames(__func__,__LINE__,msg,dir)
-static void _directory_debug_filenames(const char *func,const int line,const char *msg,const struct directory *dir){
+#define directory_print(dir,maxNum) _directory_print(__func__,__LINE__,dir,maxNum)
+static void _directory_print(const char *func,const int line,const struct directory *dir,const int maxNum){
   const struct directory_core *d=&dir->core;
-  if (!d->fname){ log_error("%s:%d %s %s: d->fname is NULL\n",__func__,line,func,msg);EXIT(9);}
-  const bool print=(strchr(msg,'/')!=NULL);
+  ASSERT(d->fname);
   const struct ht *hti=IF01(WITH_TIMEOUT_READDIR,NULL,dir->ht_intern_names);
-  fprintf(stderr,"\n"ANSI_INVERSE"%s:%d  Directory %s   files_l: %d/%d  destroyed: %s success: %s  ht-intern: %s\n"ANSI_RESET,func,line,msg,d->files_l,  dir->files_capacity, yes_no(dir->dir_is_destroyed), yes_no(dir->dir_is_success),yes_no(NULL!=hti));
+  fprintf(stderr,"\n"ANSI_INVERSE"%s:%d  Directory %p '%s'   files_l: %d/%d  destroyed: %s success: %s  ht-intern: %s\n"ANSI_RESET,func,line,dir,DIR_RP(dir),d->files_l,  dir->files_capacity, yes_no(dir->dir_is_destroyed), yes_no(dir->dir_is_success),yes_no(NULL!=hti));
   assert(d->files_l<=dir->files_capacity);
   FOR(i,0,d->files_l){
     const char *n=d->fname[i];
     if (!n) continue;
     const int len=strnlen(n,MAX_PATHLEN);
-    if (len>=MAX_PATHLEN){ log_error("%s %s %s: strnlen d->fname[%d] is %d\n",__func__,func,msg,i,len);}
-    if (print){
+    if (len>=MAX_PATHLEN){ log_error("%s %s: strnlen d->fname[%d] is %d\n",__func__,func,i,len);}
+    if (i<maxNum){
           char encoded[PATH_MAX];
-      const bool invalid=len!=url_encode(encoded,PATH_MAX,n);
+          const bool invalid=len!=url_encode(encoded,PATH_MAX,n);
       //        fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'zu\t%s\t%u\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), Nth0(d->fsize,i),encoded,hash_value_strg(n));
+      fprintf(stderr,"%s:%d ",func,line);
       fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'lld\t%s\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), (LLD)Nth0(d->fsize,i),encoded);
     }
   }

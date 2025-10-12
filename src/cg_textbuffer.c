@@ -273,50 +273,58 @@ static int textbuffer_differs_from_filecontent_fd(const struct textbuffer *b,con
   return n<0||pos<textbuffer_length(b)?-1:0;
 }
 
-static int exec_on_file(const enum enum_exec_on_file type, char *output, const int output_max, const char *path ){
+
+
+
+
+static int exec_on_file(const int opts,const enum enum_exec_on_file type, char *output, const int output_max, const char *path ){
 #define C(p) cmd[i++]=p
   struct textbuffer b={0};
   const char *cmd[9];
-  int i=0, skipLines=0;
-  bool trim_to_last_spc=false, trim=true;
+  {
+  int i=0;
   switch(type){
-  case EXECF_MOUNTPOINT_USING_DF: trim_to_last_spc=1; C("df"); C(path); break;
+  case EXECF_MOUNTPOINT_USING_DF: C("df"); C(path); break;
   case EXECF_MOUNTPOINT_USING_FINDMNT: C("findmnt"); C("-n"); C("-o"); C("TARGET"); C("--target"); C(path); break;
   default: return -1;
   }
   C(NULL);
+  }
 #undef C
-#define T()  if (trim){ while (len && isspace(output[len-1])) len--; output[len]=0;}
   textbuffer_reset(&b);
   b.read_bufsize=1024;
-  textbuffer_from_exec_output(0,&b,cmd,NULL,"/home/cgille/test/out_err.txt");
-  //  fprintf(stderr," Read %lld bytes \n",(LLD)textbuffer_length(&b));
+  textbuffer_from_exec_output(0,&b,cmd,NULL,(opts&EXECF_SILENT)?"/dev/null":NULL);
   int len=textbuffer_copy_to(&b,0,output_max,output);
   textbuffer_destroy(&b);
-  char *src=output;
-  T();
-  if(skipLines){
-    while(skipLines--){
-      if (!(src=strchr(src,'\n'))){ *output=0;  return -1;}
-      src++;
+  int pathB=0, pathE=0;
+  bool prevSpc=type!=EXECF_MOUNTPOINT_USING_DF;
+  FOR(i,0,len){
+    const char c=output[i];
+    const bool spc=(c==' '), lf=(c=='\n');
+    if (prevSpc && c=='/'){
+      if (!pathB) pathB=i+1;
     }
+    if (spc||lf){
+      if (pathB && !pathE) pathE=i+1;
+    }
+    prevSpc=spc;
+  }/*for*/
+  if (pathB && !pathE) pathE=len;
+  const char *src=NULL;
+  char *dst=NULL;
+  if (type==EXECF_MOUNTPOINT_USING_FINDMNT || type==EXECF_MOUNTPOINT_USING_DF){
+    if (!pathB) return (*output=0);
+    src=output+pathB-1;
+    dst=output;
+    len=pathE-pathB;
   }
-  T();
-  if (trim_to_last_spc){
-    char *spc=strrchr(output,' ');
-    if (spc) src=spc+1;
-  }
-  if (src){
-    len-=(src-output);
-    char *dst=output;
-    while ((*dst++=*src++));
-  }
-  T();
+  if (dst && src>dst) while ((*dst++=*src++));
   output[len]=0;
-  if ((type==EXECF_MOUNTPOINT_USING_DF || type==EXECF_MOUNTPOINT_USING_FINDMNT) && *output!='/') len=*output=0;
   return len;
 }
-#undef T
+
+
+
 
 #endif // cg_textbuffer_dot_c
 #if __INCLUDE_LEVEL__ == 0 && ! defined(__cppcheck__)
@@ -353,8 +361,11 @@ static void test_write_bytes_block(const int fd,const struct textbuffer *b){
 static void test_exec(void){
   FOR(i,0,EXECF_NUM){
     char output[4444]={0};
-    exec_on_file(i,output,sizeof(output)-1,"/etc/fstab");
-    printf("output='%s';\n",output);
+    FOR(k,0,2){
+      const char *dir=k?"/var/log":"/etc/fstab";
+      exec_on_file(0,i,output,sizeof(output)-1,dir);
+      printf("type: %d   %s -> output='%s';\n",i,dir,output);
+    }
   }
 }
 

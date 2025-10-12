@@ -67,5 +67,15 @@ _Static_assert(ASYNC_SLEEP_USECONDS*4<1000*1000*ROOT_RESPONSE_WITHIN_SECONDS,"")
 
 #define DEBUG_DIRCACHE_COMPARE_CACHED 0 /*TO_HEADER*/
 #define DEBUG_TRACK_FALSE_GETATTR_ERRORS 0
-#define PLACEHOLDER_NAME 0x07
-//#define PLACEHOLDER_NAME '*'
+
+
+
+
+/*********************************************************************************************************************************************************************/
+/* When the  base name of the ZIP file  is part of  ZIP entry names, storage space can be saved.                                                                     */
+/* The base name is replaced by a specific symbol denoted here as "*" asterisk. Consider for example a Zipfile my_record_1234.Zip containing my_record_1234.wiff and */
+/* my_record_1234.rawIdx and my_record_1234.raw.  Substitution of the ZIP file name "my_record_1234" by "*" results in  *.wiff and *.rawIdx and *.raw.               */
+/* After substitution, the file list will be shared by many ZIP files which allows efficient storing in the cache.                                                   */
+/*********************************************************************************************************************************************************************/
+#define PLACEHOLDER_NAME '*'
+#define WITH_ZIPENTRY_PLACEHOLDER 1

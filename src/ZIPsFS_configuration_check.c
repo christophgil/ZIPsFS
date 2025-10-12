@@ -5,15 +5,16 @@
 /////////////////////////////////////////////////////////////////
 
 
+#define T(var,x)  if (!(var x)) warn=true, printf("%-30s   ( "ANSI_FG_BLUE"Value"ANSI_RESET" Operator Recommendated-Value) ("ANSI_FG_BLUE"%d"ANSI_RESET"%s)   "ANSI_FG_RED"false"ANSI_RESET"\n",#var,var,#x)
 #if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
-#define T(var,x)  if (!(var x)) warn=true, printf("%s  (IS operator SHOULD-BE) is false:   (%d%s)\n",#var,var,#x)
 #include "ZIPsFS_configuration.h"
 #include "ZIPsFS_early.h"
 #include "cg_utils.h"
 #include <stdio.h>
 #else // __INCLUDE_LEVEL__ IIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-#define T(var,x)  if (!(var x)) warn=true,warning(WARN_CONFIG|WARN_FLAG_WITHOUT_NL,"","%s  (IS operator SHOULD-BE) is false:   (%d%s)",#var,var,#x)
 #endif //__INCLUDE_LEVEL__
+
+#define WITH_PTHREAD_LOCK 1 /*  Should be true. Only for testing if suspect deadlock set to 0 */
 
 #define CHECK_DEBUG_OFF()\
   T(DEBUG_DIRCACHE_COMPARE_CACHED,==0);\
@@ -47,13 +48,14 @@ static bool check_configuration1(){
   CHECK_TIMEOUT_ON_OFF(0);
   T(WITH_EVICT_FROM_PAGECACHE,==1);
   T(WITH_ZIPINLINE,==1);
-  T(PLACEHOLDER_NAME,==7);
   T(WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,==0);
+  T(WITH_ZIPENTRY_PLACEHOLDER,==1);
   T(WITH_AUTOGEN,==1);
   T(WITH_CCODE,==1);
   T(WITH_INTERNET_DOWNLOAD,==1);
   T(WITH_POPEN_NOSHELL,==0);
   T(READDIR_TIMEOUT_SECONDS,>9);
+  T(WITH_ZIPENTRY_PLACEHOLDER,==1);
   return warn;
 }
 #if !(defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0)
@@ -72,8 +74,6 @@ static bool check_configuration(const char *mnt){
   }
   //log_debug_now("m: %s mnt: %s",m,mnt);
   free_untracked(m);
-
-
   if (!HAS_BACKTRACE){
     fprintf(stderr,"Warning: No stack-traces can be written in case of a program error.\n");
     warn=true;

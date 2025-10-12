@@ -203,12 +203,10 @@ echo  $t\n}\n\n");
 
 #define A(act,txt) sprintf(tmp,"echo '   %d  %s'\n",act,txt); textbuffer_add_segment(TXTBUFSGMT_DUP,b,tmp,0)
 #define H(txt) sprintf(tmp,"echo '""%s"ANSI_RESET"'\n",txt); textbuffer_add_segment(TXTBUFSGMT_DUP,b,tmp,0)
-#define L(what) "Trigger error due to "what" lock. WITH_ASSERT_LOCK is " IF01(WITH_ASSERT_LOCK,"0.  This will not work unless WITH_ASSERT_LOCK is set to 1 in ZIPsFS_configuration.h.","1. ZIPsFS will abort. ")
+#define L(what) "Trigger error due to "what" lock. Requires WITH_ASSERT_LOCK set to '1'.  Current value: '"STRINGIZE(WITH_ASSERT_LOCK)"'."
     H("Terminate");
     A(ACT_KILL_ZIPSFS,"Kill-ZIPsFS and print status");
     H("Blocked threads");
-    A(ACT_BLOCK_THREAD,"Simulate-blocking-thread. ZIPsFS will release the block eventually");
-    //    A(ACT_UNBLOCK_THREAD,"Undo-simulate-blocking-thread");
     A(ACT_FORCE_UNBLOCK,"Unblock thread even if blocked thread cannot be killed - not recommended.");
     A(ACT_CANCEL_THREAD,"Interrupt-thread.  ZIPsFS will restart the thread eventually");
     H("Pthread - Locks");
@@ -218,7 +216,7 @@ echo  $t\n}\n\n");
 #undef A
 #undef H
     textbuffer_add_segment_const(b,"thread=0\nread -r -n 1 -p 'Choice? ' c\necho\nif [[ $c == [1-9] ]];then\n");
-    sprintf(tmp,"  [[ $c == %d  || $c == %d ]] && thread=$(askWhichThread)\n",ACT_BLOCK_THREAD,ACT_CANCEL_THREAD);
+    sprintf(tmp,"  [[ $c == %d ]] && thread=$(askWhichThread)\n",ACT_CANCEL_THREAD);
     textbuffer_add_segment(TXTBUFSGMT_DUP,b,tmp,0);
     textbuffer_add_segment_const(b,"  my_stat $c $thread\nfi");
     break;

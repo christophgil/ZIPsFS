@@ -26,7 +26,9 @@
 #define NUM_MUTEX   (mutex_roots+ROOTS)
 #define DIRENT_ISDIR (1<<0)
 #define DIRENT_IS_COMPRESSED (1<<1)
+#define DIRENT_SAVE_MASK   (DIRENT_IS_COMPRESSED|DIRENT_ISDIR)
 #define DIRENT_DIRECT_NAME (1<<2)
+#define DIRENT_DIRECT_DEBUG (1<<3)
 //#define DEBUG_DIRECTORY_HASH32_OF_FNAME(s)    hash32((char*)s->fname,s->files_l*sizeof(char*))
 
 #define MALLOC_TYPE_SHIFT 8
@@ -254,9 +256,7 @@ struct autogen_files;
 #define WITH_ZIPINLINE_CACHE 0
 #endif
 // ---
-//#define C_FILE_DATA_WITHOUT_FINODE()    C(fsize,off_t); C(fmtime,uint64_t); C(fcrc,uint32_t); C(fflags,uint8_t); C(fname,char *);
-#define C_FILE_DATA_WITHOUT_NAME()    C(fsize,off_t);  C(fmtime,uint64_t); C(fcrc,uint32_t); C(fflags,uint8_t); C(finode,uint64_t);
-#define C_FILE_DATA()    C(fname,char *); C_FILE_DATA_WITHOUT_NAME();
+#define C_FILE_DATA()    C(fname,char *); C(fsize,off_t);  C(fmtime,uint64_t); C(fcrc,uint32_t); C(fflags,uint8_t); C(finode,uint64_t);
 #define C(field,type) type *field;
 struct directory_core{
   struct timespec dir_mtim;
@@ -318,13 +318,15 @@ struct directory{
   struct directory_core core; // Only this data goes to dircache.
   struct mstore filenames;
   int files_capacity,cached_vp_to_zip;
-  bool debug, dir_is_dircache, dir_is_destroyed, dir_is_success;
+  bool debug, dir_is_dircache, dir_is_destroyed, dir_is_success, has_file_containing_placeholder;
   /* The following concern asynchronized reading */
   bool async_never;
   IF1(WITH_TIMEOUT_READDIR, struct ht *ht_intern_names);
 };
 
 #define ROOT_WHEN_SUCCESS(r,t) atomic_load(r->thread_when_success+t)
+#define ROOT_WHEN_ITERATED(r,t) atomic_load(r->thread_when+t)
+
 #define ROOT_SUCCESS_SECONDS_AGO(r) (time(NULL)-ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC))
 #define ROOT_NOT_RESPONDING(r)  (r->remote && ROOT_SUCCESS_SECONDS_AGO(r)>ROOT_RESPONSE_WITHIN_SECONDS)
 
@@ -334,6 +336,7 @@ struct directory{
 #define ZP_DOES_NOT_EXIST (1<<4)
 #define ZP_IS_COMPRESSED  (1<<5)
 #define ZP_FROM_TRANSIENT_CACHE (1<<6)
+
 
 
 
@@ -456,9 +459,7 @@ struct rootdata{
   pthread_t thread[PTHREAD_LEN];
   int thread_count_started[PTHREAD_LEN];
   int thread_when_canceled[PTHREAD_LEN];
-  bool thread_pretend_blocked[PTHREAD_LEN];
   atomic_int thread_starting[PTHREAD_LEN];
-  bool thread_is_run[PTHREAD_LEN];
   pid_t thread_pid[PTHREAD_LEN];
   counter_rootdata_t filetypedata_dummy,filetypedata_all, filetypedata[FILETYPEDATA_NUM],filetypedata_frequent[FILETYPEDATA_FREQUENT_NUM];
   bool filetypedata_initialized, blocked, writable, remote,with_timeout;
@@ -499,8 +500,8 @@ struct rootdata{
 
 #define LOG_FUSE(path)          IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER)log_entered_function("%s",path)
 #define LOG_FUSE_RES(path,res)  IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER)log_exited_function("%s res:%d",path,res)
-//#define LOG_FUSE(path)          log_entered_function("%s",path)
-//#define LOG_FUSE_RES(path,res)  log_exited_function("%s res:%d",path,res)
+//#define LOG_FUSE(path)log_entered_function("%s",path)
+//#define LOG_FUSE_RES(path,res)log_exited_function("%s res:%d",path,res)
 
 //
 #define ADVISE_DIRCACHE_IS_ZIP              (1<<1)

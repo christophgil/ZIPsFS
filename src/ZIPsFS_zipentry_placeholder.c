@@ -6,33 +6,28 @@
 /// This will save space in cache.                                                            ///
 /// Many ZIP files will have identical table-of-content and thus kept only once in the cache. ///
 /////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static const char *zipentry_placeholder_insert(char *s,const char *u, const char *zipfile){
+static const char *zipentry_placeholder_insert(char *s,const char *u, struct directory *dir){
+  if (dir->has_file_containing_placeholder) return u;
   const int ulen=cg_strlen(u);
-  if (strchr(u,PLACEHOLDER_NAME)){
-    static int alreadyWarned=0;
-    if(!alreadyWarned++) warning(WARN_CHARS,zipfile,"Found PLACEHOLDER_NAME in file name");
-  }
-  s[0]=0;
-  if (!ulen) return u;
-  if (zipfile && (ulen<MAX_PATHLEN) && *zipfile){
-    const char *replacement=zipfile+cg_last_slash(zipfile)+1, *dot=cg_strchrnul(replacement,'.');
+  if (!ulen || ulen>MAX_PATHLEN) return u;
+  const char *rp=DIR_RP(dir);
+  ASSERT(!strchr(u,PLACEHOLDER_NAME));
+  const char *replacement=rp+cg_last_slash(rp)+1, *dot=cg_strchrnul(replacement,'.');
     const int replacement_l=dot-replacement;
-    const char *posaddr=dot && replacement_l>5?cg_memmem(u,ulen,replacement,replacement_l):NULL;
-    if (posaddr && posaddr<replacement+replacement_l){
-      const int pos=posaddr-u;
+    const char *posPtr=replacement_l>5?cg_memmem(u,ulen,replacement,replacement_l):NULL;
+    if (posPtr){
+      const int pos=posPtr-u;
       memcpy(s,u,pos);
       s[pos]=PLACEHOLDER_NAME;
-      memcpy(s+pos+1,u+pos+replacement_l,ulen-replacement_l-pos);
+      const char *src=u+pos+replacement_l;
+      char *dst=s+pos+1;
+      RLOOP(i,ulen-replacement_l-pos) *dst++=*src++;
       s[ulen-replacement_l+1]=0;
+      //log_debug_now("%s  -->>> %s",u,s);
       return s;
     }
-  }
   return u;
 }
-
-/*  Reverses  */
 static int zipentry_placeholder_expand2(char *n,const char *zipfile){
   const char *placeholder=strchr(n,PLACEHOLDER_NAME);
   const int n_l=cg_strlen(n);

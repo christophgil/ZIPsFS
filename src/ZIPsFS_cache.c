@@ -80,7 +80,6 @@ static void debug_assert_crc32_not_null(const struct directory *dir){
 
 #if WITH_DIRCACHE
 static void dircache_directory_to_cache(struct directory *dir){
-  directory_remove_unused_fields(dir);
   //log_entered_function("%s",DIR_RP(dir));
   cg_thread_assert_locked(mutex_dircache);
   //debug_assert_crc32_not_null(dir);
@@ -92,13 +91,18 @@ static void dircache_directory_to_cache(struct directory *dir){
     directory_rp_stat(dir);
     d->dir_mtim=dir->dir_zpath.stat_rp.ST_MTIMESPEC;
   }
-  //ASSERT_PRINT(src.dir_mtim.tv_sec!=0);
+  const bool no_inode_fflags=DIR_VP_L(dir) && DIR_IS_ZIP(dir);
   if (src.files_l){
     RLOOP(i,src.files_l){
       d->fname[i]=(char*)ht_sinternalize(&r->dircache_ht_fname,src.fname[i]); /* All  filenames internalized */
     }
 #define C(F,type) if (src.F) d->F=mstore_add(&r->dircache_mstore,src.F,src.files_l*sizeof(type),sizeof(type))
-    C_FILE_DATA_WITHOUT_NAME();
+    C(fsize,off_t);
+    C(fmtime,uint64_t);
+    C(fcrc,uint32_t);
+    if (!no_inode_fflags){
+      C(fflags,uint8_t); C(finode,uint64_t);
+    }
 #undef C    /*  Due to zipentry_placeholder_insert()  and internalization, the array of filenames will often be the same and needs to be stored only once - hence ht_intern.*/
     d->fname=(char**)ht_intern(&r->dircache_ht_fnamearray,src.fname,src.files_l*SIZE_POINTER,0,SIZE_POINTER);
   }
@@ -131,7 +135,7 @@ static void to_cache_vpath_to_zippath(struct directory *dir){
     RLOOP(i,dc->files_l){
       const char *n=dc->fname[i];
       if (!n || strchr(n,'/')) continue; /* Only ZIP entries in root directory */
-      const int u_l=zipentry_placeholder_expand(u,n,RP());
+      const int u_l=zipentry_placeholder_expand(u,n,RP(),dir);
       const int vp_l=vp0_l+u_l;
       memcpy(vp+vp0_l,u,u_l);  vp[vp_l]=0;
       //log_debug_now(ANSI_FG_MAGENTA"u=%s   vp: %s"ANSI_RESET,u,vp);

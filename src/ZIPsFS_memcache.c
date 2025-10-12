@@ -9,7 +9,8 @@
 ////////////////////////////////////
 /// Parameters from command line ///
 ////////////////////////////////////
-#define  MEMCACHE_ROOT_UPDATE_TIME(d,r,success)   if (is_memcache(d,r))  root_update_time(PTHREAD_MEMCACHE,success,r?r:d->zpath.root);
+//if (is_memcache(d,r))
+#define  MEMCACHE_ROOT_UPDATE_TIME(d,r,success)   if (d || r) root_update_time(r?r:d->zpath.root,success?PTHREAD_MEMCACHE:-PTHREAD_MEMCACHE)
 static bool memcache_set_maxbytes(const char *s){
   if ((_memcache_bytes_limit=cg_atol_kmgt(s))<(1<<22)){
     log_error("Option -l: _memcache_bytes_limit is too small %s\n",s);
@@ -208,6 +209,7 @@ static bool fhandle_check_crc32(struct fHandle *d){
     warning(WARN_MEMCACHE|WARN_FLAG_ERROR,D_VP(d),"crc32-mismatch!  ZIP: %x != computed: %x size=%zu already: %zu  rp=%s",d->zpath.zipcrc32,crc,st_size,d->memcache->memcache_already,D_RP(d));
     return false;
   }
+  //log_verbose(GREEN_SUCCESS"crc32  %x  size=%zu already: %zu  rp=%s",crc,st_size,d->memcache->memcache_already,D_RP(d));
   return true;
 }
 //////////////////////////////////////////////////////////////////////////////////////
@@ -258,7 +260,7 @@ static bool memcache_store_try(struct fHandle *d, struct async_zipfile *zip, str
     fhandle_counter_inc(d,ok?ZIP_READ_CACHE_CRC32_SUCCESS:ZIP_READ_CACHE_CRC32_FAIL);
     msg=ok?GREEN_SUCCESS" crc32 OK":RED_WARNING" already==st_size  crc32 wrong";
   }
-  if (msg) IF_LOG_FLAG(LOG_MEMCACHE) log_exited_function("%s  %s  st_size: %lld\n",rp,msg,(LLD)st_size);
+  if (msg) IF_LOG_FLAG(LOG_MEMCACHE)log_exited_function("%s  %s  st_size: %lld\n",rp,msg,(LLD)st_size);
   if (fd) close(fd); else closezip_now(zip);
   //log_exited_function("rp: %s  e: %s ok: %d  contin: %d",rp,D_EP(d),ok,contin);
   return ok;
@@ -319,7 +321,7 @@ static time_t memcache_time_exceeded(const struct fHandle *d){
   lock(mutex_fhandle);
   struct rootdata *r=d->zpath.root;
   assert(r!=NULL);
-  time_t t=time(NULL)-atomic_load(r->thread_when+PTHREAD_MEMCACHE);
+  time_t t=time(NULL)-ROOT_WHEN_ITERATED(r,PTHREAD_MEMCACHE);
   unlock(mutex_fhandle);
   return t>MEMCACHE_TIMEOUT_SECONDS;
 }
@@ -395,6 +397,7 @@ static void *infloop_memcache(void *arg){
         LOCK(mutex_fhandle,memcache_set_status(d,memcache_done); atomic_fetch_add(&d->is_memcache_store,-1));
       }
     }
+    root_update_time(r,-PTHREAD_MEMCACHE);
     usleep(100*1000);
   }
 }

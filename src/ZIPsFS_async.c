@@ -42,6 +42,7 @@ static bool readdir_now(struct directory *dir){
   if (!readdir_from_zip(dir) && !readir_from_filesystem(dir)) return false;
   directory_rp_stat(dir);
   dir->core.dir_mtim=dir->dir_zpath.stat_rp.ST_MTIMESPEC;
+  //IF1(WITH_ZIPENTRY_PLACEHOLDER,directory_any_file_with_placeholder(dir));
   return (dir->dir_is_success=true);
 }
 /*
@@ -222,13 +223,15 @@ static void directory_copy(struct directory *dst,const struct directory *src, st
   lock(mutex_dircache);
   const int n=src->core.files_l;
   directory_ensure_capacity(dst,n,n);
+  //directory_print(src,5);
   const struct directory_core *d=&src->core;
   assert(NULL!=src->ht_intern_names);
   FOR(i,0,n){
-    directory_add(Nth0(d->fflags,i)|DIRENT_DIRECT_NAME,dst,  Nth0(d->finode,i), d->fname[i],Nth0(d->fsize,i),Nth0(d->fmtime,i),Nth0(d->fcrc,0));
+    directory_add(Nth0(d->fflags,i)|DIRENT_DIRECT_NAME,dst,  Nth0(d->finode,i), d->fname[i],Nth0(d->fsize,i),Nth0(d->fmtime,i),Nth0(d->fcrc,i));
   }
   dst->dir_is_success=src->dir_is_success;
   ASSERT(src->core.files_l==dst->core.files_l);
+  //directory_print(dst,5);
   unlock(mutex_dircache);
 }
 
@@ -237,8 +240,7 @@ static inline bool async_periodically_readdir(struct rootdata *r){
   SET_PICKED(assert(r->async_dir!=NULL); directory_init_zpath(&dir,&r->async_dir->dir_zpath));
   const bool success=readdir_now(&dir);
   OK_OR_TIMEOUT(if (success) directory_copy(r->async_dir,&dir,r),);
-  //log_debug_now("'%s'  %s",DIR_RP(&dir),success?GREEN_SUCCESS:RED_FAIL);
-  if (success)  directory_debug_filenames("&dir/",&dir);
+  //log_debug_now("'%s'  %s files_l: %d ",DIR_RP(&dir),success?GREEN_SUCCESS:RED_FAIL, dir.core.files_l);    directory_print(&dir,5);
   return success;
 }
 static bool readdir_async(struct directory *dir){
@@ -250,10 +252,9 @@ static bool readdir_async(struct directory *dir){
     if (!r->with_timeout||dir->async_never) return readdir_now(dir);
     L();
     WAIT_PICKED(r->async_dir=dir);
-    root_update_time(PTHREAD_ASYNC,false,r);
-    ASYNC_WAIT(RP(),atomic_load(r->thread_when+PTHREAD_ASYNC));
-    // log_debug_now("'%s'  finished:%d  success:%d",DIR_RP(dir),finished,dir->dir_is_success);
-    //directory_debug_filenames("dir/",dir);
+    root_update_time(r,-PTHREAD_ASYNC);
+    ASYNC_WAIT(RP(),ROOT_WHEN_ITERATED(r,PTHREAD_ASYNC));
+    //log_debug_now("%p '%s'   finished:%d  success:%d files_l: %d same: %d",dir,DIR_RP(dir),finished,dir->dir_is_success, dir->core.files_l, dir==r->async_dir);  directory_debug_filenames("dir/",dir);
     UL();
     if (finished) return dir->dir_is_success;
     DIE_IF_TIMEOUT(RP());
@@ -264,7 +265,6 @@ static bool readdir_async(struct directory *dir){
 #define readdir_async(dir) readdir_now(dir)
 #endif //WITH_TIMEOUT_READDIR
 #undef A
-/* ================================================================================ */
 #undef ASYNC_WAIT
 #undef OK_OR_TIMEOUT
 #undef L
@@ -274,19 +274,54 @@ static bool readdir_async(struct directory *dir){
 #undef ID
 #undef TO
 #undef WAIT_PICKED
-static void unblock_update_time(struct rootdata *r, const enum enum_root_thread thread){
+/* ================================================================================ */
+  static void log_infinity_loop(const struct rootdata *r, const enum enum_root_thread t){
   const int flag=
-    thread==PTHREAD_MEMCACHE?LOG_INFINITY_LOOP_MEMCACHE:
-    thread==PTHREAD_ASYNC?LOG_INFINITY_LOOP_DIRCACHE:
-    thread==PTHREAD_MISC?LOG_INFINITY_LOOP_MISC: 0;
-  IF_LOG_FLAG(flag) log_verbose("Thread: %s  Root: %s ",PTHREAD_S[thread],rootpath(r));
-  while(r->thread_pretend_blocked[thread]) usleep(1000*100);
-  atomic_store(r->thread_when_success+thread,time(NULL));
+    t==PTHREAD_MEMCACHE?LOG_INFINITY_LOOP_MEMCACHE:
+    t==PTHREAD_ASYNC?LOG_INFINITY_LOOP_DIRCACHE:
+    t==PTHREAD_MISC?LOG_INFINITY_LOOP_MISC: 0;
+    IF_LOG_FLAG(flag) log_verbose("Thread: %s  Root: %s ",PTHREAD_S[t],rootpath(r));
 }
 
-static void root_update_time(const enum enum_root_thread t,const bool success, struct rootdata *r){
+static void root_update_time(struct rootdata *r, int t){
+  const bool success=t>0;
+  if (t<0) t=-t;
   assert(r!=NULL);
   const time_t now=time(NULL);
-  if (success)  atomic_store(r->thread_when_success+t,now);
+  if (success) atomic_store(r->thread_when_success+t,now);
   atomic_store(r->thread_when+t,now);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+/// 1. Return true for local file roots.
+/// 2. Return false for remote file roots (starting with double slash) that has not responded for long time
+/// 2. Wait until last respond of root is below threshold.
+////////////////////////////////////////////////////////////////////////////////////////////
+static void log_root_blocked(struct rootdata *r,const bool blocked){
+  if (r && r->blocked!=blocked){
+    warning(WARN_ROOT|WARN_FLAG_ERROR,rootpath(r),"Remote root %s"ANSI_RESET"\n",blocked?ANSI_FG_RED"not responding.":ANSI_FG_GREEN"responding again.");
+    r->blocked=blocked;
+  }
+}
+static bool wait_for_root_timeout(struct rootdata *r){
+  if (!r || !r->remote){ log_root_blocked(r,false);return true;}
+  const int N=10000;
+  RLOOP(iTry,N){
+    const time_t delay=ROOT_SUCCESS_SECONDS_AGO(r);
+    //log_debug_now("delay: %ld ",delay);
+    if (delay>ROOT_GIVEUP_AFTER_SECONDS) break;
+    if (delay<ROOT_RESPONSE_WITHIN_SECONDS){
+      log_root_blocked(r,false);
+      return true;
+    }
+    cg_sleep_ms(ROOT_RESPONSE_WITHIN_SECONDS/N,"");
+    bool log=iTry>N/2 && iTry%(N/10)==0;
+    IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE) log=true;
+    if (log) log_verbose("%s %d/%d\n",rootpath(r),iTry,N);
+  }
+  r->log_count_delayed_periods++;
+  r->log_count_delayed++;
+  log_root_blocked(r,true);
+  r->log_count_delayed_periods++;
+  return false;
 }

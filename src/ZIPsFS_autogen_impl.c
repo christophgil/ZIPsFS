@@ -322,7 +322,7 @@ static int aimpl_run(struct autogen_files *ff){
   }/* if (!res) */
   aimpl_wait_concurrent_end(ac);
   if (res && cg_file_exists(ff->log)) cg_rename(ff->log,ff->fail);
-  IF_LOG_FLAG(LOG_AUTOGEN) log_exited_function("%s res: %d %s",ff->grealpath,res,success_or_fail(!res));
+  IF_LOG_FLAG(LOG_AUTOGEN)log_exited_function("%s res: %d %s",ff->grealpath,res,success_or_fail(!res));
   return -res;
 #undef isRAM
 #undef isMMAP
