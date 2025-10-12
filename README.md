@@ -428,9 +428,8 @@ work correctly.
 See ZIPsFS.compile.sh for activation of sanitizers.
 </details>
 <details><summary>Improve performance  caching file content and meta data</summary>
-~
-## File content cache
-
+File content cache
+==================
 ZIPsFS optionally supports caching specific files and ZIP entries entirely in RAM, allowing data segments to
 be served from memory in any order.
 This feature significantly improves performance for software that performs random-access reads for remote files and for
