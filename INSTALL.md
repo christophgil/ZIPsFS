@@ -22,9 +22,10 @@ ZIPsFS allows transparent on-the-fly file conversion which requires the followin
 </details><!--- Optional -->
 
 <details><summary>MS-Window</summary>
-ZIPsFS can probably not be installed directly in MS-Windows.
-It may be installed in WSL.
-The mountpoint can be exported as a SAMBA share.
+
+
+ZIPsFS file system can be exported via SAMBA such that the file system can be visited with a Windows PC.
+ZIPsFS could also be installed on a Windows system in  WSL.
 
 ### Problem: Files that are not listed in the parent are not accessible
 

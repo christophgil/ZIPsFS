@@ -44,7 +44,7 @@ It has a programming interface to create synthetic file content programmatically
    Please [Install](./INSTALL.md)  ZIPsFS.
 
 
-### First create some example files
+### Create some example files
 
 Without trailing slash, the folder name will be retained in the virtual path. This is the case for ``branch3``.
 Virtual file paths in that branch will start with *mount point*``/branch3/``.
@@ -196,7 +196,12 @@ Author: Christoph Gille
 
 **Current status**: Testing and Bug fixing. Already running very busy for several weeks without interruption.
 
+
+**TODO**:   Currently, the full set of threads is started in the beginning. Better start threads only when needed
+
+
 If ZIPsFS crashes, please send the stack-trace together with the source code you were using.
+
 </details>
 
 
@@ -428,14 +433,15 @@ work correctly.
 See ZIPsFS.compile.sh for activation of sanitizers.
 </details>
 <details><summary>Improve performance  caching file content and meta data</summary>
-File content cache
-==================
+## File content cache
+
+
 ZIPsFS optionally supports caching specific files and ZIP entries entirely in RAM, allowing data segments to
 be served from memory in any order.
 This feature significantly improves performance for software that performs random-access reads for remote files and for
 ZIP entries.
 
-The ***-l*** option sets an upper limit on memory usage for the ZIP RAM cache.
+The ``-l`` option sets an upper limit on memory usage for the ZIP RAM cache.
 When available memory runs low, ZIPsFS can either pause,  proceed without caching file data or just ignore the
 memory restriction depending on the configuration.
 These caching behaviors - such as which files to cache and how to handle memory pressure - are defined in the configuration.
