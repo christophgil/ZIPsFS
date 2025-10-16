@@ -144,7 +144,7 @@ enum enum_autogen_state{AUTOGEN_UNINITILIZED,AUTOGEN_SUCCESS,AUTOGEN_FAIL};
 #define A4(x) C(memcache_status_nil)C(memcache_queued)C(memcache_reading)C(memcache_done)C(MEMCACHE_STATUS_NUM)
 #define A5() C(MEMCACHE_NEVER)C(MEMCACHE_SEEK)C(MEMCACHE_RULE)C(MEMCACHE_COMPRESSED)C(MEMCACHE_ALWAYS)
 #define A7(x) C(PTHREAD_NIL)C(PTHREAD_ASYNC)C(PTHREAD_MEMCACHE)C(PTHREAD_MISC)C(PTHREAD_LEN)
-#define A8(x) C(mutex_nil)C(mutex_fhandle)C(mutex_async)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_autogen_init)C(mutex_dircache_queue)C(mutex_log_count)C(mutex_crc)C(mutex_inode)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_len) //* mutex_roots must be last */
+#define A8(x) C(mutex_nil)C(mutex_start_thread)C(mutex_fhandle)C(mutex_async)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_autogen_init)C(mutex_dircache_queue)C(mutex_log_count)C(mutex_crc)C(mutex_inode)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_len) //* mutex_roots must be last */
 
 #define A9(x) C(LOG_DEACTIVATE_ALL)C(LOG_FUSE_METHODS_ENTER)C(LOG_FUSE_METHODS_EXIT)C(LOG_ZIP)C(LOG_ZIP_INLINE)C(LOG_EVICT_FROM_CACHE)C(LOG_MEMCACHE)C(LOG_REALPATH)C(LOG_AUTOGEN)C(LOG_READ_BLOCK)\
        C(LOG_TRANSIENT_ZIPENTRY_CACHE)\
@@ -459,10 +459,12 @@ struct rootdata{
   pthread_t thread[PTHREAD_LEN];
   int thread_count_started[PTHREAD_LEN];
   int thread_when_canceled[PTHREAD_LEN];
-  atomic_int thread_starting[PTHREAD_LEN];
+  //  atomic_int thread_starting[PTHREAD_LEN];
+
+
   pid_t thread_pid[PTHREAD_LEN];
   counter_rootdata_t filetypedata_dummy,filetypedata_all, filetypedata[FILETYPEDATA_NUM],filetypedata_frequent[FILETYPEDATA_FREQUENT_NUM];
-  bool filetypedata_initialized, blocked, writable, remote,with_timeout;
+  bool filetypedata_initialized, blocked, writable, remote,with_timeout,thread_already_started[PTHREAD_LEN];
   int seq_fsid;
   unsigned long f_fsid; /* From statvfs.f_fsid */
   pthread_mutex_t async_mtx[ASYNC_LENGTH];

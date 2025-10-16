@@ -192,7 +192,7 @@ static void special_file_content(struct textbuffer *b,const enum enum_special_fi
 
   case SFILE_DEBUG_CTRL:
     textbuffer_add_segment_const(b,"\naskWhichThread(){\n");
-    FOR(t,PTHREAD_NIL+1,PTHREAD_LEN){
+    FOR(t,1,PTHREAD_LEN){
       sprintf(tmp,"  echo '  %d %s' >&2\n",t,PTHREAD_S[t]);
       textbuffer_add_segment(TXTBUFSGMT_DUP,b,tmp,0);
     }

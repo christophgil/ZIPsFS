@@ -33,11 +33,15 @@ Any newly created or modified files are stored in the first file location, while
 ZIPsFS treats **ZIP files as expandable folders**, typically naming them by appending ``.Contents/`` to the original ZIP file name.
 However, this behavior can be customized using filename-based rules. Extensive configuration options allow adjustments. Changes can be applied without disrupting the file system.
 
-ZIPsFS is best run in a **tmux** session.
 With a trailing slash, the folder name is not part of the virtual path, in accordance with  the trailing slash semantics of many UNIX tools.
 
-ZIPsFS includes specialized features like **automatic file conversions** and performance optimizations tailored for efficiently storing and accessing **large-scale mass spectrometry** data.
-It has a programming interface to create synthetic file content programmatically.
+ZIPsFS includes specialized features like **automatic file conversions** and performance
+optimizations tailored for efficiently storing and accessing **large-scale mass spectrometry** data.
+It manages non-sequential file reading from varying positions (so-called file seek) efficiently to
+improve reading of remote and zipped files. It has a programming interface to create synthetic file
+content programmatically.
+
+ZIPsFS is best run in a **tmux** session.
 
 # Mini tutorial
 
@@ -195,9 +199,6 @@ Other users are granted access.
 Author: Christoph Gille
 
 **Current status**: Testing and Bug fixing. Already running very busy for several weeks without interruption.
-
-
-**TODO**:   Currently, the full set of threads is started in the beginning. Better start threads only when needed
 
 
 If ZIPsFS crashes, please send the stack-trace together with the source code you were using.
@@ -727,6 +728,7 @@ SEE ALSO
 - https://github.com/google/mount-zip
 - https://github.com/cybernoid/archivemount
 - https://github.com/mxmlnkn/ratarmount
+- https://github.com/bazil/zipfs
 </details>
 
  - [Installation](./INSTALL.md)

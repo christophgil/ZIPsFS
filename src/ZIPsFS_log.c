@@ -366,7 +366,7 @@ static int log_print_roots(int n){ /* n==0 for UNIX console with UTF8 else for H
     }
   }
   static const char *info="Explain table:\n"
-    "    Retained directory: When no trailing slash in path then the last path-component will be part of the virtual path.\n"
+    "    Retained directory: Without trailing slash in provided path, the last path-component will be part of the virtual path.\n"
     "                        This is consistent with the trailing slash semantics of UNIX tools like rsync, scp and cp.\n\n"
     "    Feature flags: W=Writable (First path)   R=Remote (Path starts with two slashes)     T=Supports timeout (Path starts with three slashes)";
   if (n){ PRINTINFO("%s   B=Blocked (frozen)\n</PRE>",info);} else fprintf(stderr,ANSI_FG_GRAY"%s"ANSI_RESET"\n\n",info);

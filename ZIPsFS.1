@@ -44,15 +44,18 @@ However, this behavior can be customized using filename-based rules.
 Extensive configuration options allow adjustments.
 Changes can be applied without disrupting the file system.
 .PP
-ZIPsFS is best run in a \f[B]tmux\f[R] session.
 With a trailing slash, the folder name is not part of the virtual path,
 in accordance with the trailing slash semantics of many UNIX tools.
 .PP
 ZIPsFS includes specialized features like \f[B]automatic file
 conversions\f[R] and performance optimizations tailored for efficiently
 storing and accessing \f[B]large-scale mass spectrometry\f[R] data.
+It manages non-sequential file reading from varying positions (so-called
+file seek) efficiently to improve reading of remote and zipped files.
 It has a programming interface to create synthetic file content
 programmatically.
+.PP
+ZIPsFS is best run in a \f[B]tmux\f[R] session.
 .SH Mini tutorial
 .PP
 Please Install ZIPsFS.
@@ -274,10 +277,6 @@ Author: Christoph Gille
 .PP
 \f[B]Current status\f[R]: Testing and Bug fixing.
 Already running very busy for several weeks without interruption.
-.PP
-\f[B]TODO\f[R]: Currently, the full set of threads is started in the
-beginning.
-Better start threads only when needed
 .PP
 If ZIPsFS crashes, please send the stack-trace together with the source
 code you were using.

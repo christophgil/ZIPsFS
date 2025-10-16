@@ -208,7 +208,7 @@ static void async_openzip(struct async_zipfile *zip){
     UL();
     if (finished && zip->zf) break;
     DIE_IF_TIMEOUT(RP());
-    }while(find_realpath_other_root(zpath));
+  }while(find_realpath_other_root(zpath));
 }
 #else
 #define async_openzip(zip) openzip_now(zip)
@@ -275,12 +275,35 @@ static bool readdir_async(struct directory *dir){
 #undef TO
 #undef WAIT_PICKED
 /* ================================================================================ */
-  static void log_infinity_loop(const struct rootdata *r, const enum enum_root_thread t){
+
+
+/******************************/
+/* Thread and Infinity loops  */
+/******************************/
+static void root_start_thread(struct rootdata *r,const enum enum_root_thread t,const bool evenIfAlreadyStarted){
+  lock(mutex_start_thread);
+  if (!r->thread_already_started[t] ||evenIfAlreadyStarted){
+    log_verbose("Going to start thread %s / %s",r->rootpath,PTHREAD_S[t]);
+    void *(*f)(void *)=IF1(WITH_MEMCACHE,t==PTHREAD_MEMCACHE?&infloop_memcache:) t==PTHREAD_ASYNC?infloop_async:  t==PTHREAD_MISC?infloop_misc: NULL;
+    if (f){
+      const int count=r->thread_count_started[t]++;
+      if (pthread_create(&r->thread[t],NULL,f,(void*)r)){
+#define C "Failed thread_create '%s'  Root: %d",PTHREAD_S[t],rootindex(r)
+        if (count) warning(WARN_THREAD|WARN_FLAG_EXIT|WARN_FLAG_ERRNO,rootpath(r),C); else DIE(C);
+#undef C
+      }
+      if (count) warning(WARN_THREAD,report_rootpath(r),"pthread_start %s function: %p",PTHREAD_S[t],f);
+      r->thread_already_started[t]=true;
+    }
+  }
+  unlock(mutex_start_thread);
+}
+static void log_infinity_loop(const struct rootdata *r, const enum enum_root_thread t){
   const int flag=
     t==PTHREAD_MEMCACHE?LOG_INFINITY_LOOP_MEMCACHE:
     t==PTHREAD_ASYNC?LOG_INFINITY_LOOP_DIRCACHE:
     t==PTHREAD_MISC?LOG_INFINITY_LOOP_MISC: 0;
-    IF_LOG_FLAG(flag) log_verbose("Thread: %s  Root: %s ",PTHREAD_S[t],rootpath(r));
+  IF_LOG_FLAG(flag) log_verbose("Thread: %s  Root: %s ",PTHREAD_S[t],rootpath(r));
 }
 
 static void root_update_time(struct rootdata *r, int t){
@@ -292,11 +315,117 @@ static void root_update_time(struct rootdata *r, int t){
   atomic_store(r->thread_when+t,now);
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////
-/// 1. Return true for local file roots.
-/// 2. Return false for remote file roots (starting with double slash) that has not responded for long time
-/// 2. Wait until last respond of root is below threshold.
-////////////////////////////////////////////////////////////////////////////////////////////
+
+static void *infloop_async(void *arg){
+  struct rootdata *r=arg;
+  assert(r!=NULL);
+  init_infloop(r,PTHREAD_ASYNC);
+  long nanos=ASYNC_SLEEP_USECONDS*1000; /* The shorter the higher the responsiveness, but increased CPU usage */
+  for(int loop=0; ;loop++){
+    cg_nanosleep(nanos);
+    if (nanos<ASYNC_SLEEP_USECONDS*1000)      nanos++;
+    bool success=IF01(IS_CHECKING_CODE,false,rand());
+    IF1(WITH_DIRCACHE, if (!(loop&255) && async_periodically_dircache(r)) success=true);
+    if (r->with_timeout){
+      /* Reduce waiting when many subsequent request */
+      IF1(WITH_TIMEOUT_STAT, if ((async_periodically_stat(r))){ nanos=MAX(ASYNC_SLEEP_USECONDS*1000L/50,1000*400);  success=true; sched_yield();});
+      if (!(loop&15)){ /* less often */
+#define C(with,fn) IF1(with,if (fn(r)){success=true;});
+        C(WITH_TIMEOUT_READDIR,async_periodically_readdir);
+        C(WITH_TIMEOUT_OPENZIP,async_periodically_openzip);
+        C(WITH_TIMEOUT_OPENFILE,async_periodically_openfile);
+#undef C
+      }
+      if (r->remote && !(loop&15)){
+        if (!success && !(loop&255) && ROOT_SUCCESS_SECONDS_AGO(r)>MAX(1,ROOT_RESPONSE_WITHIN_SECONDS/4)){
+          success=!statvfs(rootpath(r),&r->statvfs);
+          if (!success) log_verbose(RED_FAIL"statvfs(%s)",rootpath(r));
+        }
+      }
+    }
+    if (!(loop&255)||success) root_update_time(r,success?PTHREAD_ASYNC:-PTHREAD_ASYNC);
+    if (!(loop&0x1023)) log_infinity_loop(r,PTHREAD_ASYNC);
+  }
+}
+static void *infloop_misc(void *arg){
+  struct rootdata *r=arg;
+  init_infloop(r,PTHREAD_MISC);
+  for(int j=0;;j++){
+    log_infinity_loop(r,PTHREAD_MISC);
+    root_update_time(r,-PTHREAD_MISC);
+    usleep(1000*1000);
+    LOCK_NCANCEL(mutex_fhandle,fhandle_destroy_those_that_are_marked());
+    IF1(WITH_AUTOGEN,if (!(j&0xFff)) autogen_cleanup());
+    if (!(j&3)){
+      static struct pstat pstat1,pstat2;
+      cpuusage_read_proc(&pstat2,getpid());
+      cpuusage_calc_pct(&pstat2,&pstat1,&_ucpu_usage,&_scpu_usage);
+      pstat1=pstat2;
+      IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE) if (_ucpu_usage>40||_scpu_usage>40) log_verbose("pid: %d cpu_usage user: %.2f system: %.2f\n",getpid(),_ucpu_usage,_scpu_usage);
+    }
+    log_flags_update();
+    //if (!(j&63)) debug_report_zip_count();
+    IF1(WITH_CANCEL_BLOCKED_THREADS,unblock_periodically());
+  }
+}
+///////////////////////////////////////////////
+/// Capability to unblock requires that     ///
+/// pthreads have different gettid() and    ///
+/// /proc- file system                      ///
+///////////////////////////////////////////////
+static void init_infloop(struct rootdata *r, const enum enum_root_thread ithread){
+  IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE)log_entered_function("Thread: %s  Root: %s ",PTHREAD_S[ithread],rootpath(r));
+  IF1(WITH_CANCEL_BLOCKED_THREADS,
+      pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,&_unused_int);
+      if (r) r->thread_pid[ithread]=gettid(); assert(_pid!=gettid()); assert(cg_pid_exists(gettid())));
+}
+#if WITH_CANCEL_BLOCKED_THREADS
+static void unblock_periodically(){
+  static yes_zero_no_t threads_use_own_PID=0;
+  if (!threads_use_own_PID){
+    threads_use_own_PID=YES;
+    if (_pid==gettid()){ threads_use_own_PID=NO;  warning(WARN_THREAD,"","Threads not using own process IDs. No unblock of blocked threads");}
+  }
+  if (threads_use_own_PID==NO) return;
+  foreach_root(r){
+    FOR(t,1,PTHREAD_LEN){
+      if (t==PTHREAD_MISC || !r->thread_already_started[t]) continue;
+      const int threshold=t==PTHREAD_MEMCACHE?UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE: t==PTHREAD_ASYNC?UNBLOCK_AFTER_SECONDS_THREAD_ASYNC: 0;
+      if (!threshold || !r->thread_count_started[t] || !r->thread[t]) continue;
+      const long now=time(NULL), last=MAX_long(ROOT_WHEN_ITERATED(r,t),r->thread_when_canceled[t]);
+      if (!last) continue;
+      if (now-last>threshold){
+        log_verbose("%s  %s  now-last:%ld > threshold: %d ",r->rootpath, PTHREAD_S[t],now-last,threshold);
+        pthread_cancel(r->thread[t]); /* Double cancel is not harmful: https://stackoverflow.com/questions/7235392/is-it-safe-to-call-pthread-cancel-on-terminated-thread */
+        usleep(1000*1000);
+        const pid_t pid=r->thread_pid[t];
+        bool not_restart=pid && cg_pid_exists(pid);
+        if (not_restart && _thread_unblock_ignore_existing_pid){
+          warning(WARN_THREAD,rootpath(r),"Going to start thread %s even though pid %ld still exists.",PTHREAD_S[t],(long)pid);
+          _thread_unblock_ignore_existing_pid=not_restart=false;
+        }
+        char proc[99]; sprintf(proc,"/proc/%ld",(long)pid);
+        if (not_restart){
+          log_warn("Not yet starting thread because process  still exists %s",proc);
+        }else{
+          warning(WARN_THREAD|WARN_FLAG_SUCCESS,proc,"Going root_start_thread(%s,%s) because process does not exist any more",rootpath(r),PTHREAD_S[t]);
+          r->thread_when_canceled[t]=time(NULL);
+          root_start_thread(r,t,true);
+        }
+      }
+    }
+  }
+}
+#endif //WITH_CANCEL_BLOCKED_THREADS
+
+
+
+
+/***********************************************************************************************************/
+/* 1. Return true for local file roots.                                                                    */
+/* 2. Return false for remote file roots (starting with double slash) that has not responded for long time */
+/* 2. Wait until last respond of root is below threshold.                                                  */
+/***********************************************************************************************************/
 static void log_root_blocked(struct rootdata *r,const bool blocked){
   if (r && r->blocked!=blocked){
     warning(WARN_ROOT|WARN_FLAG_ERROR,rootpath(r),"Remote root %s"ANSI_RESET"\n",blocked?ANSI_FG_RED"not responding.":ANSI_FG_GREEN"responding again.");

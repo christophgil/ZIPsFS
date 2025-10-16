@@ -1,6 +1,4 @@
-# Installation of ZIPsFS
-
-## Requirements
+## Requirements (OS-Specific)
 
  - POSIX C-compiler gcc or clang. GNU extensions not needed.
  - bash, unzip, tmux
@@ -24,8 +22,8 @@ ZIPsFS allows transparent on-the-fly file conversion which requires the followin
 <details><summary>MS-Window</summary>
 
 
-ZIPsFS file system can be exported via SAMBA such that the file system can be visited with a Windows PC.
-ZIPsFS could also be installed on a Windows system in  WSL.
+A ZIPsFS file system can be exported via SAMBA such and the file system can be visited with a Windows PC.
+    ZIPsFS can`` also be installed on a Windows system in  WSL.
 
 ### Problem: Files that are not listed in the parent are not accessible
 
@@ -235,25 +233,16 @@ This software provides FUSE. Please install it.
 [Please install solaris-sparc-fuse](https://github.com/myaut/solaris-sparc-fuse)
 
 
-
-## Install ZIPsFS
-
-
-    U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
-
-Please modify the path of the libfuse3.so accordingly.
-
-
-
-    wget -N $U && unzip -o main.zip &&  ./ZIPsFS-main/src/ZIPsFS.compile.sh -F /local/illumos-sshfs-master/libfuse/proto/usr/lib/amd64/libfuse.so.2.7.1
-
-
 ## Prepare running ZIPsFS
 
     export PATH=$PATH:/local/illumos-sshfs-master/libfuse/:/local/illumos-sshfs-master/libfuse/amd64
     mkdir -p /usr/lib/fs/fuse
     cp /local/illumos-sshfs-master/libfuse/amd64/fusermount.bin /usr/lib/fs/fuse/
     echo user_allow_other >>/etc/fuse.conf
+
+## For compilation use option -F
+
+    ./src/ZIPsFS.compile.sh -F /local/illumos-sshfs-master/libfuse/proto/usr/lib/amd64/libfuse.so.2.7.1
 
 ## TroubleShooting
 
@@ -288,11 +277,26 @@ More work is needed to understand the permission. At least, ZIPsFS compiles.
 </details><!--- Illumos -->
 
 
+
+
+
+# Downloading
+
+    I=~/test/ZIPsFS/installation
+    U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
+    mkdir -p $I
+    cd $I
+    rm main.zip 2>/dev/null
+    if curl --version  >/dev/null; then curl -O -L $U; else wget -N $U; fi
+    unzip main.zip
+    cd ZIPsFS-main
+    export PATH+=:$PWD
+
 # Compilation
 
 Run
 
-     ./ZIPsFS.compile.sh
+     ./src/ZIPsFS.compile.sh
 
 This creates the executable file **ZIPsFS**.
 
@@ -359,10 +363,10 @@ In the following, an empty folder is created which serves as mount point. Then a
 Finally, the files at the mount point are shown.
 
 
-    mkdir -p ~/test/fuse-zip/mnt
-    zip --fifo  ~/test/fuse-zip/test.zip  <(date)
-    fuse-zip  ~/test/fuse-zip/test.zip ~/test/fuse-zip/mnt
-    ls -R  ~/test/fuse-zip/mnt
+    mkdir -p ~/test/ZIPsFS/mnt
+    zip --fifo  ~/test/ZIPsFS/test.zip  <(date)
+    fuse-zip  ~/test/ZIPsFS/test.zip ~/test/ZIPsFS/mnt
+    ls -R  ~/test/ZIPsFS/mnt
 </details><!--- fuse-zip --><!--- -->
 
 

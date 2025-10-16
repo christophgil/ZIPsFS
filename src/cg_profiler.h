@@ -31,3 +31,23 @@ void print_profile(void){
 // ---
 #include "generated_profiler.h" /* By cg_profiler_make_files.sh */
 #endif //WITH_PROFILER
+
+
+
+/* *** Array *** */
+/*
+  (progn
+  (defun W(f)
+  (save-excursion
+  (beginning-of-buffer)
+  (query-replace (concat " " f "(const ")   (concat " PROFILED(" f ")(const "))
+  ))
+  (W "xmp_getattr")
+  (W "xmp_access")
+  (W "xmp_open")
+  (W "xmp_readdir")
+  (W "xmp_lseek")
+  (W "xmp_read")
+  (W "xmp_release")
+  )
+*/

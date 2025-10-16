@@ -377,6 +377,17 @@ static void directory_add(uint8_t flags,struct directory *dir, int64_t inode, co
 ////////////
 /// stat ///
 ////////////
+static void stat_set_dir(struct stat *s){
+  if (s){
+#define m (s->st_mode)
+    ASSERT(S_IROTH>>2==S_IXOTH);
+    m&=~S_IFREG;
+    s->st_size=ST_BLKSIZE;
+    s->st_nlink=1;
+    m=(m&~S_IFMT)|S_IFDIR|((m&(S_IRUSR|S_IRGRP|S_IROTH))>>2); /* Can read - can also execute directory */
+  }
+#undef m
+}
 
 static bool _stat_direct(struct stat *stbuf,const struct strg *path, const struct rootdata *r, const char *callerFunc){
   //static int count;log_entered_function(ANSI_MAGENTA"%s #%d %s"ANSI_RESET,callerFunc,count++,path->s);
@@ -417,8 +428,11 @@ static bool stat_from_cache_or_direct_or_async(const char *rp, struct stat *stbu
 static void mkSymlinkAfterStartPrepare(){
   if (*_mkSymlinkAfterStart){
     _mkSymlinkAfterStart[cg_pathlen_ignore_trailing_slash(_mkSymlinkAfterStart)]=0;
-    if (*_mkSymlinkAfterStart=='/') fprintf(stderr,RED_WARNING": "ANSI_FG_BLUE"%s"ANSI_RESET" is an absolute path. You might be unable to export the file tree with NFS and Samba.\n",_mkSymlinkAfterStart);
-    if (!_isBackground){ fputs("Press Enter to continue anyway!\n",stderr); cg_getc_tty();}
+    log_verbose("Command option -s:   Going to create symlink '%s' --> '%s' ...",_mkSymlinkAfterStart,_mnt);
+    if (*_mkSymlinkAfterStart=='/'){
+      fprintf(stderr,RED_WARNING": "ANSI_FG_BLUE"%s"ANSI_RESET" is an absolute path. You might be unable to export the file tree with NFS and Samba.\n",_mkSymlinkAfterStart);
+      if (!_isBackground){ fputs("Press Enter to continue anyway!\n",stderr); cg_getc_tty();}
+    }
     const int err=cg_symlink_overwrite_atomically(_mnt,_mkSymlinkAfterStart);
     char rp[PATH_MAX+1];
     if (err || !realpath(_mkSymlinkAfterStart,rp)){
@@ -434,158 +448,6 @@ static void mkSymlinkAfterStartPrepare(){
     *_mkSymlinkAfterStart=0;
   }
 }
-static void mkSymlinkAfterStart(){
-  if (*_mkSymlinkAfterStart){
-    struct stat stbuf;
-    lstat(_mkSymlinkAfterStart,&stbuf);
-    if (((S_IFREG|S_IFDIR)&stbuf.st_mode) && !(S_IFLNK&stbuf.st_mode)){
-      warning(WARN_MISC,""," Cannot make symlink %s =>%s  because %s is a file or dir\n",_mkSymlinkAfterStart,_mnt,_mkSymlinkAfterStart);
-      DIE("");
-    }
-  }
-}
-//////////////////////
-/// Infinity loops ///
-//////////////////////
-
-/////////// TODO   start threads only when needed
-static void root_start_thread(struct rootdata *r,const enum enum_root_thread ithread){
-  if (atomic_fetch_add(&r->thread_starting[ithread],0)){
-    log_warn("r->thread_starting[%s] >0 Not going to start thread.",PTHREAD_S[ithread]);
-    return;
-  }
-  atomic_fetch_add(&r->thread_starting[ithread],1);
-  void *(*f)(void *)=NULL;
-  switch(ithread){
-    IF1(WITH_MEMCACHE,case PTHREAD_MEMCACHE: f=&infloop_memcache;break);
-  case PTHREAD_ASYNC:      f=&infloop_async; break;
-  case PTHREAD_MISC:       f=&infloop_misc; break;
-  default:break;
-  }
-  const int count=r->thread_count_started[ithread]++;
-  if (count) warning(WARN_THREAD,report_rootpath(r),"pthread_start %s function: %p",PTHREAD_S[ithread],f);
-  if (f){
-    if (pthread_create(&r->thread[ithread],NULL,f,(void*)r)){
-#define C "Failed thread_create '%s'  Root: %d",PTHREAD_S[ithread],rootindex(r)
-      if (count) warning(WARN_THREAD|WARN_FLAG_EXIT|WARN_FLAG_ERRNO,rootpath(r),C); else DIE(C);
-#undef C
-    }
-  }
-  atomic_fetch_add(&r->thread_starting[ithread],-1);
-}
-
-static void *infloop_misc(void *arg){
-  struct rootdata *r=arg;
-  init_infloop(r,PTHREAD_MISC);
-  for(int j=0;;j++){
-    log_infinity_loop(r,PTHREAD_MISC);
-    root_update_time(r,-PTHREAD_MISC);
-    usleep(1000*1000);
-    LOCK_NCANCEL(mutex_fhandle,fhandle_destroy_those_that_are_marked());
-    IF1(WITH_AUTOGEN,if (!(j&0xFff)) autogen_cleanup());
-    if (!(j&3)){
-      static struct pstat pstat1,pstat2;
-      cpuusage_read_proc(&pstat2,getpid());
-      cpuusage_calc_pct(&pstat2,&pstat1,&_ucpu_usage,&_scpu_usage);
-      pstat1=pstat2;
-      IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE) if (_ucpu_usage>40||_scpu_usage>40) log_verbose("pid: %d cpu_usage user: %.2f system: %.2f\n",getpid(),_ucpu_usage,_scpu_usage);
-    }
-    log_flags_update();
-    //if (!(j&63)) debug_report_zip_count();
-  }
-}
-
-
-
-///////////////////////////////////////////////
-/// Capability to unblock requires that     ///
-/// pthreads have different gettid() and    ///
-/// /proc- file system                      ///
-///////////////////////////////////////////////
-static void init_infloop(struct rootdata *r, const enum enum_root_thread ithread){
-  IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE)log_entered_function("Thread: %s  Root: %s ",PTHREAD_S[ithread],rootpath(r));
-  IF1(WITH_CANCEL_BLOCKED_THREADS,
-      pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,&_unused_int);
-      if (r) r->thread_pid[ithread]=gettid(); assert(_pid!=gettid()); assert(cg_pid_exists(gettid())));
-}
-
-static void *infloop_unblock(void *arg){
-  usleep(1000*1000*ROOT_RESPONSE_WITHIN_SECONDS);
-  mkSymlinkAfterStart();
-#if WITH_CANCEL_BLOCKED_THREADS
-  if (_pid==gettid()){ warning(WARN_THREAD,"","Threads not using own process IDs. No unblock of blocked threads"); return NULL;}
-  while(true){
-    const int seconds=2;
-    usleep(1000*1000*seconds);
-    foreach_root(r){
-      RLOOP(t,PTHREAD_LEN){
-        const int threshold=t==PTHREAD_MEMCACHE?UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE: t==PTHREAD_ASYNC?UNBLOCK_AFTER_SECONDS_THREAD_ASYNC: 0;
-        if (!threshold || !r->thread_count_started[t] || !r->thread[t]) continue;
-
-        const long now=time(NULL), last=MAX_long(ROOT_WHEN_ITERATED(r,t),r->thread_when_canceled[t]);
-        if (!last) continue;
-        if (now-last>threshold){
-          log_verbose("%s  %s  now-last:%ld > threshold: %d ",r->rootpath, PTHREAD_S[t],now-last,threshold);
-          pthread_cancel(r->thread[t]); /* Double cancel is not harmful: https://stackoverflow.com/questions/7235392/is-it-safe-to-call-pthread-cancel-on-terminated-thread */
-          usleep(1000*1000);
-          const pid_t pid=r->thread_pid[t];
-          bool not_restart=pid && cg_pid_exists(pid);
-          if (not_restart && _thread_unblock_ignore_existing_pid){
-            warning(WARN_THREAD,rootpath(r),"Going to start thread %s even though pid %ld still exists.",PTHREAD_S[t],(long)pid);
-            _thread_unblock_ignore_existing_pid=not_restart=false;
-          }
-          char proc[99]; sprintf(proc,"/proc/%ld",(long)pid);
-          if (not_restart){
-            log_warn("Not yet starting thread because process  still exists %s",proc);
-          }else{
-            warning(WARN_THREAD|WARN_FLAG_SUCCESS,proc,"Going root_start_thread(%s,%s) because process does not exist any more",rootpath(r),PTHREAD_S[t]);
-            r->thread_when_canceled[t]=time(NULL);
-            root_start_thread(r,t);
-          }
-        }
-        usleep(1000*1000);
-      }
-    }
-  }
-#endif //WITH_CANCEL_BLOCKED_THREADS
-  return NULL;
-} // infloop_unblock
-
-
-
-
-//////////////////////
-/////    Utils   /////
-//////////////////////
-/* *** Stat **** */
-static void stat_set_dir(struct stat *s){
-  if (s){
-#define m (s->st_mode)
-    ASSERT(S_IROTH>>2==S_IXOTH);
-    m&=~S_IFREG;
-    s->st_size=ST_BLKSIZE;
-    s->st_nlink=1;
-    m=(m&~S_IFMT)|S_IFDIR|((m&(S_IRUSR|S_IRGRP|S_IROTH))>>2); /* Can read - can also execute directory */
-  }
-#undef m
-}
-/* *** Array *** */
-/*
-  (progn
-  (defun W(f)
-  (save-excursion
-  (beginning-of-buffer)
-  (query-replace (concat " " f "(const ")   (concat " PROFILED(" f ")(const "))
-  ))
-  (W "xmp_getattr")
-  (W "xmp_access")
-  (W "xmp_open")
-  (W "xmp_readdir")
-  (W "xmp_lseek")
-  (W "xmp_read")
-  (W "xmp_release")
-  )
-*/
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 /// The struct zippath is used to identify the real path from the virtual path               ///
@@ -676,11 +538,6 @@ static bool zpath_stat(struct zippath *zpath,struct rootdata *r){
 
 
 
-//#define filler_add(filler,buf,name,st,no_dups) {if (ht_only_once(no_dups,name,0)) filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);}
-static void filler_add(fuse_fill_dir_t filler,void *buf, const char *name,  int name_l,const struct stat *st, struct ht *no_dups){
-  if (!name_l) name_l=strlen(name);
-  if (ht_only_once(no_dups,name,name_l))   filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);
-}
 
 
 ///////////////////////////////////////////
@@ -785,7 +642,6 @@ static bool readir_from_filesystem(struct directory *dir){
   root_update_time(DIR_ROOT(dir),PTHREAD_ASYNC);
   struct dirent *de;
   while((de=readdir(d))){
-
     root_update_time(DIR_ROOT(dir),PTHREAD_ASYNC);
     const char *n=de->d_name;
     CONTAINS_PALCEHOLDER(n,zip);
@@ -801,43 +657,6 @@ static bool readir_from_filesystem(struct directory *dir){
   closedir(d);
   return true;
 }
-
-
-
-static void *infloop_async(void *arg){
-  struct rootdata *r=arg;
-  assert(r!=NULL);
-  init_infloop(r,PTHREAD_ASYNC);
-  long nanos=ASYNC_SLEEP_USECONDS*1000; /* The shorter the higher the responsiveness, but increased CPU usage */
-  for(int loop=0; ;loop++){
-    cg_nanosleep(nanos);
-    if (nanos<ASYNC_SLEEP_USECONDS*1000)      nanos++;
-    bool success=IF01(IS_CHECKING_CODE,false,rand());
-    IF1(WITH_DIRCACHE, if (!(loop&255) && async_periodically_dircache(r)) success=true);
-    if (r->with_timeout){
-      /* Reduce waiting when many subsequent request */
-      IF1(WITH_TIMEOUT_STAT, if ((async_periodically_stat(r))){ nanos=MAX(ASYNC_SLEEP_USECONDS*1000L/50,1000*400);  success=true; sched_yield();});
-      if (!(loop&15)){ /* less often */
-#define C(with,fn) IF1(with,if (fn(r)){success=true;});
-        C(WITH_TIMEOUT_READDIR,async_periodically_readdir);
-        C(WITH_TIMEOUT_OPENZIP,async_periodically_openzip);
-        C(WITH_TIMEOUT_OPENFILE,async_periodically_openfile);
-#undef C
-      }
-
-    if (r->remote && !(loop&15)){
-        if (!success && !(loop&255) && ROOT_SUCCESS_SECONDS_AGO(r)>MAX(1,ROOT_RESPONSE_WITHIN_SECONDS/4)){
-          success=!statvfs(rootpath(r),&r->statvfs);
-          if (!success) log_verbose(RED_FAIL"statvfs(%s)",rootpath(r));
-        }
-      }
-    }
-    if (!(loop&255)||success) root_update_time(r,success?PTHREAD_ASYNC:-PTHREAD_ASYNC);
-    if (!(loop&0x1023)) log_infinity_loop(r,PTHREAD_ASYNC);
-  }
-}
-
-
 /////////////////////////////////////////////////////////////////////
 //
 // The following functions are used to search for a real path
@@ -1187,7 +1006,11 @@ static int filler_readdir_zip(const int opt,struct zippath *zpath,void *buf, fus
 
 
 
-
+//#define filler_add(filler,buf,name,st,no_dups) {if (ht_only_once(no_dups,name,0)) filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);}
+static void filler_add(fuse_fill_dir_t filler,void *buf, const char *name,  int name_l,const struct stat *st, struct ht *no_dups){
+  if (!name_l) name_l=strlen(name);
+  if (ht_only_once(no_dups,name,name_l))   filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);
+}
 static bool filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_fill_dir_t filler,struct ht *no_dups){
   const char *rp=RP();
   if (!rp || !*rp) return false;
@@ -1226,7 +1049,6 @@ static bool filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_
     }
     directory_destroy(&dir);
   }
-  //log_exited_function("%s",rp);
   return true;
 }
 static int minus_val_or_errno(int res){ return res==-1?-errno:-res;}
@@ -1290,18 +1112,21 @@ static void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_c
   IF1(DO_LIBFUSE_CACHE_STAT,cfg->entry_timeout=cfg->attr_timeout=200;cfg->negative_timeout=20);
   IF0(DO_LIBFUSE_CACHE_STAT,cfg->entry_timeout=cfg->attr_timeout=2;  cfg->negative_timeout=10);
 #endif
+  log_verbose(GREEN_SUCCESS"FUSE filesystem initialized at '%s'\n",_mnt);
+    if (*_mkSymlinkAfterStart){
+    struct stat stbuf;
+    if (lstat(_mkSymlinkAfterStart,&stbuf)) perror(_mkSymlinkAfterStart);
+    if (((S_IFREG|S_IFDIR)&stbuf.st_mode) && !(S_IFLNK&stbuf.st_mode)){
+      warning(WARN_MISC,""," Cannot make symlink %s =>%s  because %s is a file or dir\n",_mkSymlinkAfterStart,_mnt,_mkSymlinkAfterStart);
+      DIE("");
+    }
+  }
+
   return NULL;
 }
 
 
-
-
-
-/////////////////////////////////////////////////
-// Functions where Only single paths need to be  substituted
-// Release FUSE 2.9 The chmod, chown, truncate, utimens and getattr handlers of the high-level API now all receive an additional struct fuse_file_info pointer (which, however, may be NULL even if the file is currently open).
-
-
+/*  Release FUSE 2.9 The chmod, chown, truncate, utimens and getattr handlers of the high-level API now  additional struct fuse_file_info pointer (which, may be NULL even if the file is currently open) */
 #if VERSION_AT_LEAST(FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION, 2,10)
 #define WITH_XMP_GETATTR_FUSE_FILE_INFO 1
 #else
@@ -1911,9 +1736,6 @@ int main(const int argc,const char *argv[]){
   int colon=0;
   FOR(i,1,argc) if (STR_EQ_C(argv[i],':')){ colon=i; break;}
   const char *compile_feature="";
-
-
-
 #if defined(__has_feature)
 #if defined(address_sanitizer) && __has_feature(address_sanitizer)
   compile_feature="With sanitizer ";
@@ -2070,19 +1892,12 @@ int main(const int argc,const char *argv[]){
   }
   mkSymlinkAfterStartPrepare();
   if (_isBackground)  _logIsSilent=_logIsSilentFailed=_logIsSilentWarn=_logIsSilentError=_cg_is_none_interactive=true;
-  {
-    int misc_started=0;
-    foreach_root(r){
-      for(enum enum_root_thread t=PTHREAD_LEN; --t>0;){
-        if (t==PTHREAD_MISC && misc_started++) continue;
-        root_start_thread(r,t);
-      }
-    }
-  }
   IF1(WITH_AUTOGEN,aimpl_init());
   IF1(WITH_INTERNET_DOWNLOAD,net_local_dir(true));
-  static pthread_t thread_unblock;
-  pthread_create(&thread_unblock,NULL,&infloop_unblock,NULL);
+  /* Begin  Threads */
+  foreach_root(r) if (r->remote) root_start_thread(r,PTHREAD_ASYNC,false);
+  root_start_thread(_root,PTHREAD_MISC,false);
+  /* End  Threads */
   _textbuffer_memusage_lock=_mutex+mutex_textbuffer_usage;
   log_msg("Running %s with PID %d. Going to fuse_main() ...\n",argv[0],_pid);
   cg_free(COUNT_MALLOC_TESTING,cg_malloc(COUNT_MALLOC_TESTING,10));

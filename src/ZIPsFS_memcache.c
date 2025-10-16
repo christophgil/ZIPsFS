@@ -184,6 +184,8 @@ static off_t memcache_read(char *buf,const struct fHandle *d,const off_t from,of
 /* Invoked from xmp_read, where struct fHandle *d=fhandle_get(path,fd) */
 static off_t memcache_wait_and_read(char *buf, const off_t size, const off_t offset,struct fHandle *d,struct fuse_file_info *fi){
   //log_entered_function("%s ",D_VP(d));
+  assert(d->zpath.root);
+  root_start_thread(d->zpath.root,PTHREAD_MEMCACHE,false);
   const bool ok=memcache_wait(d,offset+size);
   //log_debug_now("%s  ok: %d",D_VP(d),ok);
   LOCK_N(mutex_fhandle,const off_t memcache_l=is_memcache(d,NULL)? d->memcache->memcache_l: -1); /* Otherwise md5sum fails with EPERM */

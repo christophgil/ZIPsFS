@@ -14,7 +14,8 @@
 /////////////////
 /// Debugging ///
 /////////////////
-#define WITH_PTHREAD_LOCK 1 /*  Should be true. Only for testing if suspect deadlock set to 0 */
+#define WITH_PTHREAD_LOCK    1 /*  Should be true. Only for testing if suspect deadlock set to 0 */
+/* ---- */
 #define WITH_ASSERT_LOCK     0 // Optional assertion
 #define WITH_EXTRA_ASSERT    0 // Optional assertion
 #define WITH_TESTING_REALLOC 0 // Smaller initial size, earlier realloc
@@ -35,6 +36,11 @@
 #define WITH_TIMEOUT_OPENFILE 0
 #define WITH_TIMEOUT_OPENZIP  0
 #define WITH_CANCEL_BLOCKED_THREADS 0
+
+////
+
+
+
 #define ASYNC_SLEEP_USECONDS 5000    /* Sleep microseconds after checking again. Too low values increase idle CPU consumption.  Related: WITH_TIMEOUT_xxxx  DEBUG_NOW */
 
 

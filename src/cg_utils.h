@@ -126,6 +126,7 @@ _Static_assert(MAX_PATHLEN<=PATH_MAX,"");
 #define ANSI_INVERSE "\x1B[7m"
 #define ANSI_BOLD "\x1B[1m"
 #define ANSI_UNDERLINE "\x1B[4m"
+#define ANSI_ITALIC  "\e[3m"
 #define ANSI_RESET "\x1B[0m"
 
 
