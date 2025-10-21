@@ -6,7 +6,7 @@
 
 #define MAGIC_SFX_SET_ATIME  ".magicSfxSetAccessTime"
 
-enum enum_ctrl_action{ACT_NIL,ACT_KILL_ZIPSFS,ACT_FORCE_UNBLOCK,ACT_CANCEL_THREAD,ACT_NO_LOCK,ACT_BAD_LOCK,ACT_CLEAR_CACHE};
+//enum enum_ctrl_action{ACT_NIL,ACT_KILL_ZIPSFS,ACT_FORCE_UNBLOCK,ACT_CANCEL_THREAD,ACT_NO_LOCK,ACT_BAD_LOCK,ACT_CLEAR_CACHE};
 
 static char *ctrl_file_end(){
   static char s[222]={0};
@@ -23,12 +23,13 @@ static char *ctrl_file_end(){
   return s;
 }
 
+
 static bool trigger_files(const bool isGenerated,const char *path,const int path_l){
   if (cg_endsWith(0,path,path_l,ctrl_file_end(),0)){
     int action=-1, para=-1;
     sscanf(path+cg_last_slash(path)+1,"%d_%d_",&action,&para);
     const int thread=PTHREAD_NIL<para && para<PTHREAD_LEN?para:0;
-    warning(WARN_DEBUG,path,"Triggered action: %d  para: %d ",action,para);
+    warning(WARN_DEBUG,path,"Triggered action: %d / %s  para: %d ",action,action<0?"":CTRL_ACTION_S[action],para);
     if (action>0){
       foreach_root(r){
         switch(action){
@@ -73,7 +74,6 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
 #undef f
 #undef e
 #undef G
-          return true;
         }/*switch*/
       }/* foreach_root*/
       return true;

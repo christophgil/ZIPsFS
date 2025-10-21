@@ -188,9 +188,14 @@ enum enum_autogen_state{AUTOGEN_UNINITILIZED,AUTOGEN_SUCCESS,AUTOGEN_FAIL};
   C(COUNT_NUM)
 
 
+#define A13() C(ACT_NIL)C(ACT_KILL_ZIPSFS)C(ACT_FORCE_UNBLOCK)C(ACT_CANCEL_THREAD)C(ACT_NO_LOCK)C(ACT_BAD_LOCK)C(ACT_CLEAR_CACHE)C(ACT_LEN)
+
+
+
 #define C(a) a,
 enum enum_mstoreid{A1()};
 enum enum_mallocid{A12()};
+enum enum_ctrl_action{A13()};
 enum enum_warnings{A3()};
 #if WITH_MEMCACHE
 enum enum_memcache_status{A4()};
@@ -204,6 +209,7 @@ enum enum_async{A10()};
 #define C(a) #a,
 static const char *HT_MALLOC_S[]={A1()NULL};
 static const char *COUNT_S[]={A12()NULL};
+static const char *CTRL_ACTION_S[]={A13()NULL};
 static const char *MY_WARNING_NAME[]={A3()NULL};
 IF1(WITH_MEMCACHE,static const char *MEMCACHE_STATUS_S[]={A4()NULL});
 IF1(WITH_MEMCACHE,static const char *WHEN_MEMCACHE_S[]={A5()NULL});
@@ -226,7 +232,7 @@ static const char *ASYNC_S[]={A10()NULL};
 #undef A11
 #undef A12
 #undef A13
-
+#undef A14
 
 
 

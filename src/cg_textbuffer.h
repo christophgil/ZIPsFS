@@ -31,4 +31,6 @@ struct textbuffer{
 
 enum enum_exec_on_file{EXECF_MOUNTPOINT_USING_DF,EXECF_MOUNTPOINT_USING_FINDMNT, EXECF_NUM};
 #define EXECF_SILENT (1<<1)
+
+//atomic_int _
 #endif

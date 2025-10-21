@@ -394,23 +394,21 @@ static int print_bar(int n,float rel){
 
 static int print_proc_status(int n,char *filter,int *val){
   if (n>0) PRINTINFO("<B>/proc/%'ld/status</B>\n<PRE>\n", (long)getpid());
-  if (!has_proc_fs()){
-    PRINTINFO(ERROR_MSG_NO_PROC_FS"\n");
-  }else{
-    char buffer[1024]="";
-    FILE* file=fopen("/proc/self/status","r");
-    while (fscanf(file,"%1023s",buffer)==1){
-      for(char *f=filter;*f;f++){
-        if ((f==filter || f[-1]=='|') && !strcmp(buffer,f)){
-          fscanf(file," %d",val);
-          if (n>0) PRINTINFO("%s %'d kB\n",buffer,*val);
-          break;
-        }
+  ASSERT(has_proc_fs());
+  char buffer[1024]="";
+  FILE* file=fopen("/proc/self/status","r");
+  while (fscanf(file,"%1023s",buffer)==1){
+    for(char *f=filter;*f;f++){
+      char *t=strchrnul(f,'|');
+      if ((f==filter || f[-1]=='|') && !strncmp(buffer,f,t-f)){
+        fscanf(file," %d",val);
+        if (n>0) PRINTINFO("%s %'d kB\n",buffer,*val);
+        break;
       }
     }
-    if (n>0) PRINTINFO("</PRE>\n");
-    fclose(file);
   }
+  if (n>0) PRINTINFO("</PRE>\n");
+  fclose(file);
   return n;
 }
 static void log_virtual_memory_size(void){
@@ -613,7 +611,7 @@ static int log_print_memory(int n){
 #else
 #define MALLINFO() mallinfo()
 #endif
-  PRINTINFO("uordblks: %'lld bytes (Total allocated heap space)\n",(LLD)MALLINFO().uordblks);
+  PRINTINFO("uordblks: %'lld bytes\n",(LLD)MALLINFO().uordblks);
 #endif // IS_LINUX
   if (has_proc_fs()){
     int val; n=print_proc_status(n,"VmRSS:|VmHWM:|VmSize:|VmPeak:",&val);
@@ -625,8 +623,8 @@ static int log_print_memory(int n){
     if (rl.rlim_cur!=-1) PRINTINFO("Rlim soft: %'lx MB   hard: %'lx MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
   }
 #endif
-  PRINTINFO("Number of calls to mmap: %'lld to munmap: %'lld<BR>\n",(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_FREE));
-  PRINTINFO("Number of calls to Malloc: %'lld to Free: %'lld<BR>\n",(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_FREE));
+  PRINTINFO("Textbuffer - Number of calls to mmap: %'lld to munmap: %'lld<BR>\n",(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_FREE));
+  PRINTINFO("Textbuffer - Number of calls to Malloc: %'lld to Free: %'lld<BR>\n",(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_FREE));
   return n;
 }
 
@@ -693,8 +691,7 @@ TD,TH {padding:5px;padding-right:2EM;}\n\
 TD {text-align:right;}\n\
 </STYLE>\n</HEAD>\n<BODY>\n\
 <B>ZIPsFS:</B> <A href=\"%s\">%s</A><BR> \n",HOMEPAGE,HOMEPAGE);
-    const time_t t=whenStarted();
-    PRINTINFO("Compiled: &nbsp; "__DATE__"  "__TIME__"<BR>\nStarted: &nbsp; %s &nbsp; %s &nbsp; PID: %d<BR>\n",ctime(&t), snull(this_executable()), getpid());
+    PRINTINFO("Compiled: &nbsp; "__DATE__"  "__TIME__"<BR>\nStarted: &nbsp; %s &nbsp; %s &nbsp; PID: %d<BR>\n",ctime(&_whenStarted), snull(this_executable()), getpid());
   }
   if (flags&MAKE_INFO_ALL){
     time_t rawtime;  time(&rawtime);  PRINTINFO("Now: &nbsp; %s<BR>\n",ctime(&rawtime));
@@ -819,3 +816,4 @@ Options and arguments before the colon are interpreted by ZIPsFS.  Those after t
   puts_stderr(ANSI_UNDERLINE"Reporting bugs:"ANSI_RESET"\n\n\
 If ZIPsFS crashes, please report the stack-trace and the ZIPsFS version.\n\n");
 }
+// Number of calls to Malloc  textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_ALLOC)

@@ -27,6 +27,7 @@ static const char *zinline_cache_vpath_to_zippath(const char *vp,const int vp_l)
 #define CLEAR_STATCACHE 3
 #define CLEAR_CACHE_LEN 4
 #if WITH_CLEAR_CACHE
+
 static void dircache_clear_if_reached_limit_all(const bool always,const int mask){
 #define C(m) 0==(mask&(1<<m))?"":#m
   if (always) log_verbose("%s %s %s\n",C(CLEAR_DIRCACHE),C(CLEAR_STATCACHE),C(CLEAR_ZIPINLINE_CACHE));

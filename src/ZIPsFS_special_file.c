@@ -83,7 +83,7 @@ static bool special_file_set_statbuf(struct stat *stbuf,const char *path,const i
   }
   if (!ok && trigger_files(false,path,path_l)){
     stat_init(stbuf,0,NULL);
-    return 0;
+    return true;
   };
 
   if (ok && ENDSWITH(path,path_l,".command")) stbuf->st_mode|=(S_IXOTH|S_IXUSR|S_IXGRP);

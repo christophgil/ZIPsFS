@@ -71,7 +71,7 @@ static void _warning(const char *fn,int line,const uint32_t channel,const char* 
 
   pthread_mutex_unlock(&mutex);
   if ((channel&WARN_FLAG_EXIT)) EXIT(1);
-  if (_killOnError && (channel&WARN_FLAG_MAYBE_EXIT)) DIE("Thread %lx\nTime=%'lld\n  _killOnError\n",(long)pthread_self(),(LLD)whenStarted());
+  if (_killOnError && (channel&WARN_FLAG_MAYBE_EXIT)) DIE("Thread _killOnError\n");
 }
 #endif //_cg_log_dot_c
 

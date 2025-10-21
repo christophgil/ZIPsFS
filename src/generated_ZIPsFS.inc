@@ -67,7 +67,6 @@ static int cg_str_replace(const int opt,char *haystack, const int h_l_or_zero, c
 static int cg_strsplit(int opt_and_sep, const char *s, const int s_l, const char *tokens[], int *tokens_l);
 static const char *rm_pfx_us(const char *s);
 static int64_t currentTimeMillis(void);
-static time_t whenStarted(void);
 static void _cg_sleep_ms(const int millisec, const char *msg, const char *func,const int line);
 static void cg_nanosleep(long nanos);
 static void cg_usleep(int usec);

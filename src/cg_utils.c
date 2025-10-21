@@ -47,7 +47,7 @@
 #endif
 ////////////////////////////////////////
 
-
+static time_t _whenStarted;
 
 static void *malloc_untracked(const size_t size){
   void *m=malloc(size);
@@ -425,11 +425,8 @@ static int64_t currentTimeMillis(void){
   gettimeofday(&tv,NULL);
   return tv.tv_sec*1000+tv.tv_usec/1000;
 }
-static time_t whenStarted(void){
-  static time_t _t0;
-  if (!_t0) _t0=time(NULL);
-  return time(NULL)-_t0;
-}
+
+
 
 #define cg_sleep_ms(...) _cg_sleep_ms(__VA_ARGS__,__func__,__LINE__)
 static void _cg_sleep_ms(const int millisec, const char *msg, const char *func,const int line){

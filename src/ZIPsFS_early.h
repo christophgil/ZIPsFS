@@ -79,3 +79,4 @@ _Static_assert(ASYNC_SLEEP_USECONDS*4<1000*1000*ROOT_RESPONSE_WITHIN_SECONDS,"")
 /*********************************************************************************************************************************************************************/
 #define PLACEHOLDER_NAME '*'
 #define WITH_ZIPENTRY_PLACEHOLDER 1
+#define WITH_CLEAR_CACHE 1

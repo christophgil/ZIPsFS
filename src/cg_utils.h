@@ -168,7 +168,7 @@ M(MAX,long)
 #define FREE_NULL_MALLOC_ID(b) cg_free_null(b?b->malloc_id:0,b)
 
 
-#define PRINT_PFX_FUNC_MSG(pfx1,pfx2,sfx,...)  fprintf(stderr,pfx1"%lld %s():%i "pfx2,(LLD)whenStarted(),__func__,__LINE__),fprintf(stderr,__VA_ARGS__),puts_stderr(sfx)
+#define PRINT_PFX_FUNC_MSG(pfx1,pfx2,sfx,...)  fprintf(stderr,pfx1"%lld %s():%i "pfx2,(LLD)(time(NULL)-_whenStarted),__func__,__LINE__),fprintf(stderr,__VA_ARGS__),puts_stderr(sfx)
 
 #define log_entered_function(...)     PRINT_PFX_FUNC_MSG(ANSI_INVERSE" > > > "ANSI_RESET," ","\n",__VA_ARGS__)
 #define log_exited_function(...)      PRINT_PFX_FUNC_MSG(ANSI_INVERSE" < < < "ANSI_RESET," ","\n",__VA_ARGS__)

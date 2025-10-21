@@ -56,6 +56,7 @@ static bool readdir_now(struct directory *dir){
 
 #if WITH_DIRCACHE
 static void directory_to_queue(const struct directory *dir){
+  root_start_thread(DIR_ROOT(dir),PTHREAD_ASYNC,false);
   LOCK(mutex_dircache_queue,  ht_only_once(&DIR_ROOT(dir)->dircache_queue,DIR_RP(dir),0));
 }
 static bool async_periodically_dircache(struct rootdata *r){
@@ -336,14 +337,14 @@ static void *infloop_async(void *arg){
         C(WITH_TIMEOUT_OPENFILE,async_periodically_openfile);
 #undef C
       }
-      if (r->remote && !(loop&15)){
+    }
+    if (r->remote){
         if (!success && !(loop&255) && ROOT_SUCCESS_SECONDS_AGO(r)>MAX(1,ROOT_RESPONSE_WITHIN_SECONDS/4)){
           success=!statvfs(rootpath(r),&r->statvfs);
           if (!success) log_verbose(RED_FAIL"statvfs(%s)",rootpath(r));
         }
-      }
+        if (!(loop&255)||success) root_update_time(r,success?PTHREAD_ASYNC:-PTHREAD_ASYNC);
     }
-    if (!(loop&255)||success) root_update_time(r,success?PTHREAD_ASYNC:-PTHREAD_ASYNC);
     if (!(loop&0x1023)) log_infinity_loop(r,PTHREAD_ASYNC);
   }
 }

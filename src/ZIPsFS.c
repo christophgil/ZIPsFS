@@ -247,7 +247,7 @@ static void root_init(const bool isWritable,struct rootdata *r, const char *path
 // ---
 #if WITH_ZIPINLINE
 #include "ZIPsFS_zip_inline.c"
-#endif // WITH_ZIPINLINE
+#endif //WITH_ZIPINLINE
 // ---
 #if WITH_ZIPENTRY_PLACEHOLDER
 #include "ZIPsFS_zipentry_placeholder.c"
@@ -1326,8 +1326,8 @@ static int _xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_
   const int opt=strcmp(path,DIR_ZIPsFS)?0:FILLDIR_IS_DIR_ZIPsFS;
   NEW_ZIPPATH(path);
   bool ok=false;
-#define A(n) filler_add(filler,buf,n,0,NULL,NULL);
-#define C(cut_autogen,from_network_header) _xmp_readdir_roots(cut_autogen,from_network_header,opt,zpath,buf,filler,NULL);ok=true
+#define A(n) filler_add(filler,buf,n,0,NULL,&no_dups);
+#define C(cut_autogen,from_network_header) _xmp_readdir_roots(cut_autogen,from_network_header,opt,zpath,buf,filler,&no_dups);ok=true
   C(false,false);
 #if WITH_AUTOGEN
   if (zpath->flags&ZP_STARTS_AUTOGEN){
@@ -1725,7 +1725,7 @@ int main(const int argc,const char *argv[]){
   if (!realpath(*argv,_self_exe)) DIE("Failed realpath %s",*argv);
   init_mutex();
   init_sighandler(argv[0],(1L<<SIGSEGV)|(1L<<SIGUSR1)|(1L<<SIGABRT),stderr);
-  whenStarted();
+  _whenStarted=time(NULL);
   {
     _warning_color[WARN_THREAD]=ANSI_FG_RED;
     _warning_color[WARN_GETATTR]=ANSI_FG_MAGENTA;
@@ -1922,6 +1922,8 @@ int main(const int argc,const char *argv[]){
 // HAVE_CONFIG_H  HAS_EXECVPE HAS_UNDERSCORE_ENVIRON HAS_ST_MTIM HAS_POSIX_FADVISE
 // https://wiki.smartos.org/
 // malloc calloc strdup  free  mmap munmap   readdir opendir
+//
+// malloc_untracked calloc_untracked  strdup_untracked
 // MMAP_INC(...)  MUNMAP_INC(...)  MALLOC_INC(...)  FREE_INC(...)
 // cg_mmap ht_destroy cg_strdup cg_free cg_free_null
 //
@@ -1956,4 +1958,7 @@ int main(const int argc,const char *argv[]){
 // character invalide 202411
 // transient_cache_store at /home/cgille/git_projects/ZIPsFS/src/ZIPsFS_transient_zipentry_cache.c:135
 // zu zipentry_placeholder_expand
-// ``libzip.so`` on your system?
+// COUNT_TXTBUF_SEGMENT_MMAP_BYTES  textbuffer_new
+
+
+// ~/Users/ktextori/30-0105_trypsin_SPall vs ~/Users/ktextori/30-0105_trypsin_SPall_local
