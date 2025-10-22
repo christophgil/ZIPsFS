@@ -96,7 +96,7 @@ static void c_readdir(const struct zippath *zpath,void *buf, fuse_fill_dir_t fil
       struct stat st={0};
       stat_init(&st,*isDirectory?-1:0,NULL);
       st.st_ino=inode_from_virtualpath(VP()+o(),VP_L()-o());
-      filler_add(filler,buf, fname,0, &st,NULL /*no_dups*/);
+      filler_add(0,filler,buf, fname,0, &st,NULL /*no_dups*/);
     }
 
   }

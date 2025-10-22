@@ -325,7 +325,7 @@ static bool make_info(const int flags);
 static void special_file_content(struct textbuffer *b,const enum enum_special_files i);
 static bool find_realpath_try_inline(struct zippath *zpath, const char *vp, struct rootdata *r);
 static yes_zero_no_t find_realpath_try_inline_rules(struct zippath *zpath,char *append, struct rootdata *r);
-static bool readdir_inline_from_cache(const struct zippath *zpath, const char *u, void *buf, fuse_fill_dir_t filler,struct ht *no_dups);
+static bool readdir_inline_from_cache(const int opt, const struct zippath *zpath, const char *u, void *buf, fuse_fill_dir_t filler,struct ht *no_dups);
 static yes_zero_no_t zipinline_find_realpath_any_root(struct zippath *zpath,const long which_roots);
 static const char *zipentry_placeholder_insert(char *s,const char *u, struct directory *dir);
 static int zipentry_placeholder_expand2(char *n,const char *zipfile);
@@ -450,7 +450,7 @@ static ino_t make_inode(const ino_t inode0,struct rootdata *r, const int entryId
 static ino_t inode_from_virtualpath(const char *vp,const int vp_l);
 static int zipentry_placeholder_expand(char *u,const char *orig, const char *rp, const struct directory *dir);
 static int filler_readdir_zip(const int opt,struct zippath *zpath,void *buf, fuse_fill_dir_t filler,struct ht *no_dups);
-static void filler_add(fuse_fill_dir_t filler,void *buf, const char *name,  int name_l,const struct stat *st, struct ht *no_dups);
+static void filler_add(const int opt,fuse_fill_dir_t filler,void *buf, const char *name,  int name_l,const struct stat *st, struct ht *no_dups);
 static bool filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_fill_dir_t filler,struct ht *no_dups);
 static int xmp_statfs(const char *path, struct statvfs *stbuf);
 static int mk_parentdir_if_sufficient_storage_space(const char *rp);

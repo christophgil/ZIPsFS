@@ -949,6 +949,14 @@ static int zipentry_placeholder_expand(char *u,const char *orig, const char *rp,
 /// Parameter  filler:  Not NULL If called for directory listing                     ///
 ///                     NULL for running stat for a specific ZIP entry               ///
 ////////////////////////////////////////////////////////////////////////////////////////
+static void filler_add(const int opt,fuse_fill_dir_t filler,void *buf, const char *name,  int name_l,const struct stat *st, struct ht *no_dups){
+  if (!name_l) name_l=strlen(name);
+  IF1(WITH_AUTOGEN,if(opt&FILLDIR_AUTOGEN)autogen_filldir(filler,buf,name,st,no_dups);else)
+    if (ht_only_once(no_dups,name,name_l)){
+      assert_validchars(VALIDCHARS_FILE,n,n_l);
+      filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);
+    }
+}
 static int filler_readdir_zip(const int opt,struct zippath *zpath,void *buf, fuse_fill_dir_t filler,struct ht *no_dups){
   char ep[MAX_PATHLEN]; /* This will be the entry path of the parent dir */
   const int ep_l=filler?EP_L():MAX_int(0,cg_last_slash(EP()));
@@ -960,9 +968,6 @@ static int filler_readdir_zip(const int opt,struct zippath *zpath,void *buf, fus
   struct directory mydir={0}, *dir=&mydir; mydir.debug=true;
   directory_init_zpath(dir,zpath);
   if (!readdir_from_cache_zip_or_filesystem(dir)) return ENOENT;
-
-
-
   IF1(WITH_DIRCACHE,LOCK(mutex_dircache,to_cache_vpath_to_zippath(dir)));
   char u[MAX_PATHLEN+1]; /* entry path expanded placeholder */
   struct directory_core dc=dir->core;
@@ -986,38 +991,26 @@ static int filler_readdir_zip(const int opt,struct zippath *zpath,void *buf, fus
       stat_init(st,isdir?-1:Nth0(dc.fsize,i),&zpath->stat_rp);
       st->st_ino=make_inode(zpath->stat_rp.st_ino,zpath->root,idx,RP());
       st->st_mtime=Nth0(dc.fmtime,i);
-      if (filler){
-        assert_validchars(VALIDCHARS_FILE,n,n_l);
-        IF1(WITH_AUTOGEN,if(opt&FILLDIR_AUTOGEN) autogen_filldir(filler,buf,n,st,no_dups);else) filler_add(filler,buf,n,n_l,st,no_dups);
-      }else{ /* ---  Called from test_realpath_or_reset() to set zpath->stat_vp --- */
+      if (!filler){  /* ---  Called from test_realpath_or_reset() to set zpath->stat_vp --- */
         zpath->stat_vp.st_uid=getuid();
         zpath->stat_vp.st_gid=getgid();
         if (Nth0(dc.fflags,i)&DIRENT_IS_COMPRESSED) zpath->flags|=ZP_IS_COMPRESSED;
         zpath->zipcrc32=Nth0(dc.fcrc,i);
-        //log_debug_now("%s %s  zpath->zipcrc32=%x",RP(), u, zpath->zipcrc32);
         directory_destroy(dir);
         return 0;
       }
+      filler_add(opt,filler,buf,n,n_l,st,no_dups);
     }
   }
   directory_destroy(dir);
   return filler?0:ENOENT;
 }/*filler_readdir_zip*/
-
-
-
-//#define filler_add(filler,buf,name,st,no_dups) {if (ht_only_once(no_dups,name,0)) filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);}
-static void filler_add(fuse_fill_dir_t filler,void *buf, const char *name,  int name_l,const struct stat *st, struct ht *no_dups){
-  if (!name_l) name_l=strlen(name);
-  if (ht_only_once(no_dups,name,name_l))   filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);
-}
 static bool filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_fill_dir_t filler,struct ht *no_dups){
   const char *rp=RP();
   if (!rp || !*rp) return false;
   if (ZPATH_IS_ZIP()) return filler_readdir_zip(opt,zpath,buf,filler,no_dups);
   if (!zpath->stat_rp.st_ino) return true;
   ASSERT(zpath->root!=NULL);
-  //log_entered_function("'%s'",rp);
   char dirname_from_zip[MAX_PATHLEN+1];
   ASSERT(zpath!=NULL);
   struct directory dir={0};  directory_init_zpath(&dir,zpath);
@@ -1029,7 +1022,7 @@ static bool filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_
       int u_l=zipentry_placeholder_expand(u,dc.fname[i],RP(),&dir);
       IF1(WITH_INTERNET_DOWNLOAD, if (_root_writable && (opt&FILLDIR_STRIP_NET_HEADER)) u_l=net_filename_from_header_file(u,u_l));
       if (!u_l || 0==(opt&FILLDIR_AUTOGEN) && no_dups && ht_get(no_dups,u,u_l,0)) continue;
-      IF1(WITH_ZIPINLINE,if (config_skip_zipfile_show_zipentries_instead(u,u_l) && readdir_inline_from_cache(zpath,u,buf,filler,no_dups)) continue);
+      IF1(WITH_ZIPINLINE,if (config_skip_zipfile_show_zipentries_instead(u,u_l) && readdir_inline_from_cache(opt,zpath,u,buf,filler,no_dups)) continue);
       struct stat st;
       stat_init(&st,(Nth0(dc.fflags,i)&DIRENT_ISDIR)?-1:Nth0(dc.fsize,i),NULL);
       st.st_ino=make_inode(zpath->stat_rp.st_ino,zpath->root,0,rp);
@@ -1038,12 +1031,10 @@ static bool filler_readdir(const int opt,struct zippath *zpath, void *buf, fuse_
         const bool also_show_zip_file_itself=config_zipfilename_to_virtual_dirname(dirname_from_zip,u,u_l);
         if (*dirname_from_zip){
           stat_set_dir(&st);
-          filler_add(filler,buf,dirname_from_zip,0,&st,no_dups);
-          if (also_show_zip_file_itself) filler_add(filler,buf,u,u_l,&st,no_dups); // cppcheck-suppress knownConditionTrueFalse
+          filler_add(opt,filler,buf,dirname_from_zip,0,&st,no_dups);
+          if (also_show_zip_file_itself) filler_add(opt,filler,buf,u,u_l,&st,no_dups); // cppcheck-suppress knownConditionTrueFalse
         }else{
-          IF1(WITH_AUTOGEN,if(opt&FILLDIR_AUTOGEN)autogen_filldir(filler,buf,u,&st,no_dups);else){
-            filler_add(filler,buf,u,u_l,&st,no_dups);
-          }
+          filler_add(opt,filler,buf,u,u_l,&st,no_dups);
         }
       }
     }
@@ -1304,7 +1295,7 @@ static bool _xmp_readdir_roots(const bool cut_autogen, const bool from_network_h
   bool ok=false;
   foreach_root(r){ /* FINDRP_AUTOGEN_CUT_NOT means only without cut.  Giving 0 means cut and not cut. */
     if (!VP_L() && r->retain_dirname_l){
-      filler_add(filler,buf,r->retain_dirname+1,r->retain_dirname_l-1,NULL,no_dups);
+      filler_add(0,filler,buf,r->retain_dirname+1,r->retain_dirname_l-1,NULL,no_dups);
       ok=true;
     }else if (find_realpath_any_root(opt|(cut_autogen?FINDRP_AUTOGEN_CUT:FINDRP_AUTOGEN_CUT_NOT),zpath,r)){
       opt|=FINDRP_NOT_TRANSIENT_CACHE; /* Transient cache only once */
@@ -1326,7 +1317,7 @@ static int _xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_
   const int opt=strcmp(path,DIR_ZIPsFS)?0:FILLDIR_IS_DIR_ZIPsFS;
   NEW_ZIPPATH(path);
   bool ok=false;
-#define A(n) filler_add(filler,buf,n,0,NULL,&no_dups);
+#define A(n) filler_add(0,filler,buf,n,0,NULL,&no_dups);
 #define C(cut_autogen,from_network_header) _xmp_readdir_roots(cut_autogen,from_network_header,opt,zpath,buf,filler,&no_dups);ok=true
   C(false,false);
 #if WITH_AUTOGEN
