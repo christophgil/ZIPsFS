@@ -155,7 +155,6 @@ read-only and file creation and modification is disabled.
 The physical file path, i.e., the actual storage location of a file, can
 be retrieved from a file formed by appending \f[V]\[at]SOURCE.TXT\f[R]
 to the filename.
-.PP
 For example, to determine the real location of:
 \f[V]\[ti]/test/ZIPsFS/mnt/1.txt\f[R] Run the following command:
 .IP
@@ -181,14 +180,30 @@ use cases in Mass Spectrometry:
 For ZIP files whose names end with \f[I].d.Zip\f[R], the virtual folder
 will end with \f[I].d\f[R].
 .IP \[bu] 2
-Flat File Display: For Sciex instruments, each mass spectrometry record
-is stored in a group of files which are not organized in sub-folders.
-The parent directory of the ZIP files need to contain the ZIP entries as
-a flat list.
-This requires that the content of all ZIP files need to be read.
-This is done in the background.
-Consequently, the file listing will not contain the ZIP entries when
-requested for the first time.
+Flat file list: For Sciex instruments, each mass spectrometry record is
+stored in a set of files which are not organized in sub-folders.
+For example the record
+\f[V]20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01\f[R] stored in
+\f[V]20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff2.Zip\f[R] may
+constist of the following files
+.RS 2
+.IP \[bu] 2
+20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.timeseries.data
+.IP \[bu] 2
+20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff
+.IP \[bu] 2
+20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff2
+.IP \[bu] 2
+20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff.scan
+.PP
+These are contained with those of other entries in the file listing.
+To get the full list of files, the content of all ZIP files need to be
+read.
+This is time consuming and performed in the background.
+Consequently, the file listing will be incomplete when obtained for the
+first time.
+Only after some seconds, the file listing will be presented properly.
+.RE
 .SS ZIPsFS Options
 .PP
 \f[B]-h\f[R]

@@ -114,7 +114,6 @@ With an empty string as the first source,  the ZIPsFS file system read-only and 
 
 The physical file path, i.e., the actual storage location of a file, can be retrieved from a
 file formed by appending ``@SOURCE.TXT`` to the filename.
-
 For example, to determine the real location of:
     ``~/test/ZIPsFS/mnt/1.txt``
 Run the following command:
@@ -132,9 +131,18 @@ The default configuration includes a few exceptions tailored to specific use cas
 
   - For ZIP files whose names end with *.d.Zip*, the virtual folder will  end with *.d*.
 
-  - Flat File Display: For  Sciex instruments, each mass spectrometry record  is stored in a group of files which are not organized in
-    sub-folders. The parent directory of the ZIP files need to  contain the ZIP entries as a flat list. This requires that the content of all ZIP files need to be
-    read. This is done in the background. Consequently, the file listing will not contain the ZIP entries  when requested for the first time.
+  - Flat file list: For  Sciex instruments, each mass spectrometry record  is stored in a set of files which are not organized in
+    sub-folders. For example the record ``20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01``  stored in ``20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff2.Zip`` may constist of the following files
+
+     - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.timeseries.data
+     - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff
+     - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff2
+     - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff.scan
+
+    These are contained with those of other entries in the file listing.
+    To get the full list of files,  the content of all ZIP files need to be read.
+    This is time consuming and performed in the background. Consequently, the file listing will be incomplete when obtained for the first time.
+    Only after some seconds, the file listing will be presented properly.
 
 ## ZIPsFS Options
 
