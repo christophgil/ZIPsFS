@@ -18,7 +18,7 @@ pip install grip
 -->
 
 
-# SYNOPSIS
+# Example usage
 
 
     ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse-options] mount-point
@@ -28,7 +28,7 @@ pip install grip
 
 
 ZIPsFS functions as a **union or overlay** file system, merging multiple file structures into a unified directory.
-This directory presents the underlying files and subdirectories from the specified sources (branches) as a single, cohesive structure.
+This directory presents the underlying files and sub-directories from the specified sources (branches) as a single, cohesive structure.
 Any newly created or modified files are stored in the first file location, while all other sources remain read-only, ensuring that their files are never altered.
 ZIPsFS treats **ZIP files as expandable folders**, typically naming them by appending ``.Contents/`` to the original ZIP file name.
 However, this behavior can be customized using filename-based rules. Extensive configuration options allow adjustments. Changes can be applied without disrupting the file system.
@@ -82,7 +82,7 @@ Open a file browser or another terminal and  browse the files in
 ### Create a file in the virtual tree
 The first file tree stores files. All others are read-only.
 
-    echo "This file will be stored in ~/test/ZIPsFS/writable "> ~/test/ZIPsFS/mnt/my_file.txt
+    echo "Hello" > ~/test/ZIPsFS/mnt/my_file.txt
 
     cat ~/test/ZIPsFS/mnt/my_file.txt
 
@@ -91,9 +91,12 @@ To get the real storage place of the file, append ``@SOURCE.TXT``
     cat ~/test/ZIPsFS/mnt/my_file.txt@SOURCE.TXT
 
 ### Access web resources as regular files
-Make sure the UNIX tool curl is installed. Note that "//:" in the URL is replaced by commas.
+Make sure the UNIX tool curl is installed.
 
     curl --version
+
+Note that "//:" in the URL is replaced by commas.
+
     less  ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
 
 
@@ -105,9 +108,7 @@ Make sure the UNIX tool curl is installed. Note that "//:" in the URL is replace
 
 
 ZIPsFS functions as a union (overlay) file system.
-When files are created or modified, they are stored in the first file tree - e.g.,
-``~/test/ZIPsFS/writable``
-in the example setup.
+When files are created or modified, they are stored in the first file tree.
 If a file exists in multiple source locations, the version from the leftmost source (the first one listed) takes precedence.
 With an empty string as the first source,  the ZIPsFS file system read-only and file creation and modification is disabled.
 
@@ -120,22 +121,20 @@ Run the following command:
 
     cat ~/test/ZIPsFS/mnt/1.txt@SOURCE.TXT
 
-If a  remote upstream file system gets frozen, the current file access is blocked.
-This upstream file tree will be avoided to prevent that subsequent file accesses get blocked too.
-Optionally, timeouts can be activated for various file operations for selected upstream file trees to prevent blocking.
+If a remote upstream file system stops responding, the current file access is blocked (Unless the options ``WITH_ASYNC_READDIR`` ... are activated).
+After some time, unresponsive upstream file trees will be skipped to prevent that file accesses get blocked.
 
 ## ZIPsFS expands ZIP file entries
 
 By default, ZIP files are displayed as folders with the suffix ``.Content``.
 This behavior can be customized.
-The default configuration includes a few exceptions tailored to specific use cases in Mass Spectrometry Compatibility:
+The default configuration includes a few exceptions tailored to specific use cases in Mass Spectrometry:
 
-  - For ZIP files whose names start with a year and end with *.d.Zip*, the virtual folder will instead
-    end with *.d*.
+  - For ZIP files whose names end with *.d.Zip*, the virtual folder will  end with *.d*.
 
   - Flat File Display: For  Sciex instruments, each mass spectrometry record  is stored in a group of files which are not organized in
-    subfolders. When the respective archived ZIP files are virtually expanded, the ZIP entries  of all ZIP files in the folder need to form a flat file list.
-
+    sub-folders. The parent directory of the ZIP files need to  contain the ZIP entries as a flat list. This requires that the content of all ZIP files need to be
+    read. This is done in the background. Consequently, the file listing will not contain the ZIP entries  when requested for the first time.
 
 ## ZIPsFS Options
 

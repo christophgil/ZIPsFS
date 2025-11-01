@@ -21,7 +21,7 @@
 .PP
 \f[B]ZIPsFS\f[R] - FUSE-based overlay union file system expanding ZIP
 files
-.SH SYNOPSIS
+.SH Example usage
 .IP
 .nf
 \f[C]
@@ -32,8 +32,8 @@ ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse
 .PP
 ZIPsFS functions as a \f[B]union or overlay\f[R] file system, merging
 multiple file structures into a unified directory.
-This directory presents the underlying files and subdirectories from the
-specified sources (branches) as a single, cohesive structure.
+This directory presents the underlying files and sub-directories from
+the specified sources (branches) as a single, cohesive structure.
 Any newly created or modified files are stored in the first file
 location, while all other sources remain read-only, ensuring that their
 files are never altered.
@@ -110,7 +110,7 @@ All others are read-only.
 .IP
 .nf
 \f[C]
-echo \[dq]This file will be stored in \[ti]/test/ZIPsFS/writable \[dq]> \[ti]/test/ZIPsFS/mnt/my_file.txt
+echo \[dq]Hello\[dq] > \[ti]/test/ZIPsFS/mnt/my_file.txt
 
 cat \[ti]/test/ZIPsFS/mnt/my_file.txt
 \f[R]
@@ -127,11 +127,17 @@ cat \[ti]/test/ZIPsFS/mnt/my_file.txt\[at]SOURCE.TXT
 .SS Access web resources as regular files
 .PP
 Make sure the UNIX tool curl is installed.
-Note that \[lq]//:\[rq] in the URL is replaced by commas.
 .IP
 .nf
 \f[C]
 curl --version
+\f[R]
+.fi
+.PP
+Note that \[lq]//:\[rq] in the URL is replaced by commas.
+.IP
+.nf
+\f[C]
 less  \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
 \f[R]
 .fi
@@ -140,7 +146,7 @@ less  \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot
 .PP
 ZIPsFS functions as a union (overlay) file system.
 When files are created or modified, they are stored in the first file
-tree - e.g., \f[V]\[ti]/test/ZIPsFS/writable\f[R] in the example setup.
+tree.
 If a file exists in multiple source locations, the version from the
 leftmost source (the first one listed) takes precedence.
 With an empty string as the first source, the ZIPsFS file system
@@ -159,27 +165,30 @@ cat \[ti]/test/ZIPsFS/mnt/1.txt\[at]SOURCE.TXT
 \f[R]
 .fi
 .PP
-If a remote upstream file system gets frozen, the current file access is
-blocked.
-This upstream file tree will be avoided to prevent that subsequent file
-accesses get blocked too.
-Optionally, timeouts can be activated for various file operations for
-selected upstream file trees to prevent blocking.
+If a remote upstream file system stops responding, the current file
+access is blocked (Unless the options \f[V]WITH_ASYNC_READDIR\f[R] \&...
+are activated).
+After some time, unresponsive upstream file trees will be skipped to
+prevent that file accesses get blocked.
 .SS ZIPsFS expands ZIP file entries
 .PP
 By default, ZIP files are displayed as folders with the suffix
 \f[V].Content\f[R].
 This behavior can be customized.
 The default configuration includes a few exceptions tailored to specific
-use cases in Mass Spectrometry Compatibility:
+use cases in Mass Spectrometry:
 .IP \[bu] 2
-For ZIP files whose names start with a year and end with
-\f[I].d.Zip\f[R], the virtual folder will instead end with \f[I].d\f[R].
+For ZIP files whose names end with \f[I].d.Zip\f[R], the virtual folder
+will end with \f[I].d\f[R].
 .IP \[bu] 2
 Flat File Display: For Sciex instruments, each mass spectrometry record
-is stored in a group of files which are not organized in subfolders.
-When the respective archived ZIP files are virtually expanded, the ZIP
-entries of all ZIP files in the folder need to form a flat file list.
+is stored in a group of files which are not organized in sub-folders.
+The parent directory of the ZIP files need to contain the ZIP entries as
+a flat list.
+This requires that the content of all ZIP files need to be read.
+This is done in the background.
+Consequently, the file listing will not contain the ZIP entries when
+requested for the first time.
 .SS ZIPsFS Options
 .PP
 \f[B]-h\f[R]
