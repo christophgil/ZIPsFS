@@ -26,7 +26,7 @@ static bool _stat_from_cache(struct stat *stbuf, const struct strg *path, const 
 #define C(f) stbuf->f=st.f
         C(st_ino);C(st_mode);C(st_uid);C(st_gid); C(ST_MTIMESPEC);
 #undef C
-        COUNTER_INC(COUNT_STAT_FROM_CACHE);
+        COUNTER1_INC(COUNT_STAT_FROM_CACHE);
         return true;
       }
     }

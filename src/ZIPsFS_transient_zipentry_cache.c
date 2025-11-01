@@ -32,7 +32,7 @@ static struct ht* transient_cache_make_ht(struct fHandle *d){
     ht_set_id(HT_MALLOC_transient_cache,ht);
     mstore_set_mutex(mutex_fhandle,mstore_init(ht->valuestore=calloc_untracked(1,sizeof(struct mstore)),NULL,(sizeof(struct zippath)*16)|MSTORE_OPT_MALLOC));
     //const ht_hash_t hash=d->zpath.virtualpath_without_entry_hash;
-    ht->valuestore->mstore_counter_mmap=COUNT_MSTORE_MMAP_BYTES_TRANSIENT_CACHE_VALUES;
+    ht->valuestore->mstore_counter_mmap=COUNT_MSTORE_MMAP_TRANSIENT_CACHE_VALUES;
     foreach_fhandle(ie,e){
       if (!e->ht_transient_cache && FHANDLE_BOTH_SHARE_TRANSIENT_CACHE(e,d)) e->ht_transient_cache=ht;
     }

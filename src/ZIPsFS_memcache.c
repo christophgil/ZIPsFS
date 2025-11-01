@@ -56,8 +56,6 @@ static bool advise_cache_in_ram(const struct zippath *zpath, const int additiona
                                                     (z?ADVISE_CACHE_IS_ZIPENTRY:0)|
                                                     ((_memcache_policy==MEMCACHE_COMPRESSED&&c || z&&_memcache_policy==MEMCACHE_ALWAYS)?ADVISE_CACHE_BY_POLICY:0),
                                                     VP(),VP_L(),RP(),RP_L(),zpath->root->rootpath,zpath->stat_vp.st_size);
-
-  //log_debug_now("VP: %s need_bytes: %lld",VP(),(LLD)need_bytes);
   if (need_bytes<0) return false;
   if (need_bytes>_memcache_bytes_limit){
     warning(WARN_MEMCACHE|WARN_FLAG_ONCE,VP(),"%'lld>%'lld. Consider set byte limit for RAM cache with  "ANSI_FG_BLUE"-l <gigabytes>G"ANSI_RESET,(LLD)need_bytes,(LLD)_memcache_bytes_limit);
@@ -187,13 +185,12 @@ static off_t memcache_wait_and_read(char *buf, const off_t size, const off_t off
   assert(d->zpath.root);
   root_start_thread(d->zpath.root,PTHREAD_MEMCACHE,false);
   const bool ok=memcache_wait(d,offset+size);
-  //log_debug_now("%s  ok: %d",D_VP(d),ok);
   LOCK_N(mutex_fhandle,const off_t memcache_l=is_memcache(d,NULL)? d->memcache->memcache_l: -1); /* Otherwise md5sum fails with EPERM */
   if (memcache_l<0 || !ok) return -1;
   if (offset==memcache_l) return 0;
   if (memcache_l){
     LOCK_N(mutex_fhandle,const off_t num=memcache_read(buf,d,offset,size+offset));
-    if (num>0) COUNTER_INC(COUNT_READZIP_MEMCACHE);
+    if (num>0) COUNTER1_INC(COUNT_READZIP_MEMCACHE);
     if (num>0 || memcache_l>=offset) return num;
   }
   return -1;
@@ -244,8 +241,11 @@ static bool memcache_store_try(struct fHandle *d, struct async_zipfile *zip, str
       if ((ok=contin=(is_memcache(d,r) && !memcache_can_break(d)))){
         dst=textbuffer_first_segment_with_min_capacity(st_size>SIZE_CUTOFF_MMAP_vs_MALLOC?TXTBUFSGMT_MUNMAP:0,d->memcache->txtbuf,st_size);
         if ((ok=(dst!=NULL))){
+          //          ASSERT(n<=MEMCACHE_READ_BYTES_NUM);          ASSERT(already+n<=st_size);           ASSERT(fhandle_currently_reading_writing(d));
           memcpy(dst+already,buf,n);
-          if ((already+=n)>d->memcache->memcache_already)  d->memcache->memcache_already=already;
+          if ((already+=n)>d->memcache->memcache_already){
+            d->memcache->memcache_already=already;
+          }
           MEMCACHE_ROOT_UPDATE_TIME(d,r,true);
         }
       }
@@ -273,7 +273,7 @@ static bool memcache_store_try(struct fHandle *d, struct async_zipfile *zip, str
 static void memcache_now(struct fHandle *d, struct rootdata *r){
   cg_thread_assert_not_locked(mutex_fhandle);
   const struct zippath *zpath=&d->zpath;
-  log_entered_function("%s",VP());
+  LOCK(mutex_fhandle, (log_entered_function("%s  textbuffer_memusage  head: %'lld  mmap: %'lld",VP(), (LLD)textbuffer_memusage_get(0),(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP))));
   _Static_assert(NUM_MEMCACHE_STORE_RETRY>0,"");
   FOR(retry,0,NUM_MEMCACHE_STORE_RETRY){
     struct async_zipfile zip;
@@ -356,7 +356,7 @@ static bool memcache_wait(struct fHandle *d, const off_t min_fill){
 #if MEMCACHE_TIMEOUT_SECONDS
     if (memcache_time_exceeded(d)){
       warning(WARN_MEMCACHE,D_RP(d),"Timeout > "STRINGIZE(MEMCACHE_TIMEOUT_SECONDS)" s");
-      COUNTER_INC(COUNT_MEMCACHE_WAITFOR_TIMEOUT);
+      COUNTER1_INC(COUNT_MEMCACHE_WAITFOR_TIMEOUT);
       struct zippath zp={0};
       LOCK_N(mutex_fhandle, ok=is_memcache(d,NULL); if (ok) zp=d->memcache->m_zpath);
       if (ok && find_realpath_other_root(&zp)){

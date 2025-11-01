@@ -125,8 +125,8 @@ static bool autogen_remove_if_not_up_to_date(struct zippath *zpath){
 }
 
 static bool autogen_filldir(fuse_fill_dir_t filler,void *buf, const char *name, const struct stat *stbuf,struct ht *no_dups){
-    log_entered_function("%s",name);
   if (!_realpath_autogen) return false;
+  //log_entered_function("%s",name);
   const int name_l=strlen(name);
   if (!ENDSWITH(name,name_l,EXT_CONTENT)){
     char generated[MAX_PATHLEN+1];
@@ -135,6 +135,7 @@ static bool autogen_filldir(fuse_fill_dir_t filler,void *buf, const char *name, 
       if (*generated) filler_add(0,filler,buf,generated,0,stbuf,no_dups);
     }
   }
+  //log_exited_function("%s",name);
   return true;
 }
 

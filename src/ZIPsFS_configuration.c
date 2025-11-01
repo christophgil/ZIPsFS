@@ -139,7 +139,10 @@ static off_t config_advise_cache_in_ram(const int flags,const char *virtualpath,
   if (vp_l>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e') return -1; /* The exe files hold the icon for File Explorer */
   if (flags&ADVISE_CACHE_BY_POLICY) return filesize;
   off_t need=filesize;
-  bool cache=((flags&ADVISE_CACHE_IS_CMPRESSED)&&(flags&ADVISE_CACHE_IS_SEEK_BW)) || ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin");
+  bool cache=((flags&ADVISE_CACHE_IS_CMPRESSED)&&(flags&ADVISE_CACHE_IS_SEEK_BW))
+    || ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin")
+    //|| ENDSWITH(virtualpath,vp_l,".raw") && STARTSWITH(cg_strrchr_null(virtualpath,'/'),"/20")
+    ;
   if (!cache && ENDSWITH(virtualpath,vp_l,"analysis.tdf") && vp_l+4<MAX_PATHLEN){ /* Note: timsdata.dll opens analysis.tdf first  and then analysis.tdf_bin */
     cache=true;
     char tdf_bin[MAX_PATHLEN+1]; stpcpy(stpcpy(tdf_bin,virtualpath),"_bin");

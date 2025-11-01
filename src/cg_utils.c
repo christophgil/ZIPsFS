@@ -126,34 +126,38 @@ static void fprint_strerror(FILE *f,int err){
 #define cg_mmap(id,...) _cg_mmap(0,__VA_ARGS__,__FILE_NAME__,__LINE__)
 #define cg_munmap(id,...) _cg_munmap(0,__VA_ARGS__)
 #define cg_realloc_array(id,...) _cg_realloc_array(0,__VA_ARGS__)
-#define COUNTER_ADD(id,n)
+#define COUNTER1_ADD(id,n)
 #define COUNTER2_ADD(id,n)
-#define COUNTER_INC(id)
+#define COUNTER1_INC(id)
 #define COUNTER2_INC(id)
 #else
-static atomic_long _counters1[COUNT_NUM],_counters2[COUNT_PAIRS_END];
-#define COUNTER_ADD(id,n) if (id) atomic_fetch_add(_counters1+id,n)
-#define COUNTER2_ADD(id,n) if (id) atomic_fetch_add(_counters2+id,n)
-#define COUNTER_INC(id)  COUNTER_ADD(id,1)
-#define COUNTER2_INC(id)  COUNTER2_ADD(id,1)
+static atomic_long _counters1[COUNT_NUM],_counters2[COUNT_PAIRS_END],_countersB1[COUNT_NUM],_countersB2[COUNT_PAIRS_END];
+#define COUNTER1_ADD(id,n) if (id) atomic_fetch_add(_countersB1+id,n)
+#define COUNTER2_ADD(id,n) if (id) atomic_fetch_add(_countersB2+id,n)
+
+
+#define COUNTER1_INC(id) if (id) atomic_fetch_add(_counters1+id,1)
+#define COUNTER2_INC(id) if (id) atomic_fetch_add(_counters2+id,1)
+
+
 #define cg_mmap(...) _cg_mmap(__VA_ARGS__,__FILE_NAME__,__LINE__)
 #define cg_munmap(...) _cg_munmap(__VA_ARGS__)
 #define cg_realloc_array(...) _cg_realloc_array(__VA_ARGS__)
 static bool _malloc_is_count_mstore[MALLOC_ID_COUNT];
 static void *cg_malloc(const int id, const size_t size){
-  COUNTER_INC(id);
+  COUNTER1_INC(id);
   void *p=malloc_untracked(size);
   assert(p!=NULL);
   return p;
 }
 static void *cg_calloc(const int id,size_t nmemb, size_t size){
-  COUNTER_INC(id);
+  COUNTER1_INC(id);
   void *p=calloc_untracked(nmemb,size);
   assert(p!=NULL);
   return p;
 }
 static char *cg_strdup(const int id,const char *s){
-  COUNTER_INC(id);
+  COUNTER1_INC(id);
   char *p=strdup_untracked(s);
   assert(p!=NULL);
   return p;
@@ -181,7 +185,10 @@ static void *_cg_mmap(const int id, const size_t length, const int fd_or_zero, c
   const off_t offset=0;
   const int flags=fd==-1?(MAP_SHARED|MAP_ANONYMOUS):MAP_SHARED;  /* FreeBSD requires fd -1 for MAP_ANONYMOUS. Otherwise EINVAL */
   void *ptr=mmap(NULL,length,PROT_READ|PROT_WRITE,flags,fd, offset);
-  if (ptr) COUNTER_ADD(id,length);
+  if (ptr){
+    COUNTER1_ADD(id,length);
+    COUNTER1_INC(id);
+  }
   if (ptr==MAP_FAILED){
     fprintf(stderr,"%s:%d  ",file,line);    perror(__func__);
   }
@@ -190,12 +197,21 @@ static void *_cg_mmap(const int id, const size_t length, const int fd_or_zero, c
 static int _cg_munmap(const int id,const void *ptr,size_t length){
   if (!ptr) return -1;
   COUNTER2_ADD(id,length);
+  COUNTER2_INC(id);
   return munmap((void*)ptr,length);
 }
 
 //////////////
 /// String ///
 //////////////
+
+
+static char* cg_strrchr_null(const char *path, const char c){
+  const char *found=strrchr(path,c);
+  return (char*)(found?found:path+strlen(path));
+}
+
+
 
 
 static uint32_t hash32(const char* key, const uint32_t len){
@@ -478,7 +494,7 @@ static bool *cg_validchars(enum enum_validchars type){
         bool *cc=ccc[t];
         FOR(i,'A','Z'+1) cc[i|32]=cc[i]=true;
         FOR(i,'0','9'+1) cc[i]=true;
-        cc['=']=cc['+']=cc['-']=cc['_']=cc['$']=cc['@']=cc['.']=cc['~']=true;
+        cc['=']=cc['+']=cc['-']=cc['_']=cc['$']=cc['@']=cc['.']=cc['~']=cc['%']=true;
       }
     }
     ccc[VALIDCHARS_PATH]['/']=ccc[VALIDCHARS_PATH][' ']=ccc[VALIDCHARS_FILE][' ']=ccc[VALIDCHARS_NOQUOTE]['/']=ccc[VALIDCHARS_NOQUOTE]['%']=true;

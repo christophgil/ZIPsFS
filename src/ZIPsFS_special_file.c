@@ -151,7 +151,7 @@ static bool make_info(const int flags){
   int l;
   while(true){
     l=print_all_info(flags);
-    log_verbose("_info_capacity: %d l: %d",_info_capacity,l);
+    //log_verbose("_info_capacity: %d l: %d",_info_capacity,l);
     if (_info_capacity>l) break;
     char *info=_info;
     if (!(_info=realloc(_info,_info_capacity=l+8888))){

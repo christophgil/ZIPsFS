@@ -24,9 +24,9 @@
 #define mstore_base_path() mstore_set_base_path(NULL)
 
 #if WITH_DEBUG_MALLOC
-#define _MSTORE_COUNTER_MMAP(m)   ((m->mstore_counter_mmap?m->mstore_counter_mmap:COUNT_MSTORE_MMAP_BYTES_MISMATCH))
-#define _MSTORE_COUNTER_MALLOC(m) ((m->mstore_counter_mmap?m->mstore_counter_mmap:COUNT_MSTORE_MMAP_BYTES_MISMATCH)+1)
-//#define _MSTORE_MMAP_ID(m) (m->mstore_counter_mmap?m->mstore_counter_mmap:COUNT_MSTORE_MMAP_BYTES_MISMATCH)
+#define _MSTORE_COUNTER_MMAP(m)   ((m->mstore_counter_mmap?m->mstore_counter_mmap:COUNTm_MSTORE_MMAP))
+#define _MSTORE_COUNTER_MALLOC(m) ((m->mstore_counter_mmap?m->mstore_counter_mmap:COUNTm_MSTORE_MMAP)+1)
+//#define _MSTORE_MMAP_ID(m) (m->mstore_counter_mmap?m->mstore_counter_mmap:COUNTm_MSTORE_MMAP)
 #else
 #define _MSTORE_COUNTER_MMAP(m) 0
 //#define _MSTORE_MMAP_ID(m) 0

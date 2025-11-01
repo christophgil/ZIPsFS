@@ -72,8 +72,8 @@ static void _assert_validchars(enum enum_validchars t,const char *s,int s_l,cons
     char encoded[PATH_MAX];
     url_encode(encoded,PATH_MAX,s);
     warning(WARN_CHARS|WARN_FLAG_ONCE_PER_PATH,encoded,ANSI_FG_BLUE"%s()"ANSI_RESET": position: %d",fn,pos);
-    unlock(mutex_validchars);
   }
+  unlock(mutex_validchars);
 }
 #define  assert_validchars_direntries(...) _assert_validchars_direntries(__VA_ARGS__,__func__)
 static void _assert_validchars_direntries(const struct directory *dir,const char *fn){

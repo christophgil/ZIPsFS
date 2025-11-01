@@ -67,7 +67,7 @@ static int cg_mutex_count(int mutex,int inc){
 #if ! defined(WITH_PTHREAD_LOCK) || WITH_PTHREAD_LOCK
 static MAYBE_INLINE void lock(int mutex){
   if (mutex){
-    IF1(WITH_ZIPsFS_COUNTERS,COUNTER_INC(COUNT_PTHREAD_LOCK));
+    IF1(WITH_ZIPsFS_COUNTERS,COUNTER1_INC(COUNT_PTHREAD_LOCK));
     pthread_mutex_lock(_mutex+mutex);
     IF1(WITH_ASSERT_LOCK,cg_mutex_count(mutex,1));
   }

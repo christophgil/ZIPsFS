@@ -125,7 +125,7 @@ static MAYBE_INLINE struct fHandle* fhandle_at_index(int i){
 #define B _fhandle[i>>FHANDLE_LOG2_BLOCK_SIZE]
   struct fHandle *block=B;
   if (!block){
-    block=B=cg_calloc(COUNT_FHANDLE_ARRAY_MALLOC_MISMATCH,FHANDLE_BLOCK_SIZE,sizeof(struct fHandle));
+    block=B=cg_calloc(COUNTm_FHANDLE_ARRAY_MALLOC,FHANDLE_BLOCK_SIZE,sizeof(struct fHandle));
     assert(block!=NULL);
   }
   return block+(i&(FHANDLE_BLOCK_SIZE-1));
@@ -308,7 +308,7 @@ static struct zippath *directory_init_zpath(struct directory *dir,const struct z
   IF1(WITH_TIMEOUT_READDIR, if (!dir->ht_intern_names)){
     dir->files_capacity=DIRECTORY_DIM_STACK;
     mstore_init(&dir->filenames,"",4096|MSTORE_OPT_MALLOC);
-    dir->filenames.mstore_counter_mmap=COUNT_MSTORE_MMAP_BYTES_DIR_FILENAMES;
+    dir->filenames.mstore_counter_mmap=COUNT_MSTORE_MMAP_DIR_FILENAMES;
   }
   return &dir->dir_zpath;
 }
@@ -840,7 +840,7 @@ static struct fHandle* fhandle_create(const int flags,const uint64_t fh, const s
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES, transient_cache_activate(d));
   IF1(WITH_SPECIAL_FILE,if (!(flags&FHANDLE_FLAG_SPECIAL_FILE)) memcache_infer_from_other_handle(d));
   d->flags|=FHANDLE_FLAG_ACTIVE;
-  COUNTER_INC(COUNT_FHANDLE_CONSTRUCT);
+  COUNTER1_INC(COUNT_FHANDLE_CONSTRUCT);
   return d;
 }
 static bool fhandle_currently_reading_writing(const struct fHandle *d){
@@ -917,7 +917,7 @@ static ino_t make_inode(const ino_t inode0,struct rootdata *r, const int entryId
     LOCK_NCANCEL_N(mutex_inode,
                    if (!ht->capacity) ht_set_id(HT_MALLOC_inodes,ht_init(ht,"inode",HT_FLAG_NUMKEY|16));
                    ino_t inod=(ino_t)ht_numkey_get(ht,key_high_variability,key2);
-                   if (!inod){ ht_numkey_set(ht,key_high_variability,key2,(void*)(inod=next_inode())); COUNTER_INC(COUNT_SEQUENTIAL_INODE);});
+                   if (!inod){ ht_numkey_set(ht,key_high_variability,key2,(void*)(inod=next_inode())); COUNTER1_INC(COUNT_SEQUENTIAL_INODE);});
     return inod;
   }
 }
@@ -951,9 +951,10 @@ static int zipentry_placeholder_expand(char *u,const char *orig, const char *rp,
 ////////////////////////////////////////////////////////////////////////////////////////
 static void filler_add(const int opt,fuse_fill_dir_t filler,void *buf, const char *name,  int name_l,const struct stat *st, struct ht *no_dups){
   if (!name_l) name_l=strlen(name);
+
   IF1(WITH_AUTOGEN,if(opt&FILLDIR_AUTOGEN)autogen_filldir(filler,buf,name,st,no_dups);else)
     if (ht_only_once(no_dups,name,name_l)){
-      assert_validchars(VALIDCHARS_FILE,n,n_l);
+      assert_validchars(VALIDCHARS_FILE,name,name_l);
       filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);
     }
 }
@@ -1312,7 +1313,7 @@ static bool _xmp_readdir_roots(const bool cut_autogen, const bool from_network_h
 static int _xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi){
   (void)offset;(void)fi;
   struct ht no_dups={0}; ht_set_id(HT_MALLOC_without_dups,ht_init_with_keystore_dim(&no_dups,"xmp_readdir_no_dups",8,4096));
-  no_dups.keystore->mstore_counter_mmap=COUNT_MSTORE_MMAP_BYTES_NODUPS;
+  no_dups.keystore->mstore_counter_mmap=COUNT_MSTORE_MMAP_NODUPS;
   no_dups.ht_counter_malloc=COUNT_HT_MALLOC_NODUPS;
   const int opt=strcmp(path,DIR_ZIPsFS)?0:FILLDIR_IS_DIR_ZIPsFS;
   NEW_ZIPPATH(path);
@@ -1337,7 +1338,7 @@ static int _xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_
   }
   if (!VP_L()) A(&DIR_ZIPsFS[1]);
 #undef A
-  ht_destroy(NULL);
+  ht_destroy(&no_dups);
   //log_exited_function("ok: %d",ok);
   return ok?0:-1;
 }
@@ -1474,7 +1475,7 @@ static struct zip *my_zip_open(const char *orig){
     int err;
     zip=zip_open(orig,ZIP_RDONLY,&err);
     if (zip){
-      COUNTER_INC(COUNT_ZIP_OPEN);
+      COUNTER1_INC(COUNT_ZIP_OPEN);
     }else warning_zip(orig,0,"zip_open failed");
     LOCK(mutex_fhandle,inc_count_getattr(orig,zip?COUNTER_ZIPOPEN_SUCCESS:COUNTER_ZIPOPEN_FAIL));
     if (zip) break;
@@ -1490,7 +1491,7 @@ static zip_file_t *my_zip_fopen(zip_t *za, const char *entry, const zip_flags_t 
   }
   zip_file_t *zf=zip_fopen(za,entry,flags);
   if (zf){
-    COUNTER_INC(COUNT_ZIP_FOPEN);
+    COUNTER1_INC(COUNT_ZIP_FOPEN);
   }else warning(WARN_OPEN|WARN_FLAG_ONCE_PER_PATH|WARN_FLAG_FAIL,path,"zip_fopen %s",entry,zip_get_error(za));
   return zf;
 }
@@ -1575,7 +1576,7 @@ static off_t fhandle_read_zip(char *buf, const off_t size, const off_t offset,st
         if (memcache_wait(d,offset+size)){
           fi->direct_io=1;
           fhandle_zip_fclose(d);
-          COUNTER_INC(COUNT_READZIP_MEMCACHE_BECAUSE_SEEK_BWD);
+          COUNTER1_INC(COUNT_READZIP_MEMCACHE_BECAUSE_SEEK_BWD);
           fhandle_counter_inc(d,ZIP_READ_CACHE_SUCCESS);
           LOCK_N(mutex_fhandle,const off_t nread=memcache_read(buf,d,offset,offset+size));
           return nread;
@@ -1843,14 +1844,10 @@ int main(const int argc,const char *argv[]){
       _fWarnErr[i]=fopen(_fWarningPath[i],"w");
     }
     warning(0,NULL,"");ht_set_id(HT_MALLOC_warnings,&_ht_warning);
-
-
     IF1(WITH_SPECIAL_FILE,static char ctrl_sh[MAX_PATHLEN+1];
         snprintf(ctrl_sh,MAX_PATHLEN,"%s/%s",dot_ZIPsFS,"ZIPsFS_CTRL.sh");
         snprintf(tmp,MAX_PATHLEN,"%s/cachedir",dot_ZIPsFS); mstore_set_base_path(tmp);
         special_file_content_to_file(SFILE_DEBUG_CTRL,SPECIAL_FILES[SFILE_DEBUG_CTRL]=ctrl_sh));
-
-
   }
   FOR(i,optind,colon){ /* Source roots are given at command line. Between optind and colon */
     if (!*argv[i]) continue;
@@ -1919,7 +1916,7 @@ int main(const int argc,const char *argv[]){
 // cg_mmap ht_destroy cg_strdup cg_free cg_free_null
 //
 // opendir  locked config_autogen_size_of_not_existing_file crc32
-// limits strtoOAk SIZE_POINTER   COUNT_MSTORE_MALLOC_MISMATCH
+// limits strtoOAk SIZE_POINTER   COUNTm_MSTORE_MALLOC
 // strncpy stpncpy  mempcpy strcat _thisPrg
 // strrchr autogen_rinfiles
 // analysis.tdf-shm analysis.tdf-wal
@@ -1949,7 +1946,6 @@ int main(const int argc,const char *argv[]){
 // character invalide 202411
 // transient_cache_store at /home/cgille/git_projects/ZIPsFS/src/ZIPsFS_transient_zipentry_cache.c:135
 // zu zipentry_placeholder_expand
-// COUNT_TXTBUF_SEGMENT_MMAP_BYTES  textbuffer_new
-
-
-// ~/Users/ktextori/30-0105_trypsin_SPall vs ~/Users/ktextori/30-0105_trypsin_SPall_local
+// COUNT_TXTBUF_SEGMENT_MMAP  textbuffer_new
+// Pause
+// cg_print_stacktrace

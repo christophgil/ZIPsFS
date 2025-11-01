@@ -106,9 +106,7 @@ Make sure the UNIX tool curl is installed. Note that "//:" in the URL is replace
 
 ZIPsFS functions as a union (overlay) file system.
 When files are created or modified, they are stored in the first file tree - e.g.,
-
-    ~/test/ZIPsFS/writable
-
+``~/test/ZIPsFS/writable``
 in the example setup.
 If a file exists in multiple source locations, the version from the leftmost source (the first one listed) takes precedence.
 With an empty string as the first source,  the ZIPsFS file system read-only and file creation and modification is disabled.
@@ -117,9 +115,7 @@ The physical file path, i.e., the actual storage location of a file, can be retr
 file formed by appending ``@SOURCE.TXT`` to the filename.
 
 For example, to determine the real location of:
-
-    ~/test/ZIPsFS/mnt/1.txt
-
+    ``~/test/ZIPsFS/mnt/1.txt``
 Run the following command:
 
     cat ~/test/ZIPsFS/mnt/1.txt@SOURCE.TXT
@@ -157,7 +153,7 @@ This is discussed in section Configuration.
 
 **-c \[NEVER,SEEK,RULE,COMPRESSED,ALWAYS\]**
 
-Policy for ZIP entries  cached in RAM.
+Policy when ZIP entries and file content is cached in RAM.
 
 
 |           |                                                                                    |
@@ -176,6 +172,7 @@ Policy for ZIP entries  cached in RAM.
 **-l  *Maximum memory for caching ZIP-entries in the RAM***
 
 Specifies a limit for the cache.  For example *-l  8G* would limit the size of the cache to 8 Gigabyte.
+File content larger than this will not be cached. When memory usage is high, cached file access waits until it drops below this value.
 
 **-b**
  Execution in background (Not recommended). We recommend running ZIPsFS in foreground in *tmux*.

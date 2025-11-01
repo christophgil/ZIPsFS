@@ -229,7 +229,7 @@ static int counts_by_filetype_r(int n,struct rootdata *r, int *count_explain){
       x->rank=0;
       if (!count++){
         PRINTINFO("<H1>Counts by file type for root %s</H1>\n",report_rootpath(r));
-        if (!count_explain[0]++) PRINTINFO("<B>Columns explained:</B><UL>\n\
+        if (!count_explain[0]++) PRINTINFO("<B>Columns for the following table explained:</B><UL>\n\
   <LI>zip_open(): How often are ZIP entries opened..</LI>\
   <LI>ZIP read no-cache: Count direct read operations for ZIP entries</LI>\n\
   <LI>ZIP read cache: Count loading ZIP entries into RAM. If entirely read, count computation of CRC32 checksum</LI>\n\
@@ -280,9 +280,9 @@ static int counts_by_filetype(int n){
     }
     if (!x || !x->value) break;
     if (!count++){
-#define SF(counter) TH(#counter"() &check;")THfail()
+#define SF(counter) TH("&check; "#counter"()")THfail()
       PRINTINFO("Count calls to getattr() and lstat() per file type:\n\
-<B>Columns explained:</B><OL>\n\
+<B>Columns for the following table explained:</B><OL>\n\
 <LI>getattr(), readdir(): Number of successful and failed calls to the FUSE call-back function.</LI>\n\
 <LI>lstat(): Number of successful and failed calls to the C function. The goal of the cache is to reduce the number of these calls.</LI></OL>\n\
 <TABLE border=\"1\">\n<THEAD>\n\
@@ -482,16 +482,18 @@ static int log_mutex_locks(int n,const bool html){
 static int log_malloc(int n,const bool html){
   PRINTINFO("%sGlobal counters%s%s\n",BEGIN_H1(html),END_H1(html),BEGIN_PRE(html));
   int header=0;
+          const char *diffMarker=html?"<font color=\"#FF0000\">x</font>":ANSI_FG_RED"X"ANSI_RESET;
   FOR(i,1,COUNT_NUM){
     if (i==COUNT_PAIRS_END){
       header=0;
       continue;
     }
     const long x=_counters1[i],y=i<COUNT_PAIRS_END?_counters2[i]:0;
+    const long xB=_countersB1[i],yB=i<COUNT_PAIRS_END?_countersB2[i]:0;
     if (x||y){
       if (i<COUNT_PAIRS_END){
-        if (!header++)     PRINTINFO("\n%s%44s %20s %20s %20s%s\n",html?"<u>":ANSI_UNDERLINE,"ID", "Count","Count release","Diff",html?"</u>":ANSI_RESET);
-        PRINTINFO("%s%44s %'20ld %'20ld %'20ld%s\n", html?"":x==0&&y==0?ANSI_FG_GRAY:x==y?ANSI_FG_GREEN:ANSI_FG_RED, COUNT_S[i], x,y,x-y,html?"":ANSI_RESET);
+        if (!header++)     PRINTINFO("\n%s%44s %14s %14s %s %20s %20s %s %s\n",html?"<u>":ANSI_UNDERLINE,"ID", "Count","Count release","&#916;","Bytes","Bytes released","&#916;",html?"</u>":ANSI_RESET);
+        PRINTINFO("%44s %'14ld %'14ld %s %'20ld %'20ld %s\n", COUNT_S[i], x,y,x==y?" ":diffMarker,xB,yB,xB==yB?" ":diffMarker);
       }else{
         if (!header++)     PRINTINFO("\n%s%44s %20s%s\n",html?"<u>":ANSI_UNDERLINE,"ID", "Count",html?"</u>":ANSI_RESET);
         PRINTINFO("%44s %'20ld\n",COUNT_S[i],x);

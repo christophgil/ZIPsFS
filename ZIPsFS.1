@@ -140,15 +140,7 @@ less  \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot
 .PP
 ZIPsFS functions as a union (overlay) file system.
 When files are created or modified, they are stored in the first file
-tree - e.g.,
-.IP
-.nf
-\f[C]
-\[ti]/test/ZIPsFS/writable
-\f[R]
-.fi
-.PP
-in the example setup.
+tree - e.g., \f[V]\[ti]/test/ZIPsFS/writable\f[R] in the example setup.
 If a file exists in multiple source locations, the version from the
 leftmost source (the first one listed) takes precedence.
 With an empty string as the first source, the ZIPsFS file system
@@ -159,14 +151,7 @@ be retrieved from a file formed by appending \f[V]\[at]SOURCE.TXT\f[R]
 to the filename.
 .PP
 For example, to determine the real location of:
-.IP
-.nf
-\f[C]
-\[ti]/test/ZIPsFS/mnt/1.txt
-\f[R]
-.fi
-.PP
-Run the following command:
+\f[V]\[ti]/test/ZIPsFS/mnt/1.txt\f[R] Run the following command:
 .IP
 .nf
 \f[C]
@@ -206,7 +191,7 @@ section Configuration.
 .PP
 \f[B]-c [NEVER,SEEK,RULE,COMPRESSED,ALWAYS]\f[R]
 .PP
-Policy for ZIP entries cached in RAM.
+Policy when ZIP entries and file content is cached in RAM.
 .PP
 .TS
 tab(@);
@@ -260,6 +245,9 @@ RAM\f[B]\f[R]
 Specifies a limit for the cache.
 For example \f[I]-l 8G\f[R] would limit the size of the cache to 8
 Gigabyte.
+File content larger than this will not be cached.
+When memory usage is high, cached file access waits until it drops below
+this value.
 .PP
 \f[B]-b\f[R] Execution in background (Not recommended).
 We recommend running ZIPsFS in foreground in \f[I]tmux\f[R].
