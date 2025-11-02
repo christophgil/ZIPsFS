@@ -132,7 +132,7 @@ The default configuration includes a few exceptions tailored to specific use cas
   - For ZIP files whose names end with *.d.Zip*, the virtual folder will  end with *.d*.
 
   - Flat file list: For  Sciex instruments, each mass spectrometry record  is stored in a set of files which are not organized in
-    sub-folders. For example the record ``20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01``  stored in ``20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff2.Zip`` may constist of the following files
+    sub-folders. For example the record ``20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01``  stored in ``20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff2.Zip`` may consist of the following files
 
      - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.timeseries.data
      - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff
@@ -140,7 +140,7 @@ The default configuration includes a few exceptions tailored to specific use cas
      - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff.scan
 
     These are contained with those of other entries in the file listing.
-    To get the full list of files,  the content of all ZIP files need to be read.
+    To get the full list of files,  all ZIP files need to be inspected.
     This is time consuming and performed in the background. Consequently, the file listing will be incomplete when obtained for the first time.
     Only after some seconds, the file listing will be presented properly.
 

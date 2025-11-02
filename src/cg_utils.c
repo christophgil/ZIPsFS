@@ -180,12 +180,16 @@ static void *_cg_realloc_array(const int id,const int size1AndOpt,const void *pO
   return pNew;
 }
 
-static void *_cg_mmap(const int id, const size_t length, const int fd_or_zero, const char *file, const int line){
+
+//static struct ht _mmap_debug;
+
+static void *_cg_mmap(const int id, const off_t length, const int fd_or_zero, const char *file, const int line){
   const int fd=fd_or_zero?fd_or_zero:-1;
   const off_t offset=0;
   const int flags=fd==-1?(MAP_SHARED|MAP_ANONYMOUS):MAP_SHARED;  /* FreeBSD requires fd -1 for MAP_ANONYMOUS. Otherwise EINVAL */
   void *ptr=mmap(NULL,length,PROT_READ|PROT_WRITE,flags,fd, offset);
   if (ptr){
+    //    if (!_mmap_debug.capacity){ ht_init(&_mmap_debug,"_mmap_debug",HT_FLAG_NUMKEY|16);}
     COUNTER1_ADD(id,length);
     COUNTER1_INC(id);
   }
@@ -194,18 +198,19 @@ static void *_cg_mmap(const int id, const size_t length, const int fd_or_zero, c
   }
   return ptr;
 }
-static int _cg_munmap(const int id,const void *ptr,size_t length){
+static int _cg_munmap(const int id,const void *ptr,const off_t length){
   if (!ptr) return -1;
+  assert(length>0);
   COUNTER2_ADD(id,length);
   COUNTER2_INC(id);
   return munmap((void*)ptr,length);
 }
 
+
+
 //////////////
 /// String ///
 //////////////
-
-
 static char* cg_strrchr_null(const char *path, const char c){
   const char *found=strrchr(path,c);
   return (char*)(found?found:path+strlen(path));

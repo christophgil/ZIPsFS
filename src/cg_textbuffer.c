@@ -44,10 +44,6 @@ static struct textbuffer *textbuffer_new(const int malloc_id){
 static off_t textbuffer_memusage(const int flags,const off_t delta){
   const int id=((flags&TXTBUFSGMT_MUNMAP)!=0)?TEXTBUFFER_MEMUSAGE_MMAP:0;
   static off_t usage[1<<4];
-  /* if (delta && id==0){ */
-  /*   log_entered_function(" %'ld %'ld",usage[id],delta); */
-  /*   if (!usage[id] && delta<0){ cg_print_stacktrace(0); DIE_DEBUG_NOW("");} */
-  /* } */
   if (_textbuffer_memusage_lock) pthread_mutex_lock(_textbuffer_memusage_lock);
   if (delta){
     if ((usage[id]+=delta)>usage[id|TEXTBUFFER_MEMUSAGE_PEAK]) usage[id|TEXTBUFFER_MEMUSAGE_PEAK]=usage[id];
@@ -117,7 +113,7 @@ static void *malloc_or_mmap(const int flags, const off_t size){
 }
 #define free_or_munmap(flags,p,size) { _free_or_munmap(flags,p,size);p=NULL;}
 
-static void _free_or_munmap(const int flags,const void *p,const int size){
+static void _free_or_munmap(const int flags,const void *p,const off_t size){
   if (!p) return;
   if (flags&TXTBUFSGMT_MUNMAP) cg_munmap(COUNT_TXTBUF_SEGMENT_MMAP,p,size);
   else cg_free(COUNT_TXTBUF_SEGMENT_MALLOC,p);
@@ -146,7 +142,7 @@ static int textbuffer_add_segment(const uint8_t flags,struct textbuffer *b, cons
   if (b->max_length && textbuffer_length(b)+size>b->max_length) goto enomem;
   const int n=b->n++;
   if (!_textbuffer_assert_capacity(b,n)) goto enomem;
-  const int length=(n?_TXTBFFR_E(b,n-1):0);
+  const off_t length=(n?_TXTBFFR_E(b,n-1):0);
   if (size>0){
     _TXTBFFR_E(b,n)=length+size;
     _TXTBFFR_S(b,n)=(char*)bytes;
@@ -301,7 +297,7 @@ static int exec_on_file(const int opts,const enum enum_exec_on_file type, char *
   textbuffer_reset(&b);
   b.read_bufsize=1024;
   textbuffer_from_exec_output(0,&b,cmd,NULL,(opts&EXECF_SILENT)?"/dev/null":NULL);
-  int len=textbuffer_copy_to(&b,0,output_max,output);
+  off_t len=textbuffer_copy_to(&b,0,output_max,output);
   textbuffer_destroy(&b);
   int pathB=0, pathE=0;
   bool prevSpc=type!=EXECF_MOUNTPOINT_USING_DF;
