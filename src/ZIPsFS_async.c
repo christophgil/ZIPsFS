@@ -374,7 +374,7 @@ static void *infloop_misc(void *arg){
 /// pthreads have different gettid() and    ///
 /// /proc- file system                      ///
 ///////////////////////////////////////////////
-static void init_infloop(struct rootdata *r, const enum enum_root_thread ithread){
+static void init_infloop(const struct rootdata *r, const enum enum_root_thread ithread){
   IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE)log_entered_function("Thread: %s  Root: %s ",PTHREAD_S[ithread],rootpath(r));
   IF1(WITH_CANCEL_BLOCKED_THREADS,
       pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,&_unused_int);

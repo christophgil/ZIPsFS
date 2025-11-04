@@ -30,10 +30,8 @@ static bool memcache_set_policy(const char *a){
 ///////////////////////////////
 /// Decide for cache in RAM ///
 ///////////////////////////////
-static off_t ramUsageForFilecontent(void){
-  LOCK_N(mutex_fhandle,const off_t u=textbuffer_memusage_get(0)+textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP));
-  return u;
-}
+#define ramUsageForFilecontent()  (atomic_load(_countersB1+COUNT_TXTBUF_SEGMENT_MMAP)-atomic_load(_countersB2+COUNT_TXTBUF_SEGMENT_MMAP)+atomic_load(_countersB1+COUNT_TXTBUF_SEGMENT_MALLOC)-atomic_load(_countersB2+COUNT_TXTBUF_SEGMENT_MALLOC))
+
 /* File info for virtual-path plus root-path Needed  when loading analysis.tdf, also wait for sufficient RAM  for analysis.tdf_bin */
 static bool statForVirtualpathAndRootpath(struct stat *st, const char *vp, const char *rootpath){
   struct rootdata *r=NULL;
@@ -273,7 +271,7 @@ static bool memcache_store_try(struct fHandle *d, struct async_zipfile *zip, str
 static void memcache_now(struct fHandle *d, struct rootdata *r){
   cg_thread_assert_not_locked(mutex_fhandle);
   const struct zippath *zpath=&d->zpath;
-  LOCK(mutex_fhandle, (log_entered_function("%s  textbuffer_memusage  head: %'lld  mmap: %'lld",VP(), (LLD)textbuffer_memusage_get(0),(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP))));
+  log_entered_function("%s  textbuffer_memusage  head: %'lld ",VP(), (LLD)ramUsageForFilecontent());
   _Static_assert(NUM_MEMCACHE_STORE_RETRY>0,"");
   FOR(retry,0,NUM_MEMCACHE_STORE_RETRY){
     struct async_zipfile zip;

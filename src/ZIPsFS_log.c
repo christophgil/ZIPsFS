@@ -77,8 +77,6 @@ static void inc_count_getattr(const char *path,enum enum_count_getattr field){
     if (counts) counts[field]++;
   }
 }
-//static void inc_count_getattr(const char *path,enum enum_count_getattr field){int *counts=}
-//#define FT_INC_PATH(path,field,r) { filetypedata_for_ext(path,r)->field++;r->filetypedata_all.field++;}
 static const char *fileExtension(const char *path,const int len){
   if (len){
     const char *ext=strrchr(path+cg_last_slash(path)+1,'.');
@@ -399,7 +397,7 @@ static int print_proc_status(int n,char *filter,int *val){
   FILE* file=fopen("/proc/self/status","r");
   while (fscanf(file,"%1023s",buffer)==1){
     for(char *f=filter;*f;f++){
-      char *t=strchrnul(f,'|');
+      const char *t=strchrnul(f,'|');
       if ((f==filter || f[-1]=='|') && !strncmp(buffer,f,t-f)){
         fscanf(file," %d",val);
         if (n>0) PRINTINFO("%s %'d kB\n",buffer,*val);
@@ -482,7 +480,7 @@ static int log_mutex_locks(int n,const bool html){
 static int log_malloc(int n,const bool html){
   PRINTINFO("%sGlobal counters%s%s\n",BEGIN_H1(html),END_H1(html),BEGIN_PRE(html));
   int header=0;
-          const char *diffMarker=html?"<font color=\"#FF0000\">x</font>":ANSI_FG_RED"X"ANSI_RESET;
+  const char *diffMarker=html?"<font color=\"#FF0000\">x</font>":ANSI_FG_RED"X"ANSI_RESET;
   FOR(i,1,COUNT_NUM){
     if (i==COUNT_PAIRS_END){
       header=0;
@@ -492,10 +490,11 @@ static int log_malloc(int n,const bool html){
     const long xB=_countersB1[i],yB=i<COUNT_PAIRS_END?_countersB2[i]:0;
     if (x||y){
       if (i<COUNT_PAIRS_END){
-        if (!header++)     PRINTINFO("\n%s%44s %14s %14s %s %20s %20s %s %s\n",html?"<u>":ANSI_UNDERLINE,"ID", "Count","Count release","&#916;","Bytes","Bytes released","&#916;",html?"</u>":ANSI_RESET);
-        PRINTINFO("%44s %'14ld %'14ld %s %'20ld %'20ld %s\n", COUNT_S[i], x,y,x==y?" ":diffMarker,xB,yB,xB==yB?" ":diffMarker);
+        const char *mark=(x==y||x-y==1&&(i==COUNT_MALLOC_MEMCACHE_TXTBUF||i==COUNT_FHANDLE_CONSTRUCT||i==COUNTm_FHANDLE_ARRAY_MALLOC))?" ":diffMarker;
+        if (!header++)  PRINTINFO("\n%s%44s %14s %14s %s %20s %20s %s %s\n",html?"<u>":ANSI_UNDERLINE,"ID", "Count","Count release","&#916;","Bytes","Bytes released","&#916;",html?"</u>":ANSI_RESET);
+        PRINTINFO("%44s %'14ld %'14ld %s %'20ld %'20ld %s\n", COUNT_S[i], x,y,mark,xB,yB,xB==yB?" ":diffMarker);
       }else{
-        if (!header++)     PRINTINFO("\n%s%44s %20s%s\n",html?"<u>":ANSI_UNDERLINE,"ID", "Count",html?"</u>":ANSI_RESET);
+        if (!header++) PRINTINFO("\n%s%44s %20s%s\n",html?"<u>":ANSI_UNDERLINE,"ID", "Count",html?"</u>":ANSI_RESET);
         PRINTINFO("%44s %'20ld\n",COUNT_S[i],x);
       }
     }
@@ -585,16 +584,6 @@ static int log_print_CPU(int n){
 
 static int log_print_memory(int n){
   PRINTINFO("<H1>Virtual memory</H1>\n");
-#if WITH_MEMCACHE
-  {
-    const uint64_t current=textbuffer_memusage_get(0)+textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP);
-    const uint64_t peak=textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_PEAK)+textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_PEAK);
-    PRINTINFO("<H2>Cache ZIP entries in RAM (WITH_MEMCACHE)</H2>\n<UL>");
-    PRINTINFO("<LI>Current anonymous MMAP usage %'lld MB of %'lld MB</LI>\n",(LLD)(current>>20),(LLD)(_memcache_bytes_limit>>20)); //n=print_bar(n,current/(float)_memcache_bytes_limit);
-    PRINTINFO("<LI>Peak MMAP usage    %'lld MB of %'lld MB</LI>\n",(LLD)(peak>>20),(LLD)(_memcache_bytes_limit>>20));   //n=print_bar(n,peak/(float)_memcache_bytes_limit);
-    PRINTINFO("</UL>\n");
-  }
-#endif //WITH_MEMCACHE
   if (has_proc_fs()){
     int val=-1;print_proc_status(-1,"VmSize:",&val);
     //if(rlset)  n=print_bar(n,val*1024/(.01+rl.rlim_cur));
@@ -625,8 +614,8 @@ static int log_print_memory(int n){
     if (rl.rlim_cur!=-1) PRINTINFO("Rlim soft: %'lx MB   hard: %'lx MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
   }
 #endif
-  PRINTINFO("Textbuffer - Number of calls to mmap: %'lld to munmap: %'lld<BR>\n",(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_FREE));
-  PRINTINFO("Textbuffer - Number of calls to Malloc: %'lld to Free: %'lld<BR>\n",(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_FREE));
+  //  PRINTINFO("Textbuffer - Number of calls to mmap: %'lld to munmap: %'lld<BR>\n",(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_MMAP|TEXTBUFFER_MEMUSAGE_COUNT_FREE));
+  //  PRINTINFO("Textbuffer - Number of calls to Malloc: %'lld to Free: %'lld<BR>\n",(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_ALLOC),(LLD)textbuffer_memusage_get(TEXTBUFFER_MEMUSAGE_COUNT_FREE));
   return n;
 }
 

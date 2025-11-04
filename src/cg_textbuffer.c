@@ -30,8 +30,8 @@
 #define _TXTBFFR_S(b,i) _TXTBFFR(_segment,b,i)
 #define _TXTBFFR_E(b,i) _TXTBFFR(_segment_e,b,i)
 #define _TXTBFFR_F(b,i) _TXTBFFR(_segment_flags,b,i)
-#define textbuffer_memusage_get(flags) textbuffer_memusage(flags,0)
-static pthread_mutex_t *_textbuffer_memusage_lock=NULL;
+
+
 
 static struct textbuffer *textbuffer_new(const int malloc_id){
   struct textbuffer *b=cg_calloc(malloc_id,1,sizeof(struct textbuffer));
@@ -39,22 +39,18 @@ static struct textbuffer *textbuffer_new(const int malloc_id){
   return b;
 }
 
-
-
-static off_t textbuffer_memusage(const int flags,const off_t delta){
-  const int id=((flags&TXTBUFSGMT_MUNMAP)!=0)?TEXTBUFFER_MEMUSAGE_MMAP:0;
-  static off_t usage[1<<4];
-  if (_textbuffer_memusage_lock) pthread_mutex_lock(_textbuffer_memusage_lock);
-  if (delta){
-    if ((usage[id]+=delta)>usage[id|TEXTBUFFER_MEMUSAGE_PEAK]) usage[id|TEXTBUFFER_MEMUSAGE_PEAK]=usage[id];
-    usage[id|(delta>0?TEXTBUFFER_MEMUSAGE_COUNT_ALLOC:TEXTBUFFER_MEMUSAGE_COUNT_FREE)]++;
-
-  }
-  const off_t u=usage[id];
-  if (_textbuffer_memusage_lock) pthread_mutex_unlock(_textbuffer_memusage_lock);
-  return u;
-}
-
+/*  static void textbuffer_memusage(const int flags,const off_t delta){ */
+/* #if WITH_ZIPsFS_COUNTERS */
+/*    const int id=((flags&TXTBUFSGMT_MUNMAP)!=0)?COUNTER_TXTBUFSGMT_MMAP:COUNTER_TXTBUFSGMT_MALLOC; */
+/*    if (delta>0){ */
+/*     COUNTER1_ADD(id,delta); */
+/*     COUNTER1_INC(id); */
+/*    }else{ */
+/*     COUNTER2_ADD(id,delta); */
+/*     COUNTER2_INC(id); */
+/*    } */
+/* #endif //WITH_ZIPsFS_COUNTERS */
+/*  } */
 
 static off_t textbuffer_length(const struct textbuffer *b){
   return  !b || !b->n ? 0 : _TXTBFFR_E(b,b->n-1);
@@ -107,9 +103,8 @@ static off_t _textbuffer_copy_to_or_compare(const bool isCopy,const struct textb
 
 #define textbuffer_add_segment_const(b,txt) textbuffer_add_segment(TXTBUFSGMT_NO_FREE,b,txt,sizeof(txt)-1)
 static void *malloc_or_mmap(const int flags, const off_t size){
-  void *p=((flags&TXTBUFSGMT_MUNMAP)?cg_mmap(COUNT_TXTBUF_SEGMENT_MMAP,size,0):cg_malloc(COUNT_TXTBUF_SEGMENT_MALLOC,size));
-  textbuffer_memusage(flags,size);
-  return p;
+  //  textbuffer_memusage(flags,size);
+  return ((flags&TXTBUFSGMT_MUNMAP)?cg_mmap(COUNT_TXTBUF_SEGMENT_MMAP,size,0):cg_malloc(COUNT_TXTBUF_SEGMENT_MALLOC,size));
 }
 #define free_or_munmap(flags,p,size) { _free_or_munmap(flags,p,size);p=NULL;}
 
@@ -117,8 +112,7 @@ static void _free_or_munmap(const int flags,const void *p,const off_t size){
   if (!p) return;
   if (flags&TXTBUFSGMT_MUNMAP) cg_munmap(COUNT_TXTBUF_SEGMENT_MMAP,p,size);
   else cg_free(COUNT_TXTBUF_SEGMENT_MALLOC,p);
-  textbuffer_memusage(flags,-size);
-
+  //  textbuffer_memusage(flags,-size);
 }
 
 static bool _textbuffer_assert_capacity(struct textbuffer *b,const int n){
@@ -137,7 +131,7 @@ static int textbuffer_add_segment(const uint8_t flags,struct textbuffer *b, cons
   const off_t size=size_or_zero?size_or_zero:strlen(bytes);
   if (flags&TXTBUFSGMT_DUP){
     bytes=COPY_TO_HEAP(COUNT_TXTBUF_SEGMENT_MALLOC,bytes,size);
-    textbuffer_memusage(0,size);
+    //textbuffer_memusage(0,size);
   }
   if (b->max_length && textbuffer_length(b)+size>b->max_length) goto enomem;
   const int n=b->n++;
