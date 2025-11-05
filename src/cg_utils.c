@@ -190,9 +190,7 @@ static void *_cg_mmap(const int id, const off_t length, const int fd_or_zero, co
   void *ptr=mmap(NULL,length,PROT_READ|PROT_WRITE,flags,fd, offset);
   if (ptr){
     //    if (!_mmap_debug.capacity){ ht_init(&_mmap_debug,"_mmap_debug",HT_FLAG_NUMKEY|16);}
-
     COUNTER1_ADD(id,length);
-    if (id==COUNT_TXTBUF_SEGMENT_MMAP)   log_debug_now("length=%ld  %ld ",length, atomic_load(_countersB1+id));
     COUNTER1_INC(id);
   }
   if (ptr==MAP_FAILED){

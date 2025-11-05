@@ -17,7 +17,7 @@
   else if (cond){ PRINTINFO("<TD>" format "</TD>\n",__VA_ARGS__); }\
   else { PRINTINFO("<TD></TD>\n"); }
 #endif //IS_CHECKING_CODE
-#define SF(title,descr,field) R(true,"<TH colspan=\"2\">" title "</TH>",descr "  success/fail","%'u</TD><TD>%'u",G(field##_SUCCESS),G(field##_FAIL));
+#define SF(title,descr,field) R(true,"<TH colspan=\"2\">" title "</TH>",descr,"%'u</TD><TD>%'u",G(field##_SUCCESS),G(field##_FAIL));
 static int append_description(const char *title, const char *descr, char *describe, const int max){
   if (!*descr || max<=0) return 0;
   char noTag[99]={0};
@@ -34,8 +34,8 @@ static int append_description(const char *title, const char *descr, char *descri
   return snprintf(describe,max,"<LI><B>%s</B>: %s</LI>",noTag,descr);
 }
 #define COLUMN_FILE_TYPE(ext)\
-  R(ext!=NULL,"K","Counting this extension is optimized in source code","%c",isKnownExt(ext,0)?'+':' ');\
-  R(ext!=NULL,"X","Extension","%s",ext);
+  R(ext!=NULL,"X","Extension","%s",ext)\
+  R(ext!=NULL,"K","Counting this known extension is optimized in source code","%c",isKnownExt(ext,0)?'+':' ')
 
 
 #define END_HR()  PRINTINFO("</TR>%s",isHeader?"</THEAD>":"")
@@ -103,16 +103,16 @@ static void init_count_getattr(void){
   static bool initialized;
   if (!initialized){
     initialized=true;
-    ht_set_mutex(mutex_fhandle,ht_init_with_keystore(&ht_count_getattr,11,&mstore_persistent)); ht_set_id(HT_MALLOC_ht_count_getattr,&ht_count_getattr);
+    ht_set_mutex(mutex_fhandle,ht_init_with_keystore(&ht_count_by_ext,11,&mstore_persistent)); ht_set_id(HT_MALLOC_ht_count_by_ext,&ht_count_by_ext);
   }
 }
-static void inc_count_getattr(const char *path,enum enum_count_getattr field){
+static void inc_count_by_ext(const char *path,enum enum_count_getattr field){
   lock(mutex_fhandle);
   init_count_getattr();
-  if (path && ht_count_getattr.length<1024){
+  if (path && ht_count_by_ext.length<1024){
     const char *ext=strrchr(path+cg_last_slash(path)+1,'.');
     if (!ext || !*ext) ext="-No extension-";
-    struct ht_entry *e=ht_sget_entry(&ht_count_getattr,ext,true);
+    struct ht_entry *e=ht_sget_entry(&ht_count_by_ext,ext,true);
     assert(e!=NULL);assert(e->key!=NULL);
     int *counts=e->value;
     if (!counts) e->value=counts=mstore_malloc(&mstore_persistent,sizeof(int)*enum_count_getattr_length,8);
@@ -248,14 +248,16 @@ static int _counts_by_filetype_r(int n,struct rootdata *r, int *count_explain){
         if (isHeader) PRINTINFO("<HR><H1>Counts by file type for root %s</H1>\n<TABLE border=\"1\">\n<THEAD><TR>\n",report_rootpath(r));
         PRINTINFO("<TR>");
         COLUMN_FILE_TYPE(x->ext);
-        SF("ZIP open","How often are ZIP entries opened",ZIP_OPEN);
-        SF("ZIP read no-cache","Count direct read operations for ZIP entries",ZIP_READ_NOCACHE);
-        SF("ZIP read cache","Count loading ZIP entries into RAM",ZIP_READ_CACHE);
+        #define sf  "  success/fail"
+        SF("ZIP open","How often are ZIP entries opened"sf,ZIP_OPEN);
+        SF("ZIP read no-cache","Count direct read operations for ZIP entries"sf,ZIP_READ_NOCACHE);
+        SF("ZIP read cache","Count loading ZIP entries into RAM"sf,ZIP_READ_CACHE);
         R(true,"ZIP read 0","","%'u",G(ZIP_READ_NOCACHE_ZERO));
-        SF("Seek","Count setting file pointer to a different position",ZIP_READ_NOCACHE_SEEK);
-        SF("Checksum match/mismatch","If entirely read, count computation of CRC32 checksum",ZIP_READ_CACHE_CRC32);
+        SF("Seek","Count setting file pointer to a different position"sf,ZIP_READ_NOCACHE_SEEK);
+        SF("Checksum match/mismatch","If entirely read, count computation of CRC32 checksum"sf,ZIP_READ_CACHE_CRC32);
         R(true,"Cumul wait","Threads reading cached file data need to wait until the cache is filled to the respective position. Cumulative waiting time in s","%.2f",((float)x->wait)/CLOCKS_PER_SEC);
         R(true,"Retry cache","Count success on retry reading into RAM cache","%d",G(COUNT_RETRY_MEMCACHE));
+#undef sf
 #undef G
         END_HR();
       }/*isHeader*/
@@ -278,14 +280,14 @@ static long counter_getattr_rank(const struct ht_entry *e){
     (isKnownExt(e->key,e->keylen_hash>>HT_KEYLEN_SHIFT)?(1L<<30):0);
 }
 static int counts_by_filetype(int n){
-  const int c=ht_count_getattr.capacity;
+  const int c=ht_count_by_ext.capacity;
   int headerDone=0;
   char describe[3333]; int dc=0;
   bool done[c];
   memset(done,0,sizeof(done));
   FOR(pass,0,c){
     const struct ht_entry *x=NULL;
-    struct ht_entry *ee=HT_ENTRIES(&ht_count_getattr);
+    struct ht_entry *ee=HT_ENTRIES(&ht_count_by_ext);
     RLOOP(i,c){
       if (!done[i] && ee[i].key && (!x || counter_getattr_rank(ee+i) < counter_getattr_rank(x))) x=ee+i;
     }
@@ -296,18 +298,14 @@ static int counts_by_filetype(int n){
       done[x-ee]=true;
       COLUMN_FILE_TYPE(x->key);
       const int *vv=x->value; // cppcheck-suppress variableScope
-#define FF "Number of calls to this FUSE call-back function"
-#define CF "Number of calls to this C function."
-      /* see inc_count_getattr() */
+      /* see inc_count_by_ext() */
 #define G(field) vv[field]
-      SF("getattr",FF,COUNTER_GETATTR);
-      SF("readdir",FF,COUNTER_READDIR);
-      SF("opendir",CF,COUNTER_OPENDIR);
-      SF("zip_open",CF,COUNTER_ZIPOPEN);
-      SF("lstat",CF,COUNTER_STAT);
+      SF("getattr","Number of calls to this FUSE call-back function success/fail",COUNTER_GETATTR);
+      SF("readdir","&#12291;",COUNTER_READDIR);
+      SF("opendir","Number of calls to this C library function  success/fail",COUNTER_OPENDIR);
+      SF("zip_open","&#12291;",COUNTER_ZIPOPEN);
+      SF("lstat","&#12291;",COUNTER_STAT);
 #undef G
-#undef FF
-#undef CF
       END_HR();
     }
   }
@@ -392,20 +390,6 @@ static int log_print_roots(int n){ /* n==0 for UNIX console with UTF8 else for H
 #undef C
 #undef S
 }
-static int repeat_chars_info(int n,char c, int i){
-  if (i>0 && n+i<_info_capacity)  memset(_info+n,c,i);
-  return n+=i;
-}
-
-static int print_bar(int n,float rel){
-  const int L=100, a=MAX_int(0,MIN_int(L,(int)(L*rel)));
-  PRINTINFO("<SPAN style=\"border-style:solid;\"><SPAN style=\"background-color:red;color:red;\">");
-  n=repeat_chars_info(n,'#',a);
-  PRINTINFO("</SPAN>\n<SPAN style=\"background-color:blue;color:blue;\">");
-  n=repeat_chars_info(n,'~',L-a);
-  PRINTINFO("</SPAN>\n</SPAN>\n");
-  return n;
-}
 //////////////////
 /// Linux only ///
 //////////////////
@@ -446,7 +430,7 @@ static int log_memusage_ht(int n,const bool html){
       IF1(WITH_ZIPINLINE_CACHE, i==1?&ht_zinline_cache_vpath_to_zippath:)
       IF1(WITH_AUTOGEN,i==2?&ht_fsize:)
       i==3?&ht_intern_fileext:
-      i==4?&ht_count_getattr:
+      i==4?&ht_count_by_ext:
       i==5?&_ht_valid_chars:
       i==6?&ht_inodes_vp:
 
@@ -653,9 +637,9 @@ static int print_fhandle(int n,const char *title){
 #define K(x) (((1<<10)-1+x)>>10)
   FOR(ir,-1,_fhandle_n){
     const bool isHeader=ir<0;
-    struct fHandle *d=ir<0?NULL:fhandle_at_index(ir);
+    struct fHandle *d=isHeader?NULL:fhandle_at_index(ir);
     if (d && !d->flags) continue;
-    PRINTINFO("%s<TR>\n",isHeader?"":"<THEAD>\n");
+    PRINTINFO("%s<TR>\n",isHeader?"<THEAD>\n":"");
     R(true,"Path","","%s",(D_VP(d)));
     R(true,"Last-access","How many s ago","%'lld s",(LLD)(d->accesstime?(t0-d->accesstime):-1));
 #if WITH_MEMCACHE

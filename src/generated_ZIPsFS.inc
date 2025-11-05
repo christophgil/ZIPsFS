@@ -254,7 +254,7 @@ static int append_description(const char *title, const char *descr, char *descri
 static int print_table_description(int n,char *txt, const int txt_max, const int txt_l);
 static void log_flags_update();
 static void init_count_getattr(void);
-static void inc_count_getattr(const char *path,enum enum_count_getattr field);
+static void inc_count_by_ext(const char *path,enum enum_count_getattr field);
 static const char *fileExtension(const char *path,const int len);
 static counter_rootdata_t *filetypedata_for_ext(const char *path,struct rootdata *r);
 static void _rootdata_counter_inc(counter_rootdata_t *c, enum enum_counter_rootdata f);
@@ -270,8 +270,6 @@ static int _counts_by_filetype_r(int n,struct rootdata *r, int *count_explain);
 static long counter_getattr_rank(const struct ht_entry *e);
 static int counts_by_filetype(int n);
 static int log_print_fuse_argv(int n);
-static int repeat_chars_info(int n,char c, int i);
-static int print_bar(int n,float rel);
 static int print_proc_status(int n,char *filter,int *val);
 static void log_virtual_memory_size(void);
 static int log_memusage_ht(int n,const bool html);
