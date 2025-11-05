@@ -72,7 +72,6 @@ enum enum_count_getattr{
   COUNTER_OPENDIR_FAIL,COUNTER_OPENDIR_SUCCESS,
   COUNTER_ZIPOPEN_FAIL,COUNTER_ZIPOPEN_SUCCESS,
   COUNTER_GETATTR_FAIL,COUNTER_GETATTR_SUCCESS,
-  COUNTER_ACCESS_FAIL,COUNTER_ACCESS_SUCCESS,
   COUNTER_READDIR_SUCCESS,COUNTER_READDIR_FAIL,
   COUNTER_ROOTDATA_INITIALIZED,enum_count_getattr_length};
 enum enum_counter_rootdata{
@@ -84,7 +83,6 @@ enum enum_counter_rootdata{
   ZIP_READ_CACHE_SUCCESS,ZIP_READ_CACHE_FAIL,
   ZIP_READ_CACHE_CRC32_SUCCESS,ZIP_READ_CACHE_CRC32_FAIL,
   //
-  COUNT_RETRY_STAT,
   COUNT_RETRY_MEMCACHE,
   //
   counter_rootdata_num};
@@ -526,7 +524,7 @@ struct memcache{
   struct textbuffer *txtbuf;
   struct zippath m_zpath; /* To try find_realpath_other_root() */
   volatile off_t memcache_l,memcache_already;
-  int64_t memcache_took_mseconds, memcache_took_mseconds_in_lock;
+  int64_t memcache_took_mseconds;
   int id;
 };
 #endif // WITH_MEMCACHE

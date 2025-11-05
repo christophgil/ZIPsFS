@@ -65,6 +65,7 @@ static off_t special_file_length(const int i){
   return _special_file_length[i];
 }
 
+// SFILE_INFO
 static bool special_file_set_statbuf(struct stat *stbuf,const char *path,const int path_l){
   bool ok=false;
   {
@@ -78,7 +79,7 @@ static bool special_file_set_statbuf(struct stat *stbuf,const char *path,const i
     }
   }
   if (!ok && PATH_IS_FILE_INFO(path,path_l)){
-    stat_init(stbuf,PATH_MAX,0);
+    stat_init(stbuf, PATH_MAX,0);//_info_capacity?_info_capacity:0xFFFF,0);
     ok=true;
   }
   if (!ok && trigger_files(false,path,path_l)){

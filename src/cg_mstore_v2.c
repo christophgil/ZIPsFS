@@ -103,7 +103,7 @@ static int mstore_report_memusage_to_strg(char *strg,int max_bytes,struct mstore
 }
 
 //////////////////////////////////////////////////////////////////////////
-// MMAP with file                                                       //
+// Location of MMAP with file                                           //
 //////////////////////////////////////////////////////////////////////////
 static const char *mstore_set_base_path(const char *f){
   static char base[MAX_PATHLEN+1];
@@ -124,11 +124,21 @@ static const char *mstore_set_base_path(const char *f){
   return base;
 }
 
-//////////////////////////////////////////////////////////////////////////
-// Initialize                                                           //
-//   dir: Path of existing folder where the MMAP files will be written. //
-//   dim: Size of the MMAP files.  Will be rounded to next n*4096       //
-//////////////////////////////////////////////////////////////////////////
+
+
+
+/*******************************************************/
+/*   Initialize                                        */
+/*    name:                                            */
+/*         Used to form the names of cache files.      */
+/*                                                     */
+/*   Options  (size_and_opt):                          */
+/*       Flags starting with MSTORE_OPT_               */
+/*                                                     */
+/*  Size (size_and_opt):                               */
+/*       Size of first cache file                      */
+/*       The next file will be double                  */
+/*******************************************************/
 #define mstore_init_file(m,name,size_and_opt) _mstore_init(m,name,size_and_opt|MSTORE_OPT_MMAP_WITH_FILE)
 #define mstore_init(m,name,size_and_opt) _mstore_init(m,name,size_and_opt)
 static struct mstore *_mstore_init(struct mstore *m,const char *name, const int size_and_opt){
@@ -152,7 +162,6 @@ static struct mstore *_mstore_init(struct mstore *m,const char *name, const int 
 ////////////////////////////////////////
 // Allocate memory of number of bytes //
 ////////////////////////////////////////
-
 
 static void mstore_file(char path[PATH_MAX+1],const struct mstore *m,const int block){
   char b[9]={'*',0};
@@ -213,6 +222,7 @@ static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align){
   assert(!_MSTORE_BLOCK(m,ib));
 
   const long blockCapacity=m->bytes_per_block=NEXT_MULTIPLE(MAX(bytes,m->bytes_per_block),4096);
+  m->bytes_per_block=blockCapacity<<1; /* Growing size */
   assert(blockCapacity>0);
   if (_MSTORE_IS_MALLOC(m)){
     if (!(block=cg_malloc(_MSTORE_COUNTER_MALLOC(m),blockCapacity+_MSTORE_LEADING))) DIE("Malloc failed");

@@ -397,7 +397,7 @@ static bool _stat_direct(struct stat *stbuf,const struct strg *path, const struc
   //  if (!*rp) cg_print_stacktrace(0);
   assert(*rp);
   const int res=lstat(rp,stbuf);
-  LOCK(mutex_fhandle,inc_count_getattr(rp,res?COUNTER_STAT_FAIL:COUNTER_STAT_SUCCESS));
+  inc_count_getattr(rp,res?COUNTER_STAT_FAIL:COUNTER_STAT_SUCCESS);
   if (res){
     *stbuf=empty_stat;
     return false;
@@ -637,7 +637,7 @@ static bool readir_from_filesystem(struct directory *dir){
   //   DIR *fdopendir(int fd);
   DIRECTORY_PREAMBLE(false);
   DIR *d=opendir(rp);      IF_LOG_FLAG(LOG_OPENDIR) log_verbose(" opendir('%s') ",rp);
-  LOCK(mutex_fhandle,inc_count_getattr(rp,d?COUNTER_OPENDIR_SUCCESS:COUNTER_OPENDIR_FAIL));
+  inc_count_getattr(rp,d?COUNTER_OPENDIR_SUCCESS:COUNTER_OPENDIR_FAIL);
   if (!d){ log_errno("opendir: %s",rp); return false; }
   root_update_time(DIR_ROOT(dir),PTHREAD_ASYNC);
   struct dirent *de;
@@ -1154,7 +1154,7 @@ static int _xmp_getattr(const char *path, struct stat *stbuf){
     IF1(WITH_AUTOGEN,if (autogen_zpath_set_stat(stbuf,zpath,path,path_l)) return 0);
     err=ENOENT;
   }
-  LOCK(mutex_fhandle,inc_count_getattr(path,err?COUNTER_GETATTR_FAIL:COUNTER_GETATTR_SUCCESS));
+  inc_count_getattr(path,err?COUNTER_GETATTR_FAIL:COUNTER_GETATTR_SUCCESS);
   IF1(DEBUG_TRACK_FALSE_GETATTR_ERRORS, if (err) debug_track_false_getattr_errors(path,path_l));
   if (config_file_is_readonly(path,path_l)) stbuf->st_mode&=~(S_IWOTH|S_IWUSR|S_IWGRP); /* Does not improve performance */
   return -err;
@@ -1289,6 +1289,7 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t
   LOG_FUSE(path);
   const int res=_xmp_readdir(path,buf,filler,offset,fi);
   LOG_FUSE_RES(path,res);
+  inc_count_getattr(path,res?COUNTER_READDIR_FAIL:COUNTER_READDIR_SUCCESS);
   return res;
 }
 
@@ -1477,7 +1478,7 @@ static struct zip *my_zip_open(const char *orig){
     if (zip){
       COUNTER1_INC(COUNT_ZIP_OPEN);
     }else warning_zip(orig,0,"zip_open failed");
-    LOCK(mutex_fhandle,inc_count_getattr(orig,zip?COUNTER_ZIPOPEN_SUCCESS:COUNTER_ZIPOPEN_FAIL));
+    inc_count_getattr(orig,zip?COUNTER_ZIPOPEN_SUCCESS:COUNTER_ZIPOPEN_FAIL);
     if (zip) break;
     warning(WARN_OPEN|WARN_FLAG_ERRNO,orig,"err=%d",err);usleep(1000);
   }

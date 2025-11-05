@@ -704,6 +704,11 @@ they are treated specially. They are used only when they have successfully run <
 <details><summary>Limitations and Bugs</summary>
 ## LIMITATIONS
 
+
+### Software
+
+Seems not to work for Thermo raw files in Fragpipe - under investigation
+
 ### Hard Links
 
 Hard links are not supported, though symlinks are fully functional.
