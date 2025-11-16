@@ -277,6 +277,9 @@ The utility curl is required.\n\
 Examples: \n");
     SGMT_MNT();textbuffer_add_segment_const(b,DIR_INTERNET"/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE\n");
     SGMT_MNT();textbuffer_add_segment_const(b,DIR_INTERNET"/https,,,ftp.uniprot.org,pub,databases,uniprot,README\n");
+    textbuffer_add_segment_const(b,"The subfolder /gz/ allows decompression on download. Note the trailing .gz in the following example:\n\n");
+    SGMT_MNT();textbuffer_add_segment_const(b,DIR_INTERNET"/gz/https,,,files.rcsb.org,download,1SBT.pdb\n");
+    textbuffer_add_segment_const(b,"Here the file size will initially be wrong because the HTTP header is lacking the Content-Length field.\n");
     break;
 #endif //WITH_INTERNET_DOWNLOAD
 #if WITH_AUTOGEN

@@ -215,7 +215,12 @@ print_linker_option_execinfo(){
     return 1
 }
 find_bugs(){
-    grep -n  '^ *[a-z].*) *LOCK_N(' $(find $DIR -name '*.c') && echo 'Error: LOCK_N(...) requires curly braces' && exit 1
+    local cc=$(find $DIR -name '*.c')
+
+    grep -n  '^ *[a-z].*) *LOCK_N(' $cc && echo 'Error: LOCK_N(...) requires curly braces' && exit 1
+    local hh=$(find $DIR -name '*.h')
+    grep -F -w -e 'strchrnul' -e 'group_member' -e 'strcasestr' -e 'memmem'  $cc $hh && echo 'Not supported on all platforms' && exit 1
+
 }
 ######################
 ### main function  ###

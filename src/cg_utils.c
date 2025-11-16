@@ -348,12 +348,14 @@ static int cg_find_suffix(const int opt,const char *s, const int s_l,const char 
 
 
 
-static int cg_last_slash(const char *path){
-  RLOOP(i,cg_strlen(path)){
+static int cg_last_slash_l(const char *path,const int path_l ){
+  RLOOP(i,path_l){
     if (path[i]=='/') return i;
   }
   return -1;
 }
+#define cg_last_slash(path) cg_last_slash_l(path,cg_strlen(path))
+
 static int cg_leading_slashes(const char *s){
   int c=-1;
   if (s) while(s[++c]=='/');
@@ -432,7 +434,6 @@ static int cg_strsplit(int opt_and_sep, const char *s, const int s_l, const char
   if (tokens) tokens[count]=NULL;
   return count;
 }
-
 
 static const char *rm_pfx_us(const char *s){
   const char *us=!s?NULL:strchr(s,'_');
@@ -1029,10 +1030,6 @@ static bool cg_log_waitpid_status(FILE *f,const unsigned int status,const char *
   }
   return logged;
 }
-
-
-
-
 
 #define cg_log_waitpid(...) _cg_log_waitpid(__VA_ARGS__,__func__)
 static int _cg_log_waitpid(const int pid, const int status, const char *err,const bool append, char const * const cmd[],char const * const env[], const char *func){

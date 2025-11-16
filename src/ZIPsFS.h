@@ -58,7 +58,7 @@
 #define DIRNAME_INTERNET "n"
 #define DIR_INTERNET DIR_ZIPsFS"/"DIRNAME_INTERNET
 #define DIR_INTERNET_L (sizeof(DIR_INTERNET)-1)
-
+#define DIR_INTERNET_GZ_L (DIR_INTERNET_L+3)
 
 #define FILENAME_SET_ATIME "ZIPsFS_set_file_access_time"
 

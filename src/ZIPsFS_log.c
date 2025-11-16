@@ -312,7 +312,7 @@ static int counts_by_filetype(int n){
   if (headerDone){
     PRINTINFO("</TABLE>\n");
     PRINT_TABLE_DESCRIPTION();
-    PRINTINFO("<BR>Note: The goal of the cache is to reduce the number of these calls.<BR>\n");
+    PRINTINFO("<BR>Note: The transient cache (WITH_TRANSIENT_ZIPENTRY_CACHES) aims at reduction of calls to the file API.<BR>\n");
   }
   return n;
 }
@@ -384,7 +384,7 @@ static int log_print_roots(int n){ /* n==0 for UNIX console with UTF8 else for H
   static const char *info="Explain table:\n"
     "    Retained directory: Without trailing slash in provided path, the last path-component will be part of the virtual path.\n"
     "                        This is consistent with the trailing slash semantics of UNIX tools like rsync, scp and cp.\n\n"
-    "    Feature flags: W=Writable (First path)   R=Remote (Path starts with two slashes)     T=Supports timeout (Path starts with three slashes)";
+    "    Feature flags: W=Writable (First path)   R=Remote (Path starts with two slashes)     T=Supports timeout (Path starts with three slashes and activated WITH_TIMEOUT_xxxx macros)";
   if (n){ PRINTINFO("%s   B=Blocked (frozen)\n</PRE>",info);} else fprintf(stderr,ANSI_FG_GRAY"%s"ANSI_RESET"\n\n",info);
   return n;
 #undef C
@@ -401,7 +401,7 @@ static int print_proc_status(int n,char *filter,int *val){
   FILE* file=fopen("/proc/self/status","r");
   while (fscanf(file,"%1023s",buffer)==1){
     for(char *f=filter;*f;f++){
-      const char *t=strchrnul(f,'|');
+      const char *t=cg_strchrnul(f,'|');
       if ((f==filter || f[-1]=='|') && !strncmp(buffer,f,t-f)){
         fscanf(file," %d",val);
         if (n>0) PRINTINFO("%s %'d kB\n",buffer,*val);
@@ -460,8 +460,7 @@ static int log_memusage_ht(int n,const bool html){
   }
   PRINTINFO("\n%sMemory storages%s\n",html?"<B>":ANSI_BOLD,html?"</B>":ANSI_RESET);
   n+=mstore_report_memusage_to_strg(_info+n,_info_capacity-n, &mstore_persistent);
-  PRINTINFO("\n\n%s",END_PRE(html));
-  PRINTINFO("\n");
+  PRINTINFO("\n\n%s\n",END_PRE(html));
   return n;
 #undef M
 }
@@ -495,7 +494,7 @@ static int log_malloc(int n,const bool html){
     if (x||y){
       if (i<COUNT_PAIRS_END){
         const char *mark=(x==y||x-y==1&&(i==COUNT_MALLOC_MEMCACHE_TXTBUF||i==COUNT_FHANDLE_CONSTRUCT||i==COUNTm_FHANDLE_ARRAY_MALLOC))?" ":diffMarker;
-        if (!header++)  PRINTINFO("\n%s%44s %14s %14s %s %20s %20s %s %s\n",html?"<u>":ANSI_UNDERLINE,"ID", "Count","Count release","&#916;","Bytes","Bytes released","&#916;",html?"</u>":ANSI_RESET);
+        if (!header++) PRINTINFO("\n%s%44s %14s %14s %s %20s %20s %s %s\n",html?"<u>":ANSI_UNDERLINE,"ID", "Count","Count release","&#916;","Bytes","Bytes released","&#916;",html?"</u>":ANSI_RESET);
         PRINTINFO("%44s %'14ld %'14ld %s %'20ld %'20ld %s\n", COUNT_S[i], x,y,mark,xB,yB,xB==yB?" ":diffMarker);
       }else{
         if (!header++) PRINTINFO("\n%s%44s %20s%s\n",html?"<u>":ANSI_UNDERLINE,"ID", "Count",html?"</u>":ANSI_RESET);

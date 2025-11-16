@@ -157,8 +157,8 @@ static struct rootdata _root[ROOTS]={0}, *_root_writable=NULL;
 #if WITH_INTERNET_DOWNLOAD
 #include "ZIPsFS_internet.c"
 #else
-#define IS_DIR_INTERNET(vp,vp_l) false
-#define IN_DIR_INTERNET(vp,vp_l) false
+#define net_which_dir_compression(vp,vp_l) 0
+#define net_which_compression(vp,vp_l) 0
 #endif
 
 
@@ -775,8 +775,8 @@ static bool find_realpath_any_root(const int opt,struct zippath *zpath,const str
   zpath->virtualpath=virtualpath;/*Restore*/
   zpath->virtualpath_l=vp_l;
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES, if (!onlyThisRoot||found){ LOCK(mutex_fhandle,transient_cache_store(found?zpath:NULL,vp,vp_l);}));
-  if (!found && !path_starts_autogen && !onlyThisRoot && !config_not_report_stat_error(vp,vp_l)){
-    warning(WARN_STAT|WARN_FLAG_ONCE_PER_PATH,vp,"Not found");
+  if (!found && !path_starts_autogen && !onlyThisRoot && !config_not_report_stat_error(vp,vp_l) IF1(WITH_INTERNET_DOWNLOAD, && !net_is_internetfile(vp,vp_l))){
+      warning(WARN_STAT|WARN_FLAG_ONCE_PER_PATH,vp,"Not found");
   }
   return found;
 } /*find_realpath_any_root*/
@@ -1104,7 +1104,7 @@ static void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_c
   IF0(DO_LIBFUSE_CACHE_STAT,cfg->entry_timeout=cfg->attr_timeout=2;  cfg->negative_timeout=10);
 #endif
   log_verbose(GREEN_SUCCESS"FUSE filesystem initialized at '%s'\n",_mnt);
-    if (*_mkSymlinkAfterStart){
+  if (*_mkSymlinkAfterStart){
     struct stat stbuf;
     if (lstat(_mkSymlinkAfterStart,&stbuf)) perror(_mkSymlinkAfterStart);
     if (((S_IFREG|S_IFDIR)&stbuf.st_mode) && !(S_IFLNK&stbuf.st_mode)){
@@ -1136,20 +1136,22 @@ static int _xmp_getattr(const char *path, struct stat *stbuf){
   NORMALIZE_EMPTY_PATH_L(path);
   IF1(WITH_SPECIAL_FILE,if (special_file_set_statbuf(stbuf,path,path_l)) return 0);
   if (path_l==DIR_ZIPsFS_L&&!strcmp(path,DIR_ZIPsFS)
-      || IS_DIR_INTERNET(path,path_l)
+      || net_which_dir_compression(path,path_l)
       || !path_l){
     stat_init(stbuf,-1,NULL);
     stbuf->st_ino=inode_from_virtualpath(path,path_l);
     time(&stbuf->st_mtime);
     return 0;
   }
-  IF1(WITH_INTERNET_DOWNLOAD, if (net_getattr(stbuf,path,path_l)) return 0);
   IF1(WITH_CCODE, if (c_getattr(stbuf,path,path_l)) return 0);
   int err=0;
   bool found;FIND_REALPATH(path);
+
+  if (!found) log_debug_now("!!!!!!!!!! found %s",path);
+
   if (found){
     *stbuf=zpath->stat_vp;
-  }else{
+  }else  IF1(WITH_INTERNET_DOWNLOAD, if (net_getattr(stbuf,path,path_l)) return 0; else){
     IF1(WITH_AUTOGEN,if (autogen_zpath_set_stat(stbuf,zpath,path,path_l)) return 0);
     err=ENOENT;
   }
@@ -1211,13 +1213,13 @@ static int _xmp_open(const char *path, struct fuse_file_info *fi){
   ASSERT(fi!=NULL);
   if ((fi->flags&O_WRONLY) || ((fi->flags&(O_RDWR|O_CREAT))==(O_RDWR|O_CREAT))) return create_or_open(path,0775,fi);
   NEW_ZIPPATH(path);
-  IF1(WITH_INTERNET_DOWNLOAD,net_maybe_download(zpath));
   int64_t handle=0;
   IF1(WITH_SPECIAL_FILE, handle=special_file_fuse_open(zpath));
   IF1(WITH_CCODE, if (!handle) handle=c_fuse_open(zpath));
   bool found=handle>0;
   if (!found){
     found=find_realpath_any_root(0,zpath,NULL);
+    IF1(WITH_INTERNET_DOWNLOAD, if (!found) found=net_maybe_download(zpath));
     IF1(WITH_AUTOGEN, if (found && _realpath_autogen && (zpath->flags&ZP_STARTS_AUTOGEN) && autogen_remove_if_not_up_to_date(zpath)) found=false);
     if (found){
       if (ZPATH_IS_ZIP() IF1(WITH_MEMCACHE,||zpath_advise_cache_in_ram(zpath))){
@@ -1327,7 +1329,18 @@ static int _xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_
     if (IS_DIR_AUTOGEN(path,VP_L())) A(SPECIAL_FILES[SFILE_AUTOGEN_README]);
   }
 #endif //WITH_AUTOGEN
-  IF1(WITH_INTERNET_DOWNLOAD, if (IS_DIR_INTERNET(path,VP_L())){    C(false,true); A(SPECIAL_FILES[SFILE_INTERNET_README]);});
+#if WITH_INTERNET_DOWNLOAD
+  const int dirid=net_which_dir_compression(path,VP_L());
+  if (dirid){
+    C(false,true);
+    if (dirid==INTERNET_COMPRESSION_NONE){
+      A("gz");
+      A("bz2");
+      A(SPECIAL_FILES[SFILE_INTERNET_README]);
+    }
+  }
+#endif //WITH_INTERNET_DOWNLOAD
+
   IF1(WITH_CCODE, c_readdir(zpath,buf,filler,NULL));
 #undef C
   if (opt&FILLDIR_IS_DIR_ZIPsFS){ /* Childs of folder ZIPsFS */
@@ -1376,7 +1389,7 @@ static int xmp_create(const char *path, mode_t mode,struct fuse_file_info *fi){ 
 static int xmp_write(const char *path, const char *buf, size_t size,off_t offset, struct fuse_file_info *fi){ // cppcheck-suppress [constParameterCallback]
   NORMALIZE_EMPTY_PATH_L(path); // cppcheck-suppress unreadVariable
   LOG_FUSE(path);
-  if (!_root_writable || IN_DIR_INTERNET(path,path_l)) return -EACCES;
+  if (!_root_writable || net_which_compression(path,path_l)) return -EACCES;
   int res=0;
   long fd;
   errno=0;

@@ -141,6 +141,32 @@ Note that \[lq]//:\[rq] in the URL is replaced by commas.
 less  \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
 \f[R]
 .fi
+Decompress on download
+.PP
+With the virtual folder \f[V]/ZIPsFS/n/gz\f[R], a gz file is download
+and decompressed.
+In the following case the URL is
+https://files.rcsb.org/download/1SBT.pdb.gz (\f[V].gz\f[R] appended).
+.IP
+.nf
+\f[C]
+head  \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/gz/https,,,files.rcsb.org,download,1SBT.pdb
+\f[R]
+.fi
+.PP
+To download without decompression, just use folder \f[V]/ZIPsFS/n/\f[R].
+.IP
+.nf
+\f[C]
+gunzip -c  \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/https,,,files.rcsb.org,download,1SBT.pdb.gz
+\f[R]
+.fi
+.PP
+In this case, the HTTP header does not have a \f[V]Content-Length\f[R]
+field.
+Bevore the file is downloaded, its file size is not known.
+ZIPsFS will display a wrong file size which might be a problem for some
+software.
 .SH DESCRIPTION
 .SS ZIPsFS is a Union / overlay file system
 .PP

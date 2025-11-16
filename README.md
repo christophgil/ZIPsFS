@@ -99,6 +99,24 @@ Note that "//:" in the URL is replaced by commas.
 
     less  ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
 
+<details><summary>Decompress on download</summary>
+
+
+
+With the virtual folder ``/ZIPsFS/n/gz``, a gz file is download and decompressed. In the following
+case the URL is https://files.rcsb.org/download/1SBT.pdb.gz (``.gz`` appended).
+
+    head  ~/test/ZIPsFS/mnt/ZIPsFS/n/gz/https,,,files.rcsb.org,download,1SBT.pdb
+
+To download without decompression, just use folder ``/ZIPsFS/n/``.
+
+    gunzip -c  ~/test/ZIPsFS/mnt/ZIPsFS/n/https,,,files.rcsb.org,download,1SBT.pdb.gz
+
+In this case, the HTTP header does not have a ``Content-Length`` field. Bevore the file is downloaded, its file size is not known. ZIPsFS will display a
+wrong file size which might be a problem for some software.
+
+</details>
+
 
 # DESCRIPTION
 

@@ -19,7 +19,8 @@
   }
 */
 
-static int cg_group_member(gid_t gid) {
+
+static int cg_group_member(gid_t gid){
 #ifdef __APPLE__
   int groups[NGROUPS_MAX];
 #else
@@ -60,18 +61,18 @@ static void *cg_memmem(const void *haystack, const size_t hlen, const void *need
 #if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
 int main(int argc, char *argv[]){
   if (1){
-    printf("strcasestr %s  %s   ---> %s \n",argv[1],argv[2], cg_strcasestr(argv[1],argv[2]));
+    printf("cg_strcasestr %s  %s   ---> %s \n",argv[1],argv[2], cg_strcasestr(argv[1],argv[2]));
     return 0;
   }
 
   if (0){
-    printf("strcasecmp %d \n",strcasecmp(argv[1],argv[2]));
+    printf("cg_strcasecmp %d \n",strcasecmp(argv[1],argv[2]));
     return 0;
   }
   {
     int g=atoi(argv[1]);
 
-    printf("group_member %d  ... \n",g);
+    printf("cg_group_member %d  ... \n",g);
     puts(cg_group_member(g)?"Yes":"No");
     return 0;
   }
