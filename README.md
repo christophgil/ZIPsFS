@@ -448,9 +448,7 @@ work correctly.
 See ZIPsFS.compile.sh for activation of sanitizers.
 </details>
 <details><summary>Improve performance  caching file content and meta data</summary>
-x
-
-## File content CACHE
+<H2>File content cache</H2>
 
 
 ZIPsFS optionally supports caching specific files and ZIP entries entirely in RAM, allowing data segments to
