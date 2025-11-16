@@ -95,7 +95,7 @@ Make sure the UNIX tool curl is installed.
 
     curl --version
 
-Note that "//:" in the URL is replaced by commas.
+Note that "//:" and all slashes in the URL are replaced by commas.
 
     less  ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
 
@@ -104,15 +104,15 @@ Note that "//:" in the URL is replaced by commas.
 
 
 With the virtual folder ``/ZIPsFS/n/gz``, a gz file is download and decompressed. In the following
-case the URL is https://files.rcsb.org/download/1SBT.pdb.gz (``.gz`` appended).
+case the URL is https://files.rcsb.org/download/1SBT.pdb.gz. Not that ``.gz`` is  appended to the URL.
 
     head  ~/test/ZIPsFS/mnt/ZIPsFS/n/gz/https,,,files.rcsb.org,download,1SBT.pdb
 
-To download without decompression, just use folder ``/ZIPsFS/n/``.
+To download without decompression, just use the default folder ``/ZIPsFS/n/``.
 
     gunzip -c  ~/test/ZIPsFS/mnt/ZIPsFS/n/https,,,files.rcsb.org,download,1SBT.pdb.gz
 
-In this case, the HTTP header does not have a ``Content-Length`` field. Bevore the file is downloaded, its file size is not known. ZIPsFS will display a
+Here,  the HTTP header does not have a ``Content-Length`` field. Bevore the file is downloaded, its file size is not known. ZIPsFS will display a
 wrong file size which might be a problem for some software.
 
 </details>
@@ -159,7 +159,7 @@ The default configuration includes a few exceptions tailored to specific use cas
 
     These are contained with those of other entries in the file listing.
     To get the full list of files,  all ZIP files need to be inspected.
-    This is time consuming and performed in the background. Consequently, the file listing will be incomplete when obtained for the first time.
+    This is time consuming and performed in the background. Consequently, the file listing will be incomplete when requested for the first time.
     Only after some seconds, the file listing will be presented properly.
 
 ## ZIPsFS Options
@@ -229,8 +229,6 @@ If ZIPsFS crashes, please send the stack-trace together with the source code you
 
 
 <details><summary>Configuration</summary>
-## ZIPsFS Configuration
-
 ZIPsFS can be customized:
 
  - optional features can be (de)-activated with  preprocessor macros "WITH_SOME_FEATURE"  which take the values 0 or 1.
@@ -274,8 +272,6 @@ Include into */etc/samba/smb.conf*:
     follow symlinks = yes
 </details>
 <details><summary>Generated (synthetic) files: Automatic file conversions, Accessing web resources as regular files</summary>
-## Accessing internet files
-
 Computations often require files from public repositories.
 Files from the internet (http, ftp, https) can be accessed as files using the URL as file name. ZIPsFS takes care of downloading and updating.
 They are immutable and cannot be modified  unintentionally.
@@ -371,8 +367,6 @@ data and Fragpipe will fail. When however, at least one byte of the mzML files i
 conversion process before Fragpipe is started, computation will succeeds.
 </details>
 <details><summary>Logging</summary>
-## Logs
-
 ZIPsFS typically runs as a foreground process.  To keep it active and monitor its output, it is
 recommended to use a persistent terminal multiplexer such as tmux. This enables continuous
 observation of all messages and facilitates long-running sessions.
@@ -398,8 +392,6 @@ For example:
 This file provides real-time information about the system’s current state.
 </details>
 <details><summary>Fault management. Timouts for remote upstream file systems. Duplicated remote trees</summary>
-# Fault Management for Remote File Access
-
 Accessing remote files inherently carries a higher risk of failure. Requests may either:
 
  - Fail immediately with an error code, or
@@ -641,12 +633,11 @@ File attributes need to be cached.
 
 </details>
 <details><summary>Implementation</summary>
-# Dependencies
+ZIPsFS is written in standard C for UNIX and Linux computer systems.
 
- - libfuse
- - libzip
- - Gnu-C
- - UNIX like OS.
+# Dependencies
+- libfuse
+- libzip
 
 For OS other than LINUX, some minor adaptions will be required.
 
@@ -720,7 +711,7 @@ When paths of roots  are given with leading double slash <b>//</b> (according to
 they are treated specially. They are used only when they have successfully run <i>fsstat()<i> recently in <i>infloop_statqueue()</i>.
 </details>
 <details><summary>Limitations and Bugs</summary>
-## LIMITATIONS
+There are some  Limitations:
 
 
 ### Software
@@ -745,10 +736,6 @@ Simultaneous reading and writing of a file using the same file descriptor will o
 correctly for files stored in the writable source.
 </details>
 <details><summary>See also related sites</summary>
-SEE ALSO
-========
-
-
 - https://github.com/openscopeproject/ZipROFS
 - https://github.com/google/fuse-archive
 - https://bitbucket.org/agalanin/fuse-zip/src

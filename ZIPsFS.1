@@ -134,7 +134,8 @@ curl --version
 \f[R]
 .fi
 .PP
-Note that \[lq]//:\[rq] in the URL is replaced by commas.
+Note that \[lq]//:\[rq] and all slashes in the URL are replaced by
+commas.
 .IP
 .nf
 \f[C]
@@ -146,7 +147,8 @@ Decompress on download
 With the virtual folder \f[V]/ZIPsFS/n/gz\f[R], a gz file is download
 and decompressed.
 In the following case the URL is
-https://files.rcsb.org/download/1SBT.pdb.gz (\f[V].gz\f[R] appended).
+https://files.rcsb.org/download/1SBT.pdb.gz.
+Not that \f[V].gz\f[R] is appended to the URL.
 .IP
 .nf
 \f[C]
@@ -154,7 +156,8 @@ head  \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/gz/https,,,files.rcsb.org,download,1SBT.pdb
 \f[R]
 .fi
 .PP
-To download without decompression, just use folder \f[V]/ZIPsFS/n/\f[R].
+To download without decompression, just use the default folder
+\f[V]/ZIPsFS/n/\f[R].
 .IP
 .nf
 \f[C]
@@ -162,8 +165,7 @@ gunzip -c  \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/https,,,files.rcsb.org,download,1SBT.p
 \f[R]
 .fi
 .PP
-In this case, the HTTP header does not have a \f[V]Content-Length\f[R]
-field.
+Here, the HTTP header does not have a \f[V]Content-Length\f[R] field.
 Bevore the file is downloaded, its file size is not known.
 ZIPsFS will display a wrong file size which might be a problem for some
 software.
@@ -225,7 +227,7 @@ consist of the following files
 These are contained with those of other entries in the file listing.
 To get the full list of files, all ZIP files need to be inspected.
 This is time consuming and performed in the background.
-Consequently, the file listing will be incomplete when obtained for the
+Consequently, the file listing will be incomplete when requested for the
 first time.
 Only after some seconds, the file listing will be presented properly.
 .RE
