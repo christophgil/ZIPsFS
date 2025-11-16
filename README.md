@@ -448,7 +448,8 @@ work correctly.
 See ZIPsFS.compile.sh for activation of sanitizers.
 </details>
 <details><summary>Improve performance  caching file content and meta data</summary>
-&nbsp;
+x
+
 ## File content CACHE
 
 
