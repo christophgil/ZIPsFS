@@ -449,7 +449,7 @@ See ZIPsFS.compile.sh for activation of sanitizers.
 </details>
 <details><summary>Improve performance  caching file content and meta data</summary>
 &nbsp;
-## File content cache
+## File content CACHE
 
 
 ZIPsFS optionally supports caching specific files and ZIP entries entirely in RAM, allowing data segments to
