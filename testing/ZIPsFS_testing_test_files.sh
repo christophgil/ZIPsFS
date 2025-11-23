@@ -4,19 +4,19 @@ export ANSI_FG_GREEN=$'\e[32m' ANSI_FG_RED=$'\e[31m' ANSI_FG_MAGENTA=$'\e[35m' A
 export ANSI_INVERSE=$'\e[7m' ANSI_BOLD=$'\e[1m' ANSI_UNDERLINE=$'\e[4m' ANSI_RESET=$'\e[0m'
 
 
-
+readonly MODI=/home/_cache/$USER/ZIPsFS/modifications/
 run_ZIPsFS(){
     local root1=~/tmp/ZIPsFS/root1/
     local root2=/home/_cache/x/ZIPsFS/root/
 
-    local modi=/home/_cache/$USER/ZIPsFS/modifications/
+
     local mnt=~/tmp/ZIPsFS///$MNT/
     rm ~/.ZIPsFS/_home_cgille_tmp_ZIPsFS_mnt/cachedir/*.cache
     mountpoint $mnt && umount $mnt
     mountpoint $mnt && umount -l $mnt
     mountpoint $mnt 2>&1 |grep 'connected' &&  sudo umount $mnt
     mountpoint $mnt && return
-    ~/git_projects/ZIPsFS/ZIPsFS  "$@" -k -l 33GB  -c rule  $modi $root1 $root2  /s-mcpb-ms03/fulnas1/1/ : -o 'allow_other,attr_timeout=13,entry_timeout=13,negative_timeout=13,ac_attr_timeout=13'    $mnt
+    ~/git_projects/ZIPsFS/ZIPsFS  "$@" -k -l 33GB  -c rule  $MODI $root1 $root2  /s-mcpb-ms03/fulnas1/1/ : -o 'allow_other,attr_timeout=13,entry_timeout=13,negative_timeout=13,ac_attr_timeout=13'    $mnt
 }
 
 
@@ -124,9 +124,9 @@ local mnt=${1:-mnt}
 
 
     echo "${ANSI_INVERSE}Test by curl$ANSI_RESET"
-    test_pattern 2 ' warranties '  $MNT/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README
-    test_pattern 2 ' License '     $MNT/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
-
+        test_pattern 2 ' warranties '  $MNT/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README
+        test_pattern 2 ' License '     $MNT/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
+        test_pattern 2 'MASTER '       $MNT/ZIPsFS/n/gz/https,,,files.rcsb.org,download,1SBT.pdb
 
     read -r -p Enter
     test_zip_inline
@@ -176,5 +176,9 @@ shift $((OPTIND-1))
 if ((DO_RUN_ZIPSFS)); then
     run_ZIPsFS
 else
+    rm -r -f "$MODI/ZIPsFS/a"
+    rm -r -f "$MODI/ZIPsFS/n"
+    main "$@"
+    echo "${ANSI_INVERSE}Second Pass ${ANSI_RESET}"
     main "$@"
 fi

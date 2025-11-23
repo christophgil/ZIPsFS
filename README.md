@@ -181,18 +181,18 @@ This is discussed in section Configuration.
 Policy when ZIP entries and file content is cached in RAM.
 
 
-|           |                                                                                    |
-|:---------:|------------------------------------------------------------------------------------|
-|   NEVER   | ZIP entries are never cached, even not in case of backward seek.                   |
-|           |                                                                                    |
-|   SEEK    | ZIP entries are cached when the file position jumps backward. This is the default  |
-|           |                                                                                    |
-|   RULE    | ZIP entries are cached according to customizable rules                             |
-|           |                                                                                    |
-|COMPRESSED | All compressed ZIP entries are cached.                                             |
-|           |                                                                                    |
-|  ALWAYS   | All ZIP entries are cached.                                                        |
-|           |                                                                                    |
+|           |                                                                                       |
+|:---------:|---------------------------------------------------------------------------------------|
+|   NEVER   | ZIP entries are never cached, even not in case of backward seek.                      |
+|           |                                                                                       |
+|   SEEK    | ZIP entries are cached when the file position jumps backward.                         |
+|           |                                                                                       |
+|   RULE    | ZIP entries are cached according to customizable rules or on backward seed. (DEFAULT) |
+|           |                                                                                       |
+|COMPRESSED | All compressed ZIP entries are cached.                                                |
+|           |                                                                                       |
+|  ALWAYS   | All ZIP entries are cached.                                                           |
+|           |                                                                                       |
 
 **-l  *Maximum memory for caching ZIP-entries in the RAM***
 

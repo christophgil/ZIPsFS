@@ -100,7 +100,7 @@ static pid_t _pid;
 #endif //WITH_CCODE
 static char _self_exe[PATH_MAX+1];//,static char _initial_cwd[PATH_MAX+1];
 static int _fhandle_n=0,_mnt_l=0;
-IF1(WITH_MEMCACHE,static enum enum_when_memcache_zip _memcache_policy=MEMCACHE_SEEK);
+IF1(WITH_MEMCACHE,static enum enum_when_memcache_zip _memcache_policy=MEMCACHE_RULE);
 static char _mkSymlinkAfterStart[MAX_PATHLEN+1]={0},_mnt[PATH_MAX+1];
 static struct ht *ht_set_id(const int id,struct ht *ht){
 #if WITH_DEBUG_MALLOC

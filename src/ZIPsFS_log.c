@@ -7,6 +7,21 @@
 /////////////////////////////////////////////////////////////////////////////////
 /// The file _log_flags contains a decimal number specifying what is logged.  ///
 /////////////////////////////////////////////////////////////////////////////////
+
+#if WITH_MEMCACHE
+static int _info_capacity=0;
+static char *_info=NULL;
+static char *_info_sprint_address(const int n){
+  return _info && n>=0 && _info_capacity>n?_info+n:NULL;
+}
+static int _info_sprint_max(const int n){
+  return _info && n>=0 && _info_capacity>n?_info_capacity-n:0;
+}
+#else
+#define _info_sprint_max(n) 0
+#define _info_sprint_address(n) NULL
+#endif //WITH_MEMCACHE
+
 #define PRINTINFO(...)   n+=snprintf(_info_sprint_address(n),_info_sprint_max(n),__VA_ARGS__)
 #if IS_CHECKING_CODE
 #define R(cond,title,descr,format,...) printf(format,__VA_ARGS__)
@@ -187,22 +202,9 @@ static void log_fh(const char *title,const long fh){
   cg_path_for_fd(title,p,fh);
   log_msg("%s  fh: %ld %s \n",title?title:"", fh,p);
 }
-static int _info_capacity=0;
-static char *_info=NULL;
 
 
 
-#if WITH_MEMCACHE
-static char *_info_sprint_address(const int n){
-  return _info && n>=0 && _info_capacity>n?_info+n:NULL;
-}
-static int _info_sprint_max(const int n){
-  return _info && n>=0 && _info_capacity>n?_info_capacity-n:0;
-}
-#else
-#define _info_sprint_max(n) 0
-#define _info_sprint_address(n) NULL
-#endif //WITH_MEMCACHE
 
 static bool isKnownExt(const char *path, int len){
   static int index_not_needed;

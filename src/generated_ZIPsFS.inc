@@ -256,6 +256,8 @@ static int transient_cache_find_realpath(const int opt, struct zippath *zpath, c
 static void transient_cache_store(const struct zippath *zpath, const char *vp,const int vp_l);
 static void transient_cache_destroy(struct fHandle *d);
 static void transient_cache_activate(struct fHandle *d);
+static char *_info_sprint_address(const int n);
+static int _info_sprint_max(const int n);
 static int append_description(const char *title, const char *descr, char *describe, const int max);
 static int print_table_description(int n,char *txt, const int txt_max, const int txt_l);
 static void log_flags_update();
@@ -268,8 +270,6 @@ static void fhandle_counter_inc( struct fHandle* d, enum enum_counter_rootdata f
 static void rootdata_counter_inc(const char *path, enum enum_counter_rootdata f, struct rootdata* r);
 static void log_path(const char *f,const char *path);
 static void log_fh(const char *title,const long fh);
-static char *_info_sprint_address(const int n);
-static int _info_sprint_max(const int n);
 static bool isKnownExt(const char *path, int len);
 static int counts_by_filetype_by_root(int n);
 static int _counts_by_filetype_r(int n,struct rootdata *r, int *count_explain);

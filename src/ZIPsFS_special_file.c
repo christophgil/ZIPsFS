@@ -152,11 +152,10 @@ static bool make_info(const int flags){
   int l;
   while(true){
     l=print_all_info(flags);
-    //log_verbose("_info_capacity: %d l: %d",_info_capacity,l);
+    log_verbose("_info_capacity: %d l: %d",_info_capacity,l);
     if (_info_capacity>l) break;
-    char *info=_info;
-    if (!(_info=realloc(_info,_info_capacity=l+8888))){
-      free_untracked(info);
+    free_untracked(_info);
+    if (!(_info=malloc_untracked(_info_capacity=l+8888))){
       warning(WARN_MALLOC|WARN_FLAG_EXIT,SPECIAL_FILES[SFILE_INFO],"realloc failed.\n");
       return false;
     }

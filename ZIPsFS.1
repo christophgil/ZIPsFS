@@ -246,7 +246,7 @@ Policy when ZIP entries and file content is cached in RAM.
 .PP
 .TS
 tab(@);
-cw(8.1n) lw(61.9n).
+cw(7.9n) lw(62.1n).
 T{
 NEVER
 T}@T{
@@ -259,7 +259,6 @@ T{
 SEEK
 T}@T{
 ZIP entries are cached when the file position jumps backward.
-This is the default
 T}
 T{
 T}@T{
@@ -267,7 +266,9 @@ T}
 T{
 RULE
 T}@T{
-ZIP entries are cached according to customizable rules
+ZIP entries are cached according to customizable rules or on backward
+seed.
+(DEFAULT)
 T}
 T{
 T}@T{
