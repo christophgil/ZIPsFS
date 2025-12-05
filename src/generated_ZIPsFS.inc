@@ -440,8 +440,8 @@ static int virtual_dirpath_to_zipfile(const char *vp, const int vp_l,int *shorte
 static bool readdir_from_cache_zip_or_filesystem(struct directory *dir);
 static bool readdir_from_zip(struct directory *dir);
 static bool readir_from_filesystem(struct directory *dir);
-static bool test_realpath(struct zippath *zpath, struct rootdata *r);
-static bool test_realpath_or_reset(struct zippath *zpath, struct rootdata *r);
+static bool test_realpath(const bool fst_root_try_preload, struct zippath *zpath, struct rootdata *r);
+static bool test_realpath_or_reset(const bool fst_root_try_preload, struct zippath *zpath, struct rootdata *r);
 static bool find_realpath_for_root(struct zippath *zpath,struct rootdata *r);
 static long search_file_which_roots(const char *vp,const int vp_l,const bool path_starts_with_autogen);
 static bool find_realpath_roots_by_mask(struct zippath *zpath,const long roots);

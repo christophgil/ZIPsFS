@@ -55,6 +55,8 @@
 #define DIR_PRELOADFILEDISK_R  DIR_ZIPsFS"/lr"
 #define DIR_PRELOADFILEDISK_RC DIR_ZIPsFS"/lrc"
 #define DIR_PRELOADFILEDISK_RZ DIR_ZIPsFS"/lrz"
+#define DIR_PRELOADFILEDISK_PRELOAD  DIR_ZIPsFS"/preload"
+
 #define DIR_AUTOGEN            DIR_ZIPsFS"/a"
 #define DIR_AUTOGEN_L          (sizeof(DIR_AUTOGEN)-1)
 #define DIR_INTERNET           DIR_ZIPsFS"/n"

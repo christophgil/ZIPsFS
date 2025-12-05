@@ -50,9 +50,9 @@ static const char *preloadfiledisk_type(int *prefix_l, const char *vp, const int
 
 static bool preloadfiledisk_up_to_date(struct fHandle *d, char dst[MAX_PATHLEN+1], struct stat *st){
   if (!d) return false;
-  int cut;  preloadfiledisk_type(&cut,D_VP(d),D_VP_L(d));  assert(cut>0);
-  stpcpy(stpcpy(stpcpy(dst,_root_writable->rootpath),DIR_PRELOADFILEDISK_R),cut+D_VP(d));
-  //DIE_DEBUG_NOW("dst=%s",dst);
+  int cut;  preloadfiledisk_type(&cut,D_VP(d),D_VP_L(d));
+  stpcpy(stpcpy(stpcpy(dst,_root_writable->rootpath),d->zpath.root->preload? DIR_PRELOADFILEDISK_PRELOAD:DIR_PRELOADFILEDISK_R),cut+D_VP(d));
+  DIE_DEBUG_NOW("dst=%s",dst);
   bool ok=false;
   if (!stat(dst,st)){
     if (st->st_mtime>=d->zpath.stat_rp.st_mtime){
@@ -74,13 +74,6 @@ static bool preloadfiledisk_up_to_date(struct fHandle *d, char dst[MAX_PATHLEN+1
   }
   return ok;
 }
-/* static void zpath_copy_rp(struct zippath *dst, const struct zippath *src){ */
-/*   zpath_reset_keep_VP(dst); */
-/*   dst->realpath=zpath_newstr(dst); */
-/*   zpath_strcat(dst, ZP_RP(src)); */
-/*   dst->root=src->root; */
-/*   dst->stat_rp=dst->stat_vp=src->stat_rp; */
-/* } */
 
 static void zpath_copy_rp(struct zippath *zpath, const char *rp, const struct stat *st){
   zpath_reset_keep_VP(zpath);

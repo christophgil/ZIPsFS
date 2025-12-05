@@ -370,7 +370,7 @@ static int log_print_roots(int n){ /* n==0 for UNIX console with UTF8 else for H
       line[pos++]=' ';
       C("No","%2d",1+rootindex(r));
       C("Path","%s",r->rootpath);
-      if (r) sprintf(tmp,"%s%s%s%s",r->remote?"R ":"",r->writable?"W ":"",r->with_timeout?"T ":"",r->blocked?"B ":"");
+      if (r) sprintf(tmp,"%s%s%s%s%s",r->remote?"R ":"",r->writable?"W ":"",r->with_timeout?"T ":"",r->blocked?"B ":"",r->preload?"L ":"");
       C("Features","%s",tmp);
       C("Retained directory","%s",r->retain_dirname);
       if (r){ if (*r->rootpath_mountpoint) sprintf(tmp,"(%d) %s",1+r->seq_fsid,r->rootpath_mountpoint); else sprintf(tmp,"(%d) %16lx",1+r->seq_fsid,r->f_fsid);}
@@ -391,7 +391,7 @@ static int log_print_roots(int n){ /* n==0 for UNIX console with UTF8 else for H
   static const char *info="Explain table:\n"
     "    Retained directory: Without trailing slash in provided path, the last path-component will be part of the virtual path.\n"
     "                        This is consistent with the trailing slash semantics of UNIX tools like rsync, scp and cp.\n\n"
-    "    Feature flags: W=Writable (First path)   R=Remote (Path starts with two slashes)     T=Supports timeout (Path starts with three slashes and activated WITH_TIMEOUT_xxxx macros)";
+    "    Feature flags: W=Writable (First path)   R=Remote (Path starts with two slashes)  L=Preload files (option --preload)  T=Supports timeout (Path starts with three slashes and activated WITH_TIMEOUT_xxxx macros)";
   if (n){ PRINTINFO("%s   B=Blocked (frozen)\n</PRE>",info);} else fprintf(stderr,ANSI_FG_GRAY"%s"ANSI_RESET"\n\n",info);
   return n;
 #undef C

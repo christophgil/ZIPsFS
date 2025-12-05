@@ -149,7 +149,7 @@ static char _fWarningPath[2][MAX_PATHLEN+1];
 static float _ucpu_usage,_scpu_usage;/* user and system */
 static int64_t _preloadfileram_bytes_limit=3L*1000*1000*1000;
 static int _unused_int;
-static bool _thread_unblock_ignore_existing_pid, _fuse_started, _isBackground;
+static bool _thread_unblock_ignore_existing_pid, _fuse_started, _isBackground, _exists_root_with_preload;
 
 static struct rootdata _root[ROOTS]={0}, *_root_writable=NULL;
 
@@ -677,7 +677,7 @@ static bool readir_from_filesystem(struct directory *dir){
 //
 ////////////////////////////////////////////////////////////
 /* Returns true on success */
-static bool test_realpath(struct zippath *zpath, struct rootdata *r){
+static bool test_realpath(const bool fst_root_try_preload, struct zippath *zpath, struct rootdata *r){
   assert(r!=NULL);
   const int vp0_l=VP0_L()?VP0_L():VP_L();
   char vp0[1+vp0_l]; cg_strncpy0(vp0,VP0_L()?VP0():VP(),vp0_l);
@@ -691,9 +691,10 @@ static bool test_realpath(struct zippath *zpath, struct rootdata *r){
   int preload_pfx=0;
   const char *preload_type=NULL;
   IF1(WITH_PRELOADFILEDISK, if (_root_writable) preload_type=preloadfiledisk_type(&preload_pfx,VP(),VP_L()));
+
   { /* Virtual path without zip entry */
     if (!zpath_strcat(zpath,rootpath(r))) return false;
-    IF1(WITH_PRELOADFILEDISK, if (r==_root_writable && preload_type && !zpath_strcat(zpath,DIR_PRELOADFILEDISK_R)) return false);
+    IF1(WITH_PRELOADFILEDISK, if (r==_root_writable  && (fst_root_try_preload||preload_type) && !zpath_strcat(zpath,preload_type?DIR_PRELOADFILEDISK_R:DIR_PRELOADFILEDISK_PRELOAD)) return false);
     if (!zpath_strcat(zpath,vp0+preload_pfx+r->retain_dirname_l)) return false;
     ZPATH_COMMIT_HASH(zpath,realpath);
   }
@@ -720,8 +721,17 @@ static bool test_realpath(struct zippath *zpath, struct rootdata *r){
 
   return true;
 }
-static bool test_realpath_or_reset(struct zippath *zpath, struct rootdata *r){
-  if (!test_realpath(zpath,r)){ zpath_reset_keep_VP(zpath); return false;}
+static bool test_realpath_or_reset(const bool fst_root_try_preload, struct zippath *zpath, struct rootdata *r){
+  if (!test_realpath(fst_root_try_preload,zpath,r)){
+    zpath_reset_keep_VP(zpath);
+    if (r==_root_writable && !fst_root_try_preload && _exists_root_with_preload){
+      if (test_realpath_or_reset(true,zpath,r)){
+        //        DIE_DEBUG_NOW("rp: %s",RP());
+        return true;
+      }
+    }
+    return false;
+  }
   return true;
 }
 /* Uses different approaches and calls test_realpath */
@@ -746,7 +756,7 @@ static bool find_realpath_for_root(struct zippath *zpath,struct rootdata *r){
         EP_L()=zpath_commit(zpath);
         zpath->flags|=ZP_ZIP;
         zpath_assert_strlen(zpath);
-        const bool t=test_realpath_or_reset(zpath,r);
+        const bool t=test_realpath_or_reset(false,zpath,r);
         if (t){
           if (!EP_L()) stat_set_dir(&zpath->stat_vp); /* ZIP file without entry path */
           return true;
@@ -757,7 +767,7 @@ static bool find_realpath_for_root(struct zippath *zpath,struct rootdata *r){
   }
   /* Just a file */
   zpath_reset_keep_VP(zpath);
-  bool ok=test_realpath_or_reset(zpath,r);
+  bool ok=test_realpath_or_reset(false,zpath,r);
   return ok;
 } /*find_realpath_nocache*/
 
@@ -818,7 +828,7 @@ static bool _find_realpath_other_root(struct zippath *zpath){
     if (prev==zpath->root){
       zpath->strgs_l=zpath->realpath;
       zpath->realpath=0;
-      if (test_realpath(zpath,r) && size0==zpath->stat_rp.st_size)  return true;
+      if (test_realpath(false,zpath,r) && size0==zpath->stat_rp.st_size)  return true;
     }
     prev=r;
   }
@@ -1969,10 +1979,10 @@ int main(const int argc,const char *argv[]){
   FOR(i,optind,colon){ /* Source roots are given at command line. Between optind and colon */
     if (!*argv[i]) continue;
 
-    if ((isPreload=!strcmp("--preload",argv[i]))) continue;
+    if (!strcmp("--preload",argv[i])){ _exists_root_with_preload=isPreload=true; continue;}
     if (_root_n>=ROOTS) DIE("Exceeding max number of ROOTS %d.  Increase macro  ROOTS   in configuration.h and recompile!\n",ROOTS);
     struct rootdata *r=_root+_root_n++;
-    r->preload=isPreload;
+    r->preload=isPreload;isPreload=false;
     root_init(i==optind,r,argv[i]);
     if (_root_writable){
       char rp[MAX_PATHLEN];
