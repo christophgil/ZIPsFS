@@ -258,7 +258,7 @@ static int aimpl_run(struct autogen_files *ff){
 #define isMMAP (ff->out==STDOUT_TO_MMAP)
 #define isRAM  (ff->out==STDOUT_TO_MALLOC||isMMAP)
 #define isOUTF (ff->out==STDOUT_TO_OUTFILE)
-  if (isRAM &&  ac->max_infilesize_for_RAM && ac->max_infilesize_for_RAM<ff->infiles_stat[0].st_size || ramUsageForFilecontent()>_memcache_bytes_limit) ff->out=STDOUT_TO_OUTFILE;
+  if (isRAM &&  ac->max_infilesize_for_RAM && ac->max_infilesize_for_RAM<ff->infiles_stat[0].st_size || ramUsageForFilecontent()>_preloadfileram_bytes_limit) ff->out=STDOUT_TO_OUTFILE;
   {
     struct stat st_fail={0},st_out={0};
     if (!ac->ignore_errfile && !stat(ff->fail,&st_fail) && CG_STAT_B_BEFORE_A(st_fail,_thisPrgStat)){ /* Previously failed */

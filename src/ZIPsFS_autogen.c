@@ -238,7 +238,7 @@ static void autogen_zpath_init(struct zippath *zpath,const char *path){
 }
 
 
-static bool autogen_zpath_set_stat(struct stat *stbuf,const struct zippath *zpath,const char *path,const int path_l){
+static bool autogen_getattr(struct stat *stbuf,const struct zippath *zpath,const char *path,const int path_l){
   long size;
   if(_realpath_autogen && (size=autogen_estimate_filesize(path,path_l))>0){
     stat_init(stbuf,size,&zpath->stat_rp);

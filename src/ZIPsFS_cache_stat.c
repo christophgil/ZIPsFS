@@ -47,7 +47,8 @@ static void stat_to_cache(const struct stat *stbuf, const struct strg *path){
 #define C(f) st->f=stbuf->f
   lock(mutex_dircache);
   struct cached_stat *st=ht_get(&stat_ht,path->s,path->l,path->hash);
-  if (!st) ht_set(&stat_ht,  ht_intern(&_root->dircache_ht_fname,path->s,path->l,path->hash,HT_MEMALIGN_FOR_STRG),  path->l,path->hash, st=mstore_malloc(&_root->dircache_mstore,sizeof(struct cached_stat),8));
+  //  if (!st) ht_set(&stat_ht,  ht_intern(&_root->dircache_ht_fname,path->s,path->l,path->hash,HT_MEMALIGN_FOR_STRG),  path->l,path->hash, st=mstore_malloc(&_root->dircache_mstore,sizeof(struct cached_stat),8));
+  if (!st) ht_set(&stat_ht,  internalize_realpath(path->s,path->l,path->hash),  path->l,path->hash, st=mstore_malloc(&_root->dircache_mstore,sizeof(struct cached_stat),8));
   C(st_ino);C(st_mode);C(st_uid);C(st_gid);
   C(ST_MTIMESPEC);
   st->when_read=time(NULL);

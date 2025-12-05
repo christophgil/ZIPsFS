@@ -132,11 +132,13 @@ static void fprint_strerror(FILE *f,int err){
 #define COUNTER2_INC(id)
 #else
 static atomic_long _counters1[COUNT_NUM],_counters2[COUNT_PAIRS_END],_countersB1[COUNT_NUM],_countersB2[COUNT_PAIRS_END];
+// cppcheck-suppress-macro duplicateCondition
 #define COUNTER1_ADD(id,n) if (id) atomic_fetch_add(_countersB1+id,n)
+// cppcheck-suppress-macro duplicateCondition
 #define COUNTER2_ADD(id,n) if (id) atomic_fetch_add(_countersB2+id,n)
-
-
+// cppcheck-suppress-macro duplicateCondition
 #define COUNTER1_INC(id) if (id) atomic_fetch_add(_counters1+id,1)
+// cppcheck-suppress-macro duplicateCondition
 #define COUNTER2_INC(id) if (id) atomic_fetch_add(_counters2+id,1)
 
 
@@ -788,13 +790,21 @@ static bool cg_access_from_stat(const struct stat *stats,int mode){ // equivalet
     granted=(stats->st_mode&mode);
   return granted==mode;
 }
-static bool cg_file_set_atime(const char *path, const struct stat *stbuf,long secondsFuture){
+static bool cg_file_set_atime(const char *path, const struct stat *st_or_null,long secondsFuture){
   const struct stat st;
-  if (!stbuf && PROFILED(stat)(path, (struct stat*)(stbuf=&st))) return false;
-  log_verbose("secondsFuture=%ld\n",secondsFuture);
-  struct utimbuf new_times={.actime=time(NULL)+secondsFuture,.modtime=stbuf->st_mtime};
+  if (!st_or_null && stat(path,(struct stat*)(st_or_null=&st))) return false;
+  //log_verbose("secondsFuture=%ld\n",secondsFuture);
+  struct utimbuf new_times={.actime=time(NULL)+secondsFuture,.modtime=st_or_null->st_mtime};
   return !utime(path,&new_times);
 }
+
+static bool cg_file_set_mtimes(const char *path, const struct timespec mtime){
+  struct timeval tt[2]={0};
+  tt[1].tv_sec=mtime.tv_sec;
+  tt[1].tv_usec=mtime.tv_nsec/1000;
+  return !utimes(path,tt);
+}
+// timespec
 
 
 #define  cg_set_executable(path)  cg_set_st_mode_flag(path,S_IRWXU)

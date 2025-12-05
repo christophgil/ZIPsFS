@@ -3,29 +3,30 @@
 /// Debugging ZIPsFS                                          ///
 /////////////////////////////////////////////////////////////////
 // cppcheck-suppress-file unusedFunction
-static int countFhandleWithMemcache(const char *path, int len,int h){
+// cppcheck-suppress-file knownConditionTrueFalse
+static int countFhandleWithPreloadfileram(const char *path, int len,int h){
   if (!len) len=strlen(path);
   if (!h) h=hash32(path,len);
   int count=0;
-  IF1(WITH_MEMCACHE,foreach_fhandle(id,d)     if (D_VP_HASH(d)==h && d->memcache && d->memcache->txtbuf && !strcmp(path,D_VP(d))) count++);
+  IF1(WITH_PRELOADFILERAM,foreach_fhandle(id,d)     if (D_VP_HASH(d)==h && d->preloadfileram && d->preloadfileram->txtbuf && !strcmp(path,D_VP(d))) count++);
   return count;
 }
 
-#define fhandleWithMemcachePrint(...) _fhandleWithMemcachePrint(__func__,__LINE__,__VA_ARGS__)
-static void _fhandleWithMemcachePrint(const char *func,int line,const char *path, int len,int h){
-#if WITH_MEMCACHE
+#define fhandleWithPreloadfileramPrint(...) _fhandleWithPreloadfileramPrint(__func__,__LINE__,__VA_ARGS__)
+static void _fhandleWithPreloadfileramPrint(const char *func,int line,const char *path, int len,int h){
+#if WITH_PRELOADFILERAM
   ASSERT_LOCKED_FHANDLE();
   if (!len) len=strlen(path);
   if (!h) h=hash32(path,len);
   foreach_fhandle(id,d){
     if (D_VP_HASH(d)==h){
-      const struct memcache *m=d->memcache;
-      if (m && (m->txtbuf||m->memcache_status) && !strcmp(path,D_VP(d))){
-        log_msg("%s:%d fhandleWithMemcachePrint: %d %s  memcache_status: %s memcache_l: %lld\n",func,line,id,path,MEMCACHE_STATUS_S[m->memcache_status],(LLD)m->memcache_l);
+      const struct preloadfileram *m=d->preloadfileram;
+      if (m && (m->txtbuf||m->preloadfileram_status) && !strcmp(path,D_VP(d))){
+        log_msg("%s:%d fhandleWithPreloadfileramPrint: %d %s  preloadfileram_status: %s preloadfileram_l: %lld\n",func,line,id,path,PRELOADFILERAM_STATUS_S[m->preloadfileram_status],(LLD)m->preloadfileram_l);
       }
     }
   }
-#endif //WITH_MEMCACHE
+#endif //WITH_PRELOADFILERAM
 }
 
 
@@ -45,10 +46,10 @@ static bool _debugSpecificPath(int mode, const char *path, int path_l){
   case 3: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d");break;
   }
   if (b){
-    const int n=countFhandleWithMemcache(path,path_l,0);
+    const int n=countFhandleWithPreloadfileram(path,path_l,0);
     if (n>1){
-      log_error("path=%s   countFhandleWithMemcache=%d\n",path,n);
-      fhandleWithMemcachePrint(path,path_l,0);
+      log_error("path=%s   countFhandleWithPreloadfileram=%d\n",path,n);
+      fhandleWithPreloadfileramPrint(path,path_l,0);
     }
     return true;
   }

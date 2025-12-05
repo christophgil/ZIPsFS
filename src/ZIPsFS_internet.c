@@ -132,41 +132,7 @@ static int cg_fork_exec(const char *cmd[], char const * const * const env){
   }
 }
 
-static bool xxxxnet_call_curl(const bool header,const char *url, const char *outfile){
-  //log_entered_function("header: %d  url: %s  outfile: %s",header,url,outfile);
-  net_local_dir(true);
-  char tmp[MAX_PATHLEN+16];
-  sprintf(tmp,"%s.%d.tmp",outfile,_pid);
-  const char *cmd[]={"curl",header?"-I":"", "-o",tmp,url,(char*)0};
-  const pid_t pid=fork(); /* Make real file by running external prg */
-  if (!pid){
-    cg_array_remove_element(cmd,"");
-    cg_log_exec_fd(STDERR_FILENO,cmd,NULL);
-    execvp(cmd[0],(char *const *)cmd);
-    exit(errno);
-  }else{
-    int status;
-    waitpid(pid,&status,0);
-    char errfile[strlen(outfile)+sizeof(NET_SFX_FAIL)+1];
-    stpcpy(stpcpy(errfile,outfile),NET_SFX_FAIL);
-    unlink(errfile);
-    const bool tmpExists=cg_file_exists(tmp);
-    cg_log_waitpid(!tmpExists?-2:pid,status,errfile,false,cmd,NULL);
-    if (!tmpExists){
-      warning(WARN_NET,tmp,"Does not exist");
-    }else{
-      const char *dst=outfile;
-      if (ENDSWITH(outfile,strlen(outfile),NET_SFX_HEADER)){
-        if (!net_parse_header(NULL,tmp)) dst=errfile;
-        const int fd=open(tmp,O_RDWR|O_APPEND);
-        if (fd>0){ cg_log_exec_fd(fd,cmd,NULL); close(fd);}
-      }
-      unlink(dst);
-      return !cg_rename(tmp,dst);
-    }
-  }
-  return false;
-}
+
 static bool net_call_curl(const bool header,const char *url, const char *outfile){
   //log_entered_function("header: %d  url: %s  outfile: %s",header,url,outfile);
   net_local_dir(true);
@@ -200,7 +166,7 @@ static bool net_getattr(struct stat *st, const char *vp,const int vp_l){
   //log_entered_function("vp: %s %d",vp,net_which_compression(vp,vp_l));
   if (net_which_dir_compression(vp,vp_l)){
     stat_set_dir(st);
-    return true;
+        return true;
   }
   if (!net_is_internetfile(vp,vp_l)) return false;
   stat_init(st,0,NULL);
@@ -215,6 +181,7 @@ static bool net_parse_header(struct stat *st,const char *rp){
   bool ok=false;
   while(fgets(line,sizeof(line),f)){
     /* Header field names are case-insensitive. */
+    // cppcheck-suppress-macro unreadVariable
 #define E(P,code) if (!strncasecmp(line,P,sizeof(P)-1)){ok=true;const int l=sizeof(P)-1;if(st){code;}}
     E("Last-Modified:",st->st_mtime=parse_http_time(line+l));
     E("Content-Length:",st->st_size=atol(line+l));

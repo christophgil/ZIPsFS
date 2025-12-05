@@ -4,11 +4,12 @@
 /////////////////////////////////////////////////////////////////
 
 // cppcheck-suppress-file unusedFunction
+// cppcheck-suppress-file variableScope
 /////////////////////////////////////////////////////////////////////////////////
 /// The file _log_flags contains a decimal number specifying what is logged.  ///
 /////////////////////////////////////////////////////////////////////////////////
 
-#if WITH_MEMCACHE
+#if WITH_PRELOADFILERAM
 static int _info_capacity=0;
 static char *_info=NULL;
 static char *_info_sprint_address(const int n){
@@ -20,11 +21,11 @@ static int _info_sprint_max(const int n){
 #else
 #define _info_sprint_max(n) 0
 #define _info_sprint_address(n) NULL
-#endif //WITH_MEMCACHE
+#endif //WITH_PRELOADFILERAM
 
 #define PRINTINFO(...)   n+=snprintf(_info_sprint_address(n),_info_sprint_max(n),__VA_ARGS__)
 #if IS_CHECKING_CODE
-#define R(cond,title,descr,format,...) printf(format,__VA_ARGS__)
+#define R(cond,title,descr,format,...) if (cond && *title && *descr){ printf(format,__VA_ARGS__); }
 #else
 #define H(title) if(*title=='<') PRINTINFO("%s",title); else PRINTINFO("<TH>%s</TH>",title);
 #define R(cond,title,descr,format,...)\
@@ -32,7 +33,7 @@ static int _info_sprint_max(const int n){
   else if (cond){ PRINTINFO("<TD>" format "</TD>\n",__VA_ARGS__); }\
   else { PRINTINFO("<TD></TD>\n"); }
 #endif //IS_CHECKING_CODE
-#define SF(title,descr,field) R(true,"<TH colspan=\"2\">" title "</TH>",descr,"%'u</TD><TD>%'u",G(field##_SUCCESS),G(field##_FAIL));
+#define SF(title,descr,field) R(true,"<TH colspan=\"2\">" title "</TH>",descr,"%'d</TD><TD>%'d",G(field##_SUCCESS),G(field##_FAIL));
 static int append_description(const char *title, const char *descr, char *describe, const int max){
   if (!*descr || max<=0) return 0;
   char noTag[99]={0};
@@ -48,10 +49,13 @@ static int append_description(const char *title, const char *descr, char *descri
   }
   return snprintf(describe,max,"<LI><B>%s</B>: %s</LI>",noTag,descr);
 }
+#if IS_CHECKING_CODE
+#define COLUMN_FILE_TYPE(ext)
+#else
 #define COLUMN_FILE_TYPE(ext)\
   R(ext!=NULL,"X","Extension","%s",ext)\
   R(ext!=NULL,"K","Counting this known extension is optimized in source code","%c",isKnownExt(ext,0)?'+':' ')
-
+#endif //IS_CHECKING_CODE
 
 #define END_HR()  PRINTINFO("</TR>%s",isHeader?"</THEAD>":"")
 #define BEGIN_H1(is_html) (is_html?"<HR><H1>":ANSI_INVERSE)
@@ -215,10 +219,12 @@ static int counts_by_filetype_by_root(int n){
   foreach_root(r) n=_counts_by_filetype_r(n,r,&count_explain);
   return n;
 }
-static int _counts_by_filetype_r(int n,struct rootdata *r, int *count_explain){
+static int _counts_by_filetype_r(int n,struct rootdata *r, const int *count_explain){
   struct ht_entry *ee=HT_ENTRIES(&r->ht_filetypedata);
   int headerDone=0;
-  char describe[3333]; int dc=0;
+
+  int dc=0; // cppcheck-suppress variableScope
+  char describe[3333]; // cppcheck-suppress variableScope
   FOR(pass,0,r->ht_filetypedata.capacity){
     counter_rootdata_t *x=NULL;
     RLOOP(i,r->ht_filetypedata.capacity){
@@ -232,7 +238,7 @@ static int _counts_by_filetype_r(int n,struct rootdata *r, int *count_explain){
           C(00,ZIP_READ_NOCACHE_SEEK_SUCCESS)+C(8,ZIP_READ_NOCACHE_SEEK_FAIL)+
           C(00,ZIP_READ_CACHE_SUCCESS)+C(12,ZIP_READ_CACHE_FAIL)+
           C(14,ZIP_READ_CACHE_CRC32_SUCCESS)+C(00,ZIP_READ_CACHE_CRC32_FAIL)+
-          C(00,COUNT_RETRY_MEMCACHE)+
+          C(00,COUNT_RETRY_PRELOADFILERAM)+
           (isKnownExt(d->ext,0)?(1L<<28):0);
 #undef C
       }else if (!x || d->rank>x->rank){
@@ -258,7 +264,7 @@ static int _counts_by_filetype_r(int n,struct rootdata *r, int *count_explain){
         SF("Seek","Count setting file pointer to a different position"sf,ZIP_READ_NOCACHE_SEEK);
         SF("Checksum match/mismatch","If entirely read, count computation of CRC32 checksum"sf,ZIP_READ_CACHE_CRC32);
         R(true,"Cumul wait","Threads reading cached file data need to wait until the cache is filled to the respective position. Cumulative waiting time in s","%.2f",((float)x->wait)/CLOCKS_PER_SEC);
-        R(true,"Retry cache","Count success on retry reading into RAM cache","%d",G(COUNT_RETRY_MEMCACHE));
+        R(true,"Retry cache","Count success on retry reading into RAM cache","%d",G(COUNT_RETRY_PRELOADFILERAM));
 #undef sf
 #undef G
         END_HR();
@@ -269,7 +275,6 @@ static int _counts_by_filetype_r(int n,struct rootdata *r, int *count_explain){
     PRINTINFO("</TABLE>\n");
     if (!*count_explain++) PRINT_TABLE_DESCRIPTION();
   }
-
   return n;
 }
 static long counter_getattr_rank(const struct ht_entry *e){
@@ -372,7 +377,7 @@ static int log_print_roots(int n){ /* n==0 for UNIX console with UTF8 else for H
       C("Filesystem","%s",tmp);
       C("Free [GB]","%'9ld",((r->statvfs.f_frsize*r->statvfs.f_bfree)>>30));
       if (n){
-        if (r){ if (ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC)) sprintf(tmp,"%'ld seconds ago",ROOT_SUCCESS_SECONDS_AGO(r)); else strcpy(tmp,"Never");}
+        if (r){ if (!r->remote) strcpy(tmp,"NA"); else if (ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC)) sprintf(tmp,"%'ld seconds ago",ROOT_SUCCESS_SECONDS_AGO(r)); else strcpy(tmp,"Never");}
         C("Last response","%s", tmp);
         C("Blocked","%'u times",r->log_count_delayed);
       }
@@ -495,7 +500,7 @@ static int log_malloc(int n,const bool html){
     const long xB=_countersB1[i],yB=i<COUNT_PAIRS_END?_countersB2[i]:0;
     if (x||y){
       if (i<COUNT_PAIRS_END){
-        const char *mark=(x==y||x-y==1&&(i==COUNT_MALLOC_MEMCACHE_TXTBUF||i==COUNT_FHANDLE_CONSTRUCT||i==COUNTm_FHANDLE_ARRAY_MALLOC))?" ":diffMarker;
+        const char *mark=(x==y||x-y==1&&(i==COUNT_MALLOC_PRELOADFILERAM_TXTBUF||i==COUNT_FHANDLE_CONSTRUCT||i==COUNTm_FHANDLE_ARRAY_MALLOC))?" ":diffMarker;
         if (!header++) PRINTINFO("\n%s%44s %14s %14s %s %20s %20s %s %s\n",html?"<u>":ANSI_UNDERLINE,"ID", "Count","Count release","&#916;","Bytes","Bytes released","&#916;",html?"</u>":ANSI_RESET);
         PRINTINFO("%44s %'14ld %'14ld %s %'20ld %'20ld %s\n", COUNT_S[i], x,y,mark,xB,yB,xB==yB?" ":diffMarker);
       }else{
@@ -550,7 +555,7 @@ static int print_maps(int n){
       PRINTINFO("/proc/%d/maps: %s\n",getpid(),strerror(errno));
       return n;
     }
-    const int L=333;
+    //const int L=333;
     int headerDone=0;
     char describe[999];int dc=0;
     while(!feof(f)) {
@@ -625,7 +630,7 @@ static int log_print_memory(int n){
   {
     struct rlimit rl={0};
     getrlimit(RLIMIT_AS,&rl);
-    if (rl.rlim_cur!=-1) PRINTINFO("Rlim soft: %'lx MB   hard: %'lx MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
+    if (rl.rlim_cur!=-1) PRINTINFO("Rlim soft: %lx MB   hard: %lx MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
   }
 #endif
   return n;
@@ -641,16 +646,16 @@ static int print_fhandle(int n,const char *title){
     struct fHandle *d=isHeader?NULL:fhandle_at_index(ir);
     if (d && !d->flags) continue;
     PRINTINFO("%s<TR>\n",isHeader?"<THEAD>\n":"");
-    R(true,"Path","","%s",(D_VP(d)));
-    R(true,"Last-access","How many s ago","%'lld s",(LLD)(d->accesstime?(t0-d->accesstime):-1));
-#if WITH_MEMCACHE
-    const struct memcache *m=d?d->memcache:NULL;
-    struct textbuffer *tb=m?m->txtbuf:NULL;
-    R(tb!=NULL,"Cache-ID",        "",                                                     "%05x",m->id);
-    R(tb!=NULL,"Cache-read-kB",   "Number of KB already read into cache",                 "%'lld",(LLU)K(m->memcache_already));
-    R(tb!=NULL,"Entry-kB",        "Total size of file content",                           "%'lld",(LLU)K(m->memcache_l));
-    R(tb!=NULL,"Millisec",        "How long did it take to read file content into cache.","%'lld",(LLD)m->memcache_took_mseconds);
-#endif //WITH_MEMCACHE
+    R(true,"Path","","%s",!d?"Null":D_VP(d));
+    R(true,"Last-access","How many s ago","%'lld s",!d?0:(LLD)(d->accesstime?(t0-d->accesstime):-1));
+#if WITH_PRELOADFILERAM
+    const struct preloadfileram *m=d?d->preloadfileram:NULL;
+    const struct textbuffer *tb=m?m->txtbuf:NULL; // cppcheck-suppress unreadVariable
+    R(tb!=NULL,"Cache-ID",        "",                                                     "%05x",!m?0:m->id);
+    R(tb!=NULL,"Cache-read-kB",   "Number of KB already read into cache",                 "%'lld",!m?0:(LLD)K(m->preloadfileram_already));
+    R(tb!=NULL,"Entry-kB",        "Total size of file content",                           "%'lld",!m?0:(LLD)K(m->preloadfileram_l));
+    R(tb!=NULL,"Millisec",        "How long did it take to read file content into cache.","%'lld",!m?0:(LLD)m->preloadfileram_took_mseconds);
+#endif //WITH_PRELOADFILERAM
     const bool locked=d && pthread_mutex_trylock(&d->mutex_read);
     if (d && !locked) pthread_mutex_unlock(&d->mutex_read);
     const char *status_descr="<UL><LI>(D)elete indicates that it is marked for closing</LI>"
@@ -662,7 +667,7 @@ static int print_fhandle(int n,const char *title){
     R(true,"Busy","Number of threads in currently in xmp_read()",  "%d",d->is_busy);
 #if WITH_TRANSIENT_ZIPENTRY_CACHES
     const struct ht *ht=d?d->ht_transient_cache:NULL;
-    R(ht!=NULL,"Transient-cache","Number of cached paths, count fetched non-existing paths, count fetched existing","%'u %d %d",ht->length, ht->client_value_int[0], ht->client_value_int[1]);
+    R(ht!=NULL,"Transient-cache","Number of cached paths, count fetched non-existing paths, count fetched existing","%'u %d %d", ht->length, ht->client_value_int[0], ht->client_value_int[1]);
 #endif //WITH_TRANSIENT_ZIPENTRY_CACHES
     END_HR();
   }
@@ -709,7 +714,7 @@ TD {text-align:right;}\n\
     LOCK(mutex_fhandle,n=print_fhandle(n,""));
     //    n=print_maps(n);
     PRINTINFO("<HR><H1>Cache</H1>");
-    PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",  IF01(WITH_MEMCACHE,"!WITH_MEMCACHE",WHEN_MEMCACHE_S[_memcache_policy]));
+    PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",  IF01(WITH_PRELOADFILERAM,"!WITH_PRELOADFILERAM",WHEN_PRELOADFILERAM_S[_preloadfileram_policy]));
     //  PRINTINFO("_cumul_time_store=%lf\n<BR>",((double)_cumul_time_store)/CLOCKS_PER_SEC);
     LOCK(mutex_fhandle,n=counts_by_filetype(n));
     LOCK(mutex_fhandle,n=counts_by_filetype_by_root(n));
@@ -736,14 +741,14 @@ static const char *zip_fdopen_err(int err){
   return "zip_fdopen - Unknown error";
 #undef ZIP_FDOPEN_ERR
 }
-#if WITH_MEMCACHE
+#if WITH_PRELOADFILERAM
 static void fhandle_log_cache(const struct fHandle *d){
   if (!d){ log_char('\n');return;}
   ASSERT_LOCKED_FHANDLE();
-  const struct memcache *m=d->memcache;
-  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %lld/%lld   hasc: %s\n",d,D_VP(d),yes_no(m && m->txtbuf),!m?0:MEMCACHE_STATUS_S[m->memcache_status],(LLD)(!m?-1:m->memcache_already),(LLD)(!m?-1:m->memcache_l),yes_no(m && m->memcache_l>0));
+  const struct preloadfileram *m=d->preloadfileram;
+  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %lld/%lld   hasc: %s\n",d,D_VP(d),yes_no(m && m->txtbuf),!m?0:PRELOADFILERAM_STATUS_S[m->preloadfileram_status],(LLD)(!m?-1:m->preloadfileram_already),(LLD)(!m?-1:m->preloadfileram_l),yes_no(m && m->preloadfileram_l>0));
 }
-#endif //WITH_MEMCACHE
+#endif //WITH_PRELOADFILERAM
 static void _log_zpath(const char *fn,const int line,const char *msg, struct zippath *zpath){
   log_msg(ANSI_INVERSE"%s():%d %s"ANSI_RESET,fn,line,msg);
   if (!zpath){
@@ -801,8 +806,8 @@ Options and arguments before the colon are interpreted by ZIPsFS.  Those after t
       -q quiet, no debug messages to stdout\n\
          Without the option -f (foreground) all logs are suppressed anyway.\n\n\
       -c  ");
-  //  for(char **s=WHEN_MEMCACHE_S;*s;s++){if (s!=WHEN_MEMCACHE_S) putchar('|');puts_stderr(*s);}
-  IF1(WITH_MEMCACHE,for(int i=0;WHEN_MEMCACHE_S[i];i++){ if (i) putc('|',stderr);puts_stderr(WHEN_MEMCACHE_S[i]);});
+  //  for(char **s=WHEN_PRELOADFILERAM_S;*s;s++){if (s!=WHEN_PRELOADFILERAM_S) putchar('|');puts_stderr(*s);}
+  IF1(WITH_PRELOADFILERAM,for(int i=0;WHEN_PRELOADFILERAM_S[i];i++){ if (i) putc('|',stderr);puts_stderr(WHEN_PRELOADFILERAM_S[i]);});
   puts_stderr("    When to read zip entries into RAM\n\
          seek: When the data is not read continuously\n\
          rule: According to rules based on the file name encoded in configuration.h\n\

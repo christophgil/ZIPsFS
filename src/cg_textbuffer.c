@@ -106,6 +106,7 @@ static void *malloc_or_mmap(const int flags, const off_t size){
   //  textbuffer_memusage(flags,size);
   return ((flags&TXTBUFSGMT_MUNMAP)?cg_mmap(COUNT_TXTBUF_SEGMENT_MMAP,size,0):cg_malloc(COUNT_TXTBUF_SEGMENT_MALLOC,size));
 }
+// cppcheck-suppress-macro uselessAssignmentPtrArg
 #define free_or_munmap(flags,p,size) { _free_or_munmap(flags,p,size);p=NULL;}
 
 static void _free_or_munmap(const int flags,const void *p,const off_t size){

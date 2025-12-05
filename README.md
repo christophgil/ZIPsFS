@@ -99,6 +99,14 @@ Note that "//:" and all slashes in the URL are replaced by commas.
 
     less  ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
 
+
+<details><summary>Public repositories (Pride, genomes, PDB, Swissprot)</summary>
+
+It will be possible to integrate those as regular file trees.
+We are working on this.
+
+</details>
+
 <details><summary>Decompress on download</summary>
 
 
@@ -162,6 +170,39 @@ The default configuration includes a few exceptions tailored to specific use cas
     This is time consuming and performed in the background. Consequently, the file listing will be incomplete when requested for the first time.
     Only after some seconds, the file listing will be presented properly.
 
+
+
+## File content pre-load
+
+
+Non-linear file loading in a random-access manner is inefficient for remote or ZIP-compressed files.
+This is the case for the MS-programs Diann and FragPipe (Fragger).
+
+<details><summary>More preload</summary>
+
+
+File types are specified in the configurable method ``config_advise_cache_in_ram()``.  The default
+setting includes Brukertimstof files. Preloading to the RAM is appropriate for these files because
+each file is loaded only once per analysis.  The ``-l`` option sets an upper limit on memory usage
+for the ZIP RAM cache.  When available memory runs low, ZIPsFS can either pause, proceed without
+caching file data or just ignore the memory restriction depending on the configuration.
+
+For Thermo raw files analyzed in FragPipe, preloading entire files into RAM  would  be inappropriate because each raw file is opened and closed multiple times during  computation.
+In this case  prefetch remote or compressed files to the local disk is the best choice.
+
+All remote (r) or compressed (c) or zippded (z) files
+accessed through the following folders will be first copied to local disk:
+
+    <mount-point>/ZIPsFS/lr/
+    <mount-point>/ZIPsFS/lrc/
+    <mount-point>/ZIPsFS/lrz/
+
+Periodically ZIPsFS will call ``<path-of-branch1>/ZIPsFS/ZIP_cleanup.sh``.
+This customizable script can cleanup old files to free up drive space.
+
+Additional caching mechanisms are designed to accelerate file listing in large directories for ZIP entries.
+</details>
+
 ## ZIPsFS Options
 
 
@@ -201,6 +242,7 @@ File content larger than this will not be cached. When memory usage is high, cac
 
 **-b**
  Execution in background (Not recommended). We recommend running ZIPsFS in foreground in *tmux*.
+
 
 
 ## FUSE Options
@@ -447,29 +489,7 @@ work correctly.
 
 See ZIPsFS.compile.sh for activation of sanitizers.
 </details>
-<details><summary>Improve performance  caching file content and meta data</summary>
-<H2>File content cache</H2>
-
-
-ZIPsFS optionally supports caching specific files and ZIP entries entirely in RAM, allowing data segments to
-be served from memory in any order.
-This feature significantly improves performance for software that performs random-access reads for remote files and for
-ZIP entries.
-
-The ``-l`` option sets an upper limit on memory usage for the ZIP RAM cache.
-When available memory runs low, ZIPsFS can either pause,  proceed without caching file data or just ignore the
-memory restriction depending on the configuration.
-These caching behaviors - such as which files to cache and how to handle memory pressure - are defined in the configuration.
-
-
-## File attribute cache
-
-Additional caching mechanisms are designed to accelerate file listing in large directories for ZIP entries.
-
-
-
-
-
+<details><summary>File integrity checks</summary>
 ## Data Integrity for ZIP Entries
 
 For ZIP entries loaded entirely into RAM:

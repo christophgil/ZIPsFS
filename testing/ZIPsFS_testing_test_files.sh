@@ -92,6 +92,8 @@ test_zip_entry(){
 
 test_zip_inline(){
     export GREP_COLORS='ms=01;32'
+    ls $MNT/Z1/Data/50-0079/
+    sleep 2
     if ls $MNT/Z1/Data/50-0079/ | grep --color=always wiff2 && sleep 1 && ls $MNT/Z1/Data/50-0079/ | grep --color=always wiff$; then
         echo -n  "$ANSI_FG_GREEN OK $ANSI_RESET"
     else

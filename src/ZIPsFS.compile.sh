@@ -209,7 +209,7 @@ detect_fuse_version(){
 }
 print_linker_option_execinfo(){
     local p
-    for p in -lexecinfo ''; do
+    for p in '' -lexecinfo; do
         try_compile "backtrace$p" '#include <execinfo.h>' 'backtrace_symbols(0,0);' $p >/dev/null && echo $p && return 0
     done
     return 1
@@ -256,7 +256,7 @@ main(){
     opts+="${D}HAS_ST_MTIM=$(             try_compile st_mtim                 '#include <sys/stat.h>'     'struct stat st;  st.st_mtim=st.st_mtim    ;')"
     opts+="${D}HAS_POSIX_FADVISE=$(       try_compile posix_fadvise           '#include <fcntl.h>'        'posix_fadvise(0,0,0,POSIX_FADV_DONTNEED)  ;')"
     opts+="${D}HAS_DIRENT_D_TYPE=$(       try_compile dirent_d_type           '#include <dirent.h>'       'struct dirent *e; e->d_type=e->d_type     ;')"
-    opts+="${D}HAS_RLIMIT=$(              try_compile rlimit                  '#include <sys/resource.h>' 'getrlimit(RLIMIT_AS)     ;')"
+    opts+="${D}HAS_RLIMIT=$(              try_compile rlimit_3                '#include <sys/resource.h>' 'struct rlimit l; getrlimit(RLIMIT_AS,&l)     ;')"
     opts+="${D}HAS_NO_ATIME=$(            try_compile no_atime                $'#define _GNU_SOURCE\n#include <sys/statvfs.h>' 'struct statvfs s; int i=s.f_flag&ST_NOATIME;')"
     local x=${DIR%/*}/ZIPsFS
     rm  "$x" 2>/dev/null

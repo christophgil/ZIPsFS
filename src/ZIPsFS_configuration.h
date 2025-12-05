@@ -6,15 +6,15 @@
 
 #define EXT_CONTENT  ".Content"                    /* ZIP files appear as folders. This is appended to form the folder name. */
 
-/////////////////////////////////
-/// Limitations of pathlength ///
-/////////////////////////////////
-#define ZPATH_STRGS 1024
+///////////////////
+/// Limitations ///
+///////////////////
+#define ZPATH_STRGS 1024   /* Buffer for file paths */
+#define MAX_NUM_OPEN_FILES 16384   /* Unless 0, used for setrlimit(RLIMIT_NOFILE,); */
 /* cg_utils.c defines   MAX_PATHLEN */
 /////////////////
 /// Debugging ///
 /////////////////
-#define WITH_PTHREAD_LOCK    1 /*  Should be true. Only for testing if suspect deadlock set to 0 */
 /* ---- */
 #define WITH_ASSERT_LOCK     0 // Optional assertion
 #define WITH_EXTRA_ASSERT    0 // Optional assertion
@@ -65,9 +65,9 @@
 // This activates storage of the ZIP file index and the file listing of rarely changing file directories in a cache.
 // The cache key is the filepath of the ZIP file or directory  plus the last-modified file  attribute.
 
-#define WITH_MEMCACHE 1
-#define NUM_MEMCACHE_STORE_RETRY 2
-// With WITH_MEMCACHE, the file content of selected ZIP entries is hold in RAM while the respective file handle exists.
+#define WITH_PRELOADFILERAM 1
+#define NUM_PRELOADFILERAM_STORE_RETRY 2
+// With WITH_PRELOADFILERAM, the file content of selected ZIP entries is hold in RAM while the respective file handle exists.
 // This facilitates non-sequential file reading.
 // See man fseek
 // The virtual file paths are selected with the function config_advise_cache_zipentry_in_ram(). Also see CLI parameter -c.
@@ -120,7 +120,7 @@
 #if WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
 #define NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE 16 // Maximum number of blocks. If Exceeded, the directory cache is cleared and filled again.
 #endif
-#define MEMCACHE_READ_BYTES_NUM (16*1024*1024) // When storing zip entries in RAM, number of bytes read in one go
+#define PRELOADFILERAM_READ_BYTES_NUM (16*1024*1024) // When storing zip entries in RAM, number of bytes read in one go
 #define SIZE_CUTOFF_MMAP_vs_MALLOC (1<<16)
 
 /////////////////////////////////////
@@ -136,6 +136,7 @@
 /// Times ///
 /////////////
 
+#define PRELOADFILEDISK_CACHE_MTIME_SECONDS 60 /* ZIPsFS is discarding local files if last modified does not match upstream */
 #define WITH_TESTING_TIMEOUTS 0
 #if WITH_TESTING_TIMEOUTS
 #define ROOT_RESPONSE_WITHIN_SECONDS 2
@@ -144,9 +145,9 @@
 #define READDIR_TIMEOUT_SECONDS  100
 #define OPENFILE_TIMEOUT_SECONDS 100
 #define OPENZIP_TIMEOUT_SECONDS  50
-#undef NUM_MEMCACHE_STORE_RETRY
-#define NUM_MEMCACHE_STORE_RETRY 1
-#define MEMCACHE_TIMEOUT_SECONDS 2
+#undef NUM_PRELOADFILERAM_STORE_RETRY
+#define NUM_PRELOADFILERAM_STORE_RETRY 1
+#define PRELOADFILE_TIMEOUT_SECONDS 2
 #else
 #define ROOT_RESPONSE_WITHIN_SECONDS 9   /* Roots which have responded within that time are used. */
 #define ROOT_GIVEUP_AFTER_SECONDS 30     /* Otherwise wait until ROOT_RESPONSE_WITHIN_SECONDS is reached and give up waiting. */
@@ -154,7 +155,7 @@
 #define READDIR_TIMEOUT_SECONDS  30 // Give up waiting for opendir()  and readdir()
 #define OPENFILE_TIMEOUT_SECONDS 30
 #define OPENZIP_TIMEOUT_SECONDS  30
-#define MEMCACHE_TIMEOUT_SECONDS 30
+#define PRELOADFILE_TIMEOUT_SECONDS 30
 #endif
 
 
@@ -170,10 +171,10 @@
 #if WITH_CANCEL_BLOCKED_THREADS
 #if WITH_TESTING_UNBLOCK
 #define UNBLOCK_AFTER_SECONDS_THREAD_ASYNC      30
-#define UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE   300
+#define UNBLOCK_AFTER_SECONDS_THREAD_PRELOADFILERAM   300
 #else
 #define UNBLOCK_AFTER_SECONDS_THREAD_ASYNC      300
-#define UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE   300
+#define UNBLOCK_AFTER_SECONDS_THREAD_PRELOADFILERAM   300
 #endif
 #endif // WITH_CANCEL_BLOCKED_THREADS
 
@@ -186,12 +187,13 @@
 #define WITH_AUTOGEN           1 /* Generate files based on rules of file extensions */
 #define WITH_CCODE             1 /* Generate files by C-code */
 #define WITH_INTERNET_DOWNLOAD 1 /* Access to internet files like <mount-point>/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README */
+#define WITH_PRELOADFILEDISK 1
 
 #if 0 /* Conveniently deactivate all caches for testing */
 #undef WITH_DIRCACHE
 #define WITH_DIRCACHE 0
-#undef WITH_MEMCACHE
-#define WITH_MEMCACHE 0
+#undef WITH_PRELOADFILERAM
+#define WITH_PRELOADFILERAM 0
 #undef WITH_AUTOGEN
 #define WITH_AUTOGEN 0
 #undef WITH_TRANSIENT_ZIPENTRY_CACHES

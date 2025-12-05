@@ -118,13 +118,15 @@ static bool config_skip_zipfile_show_zipentries_instead(const char *zipfile,cons
 /// Improving performance by refusing those file names                         //
 /////////////////////////////////////////////////////////////////////////////////
 static bool config_not_report_stat_error(const char *path,const int path_l){
-#define I(s) ENDSWITH(path,path_l,#s)||
+#define E(s) ENDSWITH(path,path_l,#s)||
 #define S(s,pfx) !strncmp(path,pfx,sizeof(pfx)-1)||
-  return I(/analysis.tdf-wal)  I(/analysis.tdf-journal)   I(/.ciopfs)  I(.quant)  I(/autorun.inf)  I(/.xdg-volume-info)  S(path,"/.Trash")  S(path,"/ZIPsFS_") false;
-#undef I
+  return E(/analysis.tdf-wal)  E(/analysis.tdf-journal)   E(/.ciopfs)  E(.quant)  E(/autorun.inf)  E(/.xdg-volume-info)  /* Diann */
+    E(.fragtmp) /* FragPipe */
+    S(path,"/.Trash")  S(path,"/ZIPsFS_") false;
+#undef E
 #undef S
 }
-#if WITH_MEMCACHE
+#if WITH_PRELOADFILERAM
 
 
 ////////////////////////////////////////////////////////////
@@ -134,15 +136,16 @@ static bool config_not_report_stat_error(const char *path,const int path_l){
 ///   < 0: No cache                                      ///
 ///   > 0: Cache is advised and requires n bytes         ///
 ////////////////////////////////////////////////////////////
-static off_t config_advise_cache_in_ram(const int flags,const char *virtualpath, const int vp_l, const char *realpath,const int rp_l,const char *rootpath,const off_t filesize){
+static off_t config_advise_preload_file_ram(const int flags,const char *virtualpath, const int vp_l, const char *realpath,const int rp_l,const char *rootpath,const off_t filesize){
   const char *e=virtualpath+vp_l;
   if (vp_l>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e') return -1; /* The exe files hold the icon for File Explorer */
   if (flags&ADVISE_CACHE_BY_POLICY) return filesize;
   off_t need=filesize;
   bool cache=((flags&ADVISE_CACHE_IS_CMPRESSED)&&(flags&ADVISE_CACHE_IS_SEEK_BW))
-    || ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin")
-    //|| ENDSWITH(virtualpath,vp_l,".raw") && STARTSWITH(cg_strrchr_null(virtualpath,'/'),"/20")
-    ;
+    || ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin");
+    //         || ENDSWITH(virtualpath,vp_l,".raw") && STARTSWITH(cg_strrchr_null(virtualpath,'/'),"/20")
+    /*  Thermo raw files: Not applicable to FragPipe because raw file opened and closed multiple times. */
+
   if (!cache && ENDSWITH(virtualpath,vp_l,"analysis.tdf") && vp_l+4<MAX_PATHLEN){ /* Note: timsdata.dll opens analysis.tdf first  and then analysis.tdf_bin */
     cache=true;
     char tdf_bin[MAX_PATHLEN+1]; stpcpy(stpcpy(tdf_bin,virtualpath),"_bin");
@@ -155,7 +158,7 @@ static off_t config_advise_cache_in_ram(const int flags,const char *virtualpath,
   }
   return cache?need:-1;
 }
-#endif //WITH_MEMCACHE
+#endif //WITH_PRELOADFILERAM
 
 
 static bool config_advise_evict_from_filecache(const char *realpath,const int realpath_l, const char *zipentryOrNull, const off_t filesize){

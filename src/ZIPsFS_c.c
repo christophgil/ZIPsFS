@@ -24,7 +24,7 @@ typedef struct textbuffer** c_read_handle_t;
 #undef C
 #undef X
 
-#define a(vp,vp_l)   const bool inDirA=IS_IN_DIR_AUTOGEN(vp,vp_l)
+#define a(vp,vp_l)   const bool inDirA=IS_IN_DIR_Z(DIR_AUTOGEN,vp,vp_l)
 #define o()   (inDirA?DIR_AUTOGEN_L:0)
 #define f()   inDirA?ZIPSFS_C_IS_DIR_A:0
 
@@ -39,7 +39,7 @@ static int c_from_exec_output(struct textbuffer **bb,const uint8_t flags,char *c
 static struct textbuffer *_zipsfs_c_init_tb(struct textbuffer **bb){
   if (!bb[0]){
     cg_thread_assert_not_locked(mutex_fhandle);
-    bb[0]=textbuffer_new(COUNT_MALLOC_MEMCACHE_TXTBUF);
+    bb[0]=textbuffer_new(COUNT_MALLOC_PRELOADFILERAM_TXTBUF);
   }
   return bb[0];
 }
@@ -47,10 +47,7 @@ static struct textbuffer *_zipsfs_c_init_tb(struct textbuffer **bb){
 
 static  int64_t c_fuse_open(const struct zippath *zpath){
   a(VP(),VP_L());
-  if (!config_c_open(f(),VP()+o(),VP_L()-o())) return 0;
-  int64_t fh;
-  LOCK(mutex_fhandle,fhandle_create(FHANDLE_FLAG_IS_CCODE,(fh=next_fh()),zpath));
-  return fh;
+  return  !config_c_open(f(),VP()+o(),VP_L()-o())?0:  fhandle_create(FHANDLE_FLAG_IS_CCODE,next_fh(),zpath)->fh;
 }
 static bool c_getattr(struct stat *st, const char *vp,const int vp_l){
   a(vp,vp_l);
@@ -66,7 +63,7 @@ static bool c_getattr(struct stat *st, const char *vp,const int vp_l){
 
 static void c_file_content_to_fhandle(struct fHandle *d){
   if (!(d->flags&FHANDLE_FLAG_IS_CCODE)) return;
-  //    if (d->memcache && d->memcache->txtbuf){ d->flags|=FHANDLE_FLAG_NOT_CCODE; return;}
+  //    if (d->preloadfileram && d->preloadfileram->txtbuf){ d->flags|=FHANDLE_FLAG_NOT_CCODE; return;}
   const char *vp=D_VP(d);
   const int vp_l=D_VP_L(d);
   a(vp,vp_l);
@@ -77,9 +74,9 @@ static void c_file_content_to_fhandle(struct fHandle *d){
     if (!fhandle_set_text(d,bb[0])){
       FREE_NULL_MALLOC_ID(bb[0]);
     }else{
-      d->memcache->txtbuf=bb[0];
-      memcache_set_status(d,memcache_done);
-      d->flags|=FHANDLE_FLAG_MEMCACHE_COMPLETE;
+      d->preloadfileram->txtbuf=bb[0];
+      preloadfileram_set_status(d,preloadfileram_done);
+      d->flags|=FHANDLE_FLAG_PRELOADFILERAM_COMPLETE;
     }
     unlock(mutex_fhandle);
   }

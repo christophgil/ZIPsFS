@@ -108,12 +108,12 @@ static void dircache_directory_to_cache(struct directory *dir){
     d->fname=(char**)ht_intern(&r->dircache_ht_fnamearray,src.fname,src.files_l*SIZE_POINTER,0,SIZE_POINTER);
   }
   const ht_hash_t rp_hash=hash32(DIR_RP(dir),DIR_RP_L(dir));
-  const char *rp=ht_intern(&_root->dircache_ht_fname,DIR_RP(dir),DIR_RP_L(dir),rp_hash,HT_MEMALIGN_FOR_STRG); /* The real path of the zip file */
+  //const char *rp=ht_intern(&_root->dircache_ht_fname,DIR_RP(dir),DIR_RP_L(dir),rp_hash,HT_MEMALIGN_FOR_STRG); /* The real path of the zip file */
+  const char *rp=internalize_realpath(DIR_RP(dir),DIR_RP_L(dir),rp_hash);
   ht_set(&r->dircache_ht,rp,DIR_RP_L(dir),rp_hash,d);
   to_cache_vpath_to_zippath(dir);
   //log_exited_function("%s",DIR_RP(dir));
 }
-
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -178,7 +178,7 @@ static bool dircache_directory_from_cache(struct directory *dir){
 ///////////////////////////
 #if WITH_EVICT_FROM_PAGECACHE && (!defined(HAS_POSIX_FADVISE) || HAS_POSIX_FADVISE)
 static void maybe_evict_from_filecache(const int fdOrZero,const char *realpath,const int realpath_l, const char *zipentry, const int zipentry_l){
-  config_advise_evict_from_filecache(realpath,realpath_l, zipentry, zipentry_l);
+  if (!config_advise_evict_from_filecache(realpath,realpath_l, zipentry, zipentry_l)) return;
   const int fd=fdOrZero?fdOrZero:realpath?open(realpath,O_RDONLY):0;
   if (fd>0){
     posix_fadvise(fd,0,0,POSIX_FADV_DONTNEED);

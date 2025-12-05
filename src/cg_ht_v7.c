@@ -142,16 +142,17 @@ static MAYBE_INLINE int debug_count_empty(const struct ht_entry *ee, const uint3
 static struct ht_entry* _ht_get_entry_ee(struct ht_entry *ee, const uint32_t capacity, const bool intkey,const char* key, const uint64_t keylen_hash){
   struct ht_entry *e=ee+(keylen_hash&(capacity-1));
 #define _HT_AT_END_OF_ENTRIES_WRAP_AROUND() if (++e>=ee+capacity){e=ee;ASSERT(!count_wrap_around);count_wrap_around++;}
+// cppcheck-suppress-macro unreadVariable
 #define _HT_LOOP_TILL_EMPTY_ENTRY(cond)  int count_wrap_around=0;while (e->key cond)
   if (intkey){
-    _HT_LOOP_TILL_EMPTY_ENTRY(|| e->keylen_hash || e->value){ // cppcheck-suppress-macro unreadVariable
+    _HT_LOOP_TILL_EMPTY_ENTRY(|| e->keylen_hash || e->value){
       if (e->keylen_hash==keylen_hash && key==e->key) break;
       _HT_AT_END_OF_ENTRIES_WRAP_AROUND();
     }
   }else{
     ASSERT(key);
     ASSERT(capacity);
-    _HT_LOOP_TILL_EMPTY_ENTRY(){ // cppcheck-suppress-macro unreadVariable
+    _HT_LOOP_TILL_EMPTY_ENTRY(){
       if (e->key && e->keylen_hash==keylen_hash && (key==e->key || !memcmp(e->key,key,keylen_hash>>HT_KEYLEN_SHIFT))) break;
       _HT_AT_END_OF_ENTRIES_WRAP_AROUND();
     }

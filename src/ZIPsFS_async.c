@@ -285,7 +285,7 @@ static void root_start_thread(struct rootdata *r,const enum enum_root_thread t,c
   lock(mutex_start_thread);
   if (!r->thread_already_started[t] ||evenIfAlreadyStarted){
     log_verbose("Going to start thread %s / %s",r->rootpath,PTHREAD_S[t]);
-    void *(*f)(void *)=IF1(WITH_MEMCACHE,t==PTHREAD_MEMCACHE?&infloop_memcache:) t==PTHREAD_ASYNC?infloop_async:  t==PTHREAD_MISC?infloop_misc: NULL;
+    void *(*f)(void *)=IF1(WITH_PRELOADFILERAM,t==PTHREAD_PRELOAD?&infloop_preloadfile:) t==PTHREAD_ASYNC?infloop_async:  t==PTHREAD_MISC?infloop_misc: NULL;
     if (f){
       const int count=r->thread_count_started[t]++;
       if (pthread_create(&r->thread[t],NULL,f,(void*)r)){
@@ -301,7 +301,7 @@ static void root_start_thread(struct rootdata *r,const enum enum_root_thread t,c
 }
 static void log_infinity_loop(const struct rootdata *r, const enum enum_root_thread t){
   const int flag=
-    t==PTHREAD_MEMCACHE?LOG_INFINITY_LOOP_MEMCACHE:
+    t==PTHREAD_PRELOAD?LOG_INFINITY_LOOP_PRELOADFILERAM:
     t==PTHREAD_ASYNC?LOG_INFINITY_LOOP_DIRCACHE:
     t==PTHREAD_MISC?LOG_INFINITY_LOOP_MISC: 0;
   IF_LOG_FLAG(flag) log_verbose("Thread: %s  Root: %s ",PTHREAD_S[t],rootpath(r));
@@ -339,11 +339,11 @@ static void *infloop_async(void *arg){
       }
     }
     if (r->remote){
-        if (!success && !(loop&255) && ROOT_SUCCESS_SECONDS_AGO(r)>MAX(1,ROOT_RESPONSE_WITHIN_SECONDS/4)){
-          success=!statvfs(rootpath(r),&r->statvfs);
-          if (!success) log_verbose(RED_FAIL"statvfs(%s)",rootpath(r));
-        }
-        if (!(loop&255)||success) root_update_time(r,success?PTHREAD_ASYNC:-PTHREAD_ASYNC);
+      if (!success && !(loop&255) && ROOT_SUCCESS_SECONDS_AGO(r)>MAX(1,ROOT_RESPONSE_WITHIN_SECONDS/4)){
+        success=!statvfs(rootpath(r),&r->statvfs);
+        if (!success) log_verbose(RED_FAIL"statvfs(%s)",rootpath(r));
+      }
+      if (!(loop&255)||success) root_update_time(r,success?PTHREAD_ASYNC:-PTHREAD_ASYNC);
     }
     if (!(loop&0x1023)) log_infinity_loop(r,PTHREAD_ASYNC);
   }
@@ -369,6 +369,72 @@ static void *infloop_misc(void *arg){
     IF1(WITH_CANCEL_BLOCKED_THREADS,unblock_periodically());
   }
 }
+
+
+/* Each remote root has its own  infloop_preloadfile thread. Loading file content into RAM asynchronously. */
+#if WITH_PRELOADFILERAM || WITH_PRELOADFILEDISK
+static void *infloop_preloadfile(void *arg){
+  struct rootdata *r=arg;
+  init_infloop(r,PTHREAD_PRELOAD);
+  /* pthread_cleanup_push(infloop_preloadfile_start,r); Does not work because pthread_cancel not working when root blocked. */
+  for(int i=0;;i++){
+    struct fHandle *dm=NULL,*dl=NULL,*d=NULL;
+    {
+      lock(mutex_fhandle);
+      foreach_fhandle(id,e){
+        if (e->preloadfileram && e->preloadfileram->preloadfileram_status==preloadfileram_queued && e->preloadfileram->m_zpath.root==r) d=dm=e;
+        if (e->zpath.root==r && e->flags&FHANDLE_FLAG_LCOPY_QUEUE) d=dl=e;
+      }
+      unlock(mutex_fhandle);
+    }
+    if (d && wait_for_root_timeout(r)){
+      {
+        lock(mutex_fhandle);
+        atomic_fetch_add(&d->is_preloading,1); /* Prevents destruction */
+        IF1(WITH_PRELOADFILERAM,  if (dm && preloadfileram_queued!=preloadfileram_get_status(dm))  dm=NULL;   preloadfileram_set_status(dm,preloadfileram_reading));
+        IF1(WITH_PRELOADFILEDISK, if (dl && !(dl->flags&FHANDLE_FLAG_LCOPY_QUEUE))  dl=NULL; if (dl) { dl->flags|=FHANDLE_FLAG_LCOPY_RUN; dl->flags&=~FHANDLE_FLAG_LCOPY_QUEUE;});
+        unlock(mutex_fhandle);
+      }
+      IF1(WITH_PRELOADFILERAM,  if (dm) preloadfileram_now(dm,r));
+      IF1(WITH_PRELOADFILEDISK, if (dl) preloadfiledisk_now(dl));
+      {
+        lock(mutex_fhandle);
+        atomic_fetch_add(&d->is_preloading,-1);
+        IF1(WITH_PRELOADFILERAM,  preloadfileram_set_status(dm,preloadfileram_done));
+        unlock(mutex_fhandle);
+      }
+    }/* if (d) */
+    root_update_time(r,-PTHREAD_PRELOAD);
+    usleep(100*1000);
+  }
+}
+
+
+
+// PRELOADFILE_TIMEOUT_SECONDS     PREFETCH_FILE_TIMEOUT_SECONDS
+// PTHREAD_PRELOAD             PTHREAD_PREFETCH_FILE
+// preloadfile_time_exceeded()     prefetch_file_timeout()
+// infloop_preloadfile() infloop_prefetch_file()
+// config_advise_cache_in_ram() config_advise_prefetch_file_to_ram
+#if PRELOADFILE_TIMEOUT_SECONDS
+bool preloadfile_time_exceeded(const char *func, const struct fHandle *d,const int counter){
+  lock(mutex_fhandle);
+  struct rootdata *r=d->zpath.root;
+  assert(r!=NULL);
+  time_t t=time(NULL)-ROOT_WHEN_ITERATED(r,PTHREAD_PRELOAD);
+  unlock(mutex_fhandle);
+  if (t>PRELOADFILE_TIMEOUT_SECONDS){
+      warning(WARN_PRELOADFILE,D_RP(d),"%s Timeout > "STRINGIZE(PRELOADFILE_TIMEOUT_SECONDS)" s",func);
+      COUNTER1_INC(counter);
+      return true;
+  }
+  return false;
+}
+#else
+#define preloadfile_time_exceeded(...) false
+#endif //PRELOADFILE_TIMEOUT_SECONDS
+
+#endif //WITH_PRELOADFILERAM || WITH_PRELOADFILEDISK
 ///////////////////////////////////////////////
 /// Capability to unblock requires that     ///
 /// pthreads have different gettid() and    ///
@@ -391,7 +457,7 @@ static void unblock_periodically(){
   foreach_root(r){
     FOR(t,1,PTHREAD_LEN){
       if (t==PTHREAD_MISC || !r->thread_already_started[t]) continue;
-      const int threshold=t==PTHREAD_MEMCACHE?UNBLOCK_AFTER_SECONDS_THREAD_MEMCACHE: t==PTHREAD_ASYNC?UNBLOCK_AFTER_SECONDS_THREAD_ASYNC: 0;
+      const int threshold=t==PTHREAD_PRELOAD?UNBLOCK_AFTER_SECONDS_THREAD_PRELOADFILERAM: t==PTHREAD_ASYNC?UNBLOCK_AFTER_SECONDS_THREAD_ASYNC: 0;
       if (!threshold || !r->thread_count_started[t] || !r->thread[t]) continue;
       const long now=time(NULL), last=MAX_long(ROOT_WHEN_ITERATED(r,t),r->thread_when_canceled[t]);
       if (!last) continue;

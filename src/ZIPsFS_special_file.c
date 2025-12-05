@@ -19,15 +19,20 @@ static bool _isSpecialFileInDir(const enum enum_special_files i, const char *pat
     !strcmp(path+dir_l+1,s);
 }
 static int special_file_id(const char *vp,const int vp_l){
-  IF1(WITH_INTERNET_DOWNLOAD, if (isSpecialFileInDir(SFILE_INTERNET_README, vp,vp_l,DIR_INTERNET)) return SFILE_INTERNET_README);
-  IF1(WITH_AUTOGEN,           if (isSpecialFileInDir(SFILE_AUTOGEN_README,  vp,vp_l,DIR_AUTOGEN)) return SFILE_AUTOGEN_README);
-
+#define C(id,dir) if (isSpecialFileInDir(id,vp,vp_l,dir)) return id
+  IF1(WITH_INTERNET_DOWNLOAD, C(SFILE_README_INTERNET,DIR_INTERNET));
+  IF1(WITH_AUTOGEN,           C(SFILE_README_AUTOGEN,DIR_AUTOGEN));
+  IF1(WITH_PRELOADFILEDISK,
+      C(SFILE_README_PRELOADFILEDISK,DIR_PRELOADFILEDISK_R);
+      C(SFILE_README_PRELOADFILEDISK,DIR_PRELOADFILEDISK_RC);
+      C(SFILE_README_PRELOADFILEDISK,DIR_PRELOADFILEDISK_RZ));
   if (IS_IN_DIR_ZIPsFS(vp,vp_l)){
-    FOR(i,1,SFILE_NUM)  if (isSpecialFileInDir(i,vp,vp_l,DIR_ZIPsFS)) return i;
+    FOR(i,1,SFILE_NUM)  C(i,DIR_ZIPsFS);
   }
   return 0;
+  #undef C
 }
-static bool is_special_file_memcache(const char *path,const int path_l){
+static bool is_special_file_preloadfileram(const char *path,const int path_l){
   if (PATH_IS_FILE_INFO(path,path_l)) return true;
   const int id=special_file_id(path,path_l);
   return id && !(SFILE_FLAG_REAL&SPECIAL_FILES_FLAGS[id]);
@@ -93,13 +98,13 @@ static bool special_file_set_statbuf(struct stat *stbuf,const char *path,const i
 
 
 static void special_file_file_content_to_fhandle(struct fHandle *d){
-  if (d->memcache && d->memcache->txtbuf || !(d->flags&FHANDLE_FLAG_SPECIAL_FILE)) return;
+  if (d->preloadfileram && d->preloadfileram->txtbuf || !(d->flags&FHANDLE_FLAG_SPECIAL_FILE)) return;
   const char *vp=D_VP(d);
   const int vp_l=D_VP_L(d), i=special_file_id(vp,vp_l);
   const bool isPathInfo=PATH_IS_FILE_INFO(vp,vp_l);
   //log_entered_function("%s i: %d isPathInfo: %d",vp,i,isPathInfo);
   if (i>0 || isPathInfo){
-    struct textbuffer *b=textbuffer_new(COUNT_MALLOC_MEMCACHE_TXTBUF);
+    struct textbuffer *b=textbuffer_new(COUNT_MALLOC_PRELOADFILERAM_TXTBUF);
     cg_thread_assert_not_locked(mutex_fhandle);
     if (isPathInfo){
       char withoutSfx[vp_l+1];
@@ -117,8 +122,8 @@ static void special_file_file_content_to_fhandle(struct fHandle *d){
       if (!fhandle_set_text(d,b)){
         FREE_NULL_MALLOC_ID(b);
       }else{
-        memcache_set_status(d,memcache_done);
-        d->flags|=FHANDLE_FLAG_MEMCACHE_COMPLETE;
+        preloadfileram_set_status(d,preloadfileram_done);
+        d->flags|=FHANDLE_FLAG_PRELOADFILERAM_COMPLETE;
         //log_debug_now("%s isPathInfo: %d textbuffer_length: %ld",D_VP(d), isPathInfo, textbuffer_length(b));
       }
       unlock(mutex_fhandle);
@@ -241,8 +246,8 @@ This feature can be activated with the switch <b>WITH_AUTOGEN</b> in ZIPsFS_conf
 Derived files are displayed in the file tree <B>");
     SGMT_MNT();
 #if WITH_AUTOGEN
-    textbuffer_add_segment_const(b, DIR_ZIPsFS"/"DIRNAME_AUTOGEN"</B>.\n\
-With <b>WITH_AUTOGEN_DIR_HIDDEN</b> set to <b>1</b>, the folder <B>"DIRNAME_AUTOGEN"</B> is not listed in its parent.\n\
+    textbuffer_add_segment_const(b, DIR_AUTOGEN"</B>.\n\
+With <b>WITH_AUTOGEN_DIR_HIDDEN</b> set to <b>1</b>, the folder <B>"DIR_AUTOGEN"</B> is not listed in its parent.\n\
 The prevents recursive file searches to enter this tree.\n\
 It is currently <B>" IF0(WITH_AUTOGEN_DIR_HIDDEN,"de")"activated</B>.<BR><BR>\n\
 The generated files  are displayed even if they do  not exist.\n\
@@ -258,16 +263,30 @@ When a file is accessed that is not yet generated, potentially two  problems may
 </OL><B><U>Workaround</U></B>\n\
 Generation of the files can be forced using "FILENAME_SET_ATIME". These scripts change the <B>last-access-time</B> and  can also be used to postpone  deletion.<BR><BR>\
 <B><U>Testing</U></B>\n\
-For testing,  copy  jpeg, png or give files. Downscaled versions will be found in the file tree "DIR_ZIPsFS"/"DIRNAME_AUTOGEN"/.\n\
+For testing,  copy  jpeg, png or give files. Downscaled versions will be found in the file tree "DIR_AUTOGEN"/.\n\
 This requires installation of Imagemagick\n\
 </BODY></HTML>\n");
+
 #endif // WITH_AUTOGEN
     break;
 
-
+#if WITH_PRELOADFILEDISK
+  case SFILE_README_PRELOADFILEDISK:
+    textbuffer_add_segment_const(b,"When remote files are accessed from this path\n\
+the file content is copied to the first root which is usually the local harddisk.\n\
+This improves performance of non-sequential file reads.\n\
+The conditions depend on the subdir:\n\
+ - lr: All files in a remote (i.e. given with leading double slash at command line) branch\n\
+ - lrz: All ZIP-ed files in a remote branch\n\
+ - lrc: All ZIP compressed files in a remote branch\n\
+last-modified time and size of locally stored files will be compared with upstream.\n\
+The cache stores these values for PRELOADFILEDISK_CACHE_MTIME_SECONDS = " STRINGIZE(PRELOADFILEDISK_CACHE_MTIME_SECONDS)" s.\n\
+");
+    break;
+#endif //WITH_PRELOADFILEDISK
 
 #if WITH_INTERNET_DOWNLOAD
-  case SFILE_INTERNET_README:
+  case SFILE_README_INTERNET:
     textbuffer_add_segment_const(b,"This directory contains downloaded internet files.\n\
 The file names are the URLs where the colon and slashes are replaced by comma.\n\
 ZIPsFS automatically downloads and updates the files.\n\
@@ -282,7 +301,7 @@ Examples: \n");
     break;
 #endif //WITH_INTERNET_DOWNLOAD
 #if WITH_AUTOGEN
-  case SFILE_AUTOGEN_README:
+  case SFILE_README_AUTOGEN:
     textbuffer_add_segment_const(b,"This file tree is a replicate of "); SGMT_MNT();
     textbuffer_add_segment_const(b,".\nIn addition it contains dynamically generated files which might or might not exist as real files yet.\n\
 They will be created on access using comand lines which can be customized by the user.\n\
