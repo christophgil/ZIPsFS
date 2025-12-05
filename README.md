@@ -195,10 +195,10 @@ accessed through the following folders will be first copied to local disk:
 
     <mount-point>/ZIPsFS/lr/
     <mount-point>/ZIPsFS/lrc/
-    <mount-point>/ZIPsFS/lrz/
+    <mount-point>/ZIPsFS/lrz/    # use this for FragPipe
 
 Periodically ZIPsFS will call ``<path-of-branch1>/ZIPsFS/ZIP_cleanup.sh``.
-This customizable script can cleanup old files to free up drive space.
+This customizable script can cleanup old files to free up disk space.
 
 Additional caching mechanisms are designed to accelerate file listing in large directories for ZIP entries.
 </details>
