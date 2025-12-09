@@ -83,6 +83,8 @@ typedef enum yes_zero_no { NO=-1,ZERO,YES} yes_zero_no_t;
 #define ST_MTIMESPEC st_mtim
 #endif
 #define CG_TIMESPEC_EQ(a,b) ((a).tv_sec==(b).tv_sec && (a).tv_nsec==(b).tv_nsec)
+#define CTIME(t) strtok(ctime(&(t)),"\n")
+#define ST_MTIME(st) strtok(ctime(&(st)->st_mtime),"\n")
 ////////////////////////////////////////
 #define FOR(var,from,to) for(int var=from;var<(to);var++)
 #define RLOOP(var,from) for(int var=from;--var>=0;)

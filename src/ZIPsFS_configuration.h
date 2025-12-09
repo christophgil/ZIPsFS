@@ -68,6 +68,7 @@
 #define WITH_PRELOADFILERAM 1
 #define NUM_PRELOADFILERAM_STORE_RETRY 2
 // With WITH_PRELOADFILERAM, the file content of selected ZIP entries is hold in RAM while the respective file handle exists.
+// This is also required for WITH_INTERNET_DOWNLOAD WITH_AUTOGEN and WITH_PRELOADFILERAM
 // This facilitates non-sequential file reading.
 // See man fseek
 // The virtual file paths are selected with the function config_advise_cache_zipentry_in_ram(). Also see CLI parameter -c.
@@ -136,7 +137,7 @@
 /// Times ///
 /////////////
 
-#define PRELOADFILEDISK_CACHE_MTIME_SECONDS 60 /* ZIPsFS is discarding local files if last modified does not match upstream */
+
 #define WITH_TESTING_TIMEOUTS 0
 #if WITH_TESTING_TIMEOUTS
 #define ROOT_RESPONSE_WITHIN_SECONDS 2
@@ -187,15 +188,17 @@
 #define WITH_AUTOGEN           1 /* Generate files based on rules of file extensions */
 #define WITH_CCODE             1 /* Generate files by C-code */
 #define WITH_INTERNET_DOWNLOAD 1 /* Access to internet files like <mount-point>/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README */
-#define WITH_PRELOADFILEDISK 1
+#define WITH_PRELOADFILEDISK   1
 
-#if 0 /* Conveniently deactivate all caches for testing */
+
+
+#define WITH_AUTOGEN_DIR_HIDDEN 0  /* Hide the directory a in ZIPsFS to avoid recursive searches. However, it breaks export to Windows */
+#if 0
+#warning "Going to deactivate all caches for testing"
 #undef WITH_DIRCACHE
 #define WITH_DIRCACHE 0
 #undef WITH_PRELOADFILERAM
 #define WITH_PRELOADFILERAM 0
-#undef WITH_AUTOGEN
-#define WITH_AUTOGEN 0
 #undef WITH_TRANSIENT_ZIPENTRY_CACHES
 #define WITH_TRANSIENT_ZIPENTRY_CACHES 0
 #undef WITH_STAT_CACHE

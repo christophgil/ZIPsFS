@@ -139,22 +139,6 @@ static bool autogen_filldir(fuse_fill_dir_t filler,void *buf, const char *name, 
   return true;
 }
 
-static bool autogen_cleanup_running;
-static void *_autogen_cleanup_runnable(void *arg){
-  if(_realpath_autogen){
-    static int count;
-    autogen_cleanup_running=true;
-    if (strstr(_realpath_autogen,DIR_AUTOGEN)) aimpl_cleanup(_realpath_autogen);
-    autogen_cleanup_running=false;
-  }
-  return NULL;
-}
-static void autogen_cleanup(void){
-  static pthread_t thread_cleanup;
-  if (!autogen_cleanup_running){
-    pthread_create(&thread_cleanup,NULL,&_autogen_cleanup_runnable,NULL);
-  }
-}
 
 static char *autogen_apply_replacements_for_argv(char *dst_or_NULL,const char *orig,const struct autogen_files *ff){ /* NOT_TO_HEADER */
   if (!orig) return NULL;

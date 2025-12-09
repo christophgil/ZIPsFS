@@ -673,7 +673,14 @@ static long cg_file_size(const char *path){
   struct stat st;
   return stat(path,&st)?-1:st.st_size;
 }
-#define cg_file_exists(path) (cg_file_size(path)>=0)
+
+
+static bool cg_file_exists(const char *path){
+  struct stat st;
+  return path && !stat(path,&st);
+}
+
+
 #define cg_pid_exists(pid)  (!kill(pid,0)) // Or   getpgid(pid)>=0
 
 #define ST_BLKSIZE 4096
@@ -709,10 +716,9 @@ static void _cg_log_file_stat(const char *func,const char * name,const struct st
 #ifdef SHIFT_INODE_ROOT
   if (s->st_ino>(1L<<SHIFT_INODE_ROOT)) color=ANSI_FG_MAGENTA;
 #endif
-  fprintf(stderr,"%s('%s') stat: %s",func,name,s?" ":"NULL");
+  fprintf(stderr,"%s() '%s' stat: %s",func,name,s?" ":"NULL");
   if (s){
-    fprintf(stderr,"size=%lld blksize=%lld blocks=%lld links=%u inode=%s%llu"ANSI_RESET" dir=%s uid=%u gid=%u ",(LLD)s->st_size,(LLD)s->st_blksize,(LLD)s->st_blocks,  (uint32_t) s->st_nlink,color,(LLU)s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
-    //st_blksize st_blocks f_bsize
+    fprintf(stderr,"size=%lld lm:%s blksize=%lld blocks=%lld links=%u inode=%s%llu"ANSI_RESET" dir=%s uid=%u gid=%u ",(LLD)s->st_size,ST_MTIME(s),(LLD)s->st_blksize,(LLD)s->st_blocks,  (uint32_t) s->st_nlink,color,(LLU)s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
     cg_log_file_mode(s->st_mode);
   }
   fputc('\n',stderr);
@@ -805,6 +811,16 @@ static bool cg_file_set_mtimes(const char *path, const struct timespec mtime){
   return !utimes(path,tt);
 }
 // timespec
+static bool cg_file_set_mtime(const char *path, const time_t time){
+  struct timeval tt[2]={0};
+  tt[1].tv_sec=time;
+  if (utimes(path,tt)){
+    perror(path);
+    return false;
+  }
+  return true;
+
+}
 
 
 #define  cg_set_executable(path)  cg_set_st_mode_flag(path,S_IRWXU)
@@ -838,8 +854,16 @@ static bool cg_fd_write_str(const int fd,const char *t){
 
 
 static int cg_rename(const char *old, const char *n){
+  if (!old || !n || !*old || !*n) return -1;
   const int ret=rename(old,n);
   if (ret) log_errno("rename(%s,%s)",old,n);
+  return ret;
+}
+
+static int cg_unlink(const char *f){
+  if (!f || !*f) return -1;
+  const int ret=unlink(f);
+  if (ret) log_errno("unlink(%s)",f);
   return ret;
 }
 
@@ -1106,6 +1130,7 @@ static int differs_filecontent_from_string(const int opt,const char* path, const
 #endif // _cg_utils_dot_c
 // 1111111111111111111111111111111111111111111111111111111111111
 #if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
+
 static bool cg_pid_exists_proc(const pid_t pid){
   static char path[99];
   sprintf(path,"/proc/%ld",(long)pid);

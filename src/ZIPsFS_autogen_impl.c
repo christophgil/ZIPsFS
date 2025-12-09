@@ -95,7 +95,6 @@ static void aimpl_init(void){
       if (n!=1) DIE("autogen_rule %d: There are %d file endings. However, with option generated_file_hasnot_infile_ext, there must be exactly one.",idx,n);
     }
   }
-  autogen_cleanup();
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -197,7 +196,7 @@ static int _autogen_realinfiles(struct autogen_files *ff,const struct autogen_ru
         NEW_ZIPPATH(vin);
         //if (find_realpath_any_root(0,zpath,NULL) || (zpath_init(zpath,vin+DIR_AUTOGEN_L),find_realpath_any_root(0,zpath,NULL))){
         if (!find_realpath_any_root(0,zpath,NULL)) goto end;
-        if ((zpath->flags&ZP_ZIP)) strcpy(stpcpy(ff->rinfiles[i],_mnt),vp_without_pfx_autogen(VP(),VP_L()));     /* TODO entry size */
+        if ((ZPF(ZP_ZIP))) strcpy(stpcpy(ff->rinfiles[i],_mnt),vp_without_pfx_autogen(VP(),VP_L()));     /* TODO entry size */
         else strcpy(ff->rinfiles[i],RP());                                                                       /* TODO recursion? */
         ff->infiles_size_sum+=(ff->infiles_stat[i]=zpath->stat_vp).st_size;
       }
@@ -321,34 +320,14 @@ static int aimpl_run(struct autogen_files *ff){
     if (fd_err>0) close(fd_err);
   }/* if (!res) */
   aimpl_wait_concurrent_end(ac);
-  if (res && cg_file_exists(ff->log)) cg_rename(ff->log,ff->fail);
+  if (res && cg_file_size(ff->log)>=0) cg_rename(ff->log,ff->fail);
   IF_LOG_FLAG(LOG_AUTOGEN)log_exited_function("%s res: %d %s",ff->grealpath,res,success_or_fail(!res));
   return -res;
 #undef isRAM
 #undef isMMAP
 #undef isOUTF
 }
-static void aimpl_cleanup(const char *root){
-  static time_t when=0;
-  struct stat st={0};
-  RLOOP(pass,2){
-    if (time(NULL)-when>60*60*4 && !stat(root,&st) && st.st_ino){
-      static int count;
-      when=time(NULL);
-      const pid_t pid=fork(); /* Make real file by running external prg */
-      if (pid<0){ log_errno("fork() waitpid 1 returned %d",pid);return;}
-      if (!pid){
-        if (pass) execlp("find","find",root,"-type","f","-executable","-atime","+"AUTOGEN_DELETE_FILES_AFTER_DAYS,"-delete",(char*)0);
-        else execlp("find","find",root,"-name","*.autogen.tmp","-mtime","+7","-delete",(char*)0);
-        exit(errno);
-      }else{
-        int status;
-        waitpid(pid,&status,0);
-        cg_log_waitpid_status(stderr,status,__func__);
-      }
-    }
-  }
-}
+
 static int _autogen_filecontent_append(const int flags, struct autogen_files *ff, const char *s,const long s_l){
   if (!ff->af_txtbuf) ff->af_txtbuf=textbuffer_new(COUNT_AUTOGEN_MALLOC_TXTBUF);
   return textbuffer_add_segment(flags,ff->af_txtbuf,s,s_l);

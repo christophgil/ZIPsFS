@@ -13,7 +13,6 @@
 
 #define AUTOGEN_MAX_INFILES 5 /*  Dynamically generated file can depend on n input files.  Prevents runaway loop */
 
-#define WITH_AUTOGEN_DIR_HIDDEN 0  /* Hide the directory a in ZIPsFS to avoid recursive searches. */
 /* Unfortunately, Windows will not be able to open folder a when it is not shown in the parent file listing. */
 #define AUTOGEN_DELETE_FILES_AFTER_DAYS "99"
 

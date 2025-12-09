@@ -79,7 +79,7 @@ static struct zippath *transient_cache_get_or_create_zpath(const bool create,con
         || strcmp(virtualpath,VP())){ /* Accept hash_collision */
       zpath_init(zpath,virtualpath);
     }
-    if (maybe_same_zip && (zpath->flags&ZP_DOES_NOT_EXIST)){
+    if (maybe_same_zip && ZPF(ZP_DOES_NOT_EXIST)){
       //DIE_DEBUG_NOW("ZP_DOES_NOT_EXIST %s",VP());
       return NULL;
     }

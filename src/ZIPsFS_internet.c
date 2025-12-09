@@ -3,7 +3,6 @@
 /// Dynamically downloaded files ///
 ////////////////////////////////////
 // cat mnt/ZIPsFS/n/gz/https,,,files.rcsb.org,download,1SBT.pdb
-enum enum_internet_compression{INTERNET_COMPRESSION_NA, INTERNET_COMPRESSION_NONE, INTERNET_COMPRESSION_GZ, INTERNET_COMPRESSION_BZ2, INTERNET_COMPRESSION_NUM};
 static int _dir_internet_l[]={0,DIR_INTERNET_L,DIR_INTERNET_L+3,DIR_INTERNET_L+4};
 static char *_dir_internet_subdir[]={NULL,NULL,"gz","bz2",NULL};
 #define INTERNET_SUBDIR_MAXLEN 4 /* /bz2 */
@@ -14,7 +13,10 @@ static char *_dir_internet_subdir[]={NULL,NULL,"gz","bz2",NULL};
 static enum enum_internet_compression  net_which_dir_compression(const char *vp,const int vp_l){
   if (vp_l<=0 || !_root_writable && vp[DIR_ZIPsFS_L]!='/') return INTERNET_COMPRESSION_NA;
   FOR(i,INTERNET_COMPRESSION_NONE,INTERNET_COMPRESSION_NUM){
-    if (vp_l==_dir_internet_l[i] && !strncmp(vp,DIR_INTERNET,DIR_INTERNET_L)) return i;
+    if (vp_l==_dir_internet_l[i] && !strncmp(vp,DIR_INTERNET,DIR_INTERNET_L)){
+      //log_debug_now("%s %d",vp,i);
+      return i;
+    }
   }
   return INTERNET_COMPRESSION_NA;
 }
@@ -30,6 +32,7 @@ static int net_which_compression(const char *vp,const int vp_l){
   return net_which_dir_compression(vp,cg_last_slash_l(vp,vp_l));
 }
 
+#if WITH_INTERNET_DOWNLOAD
 #define net_filepath_l(isHeader,vp,vp_l) (_root_writable->rootpath_l+vp_l+(isHeader?NET_SFX_HEADER_L:0))
 #define net_filepath(rp,isHeader,vp,vp_l) stpcpy(stpcpy(stpcpy(rp,_root_writable->rootpath),vp),(isHeader?NET_SFX_HEADER:""))
 
@@ -73,7 +76,7 @@ static void net_url_for_file(char *url, const char *vp,const int vp_l){
 }
 static bool net_header_download(const char *rph, const bool overwrite,const char *vp,const int vp_l){
   char url[vp_l]; net_url_for_file(url,vp,vp_l);
-  const bool ok=!overwrite && cg_file_exists(rph) || net_call_curl(true,url,rph);
+  const bool ok=!overwrite && cg_file_size(rph)>=0 || net_call_curl(true,url,rph);
   //log_exited_function("%s %s overwrite:%d ok:%d",vp,url,overwrite,ok);
   return ok;
 }
@@ -90,7 +93,7 @@ static bool net_maybe_download(struct zippath *zpath){
   if (!net_header_download(rph,updateHeader,vp,vp_l)) return false;
   struct stat sth={0};
   if (!net_parse_header(&sth,rph)) return false;
-  if (!cg_file_exists(rp)){
+  if (cg_file_size(rp)<0){
     const int rp_l=strlen(rp);
     const int compression=net_which_compression(vp,vp_l);
     net_append_subdir(rp,'.',compression);
@@ -144,7 +147,7 @@ static bool net_call_curl(const bool header,const char *url, const char *outfile
   char errfile[strlen(outfile)+sizeof(NET_SFX_FAIL)+1];
   stpcpy(stpcpy(errfile,outfile),NET_SFX_FAIL);
   unlink(errfile);
-  if (!cg_file_exists(tmp)){
+  if (cg_file_size(tmp)<0){
     warning(WARN_NET,tmp,"Does not exist");
   }else{
     const char *dst=outfile;
@@ -163,10 +166,9 @@ static bool net_call_curl(const bool header,const char *url, const char *outfile
   return false;
 }
 static bool net_getattr(struct stat *st, const char *vp,const int vp_l){
-  //log_entered_function("vp: %s %d",vp,net_which_compression(vp,vp_l));
   if (net_which_dir_compression(vp,vp_l)){
-    stat_set_dir(st);
-        return true;
+    stat_set_dir(st,vp);
+    return true;
   }
   if (!net_is_internetfile(vp,vp_l)) return false;
   stat_init(st,0,NULL);
@@ -217,7 +219,7 @@ static int net_filename_from_header_file(char *n,const int n_l){
   n[n_l-NET_SFX_HEADER_L]=0;
   return n_l-NET_SFX_HEADER_L;
 }
-
+#endif //WITH_INTERNET_DOWNLOAD
 //curl -o t.txt  -I https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz
 /*
   m=~/tmp/ZIPsFS/mnt

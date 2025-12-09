@@ -24,7 +24,7 @@ typedef struct textbuffer** c_read_handle_t;
 #undef C
 #undef X
 
-#define a(vp,vp_l)   const bool inDirA=IS_IN_DIR_Z(DIR_AUTOGEN,vp,vp_l)
+#define a(vp,vp_l)   const bool inDirA=PATH_STARTS_Z(vp,vp_l,DIR_AUTOGEN,sizeof(DIR_AUTOGEN)-1)
 #define o()   (inDirA?DIR_AUTOGEN_L:0)
 #define f()   inDirA?ZIPSFS_C_IS_DIR_A:0
 
@@ -56,7 +56,7 @@ static bool c_getattr(struct stat *st, const char *vp,const int vp_l){
   if (!config_c_getattr(f(),vp+o(),vp_l-o(),st)){
     return false;
   }
-  if (st->st_mode&S_IFDIR) stat_set_dir(st);
+  if (st->st_mode&S_IFDIR) stat_set_dir(st,vp);
   if (!st->st_ino) st->st_ino=inode_from_virtualpath(vp+o(),vp_l-o());
   return true;
 }
@@ -74,8 +74,7 @@ static void c_file_content_to_fhandle(struct fHandle *d){
     if (!fhandle_set_text(d,bb[0])){
       FREE_NULL_MALLOC_ID(bb[0]);
     }else{
-      d->preloadfileram->txtbuf=bb[0];
-      preloadfileram_set_status(d,preloadfileram_done);
+      IF1(WITH_PRELOADFILERAM,d->preloadfileram->txtbuf=bb[0];preloadfileram_set_status(d,preloadfileram_done));
       d->flags|=FHANDLE_FLAG_PRELOADFILERAM_COMPLETE;
     }
     unlock(mutex_fhandle);

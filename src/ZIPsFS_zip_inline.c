@@ -10,7 +10,7 @@ static bool find_realpath_try_inline(struct zippath *zpath, const char *vp, stru
   zpath->flags|=ZP_ZIP;
   if (!zpath_strcat(zpath,vp+cg_last_slash(vp)+1)) return false;
   EP_L()=zpath_commit(zpath);
-  const bool ok=test_realpath_or_reset(false,zpath,r);
+  const bool ok=test_realpath_or_reset(zpath,r);
   IF_LOG_FLAG(LOG_ZIP_INLINE) if (cg_is_regular_file(RP()))log_exited_function("rp: %s vp: %s ep: %s ok: %s",RP(),vp,EP(),yes_no(ok));
   return ok;
 }

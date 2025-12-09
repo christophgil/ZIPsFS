@@ -348,6 +348,20 @@ static void *infloop_async(void *arg){
     if (!(loop&0x1023)) log_infinity_loop(r,PTHREAD_ASYNC);
   }
 }
+
+static bool _cleanup_running;
+static void *_cleanup_files_runnable(void *arg){
+  _cleanup_running=true;
+    //const pid_t pid0=getpid();
+    if (fork()){
+      perror(_cleanup_script);
+    }else{
+      execlp("bash","bash",_cleanup_script,(char*)0);
+      exit(errno);
+    }
+  _cleanup_running=false;
+  return NULL;
+}
 static void *infloop_misc(void *arg){
   struct rootdata *r=arg;
   init_infloop(r,PTHREAD_MISC);
@@ -356,7 +370,12 @@ static void *infloop_misc(void *arg){
     root_update_time(r,-PTHREAD_MISC);
     usleep(1000*1000);
     LOCK_NCANCEL(mutex_fhandle,fhandle_destroy_those_that_are_marked());
-    IF1(WITH_AUTOGEN,if (!(j&0xFff)) autogen_cleanup());
+#if WITH_AUTOGEN||WITH_PRELOADFILEDISK
+    if (_root_writable && (j&0xFff)==256){
+      static pthread_t t;
+      if (!_cleanup_running && cg_file_exists(_cleanup_script)) pthread_create(&t,NULL,&_cleanup_files_runnable,NULL);
+    }
+#endif //WITH_AUTOGEN||WITH_PRELOADFILEDISK
     if (!(j&3)){
       static struct pstat pstat1,pstat2;
       cpuusage_read_proc(&pstat2,getpid());
@@ -378,12 +397,12 @@ static void *infloop_preloadfile(void *arg){
   init_infloop(r,PTHREAD_PRELOAD);
   /* pthread_cleanup_push(infloop_preloadfile_start,r); Does not work because pthread_cancel not working when root blocked. */
   for(int i=0;;i++){
-    struct fHandle *dm=NULL,*dl=NULL,*d=NULL;
+    struct fHandle *dm=NULL,*dl=NULL,*d=NULL; // cppcheck-suppress constVariablePointer
     {
       lock(mutex_fhandle);
       foreach_fhandle(id,e){
-        if (e->preloadfileram && e->preloadfileram->preloadfileram_status==preloadfileram_queued && e->preloadfileram->m_zpath.root==r) d=dm=e;
-        if (e->zpath.root==r && e->flags&FHANDLE_FLAG_LCOPY_QUEUE) d=dl=e;
+        IF1(WITH_PRELOADFILERAM,if (e->preloadfileram && e->preloadfileram->preloadfileram_status==preloadfileram_queued && e->preloadfileram->m_zpath.root==r) d=dm=e);
+        if (e->zpath.root==r && e->flags&FHANDLE_FLAG_LCOPY_QUEUE) d=dl=e; // cppcheck-suppress unreadVariable
       }
       unlock(mutex_fhandle);
     }
@@ -396,7 +415,7 @@ static void *infloop_preloadfile(void *arg){
         unlock(mutex_fhandle);
       }
       IF1(WITH_PRELOADFILERAM,  if (dm) preloadfileram_now(dm,r));
-      IF1(WITH_PRELOADFILEDISK, if (dl) preloadfiledisk_now(dl));
+      IF1(WITH_PRELOADFILEDISK, if (dl){ char dst[MAX_PATHLEN+1];   if (preloadfiledisk_realpath(&dl->zpath,dst)) preloadfiledisk_now(dst,NULL,dl);});
       {
         lock(mutex_fhandle);
         atomic_fetch_add(&d->is_preloading,-1);

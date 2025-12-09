@@ -13,11 +13,12 @@ main(){
     mkdir -p $DIR || return 1
     cd $DIR || return 1
     rm -r ZIPsFS-main main.zip 2>/dev/null
-#     wget -N $U || return 1
-    #     unzip -o main.zip || return 1
-wget -O - $U
+    wget -N  $U
+    unzip main.zip
 
+pwd
     ls -l
     ./ZIPsFS-main/src/ZIPsFS.compile.sh
+
 }
 main

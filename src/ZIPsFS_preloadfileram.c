@@ -47,11 +47,10 @@ static bool statForVirtualpathAndRootpath(struct stat *st, const char *vp, const
 static bool preloadfileram_advise(const struct zippath *zpath, const int additional_flags,const bool wait_for_free_mem){
   cg_thread_assert_not_locked(mutex_fhandle);
   if (_preloadfileram_policy==PRELOADFILERAM_NEVER) return false;
-  const bool c=zpath->flags&ZP_IS_COMPRESSED, z=zpath->flags&ZP_ZIP;
   const off_t need_bytes=config_advise_preload_file_ram(additional_flags|
-                                                    (c?ADVISE_CACHE_IS_CMPRESSED:0)|
-                                                    (z?ADVISE_CACHE_IS_ZIPENTRY:0)|
-                                                    ((_preloadfileram_policy==PRELOADFILERAM_COMPRESSED&&c || z&&_preloadfileram_policy==PRELOADFILERAM_ALWAYS)?ADVISE_CACHE_BY_POLICY:0),
+                                                    (ZPF(ZP_IS_COMPRESSED)?ADVISE_CACHE_IS_CMPRESSED:0)|
+                                                    (ZPF(ZP_ZIP)?ADVISE_CACHE_IS_ZIPENTRY:0)|
+                                                    ((_preloadfileram_policy==PRELOADFILERAM_COMPRESSED&&ZPF(ZP_IS_COMPRESSED) || ZPF(ZP_ZIP)&&_preloadfileram_policy==PRELOADFILERAM_ALWAYS)?ADVISE_CACHE_BY_POLICY:0),
                                                     VP(),VP_L(),RP(),RP_L(),zpath->root->rootpath,zpath->stat_vp.st_size);
   if (need_bytes<0) return false;
   if (need_bytes>_preloadfileram_bytes_limit){
