@@ -3,80 +3,41 @@
 /// Dynamically downloaded files ///
 ////////////////////////////////////
 // cat mnt/ZIPsFS/n/gz/https,,,files.rcsb.org,download,1SBT.pdb
-static int _dir_internet_l[]={0,DIR_INTERNET_L,DIR_INTERNET_L+3,DIR_INTERNET_L+4};
-static char *_dir_internet_subdir[]={NULL,NULL,"gz","bz2",NULL};
-#define INTERNET_SUBDIR_MAXLEN 4 /* /bz2 */
 #define NET_SFX_HEADER ".HeaDeR"
 #define NET_SFX_FAIL   ".FaiLeD"
 #define NET_SFX_HEADER_L (sizeof(NET_SFX_HEADER)-1)
 
-static enum enum_internet_compression  net_which_dir_compression(const char *vp,const int vp_l){
-  if (vp_l<=0 || !_root_writable && vp[DIR_ZIPsFS_L]!='/') return INTERNET_COMPRESSION_NA;
-  FOR(i,INTERNET_COMPRESSION_NONE,INTERNET_COMPRESSION_NUM){
-    if (vp_l==_dir_internet_l[i] && !strncmp(vp,DIR_INTERNET,DIR_INTERNET_L)){
-      //log_debug_now("%s %d",vp,i);
-      return i;
-    }
-  }
-  return INTERNET_COMPRESSION_NA;
-}
-/*
-static enum enum_internet_compression  net_which_dir_compression(const char *vp,const int vp_l){
-  const int ret=_net_which_dir_compression(vp,vp_l);
-  log_exited_function("vp: %s %d   vp_l: %d   ret: %d",vp,cg_strlen(vp), vp_l,ret);
-  return ret;
-}
-*/
-static int net_which_compression(const char *vp,const int vp_l){
-  //log_entered_function("vp: %s %d",vp,vp_l);
-  return net_which_dir_compression(vp,cg_last_slash_l(vp,vp_l));
-}
+#define MAX_LEN_COMPRESS_EXT 5
+#define net_estimate_filepath_l(vp,vp_l) (_root_writable->rootpath_l+vp_l+(NET_SFX_HEADER_L+MAX_LEN_COMPRESS_EXT+1))
+#define net_filepath(rp,vp,vp_l) stpcpy(stpcpy(rp,_root_writable->rootpath),vp)
+#define net_filepath_header(rp,vp,vp_l,ext) stpcpy(stpcpy(stpcpy(stpcpy(rp,_root_writable->rootpath),vp),ext),NET_SFX_HEADER)
 
-#if WITH_INTERNET_DOWNLOAD
-#define net_filepath_l(isHeader,vp,vp_l) (_root_writable->rootpath_l+vp_l+(isHeader?NET_SFX_HEADER_L:0))
-#define net_filepath(rp,isHeader,vp,vp_l) stpcpy(stpcpy(stpcpy(rp,_root_writable->rootpath),vp),(isHeader?NET_SFX_HEADER:""))
+
+
 
 #define net_is_internetfile(vp,vp_l) (net_internet_file_colon(vp,vp_l)>0)
-static void net_append_subdir(char *path, const char slash_or_dot, const int type){
-  const char *subdir=type<0?NULL:_dir_internet_subdir[type];
-  if(subdir){
-    const int path_l=strlen(path);
-    path[path_l]=slash_or_dot;
-    strcpy(path+path_l+1,subdir);
-  }
-}
-static void net_local_dir(const bool mkdir){
-  if (!_root_writable) return;
-#define N 3
-  static char d[N][MAX_PATHLEN+1]={0};
-  RLOOP(i,N){
-    if (!*d[i]){
-      net_filepath(d[i],false,DIR_INTERNET,DIR_INTERNET_L);
-      net_append_subdir(d[i],'/',i);
-    }
-    if (mkdir && *d[i]) cg_recursive_mkdir(d[i]);
-  }
-#undef N
-}
+
+#define NET_FOREACH_COMPRESS(iCompress)   FOR(iCompress,0,2)
+#define X()  const char *ext=iCompress==0?"":".gz"
 static int net_internet_file_colon(const char *vp,const int vp_l){
-  const int parent_l=_dir_internet_l[net_which_compression(vp,vp_l)];
-  const int colon=((parent_l && vp[parent_l]=='/' && !ENDSWITH(vp,vp_l,NET_SFX_HEADER) && !ENDSWITH(vp,vp_l,NET_SFX_FAIL)) && !cg_starts_digits_char(vp+parent_l+1,8,'_')) ? cg_str_str(1+parent_l+vp,",,,") : 0;
+  const int colon=((vp[DIR_INTERNET_L]=='/' && !ENDSWITH(vp,vp_l,NET_SFX_HEADER) && !ENDSWITH(vp,vp_l,NET_SFX_FAIL)) && !cg_starts_digits_char(vp+DIR_INTERNET_L+1,8,'_')) ? cg_str_str(1+DIR_INTERNET_L+vp,",,,") : 0;
   //log_exited_function("%s %d",vp,colon);
   return colon;
 }
-static void net_url_for_file(char *url, const char *vp,const int vp_l){
+static void net_url_for_file(char *url, const char *vp,const int vp_l, const char *ext){
   const int colon=net_internet_file_colon(vp,vp_l);
   if (colon<=0){
     *url=0;
   }else{
-    strcpy(url,cg_last_slash_l(vp,vp_l)+1+vp)[colon]=':';
+    stpcpy(stpcpy(url,cg_last_slash_l(vp,vp_l)+1+vp),ext);
+    url[colon]=':';
     for(char *s=url;*s;s++) if (*s==',') *s='/';
-    net_append_subdir(url,'.',net_which_compression(vp,vp_l));
   }
+  //log_exited_function("url=%s",url);
 }
-static bool net_header_download(const char *rph, const bool overwrite,const char *vp,const int vp_l){
-  char url[vp_l]; net_url_for_file(url,vp,vp_l);
-  const bool ok=!overwrite && cg_file_size(rph)>=0 || net_call_curl(true,url,rph);
+static bool net_header_download(const char *rph, const bool overwrite,const char *vp,const int vp_l,const char *ext){
+  char url[vp_l]; net_url_for_file(url,vp,vp_l,ext);
+  const bool ok=!overwrite && cg_file_size(rph)>=0 || cg_download_url(COPY_HEADER,url,rph);
   //log_exited_function("%s %s overwrite:%d ok:%d",vp,url,overwrite,ok);
   return ok;
 }
@@ -85,98 +46,54 @@ static bool net_maybe_download(struct zippath *zpath){
   if (!net_is_internetfile(VP(),VP_L())) return false;
   const char *vp=VP();
   const int vp_l=VP_L();
-  char rp[1+INTERNET_SUBDIR_MAXLEN+net_filepath_l(false,vp,vp_l)]; net_filepath(rp,false,vp,vp_l);
-  char rph[net_filepath_l(true,vp,vp_l)+1]; net_filepath(rph,true,vp,vp_l);
-  char url[vp_l]; net_url_for_file(url,vp,vp_l);
   struct stat st={0};
-  const bool updateHeader=!stat(rph,&st) && config_internet_update_header(url,&st);
-  if (!net_header_download(rph,updateHeader,vp,vp_l)) return false;
-  struct stat sth={0};
-  if (!net_parse_header(&sth,rph)) return false;
-  if (cg_file_size(rp)<0){
-    const int rp_l=strlen(rp);
-    const int compression=net_which_compression(vp,vp_l);
-    net_append_subdir(rp,'.',compression);
-    if ((stat(rp,&st) || st.st_mtime<sth.st_mtime) && !net_call_curl(false,url,rp)) return false;
-    const char *unzip=compression==INTERNET_COMPRESSION_BZ2?"bunzip": compression==INTERNET_COMPRESSION_GZ?"gunzip":  NULL;
-    if (unzip){
-      const char *cmd[]={unzip,"-k",rp,(char*)0};
-      cg_fork_exec(cmd,NULL);
-    }
-    rp[rp_l]=0;
+  char url[vp_l];
+  char rph[net_estimate_filepath_l(vp,vp_l)];
+  char rp[net_estimate_filepath_l(vp,vp_l)];
+  NET_FOREACH_COMPRESS(iCompress){
+    if (iCompress && cg_endsWithGZ(vp,vp_l)) continue;
+    X();
+    net_filepath(rp,vp,vp_l);
+    net_filepath_header(rph,vp,vp_l,ext);
+    net_url_for_file(url,vp,vp_l,ext);
+    const bool updateHeader=!stat(rph,&st) && config_internet_update_header(url,&st);
+    if (!net_header_download(rph,updateHeader,vp,vp_l,ext)) continue;
+    struct stat sth={0};
+    if (!net_parse_header(&sth,rph,iCompress)) continue;
+    if ((stat(rp,&st) || st.st_mtime<sth.st_mtime) && !cg_download_url(iCompress?COPY_GUNZIP:0,url,rp)) continue;
     if (configuration_internet_with_date_in_filename(url)){
       const time_t t=sth.st_mtime;
       struct tm lt; gmtime_r(&t,&lt);
-      char rpdate[strlen(rp)+16]; strftime(net_filepath(rpdate,false,DIR_INTERNET,DIR_INTERNET_L),15,"/%Y%m%d_",&lt);
+      char rpdate[strlen(rp)+16]; strftime(net_filepath(rpdate,DIR_INTERNET,DIR_INTERNET_L),15,"/%Y%m%d_",&lt);
       const char *slash=strrchr(rp,'/');    ASSERT(slash!=NULL);
       if (!slash) return false;
       strcat(rpdate,slash+1);
       link(rp,rpdate);
     }
+    zpath_reset_keep_VP(zpath);
+    zpath->realpath=zpath_newstr(zpath);
+    zpath_strcat(zpath,rp);
+    ZPATH_COMMIT_HASH(zpath,realpath);
+    return true;
   }
-  zpath_reset_keep_VP(zpath);
-  zpath->realpath=zpath_newstr(zpath);
-  zpath_strcat(zpath,rp);
-  ZPATH_COMMIT_HASH(zpath,realpath);
-  return true;
-}
-static int cg_fork_exec(const char *cmd[], char const * const * const env){
-  const pid_t pid=fork(); /* Make real file by running external prg */
-  if (pid<0){ log_errno("fork() waitpid 1 returned %d",pid);return -1;}
-  if (!pid){
-    cg_array_remove_element(cmd,"");
-    cg_log_exec_fd(STDERR_FILENO,cmd,NULL);
-    cg_exec(cmd,env,0,0);
-    exit(errno);
-  }else{
-    int status;
-    waitpid(pid,&status,0);
-    return status;
-  }
+  //log_debug_now(RED_FAIL"rp: %s",rp);
+  return false;
 }
 
-
-static bool net_call_curl(const bool header,const char *url, const char *outfile){
-  //log_entered_function("header: %d  url: %s  outfile: %s",header,url,outfile);
-  net_local_dir(true);
-  char tmp[MAX_PATHLEN+16];
-  sprintf(tmp,"%s.%d.tmp",outfile,_pid);
-  const char *cmd[]={"curl",header?"-I":"", "-o",tmp,url,(char*)0};
-  const int status=cg_fork_exec(cmd,NULL);
-  if (status) return false;
-  char errfile[strlen(outfile)+sizeof(NET_SFX_FAIL)+1];
-  stpcpy(stpcpy(errfile,outfile),NET_SFX_FAIL);
-  unlink(errfile);
-  if (cg_file_size(tmp)<0){
-    warning(WARN_NET,tmp,"Does not exist");
-  }else{
-    const char *dst=outfile;
-    if (ENDSWITH(outfile,strlen(outfile),NET_SFX_HEADER)){
-      if (!net_parse_header(NULL,tmp)){
-        dst=errfile;
-
-
-      }
-      const int fd=open(tmp,O_RDWR|O_APPEND);
-      if (fd>0){ cg_log_exec_fd(fd,cmd,NULL); close(fd);}
-    }
-    unlink(dst);
-    return !cg_rename(tmp,dst);
+static bool net_getattr(struct stat *st, const char *vp,const int vp_l){
+  if (!net_is_internetfile(vp,vp_l)) return false;
+  NET_FOREACH_COMPRESS(iCompress){
+    X();
+    stat_init(st,0,NULL);
+    char rph[net_estimate_filepath_l(vp,vp_l)];
+    net_filepath_header(rph,vp,vp_l,ext);
+    //log_debug_now("rph: %s  ext:%s",rph,ext);
+    if (net_header_download(rph,false,vp,vp_l,ext) && net_parse_header(st,rph,iCompress)) return true;
   }
   return false;
 }
-static bool net_getattr(struct stat *st, const char *vp,const int vp_l){
-  if (net_which_dir_compression(vp,vp_l)){
-    stat_set_dir(st,vp);
-    return true;
-  }
-  if (!net_is_internetfile(vp,vp_l)) return false;
-  stat_init(st,0,NULL);
-  char rph[net_filepath_l(true,vp,vp_l)+1]; net_filepath(rph,true,vp,vp_l);
-  return net_header_download(rph,false,vp,vp_l) && net_parse_header(st,rph);
-}
 
-static bool net_parse_header(struct stat *st,const char *rp){
+static bool net_parse_header(struct stat *st,const char *rp,const int iCompress){
   FILE *f=fopen(rp,"r");
   if (!f){ warning(WARN_NET,rp,"Cannot open"); return false; }
   char line[256];
@@ -185,8 +102,16 @@ static bool net_parse_header(struct stat *st,const char *rp){
     /* Header field names are case-insensitive. */
     // cppcheck-suppress-macro unreadVariable
 #define E(P,code) if (!strncasecmp(line,P,sizeof(P)-1)){ok=true;const int l=sizeof(P)-1;if(st){code;}}
+    if (!strncasecmp(line,"HTTP",4)){
+      const char *spc=strchr(line,' ');
+      if (spc){
+        const int code=atoi(spc+1);
+        if (code==404) return false;
+      }
+    }
     E("Last-Modified:",st->st_mtime=parse_http_time(line+l));
     E("Content-Length:",st->st_size=atol(line+l));
+    if (iCompress) st->st_size=closest_with_identical_digits(10*st->st_size); /* Guess file size and make it a Schnapszahl */
     E("Content-type:",);
 #undef E
   }
@@ -219,7 +144,9 @@ static int net_filename_from_header_file(char *n,const int n_l){
   n[n_l-NET_SFX_HEADER_L]=0;
   return n_l-NET_SFX_HEADER_L;
 }
-#endif //WITH_INTERNET_DOWNLOAD
+#undef X
+// ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz
+
 //curl -o t.txt  -I https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz
 /*
   m=~/tmp/ZIPsFS/mnt
@@ -231,3 +158,4 @@ static int net_filename_from_header_file(char *n,const int n_l){
 //curl -o t.txt  -I https://ftp.uniprot.org/pub/databases/uniprot/README
 //Content-Length: 93100075
 //Last-Modified: Wed, 18 Jun 2025 23:00:00 GMT
+// HTTP/2 200

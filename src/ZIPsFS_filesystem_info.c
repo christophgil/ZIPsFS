@@ -2,6 +2,9 @@
 /// COMPILE_MAIN=ZIPsFS                                       ///
 /// Logging in  ZIPsFS                                        ///
 /////////////////////////////////////////////////////////////////
+// cppcheck-suppress-file unusedFunction
+// cppcheck-suppress-file variableScope
+
 #define END_HR()  PRINTINFO("</TR>%s",isHeader?"</THEAD>":"")
 #define BEGIN_H1(is_html) (is_html?"<HR><H1>":ANSI_INVERSE)
 #define END_H1(is_html) (is_html?"</H1>":ANSI_RESET)

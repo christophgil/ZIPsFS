@@ -275,17 +275,17 @@ static int aimpl_run(struct autogen_files *ff){
     if (!res && !ac->no_redirect) res=_aimpl_fd_open(ff->log,&fd_err);
     if (!res){
       if (fd_err>=0 && ac->info){ R(ac->info);R("\n");}
-      char *cmd[AUTOGEN_ARGV+1]={0};
+      const char *cmd[AUTOGEN_ARGV+1]={0};
       FOR(i,0,AUTOGEN_ARGV){
         if (!(cmd[i]=autogen_apply_replacements_for_argv(NULL,ff->rule->cmd[i],ff))) break;
       }
       config_autogen_modify_exec_args(cmd,ff);
-      cg_log_exec_fd(STDERR_FILENO,(char const*const*)cmd,NULL);
+      cg_log_exec_fd(STDERR_FILENO, cmd,NULL);
       if (isRAM){   /* Output of external prg  into textbuffer */
         (ff->af_txtbuf=textbuffer_new(COUNT_AUTOGEN_MALLOC_TXTBUF))->max_length=isMMAP?AUTOGEN_MMAP_MAX_BYTES:AUTOGEN_MALLOC_MAX_BYTES;
 
 
-        if ((res=textbuffer_from_exec_output(isMMAP?TXTBUFSGMT_MUNMAP:0,ff->af_txtbuf,(char const*const*)cmd,ac->env,ff->log))){
+        if ((res=textbuffer_from_exec_output(isMMAP?TXTBUFSGMT_MUNMAP:0,ff->af_txtbuf,cmd,ac->env,ff->log))){
           log_failed("textbuffer_from_exec_output  %s ",ff->rinfiles[0]);
 
           if (res==ENOMEM && mk_parentdir_if_sufficient_storage_space(ff->grealpath)){
@@ -306,10 +306,10 @@ static int aimpl_run(struct autogen_files *ff){
           res=EIO;
         }else{
           if (!pid){
-            cg_exec((char const*const*)cmd,ac->env,ac->no_redirect?-1:ff->out==STDOUT_MERGE_WITH_STDERR?fd_err:fd_out,ac->no_redirect?-1:fd_err);
+            exit(cg_exec(cmd,ac->env,ac->no_redirect?-1:ff->out==STDOUT_MERGE_WITH_STDERR?fd_err:fd_out,ac->no_redirect?-1:fd_err));
           }else{
             int status; waitpid(pid,&status,0);
-            if (!(res=cg_log_waitpid(pid,status,ff->log,true,(char const*const*)cmd,ac->env)) && !cg_is_regular_file(ff->tmpout))  res=EIO;
+            if (!(res=cg_log_waitpid(pid,status,ff->log,true,cmd,ac->env)) && !cg_is_regular_file(ff->tmpout))  res=EIO;
             if (ff->out!=STDOUT_MERGE_WITH_STDERR && fd_err>0 && ff->grealpath){ R("File: "); R(ff->grealpath); R("\n"); }
           }
         }

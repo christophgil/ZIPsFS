@@ -79,7 +79,6 @@ static off_t special_file_length(const int i){
     struct textbuffer b={0};
     special_file_content(&b,i);
     _special_file_length[i]=textbuffer_length(&b);
-    //log_debug_now(" SPECIAL_FILES: %s len: %d",SPECIAL_FILES[i], _special_file_length[i]);
     textbuffer_destroy(&b);
     if (!_special_file_length[i]) _special_file_length[i]=-1;
   }
@@ -119,7 +118,6 @@ static void special_file_file_content_to_fhandle(struct fHandle *d){
   const char *vp=D_VP(d);
   const int vp_l=D_VP_L(d), i=special_file_id(vp,vp_l);
   const bool isPathInfo=PATH_IS_FILE_INFO(vp,vp_l);
-  //log_entered_function("%s i: %d isPathInfo: %d",vp,i,isPathInfo);
   if (i>0 || isPathInfo){
     struct textbuffer *b=textbuffer_new(COUNT_MALLOC_PRELOADFILERAM_TXTBUF);
     cg_thread_assert_not_locked(mutex_fhandle);
@@ -129,7 +127,6 @@ static void special_file_file_content_to_fhandle(struct fHandle *d){
       static struct zippath zp;
       zpath_init(&zp,withoutSfx);
       if (!find_realpath_any_root(0,&zp,NULL)) return;
-      //char buf[zp.realpath_l+zp.entry_path_l+3];  textbuffer_add_segment(TXTBUFSGMT_DUP,b,buf,sprintf(buf,"%s%s%s\n",zp.strgs+zp.realpath,zp.entry_path_l?"\t":"",zp.strgs+zp.entry_path));
       char tmp[2*MAX_PATHLEN];
       SF_PRINTF("%s%s%s\n",zp.strgs+zp.realpath,zp.entry_path_l?"\t":"",zp.strgs+zp.entry_path);
 
@@ -143,7 +140,6 @@ static void special_file_file_content_to_fhandle(struct fHandle *d){
       }else{
         preloadfileram_set_status(d,preloadfileram_done);
         d->flags|=FHANDLE_FLAG_PRELOADFILERAM_COMPLETE;
-        //log_debug_now("%s isPathInfo: %d textbuffer_length: %ld",D_VP(d), isPathInfo, textbuffer_length(b));
       }
       unlock(mutex_fhandle);
     }
@@ -206,12 +202,6 @@ echo 'If no command line arguments are given, the script will process the files 
 static void special_file_content(struct textbuffer *b,const enum enum_special_files i){
   char tmp[333];
   if (i==SFILE_CLEAR_CACHE || i==SFILE_DEBUG_CTRL){
-    /* sprintf(tmp,SHEBANG"my_stat(){\necho\n\ */
-    /* local f=$1  p=${2:-0}\n\ */
-    /* set -x;stat --format %%s %s/${f}_${p}_%s 2>/dev/null;set +x\n\ */
-    /* echo;\n}\n",_mnt,ctrl_file_end()); */
-    /* textbuffer_add_segment(TXTBUFSGMT_DUP,b,tmp,0); */
-
     SF_PRINTF(SHEBANG"my_stat(){\necho\n\
     local f=$1  p=${2:-0}\n\
     set -x;stat --format %%s %s/${f}_${p}_%s 2>/dev/null;set +x\n\
@@ -222,7 +212,6 @@ static void special_file_content(struct textbuffer *b,const enum enum_special_fi
   case SFILE_DEBUG_CTRL:
     C("\naskWhichThread(){\n");
     FOR(t,1,PTHREAD_LEN){
-      // sprintf(tmp,"  echo '  %d %s' >&2\n",t,PTHREAD_S[t]); textbuffer_add_segment(TXTBUFSGMT_DUP,b,tmp,0);
        SF_PRINTF("  echo '  %d %s' >&2\n",t,PTHREAD_S[t]);
     }
     C("  local t=0\n\
@@ -230,8 +219,6 @@ read -r -p 'What thread?' -n 1 t\n\
 [[ $t != [0-9] ]] && t=0\n\
 echo  $t\n}\n\n");
 
-    //#define A(act,txt) sprintf(tmp,"echo '   %d  %s'\n",act,txt); textbuffer_add_segment(TXTBUFSGMT_DUP,b,tmp,0)
-    //#define H(txt) sprintf(tmp,"echo '""%s"ANSI_RESET"'\n",txt); textbuffer_add_segment(TXTBUFSGMT_DUP,b,tmp,0)
 #define A(act,txt) SF_PRINTF("echo '   %d  %s'\n",act,txt)
 #define H(txt)     SF_PRINTF("echo '""%s"ANSI_RESET"'\n",txt)
 
@@ -249,14 +236,12 @@ echo  $t\n}\n\n");
 #undef A
 #undef H
     C("thread=0\nread -r -n 1 -p 'Choice? ' c\necho\nif [[ $c == [1-9] ]];then\n");
-    //sprintf(tmp,"  [[ $c == %d ]] && thread=$(askWhichThread)\n",ACT_CANCEL_THREAD);    textbuffer_add_segment(TXTBUFSGMT_DUP,b,tmp,0);
     SF_PRINTF("  [[ $c == %d ]] && thread=$(askWhichThread)\n",ACT_CANCEL_THREAD);
     C("  my_stat $c $thread\nfi");
     break;
   case SFILE_CLEAR_CACHE:
 #define A(c) "echo '  "STRINGIZE(c)"    "#c "'\n"
     C( A(CLEAR_ALL_CACHES) A(CLEAR_DIRCACHE) A(CLEAR_ZIPINLINE_CACHE) A(CLEAR_STATCACHE) "\ncache='';[[ $# == 0 ]] && read -r -p 'What cache?' -n 1 cache\n");
-    //sprintf(tmp,"for c in \"${@}\" $cache; do [[ $c == [0-9] ]] && my_stat %d $c; done\n",ACT_CLEAR_CACHE);    textbuffer_add_segment(TXTBUFSGMT_DUP,b,tmp,0);
     SF_PRINTF("for c in \"${@}\" $cache; do [[ $c == [0-9] ]] && my_stat %d $c; done\n",ACT_CLEAR_CACHE);
 #undef A
     break;

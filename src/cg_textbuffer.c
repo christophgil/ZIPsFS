@@ -186,7 +186,8 @@ static off_t textbuffer_read(const uint8_t flags,struct textbuffer *b,const int 
   close(fd);
   return count;
 }
-static int textbuffer_from_exec_output(const uint8_t flags,struct textbuffer *b,char const * const cmd[],char const * const env[], const char *path_stderr){
+//static int textbuffer_from_exec_output(const uint8_t flags,struct textbuffer *b,char const * const cmd[],char const * const env[], const char *path_stderr){
+static int textbuffer_from_exec_output(const uint8_t flags,struct textbuffer *b, const char *cmd[],const char *env[], const char *path_stderr){
   if (!b || !cmd || !cmd[0]) return -1;
   int pipefd[2];
   pipe(pipefd);
@@ -329,8 +330,9 @@ static int exec_on_file(const int opts,const enum enum_exec_on_file type, char *
 static void test_ps_pid(const int pid){
   char spid[99];
   sprintf(spid,"%d",pid);
-  char const * const cmd[]={"ps","-p",spid,NULL};
-  //char *cmd[]={"/usr/bin/ls","/",NULL};
+  //char const * const cmd[]={"ps","-p",spid,NULL};
+    const char *cmd[]={"ps","-p",spid,NULL};
+
   struct textbuffer b={0};
   textbuffer_reset(&b);
   textbuffer_from_exec_output(0,&b,cmd,NULL,NULL);

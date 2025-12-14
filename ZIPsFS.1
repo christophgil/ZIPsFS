@@ -140,25 +140,80 @@ commas.
 .nf
 \f[C]
 less  \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
+
+gunzip -c \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz
 \f[R]
 .fi
-Public repositories (Pride, genomes, PDB, Swissprot)
 .PP
-It will be possible to integrate those as regular file trees.
-We are working on this.
-Decompress on download
+Even though the file is only available in compressed form on the server,
+you can leave off the \f[V].gz\f[R] extension.
 .PP
-With the virtual folder \f[V]/ZIPsFS/n/gz\f[R], a gz file is download
-and decompressed.
-In the following case the URL is
-https://files.rcsb.org/download/1SBT.pdb.gz.
-Not that \f[V].gz\f[R] is appended to the URL.
+The file length is an estimate before the file content is loaded.
 .IP
 .nf
 \f[C]
-head  \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/gz/https,,,files.rcsb.org,download,1SBT.pdb
+ls -l \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
+
+head \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
 \f[R]
 .fi
+.PP
+From now on, the file size is known.
+.PP
+The disadvantage is that the repositories are not browsable.
+In preparation.
+Public repositories (Pride, genomes, PDB, Swissprot)
+.PP
+Please install https://curlftpfs.sourceforge.net/
+.SS Browsing FTP sites
+.PP
+The script file ZIPsFS_prepare_branch_for_ftp.sh prepares an example
+folder \f[V]\[ti]/.ZIPsFS/DBcurlftpfs\f[R] with Curlftpfs mounts to be
+used in ZIPsFS.
+.PP
+Above command line to start ZIPsFS can extended to include this folder:
+.IP
+.nf
+\f[C]
+ZIPsFS   $b1 $b2 $b3 $b4  --preload \[ti]/.ZIPsFS/DBcurlftpfs  :  \[ti]/test/ZIPsFS/mnt
+\f[R]
+.fi
+.PP
+Due to the option \f[V]--preload\f[R], files are mirrord to the first
+branch on the local file system for fast access.
+Lets try
+.IP
+.nf
+\f[C]
+ls \[ti]/test/ZIPsFS/mnt/DBcurlftpfs
+\f[R]
+.fi
+.PP
+Gnu-zip compressed files are transparently de-compressed.
+They appear in the file listing also without gz-file suffix.
+Initially, they have an estimated file length.
+After reading the virtual file, the exact length of the decompressed
+data is known.
+.SS Considerations
+.PP
+Performance: There is no trailing slash and therefore
+\f[V]/DBcurlftpfs/\f[R] will be part of the virtual paths.
+This is essential, because it avoids that the curlftpfs file systems
+will be requested for each file lookup.
+Only if virtual paths start with \f[V]/DBcurlftpfs/\f[R], the curlftpfs
+file systems will be considered.
+.PP
+Stability: There are several open questions.
+.IP
+.nf
+\f[C]
+- Is curlftpfs stable. Does it reliably reconnect
+- If requests hang, is it rescued by a timeout?
+\f[R]
+.fi
+.PP
+Many tests and further optimizations might be needed.
+In preparation: Decompress on download
 .PP
 To download without decompression, just use the default folder
 \f[V]/ZIPsFS/n/\f[R].
@@ -281,8 +336,11 @@ large directories for ZIP entries.
 .PP
 Prints brief usage information.
 .PP
-\f[B]-s \f[BI]path-of-symbolic-link\f[B]\f[R] This is discussed in
-section Configuration.
+**-s *path-of-symbolic-link** This is discussed in section
+Configuration.
+.PP
+** \[en]nosymlink ** Creating symlinks will fail with EPERM.
+For security, this is recommended before exporting with NFS or Samba.
 .PP
 \f[B]-c [NEVER,SEEK,RULE,COMPRESSED,ALWAYS]\f[R]
 .PP

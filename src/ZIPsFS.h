@@ -158,7 +158,7 @@ static void special_filename_init(){
 
 #define PATH_STARTS_WITH_OR_EQ(vp,vp_l,dir)    (STR_EQUALS(vp,vp_l,dir)||PATH_STARTS_WITH(vp,vp_l,dir))
 
-enum enum_internet_compression{INTERNET_COMPRESSION_NA, INTERNET_COMPRESSION_NONE, INTERNET_COMPRESSION_GZ, INTERNET_COMPRESSION_BZ2, INTERNET_COMPRESSION_NUM};
+//enum enum_internet_compression{INTERNET_COMPRESSION_NA, INTERNET_COMPRESSION_NONE, INTERNET_COMPRESSION_GZ, INTERNET_COMPRESSION_BZ2, INTERNET_COMPRESSION_NUM};
 enum enum_autogen_state{AUTOGEN_UNINITILIZED,AUTOGEN_SUCCESS,AUTOGEN_FAIL};
 ///////////////////////////////////////
 /// Enums and corresponding strings ///
@@ -330,7 +330,8 @@ struct zippath{
 #define ZP_FROM_TRANSIENT_CACHE    (1<<6)
 #define ZP_PRELOADFILEDISK         (1<<7) /* xmp_open() will trigger preloading into _root_writable */
 #define ZP_PRELOADFILEDISK_UPDATE  (1<<8) /* Local preloaded file should be  updated */
-#define ZP_OVERFLOW                (1<<9)
+#define ZP_OVERFLOW                (1<<9) /* The paths are to long and the buffer strgs[ZPATH_STRGS] to small */
+#define ZP_EXISTS_AS_GZ_ONLY            (1<<10)
   //#define ZP_UPDATE                  (1<<10)
 
 #define ZPF(f) (zpath->flags&(f))
@@ -503,7 +504,7 @@ struct rootdata{
 
   pid_t thread_pid[PTHREAD_LEN];
   counter_rootdata_t filetypedata_dummy,filetypedata_all, filetypedata[FILETYPEDATA_NUM],filetypedata_frequent[FILETYPEDATA_FREQUENT_NUM];
-  bool filetypedata_initialized, blocked, writable, remote,preload,with_timeout,thread_already_started[PTHREAD_LEN];
+  bool filetypedata_initialized, blocked, writable, remote,preload,stripgz,with_timeout,thread_already_started[PTHREAD_LEN];
   int seq_fsid;
   unsigned long f_fsid; /* From statvfs.f_fsid */
   pthread_mutex_t async_mtx[ASYNC_LENGTH];
@@ -573,6 +574,10 @@ struct preloadfileram{
 #define FILLDIR_AUTOGEN (1<<0)
 #define FILLDIR_IS_DIR_ZIPsFS (1<<1)
 #define FILLDIR_STRIP_NET_HEADER (1<<2)
+#define FILLDIR_STRIP_GZ (1<<3)
 //#define filler_add(filler,buf,name,st,no_dups) {if (ht_only_once(no_dups,name,0)){ filler(buf,name,st,0 COMMA_FILL_DIR_PLUS); cg_log_file_stat(name,st);}}
 //#define filler_add(filler,buf,name,st,no_dups) {if (ht_only_once(no_dups,name,0)) filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);}
 #define stat_direct(...) _stat_direct(__VA_ARGS__,__func__)
+
+#define log_entered_function_vp()  log_entered_function("%s",vp)
+#define log_entered_function_vpath()  log_entered_function("%s",vpath)

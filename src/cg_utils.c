@@ -1,3 +1,8 @@
+/////////////////////////////////////////////////////////////////
+/// COMPILE_MAIN=ZIPsFS                                       ///
+/// Logging in  ZIPsFS                                        ///
+/////////////////////////////////////////////////////////////////
+
 /*  Copyright (C) 2023   christoph Gille   This program can be distributed under the terms of the GNU GPLv3. */
 // cppcheck-suppress-file unusedFunction
 #ifndef _cg_utils_dot_c
@@ -324,6 +329,23 @@ static bool cg_endsWithZip(const char *s, const int len_or_0){
   return s && ENDSWITHI(s,len,".zip");
 }
 
+static bool cg_endsWithGZ(const char *s, const int len_or_0){
+  const int l=len_or_0?len_or_0:cg_strlen(s);
+  return l>2 && s[l-3]=='.' && (s[l-2]|32)=='g' && (s[l-1]|32)=='z';
+}
+
+
+static bool cg_isURL(const char *url){
+  const int url_l=cg_strlen(url);
+  if (url_l<8) return false;
+    switch(*url){
+#define S(s) cg_startsWith(url,url_l,s,sizeof(s)-1)
+    case 'h': if(S("http://")||S("https://")) return true; break;
+    case 'f': if(S("ftp://")||S("ftps://")) return true; break;
+#undef S
+    }
+    return false;
+}
 
 /*
   static char *cg_remove_zipext(char *s,const int s_l_or_zero){
@@ -502,7 +524,7 @@ static bool *cg_validchars(enum enum_validchars type){
         bool *cc=ccc[t];
         FOR(i,'A','Z'+1) cc[i|32]=cc[i]=true;
         FOR(i,'0','9'+1) cc[i]=true;
-        cc['=']=cc['+']=cc['-']=cc['_']=cc['$']=cc['@']=cc['.']=cc['~']=cc['%']=true;
+        cc['=']=cc['+']=cc['-']=cc['_']=cc['$']=cc['@']=cc['.']=cc['~']=cc['%']=cc[',']=true;
       }
     }
     ccc[VALIDCHARS_PATH]['/']=ccc[VALIDCHARS_PATH][' ']=ccc[VALIDCHARS_FILE][' ']=ccc[VALIDCHARS_NOQUOTE]['/']=ccc[VALIDCHARS_NOQUOTE]['%']=true;
@@ -598,6 +620,9 @@ static void cg_print_path_for_fd(int fd){
     }
   }
 }
+
+
+
 /////////////
 /// Array ///
 /////////////
@@ -637,6 +662,22 @@ static bool is_square_number(unsigned int y){
   unsigned int s=isqrt(y);
   return s*s==y;
 }
+
+static long closest_with_identical_digits(const long num){
+  int count=0;
+  long n=num;
+  while(n>9){
+    n/=10;
+    count++;
+  }
+  long ret=n;RLOOP(i,count) ret=10*ret+n;
+  //fprintf(stderr,"num: %ld  ret=%ld n: %ld\n\n",num,ret,n);
+  if (num>ret){
+    ret=++n; RLOOP(i,count) ret=10*ret+n;
+  }
+  return ret;
+}
+
 
 /* static inline int MAX_int(int a,int b){ return MAX(a,b);} */
 /* static inline int64_t MIN_long(int64_t a,int64_t b){ return MIN(a,b);} */
@@ -860,11 +901,12 @@ static int cg_rename(const char *old, const char *n){
   return ret;
 }
 
-static int cg_unlink(const char *f){
-  if (!f || !*f) return -1;
-  const int ret=unlink(f);
-  if (ret) log_errno("unlink(%s)",f);
-  return ret;
+static bool cg_unlink(const char *f){
+  if (!f || !*f) return false;
+  int err=0;
+  if (unlink(f)==-1) err=errno;
+  if (cg_file_exists(f)){ log_errno("unlink(%s)  %s",f,error_symbol(err));return false;}
+  return true;
 }
 
 
@@ -872,7 +914,6 @@ static int cg_symlink_overwrite_atomically(const char *src,const char *lnk){
   log_verbose("src: %s lnk: %s \n",src,lnk);
   if (!cg_is_symlink(lnk)) unlink(lnk);
   char lnk_tmp[MAX_PATHLEN+1]; strcpy(stpcpy(lnk_tmp,lnk),".tmp");
-
   unlink(lnk_tmp);
   symlink(src,lnk_tmp);
   return cg_rename(lnk_tmp,lnk);
@@ -1019,11 +1060,20 @@ static bool cg_is_member_of_group_docker(void){
 ///////////////////
 ///  process    ///
 ///////////////////
-static bool cg_log_exec_fd(const int fd, char const * const * const cmd, char const * const * const env){
+//static bool cg_log_exec_fd(const int fd, char const * const * const cmd, char const * const * const env){
+static bool cg_log_exec_fd(const int fd, const char *cmd[], const char  *env[]){
+  bool compact=cmd && !env;
+  if (compact){
+    int len=0;
+    for(const char **a=cmd; *a; a++) len+=cg_strlen(*a);
+    if (len<60) compact=true;
+  }
+
   RLOOP(j,2){
     char **s=(char**)(j?env:cmd);
     if (s){
-      cg_fd_write_str(fd,j?"ENVIRONMENT VARIABLES:\n":"COMMAND-LINE:\n");
+      cg_fd_write_str(fd,j?"ENVIRONMENT VARIABLES:\n":"COMMAND-LINE:");
+      if (!compact) cg_fd_write_str(fd,"\n");
       while(*s){
         cg_fd_write_str(fd,"  ");
         const char quote=cg_find_invalidchar(VALIDCHARS_NOQUOTE,*s,strlen(*s))<0?0 :strchr(*s,'\'')||strchr(*cmd,'\\')?'"':'\'';
@@ -1066,7 +1116,8 @@ static bool cg_log_waitpid_status(FILE *f,const unsigned int status,const char *
 }
 
 #define cg_log_waitpid(...) _cg_log_waitpid(__VA_ARGS__,__func__)
-static int _cg_log_waitpid(const int pid, const int status, const char *err,const bool append, char const * const cmd[],char const * const env[], const char *func){
+//static int _cg_log_waitpid(const int pid, const int status, const char *err,const bool append, char const * const cmd[],char const * const env[], const char *func){
+static int _cg_log_waitpid(const int pid, const int status, const char *err,const bool append, const char  *cmd[], const char *env[], const char *func){
   if (pid<0 || cg_log_waitpid_status(stderr,status,func)){
     FILE *f=fopen(err,"a");
     if (f){
@@ -1080,11 +1131,19 @@ static int _cg_log_waitpid(const int pid, const int status, const char *err,cons
   return pid<0?-1:WIFEXITED(status)?WEXITSTATUS(status):INT_MIN;
 }
 //static void cg_exec(char const * const * const cmd,char const * const * const env,const int fd_out,const int fd_err){
-static void cg_exec(char const * const * const cmd,char const * const * const env,const int fd_out,const int fd_err){
+#define E(msg) perror(__FILE__":"STRINGIZE(__LINE__)" "msg);
+//static bool cg_exec(char const * const * const cmd,char const * const * const env,const int fd_out,const int fd_err){
+static int fd_dev_null(){
+  static int fd;
+  if (!fd && (fd=open("/dev/null",O_WRONLY))<=0){ perror(__FILE__":"STRINGIZE(__LINE__)" /dev/null"); exit(1);}
+  return fd;
+}
+static int cg_exec(const char  *cmd[], const char *env[],const int fd_out,const int fd_err){
+  errno=0;
   if(fd_out>0) dup2(fd_out,STDOUT_FILENO);
   if(fd_err>0) dup2(fd_err,STDERR_FILENO);
   if(fd_out>0) close(fd_out);
-  //  if(fd_err>0 && fd_err!=fd_out) close(fd_err);
+  if(fd_err>0 && fd_err!=fd_out) close(fd_err);
   cg_log_exec_fd(STDERR_FILENO,cmd,env);
 #if defined(HAS_EXECVPE) && HAS_EXECVPE
   execvpe(cmd[0],(char *const *)cmd,(char *const *)env);
@@ -1092,12 +1151,36 @@ static void cg_exec(char const * const * const cmd,char const * const * const en
   extern char **_environ; /* default */
   if (env) _environ=(char**)env;
   execvp(cmd[0],(char *const *)cmd);
-
 #else
   execvp(cmd[0],(char *const *)cmd);
 #endif
-  exit(errno);
+  E("cg_exec");
+  return errno;
 }
+static bool cg_fork_exec(const char *cmd[], const char *env[],const int fd_out,const int fd_err){
+  const pid_t pid=fork(); /* Make real file by running external prg */
+  if (pid<0){ log_errno("fork() waitpid 1 returned %d",pid);return false;}
+  if (!pid){
+    cg_array_remove_element(cmd,"");
+    cg_log_exec_fd(STDERR_FILENO,cmd,NULL);
+    exit(cg_exec(cmd,env,fd_out,fd_err));
+  }
+  int wstatus;
+  waitpid(pid,&wstatus,0);
+  errno=(WIFEXITED(wstatus)?WEXITSTATUS(wstatus):0);
+  return !errno;
+}
+static bool is_installed_program(const char *prg){
+  const char *cmd[]={prg,"--version",(char*)0};
+  return cg_fork_exec(cmd,NULL,fd_dev_null(),fd_dev_null());
+}
+
+#define I(program) static int i;  if (!i) i=is_installed_program(program)?1:-1;  return i==1
+static bool is_installed_curl(){ I("curl");}
+static bool is_installed_wget(){
+  //if (DEBUG_NOW==DEBUG_NOW) return false;
+  I("wget");}
+#undef I
 
 //////////////////////////////////////////////////////////////////////
 // Compare text and file content
@@ -1127,6 +1210,7 @@ static int differs_filecontent_from_string(const int opt,const char* path, const
 }
 #endif //CODE_NOT_NEEDED
 
+#undef E
 #endif // _cg_utils_dot_c
 // 1111111111111111111111111111111111111111111111111111111111111
 #if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
@@ -1136,18 +1220,15 @@ static bool cg_pid_exists_proc(const pid_t pid){
   sprintf(path,"/proc/%ld",(long)pid);
   return cg_file_exists(path);
 }
+
 int main(int argc, char *argv[]){
+
 
   struct stat stbuf, *st=&stbuf;
   stat_init(st,0,NULL);
   st->st_mtime=time(NULL);
-
-
-
   cg_log_file_stat("",st);
   //  cg_log_file_mode();  fputc('\n',stderr);
-
-
   //  printf("  cg_endsWith: %d \n",cg_endsWith(0,argv[1],0,argv[2],0));
   //printf("  cg_endsWith: %d \n",cg_endsWith(ENDSWITH_FLAG_PRECEED_SLASH,argv[1],0,argv[2],0));
   //FOR(i,1,argc) printf("%s %d  ",argv[i],cg_starts_digits_char(argv[i],8,'_'));
@@ -1213,8 +1294,8 @@ int main(int argc, char *argv[]){
   } break;
   case 7:{
     //    log_verbose("cg_find_invalidchar=%d\n",cg_find_invalidchar(VALIDCHARS_PATH,argv[1],strlen(argv[1])));    EXIT(1);
-    char const * const  env[]={"a=1",NULL};
-    char const * const  cmd[]={"ls","-l","space char","backslash\\","single'quote'",NULL};
+    const char *env[]={"a=1",NULL};
+    const char *cmd[]={"ls","-l","space char","backslash\\","single'quote'",NULL};
     cg_log_exec_fd(2,cmd,env);
   } break;
   case 8:{
@@ -1267,3 +1348,6 @@ int main(int argc, char *argv[]){
 }
 
 #endif
+// ftp:ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/complete/docs/keywlist.xml.gz
+
+// ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz

@@ -29,11 +29,14 @@ typedef struct textbuffer** c_read_handle_t;
 #define f()   inDirA?ZIPSFS_C_IS_DIR_A:0
 
 
-static int c_from_exec_output(struct textbuffer **bb,const uint8_t flags,char *cmd[],char *env[]){
+static int c_from_exec_output(struct textbuffer **bb,const uint8_t flags,const char *cmd[],const char *env[]){
 
     return textbuffer_from_exec_output((flags&ZIPSFS_C_MMAP)?TXTBUFSGMT_MUNMAP:0,
                                        _zipsfs_c_init_tb(bb),
-                                       (const char*const*)cmd,(const char*const*)env,NULL);
+                                       //(const char*const*)
+                                       cmd,
+                                       //(const char*const*)
+                                       env,NULL);
 }
 
 static struct textbuffer *_zipsfs_c_init_tb(struct textbuffer **bb){

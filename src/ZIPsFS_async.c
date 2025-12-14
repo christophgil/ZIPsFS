@@ -241,7 +241,7 @@ static inline bool async_periodically_readdir(struct rootdata *r){
   SET_PICKED(assert(r->async_dir!=NULL); directory_init_zpath(&dir,&r->async_dir->dir_zpath));
   const bool success=readdir_now(&dir);
   OK_OR_TIMEOUT(if (success) directory_copy(r->async_dir,&dir,r),);
-  //log_debug_now("'%s'  %s files_l: %d ",DIR_RP(&dir),success?GREEN_SUCCESS:RED_FAIL, dir.core.files_l);    directory_print(&dir,5);
+  //log_debug_now("'%s'  %s files_l: %d ",DIR_RP(&dir),success_or_fail(success), dir.core.files_l);    directory_print(&dir,5);
   return success;
 }
 static bool readdir_async(struct directory *dir){

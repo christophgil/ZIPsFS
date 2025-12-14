@@ -12,11 +12,10 @@
 ////////////
 //
 /* errno -l | sed  's|^\([^ ]*\)\ .*|C(\1);|1' | paste -d " "  - - |paste -d " "  - - |paste -d " "  - - */
-static bool _killOnError=false, _logIsSilent=false, _logIsSilentFailed=false,_logIsSilentWarn=false,_logIsSilentError=false;
 
 /*********************************************************************************/
 /* *** RAM *** */
-
+static bool _killOnError, _logIsSilent;
 static char *_warning_channel_name[1<<WARN_SHIFT_MAX]={0},*_warning_color[1<<WARN_SHIFT_MAX]={0};
 //char **_warning_channel_name=NULL;
 //char *_warning_pfx[1<<WARN_SHIFT_MAX]={0};

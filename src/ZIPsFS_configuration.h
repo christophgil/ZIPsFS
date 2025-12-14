@@ -11,6 +11,8 @@
 ///////////////////
 #define ZPATH_STRGS 1024   /* Buffer for file paths */
 #define MAX_NUM_OPEN_FILES 16384   /* Unless 0, used for setrlimit(RLIMIT_NOFILE,); */
+
+
 /* cg_utils.c defines   MAX_PATHLEN */
 /////////////////
 /// Debugging ///

@@ -242,6 +242,9 @@ enum enum_validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHA
 #define ENDSWITHI(s,s_l,ending) (((s_l)>=STRLEN(ending)) && (s[(s_l)-1]|32)==(32|LASTCHAR(ending)) && (!strcasecmp(s+(s_l)-STRLEN(ending),ending)))
 
 
+
+
+
 #define STARTSWITH(s,pfx) (!strncmp(s,pfx,STRLEN(pfx)))
 
 #define STR_EQ_C(s,c) (*s==c && !s[1])
@@ -270,3 +273,6 @@ struct strg{
 #define MMAP_FD -1   // FreeBSD MAP_ANONYMOUS requires -1 rather than 0
 
 #define WITH_POPEN_NOSHELL 0
+#define TMP_FOR_FILE(tmp,f)   char tmp[strlen(f)+32];  static int count; sprintf(tmp,"%s.%d.%d.tmp",f,getpid(),count++)
+
+#define NEW_VAR_APPEND_GZ(f,f_l)  char f##gz[f_l+4];  *f##gz=0;  if (!cg_endsWithGZ(f,f_l)) stpcpy(stpcpy(f##gz,f),".gz")

@@ -8,7 +8,7 @@ set -u
 ########################
 ### Please customize ###
 ########################
-LL="-lpthread -lm -lzip  "
+LL="-lpthread -lm -lzip -lz "
 SEARCH_SO_FILES='/usr/local/lib/x86_64-linux-gnu /usr/pkg/lib /usr/local/lib /opt/local/lib /usr/lib /opt/ooce/lib/amd64 /lib'
 SEARCH_INCLUDE_FILES='/usr/include/fuse3 /usr/local/include/fuse3  /usr/local/include /opt/local/include /usr/pkg/include /local/libfuse-master/include /opt/ooce/include /opt/ooce/libzip/include /usr/include/fuse/'
 #############

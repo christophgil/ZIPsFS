@@ -99,22 +99,62 @@ Note that "//:" and all slashes in the URL are replaced by commas.
 
     less  ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
 
+    gunzip -c ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz
 
-<details><summary>Public repositories (Pride, genomes, PDB, Swissprot)</summary>
+Even though the file is only available in compressed form on the server, you can leave off the ``.gz`` extension.
 
-It will be possible to integrate those as regular file trees.
-We are working on this.
+The file length is an estimate before the file content is loaded.
+
+    ls -l ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
+
+    head ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
+
+From now on, the file size is known.
+
+The disadvantage is that the repositories are not browsable.
+
+<details><summary>In preparation. Public repositories (Pride, genomes, PDB, Swissprot)</summary>
+
+
+Please install https://curlftpfs.sourceforge.net/
+
+### Browsing FTP sites
+
+The script file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) prepares an example  folder
+``~/.ZIPsFS/DBcurlftpfs`` with  Curlftpfs mounts to be used in ZIPsFS.
+
+
+Above command line to start ZIPsFS can extended to include this folder:
+
+    ZIPsFS   $b1 $b2 $b3 $b4  --preload ~/.ZIPsFS/DBcurlftpfs  :  ~/test/ZIPsFS/mnt
+
+Due to the option ``--preload``, files are mirrord to the first branch on the local file system for fast access.
+Lets try
+
+    ls ~/test/ZIPsFS/mnt/DBcurlftpfs
+
+
+Gnu-zip compressed  files are transparently de-compressed. They appear in the file listing also without gz-file suffix.
+Initially, they have an estimated file length. After reading the virtual file, the exact length of the
+decompressed data is known.
+
+
+#### Considerations
+
+Performance: There is no trailing slash and therefore ``/DBcurlftpfs/`` will be part of the virtual paths.  This
+is essential, because it avoids that the  curlftpfs file systems will be requested for each file lookup.
+Only if virtual paths start with ``/DBcurlftpfs/``, the curlftpfs file systems will be considered.
+
+Stability: There are several open questions.
+
+    - Is curlftpfs stable. Does it reliably reconnect
+    - If requests hang, is it rescued by a timeout?
+
+Many tests and further optimizations might be needed.
 
 </details>
 
-<details><summary>Decompress on download</summary>
-
-
-
-With the virtual folder ``/ZIPsFS/n/gz``, a gz file is download and decompressed. In the following
-case the URL is https://files.rcsb.org/download/1SBT.pdb.gz. Not that ``.gz`` is  appended to the URL.
-
-    head  ~/test/ZIPsFS/mnt/ZIPsFS/n/gz/https,,,files.rcsb.org,download,1SBT.pdb
+<details><summary>In preparation: Decompress on download</summary>
 
 To download without decompression, just use the default folder ``/ZIPsFS/n/``.
 
@@ -212,14 +252,19 @@ Prints brief usage information.
 
 
 
-**-s *path-of-symbolic-link***
+**-s *path-of-symbolic-link**
 This is discussed in section Configuration.
+
+
+** --nosymlink **
+Creating symlinks will fail with EPERM. For security, this is recommended before exporting with NFS or Samba.
 
 
 
 **-c \[NEVER,SEEK,RULE,COMPRESSED,ALWAYS\]**
 
 Policy when ZIP entries and file content is cached in RAM.
+
 
 
 |           |                                                                                       |

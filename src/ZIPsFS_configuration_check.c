@@ -91,6 +91,8 @@ static bool check_configuration(const char *mnt){
   }
 #endif
 
+  if (MAX_NUM_OPEN_FILES<8000){ fprintf(stderr,RED_WARNING"Consider to increase MAX_NUM_OPEN_FILES\n\n"); warn=true;}
+
   if (_root_writable){
     #define EXPLAIN_WRITABLE "The first upstream root is writable.'nIf an empty string is given as first root, it will not be possible to store files in the virtual file system.\n"
     if(_root_writable->retain_dirname_l){

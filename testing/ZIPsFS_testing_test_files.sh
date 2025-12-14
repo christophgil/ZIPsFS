@@ -4,6 +4,7 @@ export ANSI_FG_GREEN=$'\e[32m' ANSI_FG_RED=$'\e[31m' ANSI_FG_MAGENTA=$'\e[35m' A
 export ANSI_INVERSE=$'\e[7m' ANSI_BOLD=$'\e[1m' ANSI_UNDERLINE=$'\e[4m' ANSI_RESET=$'\e[0m'
 
 
+
 readonly MODI=/home/_cache/$USER/ZIPsFS/modifications/
 run_ZIPsFS(){
     local root1=~/tmp/ZIPsFS/root1/
@@ -31,6 +32,7 @@ Enter(){
 
 test_is_in_listing(){
     local vp=$1
+    [[ $vp == *@SOURCE.TXT ]] && return
     find ${vp%/*} | grep -q -F /${vp##*/} || echo -e "\n${ANSI_FG_RED} MISSING   find ${vp%/*} | grep -q -F /${vp##*/}    $ANSI_RESET\n"
 }
 
@@ -94,6 +96,7 @@ test_zip_inline(){
     export GREP_COLORS='ms=01;32'
     ls $MNT/Z1/Data/50-0079/
     sleep 2
+    # shellcheck disable=SC2010
     if ls $MNT/Z1/Data/50-0079/ | grep --color=always wiff2 && sleep 1 && ls $MNT/Z1/Data/50-0079/ | grep --color=always wiff$; then
         echo -n  "$ANSI_FG_GREEN OK $ANSI_RESET"
     else
@@ -109,6 +112,8 @@ main(){
 local mnt=${1:-mnt}
     echo "${ANSI_INVERSE}Test by C-code $ANSI_RESET"
     local f=$MNT/example_generated_file/example_generated_file.txt
+
+    # shellcheck disable=SC2010
     ls mnt | grep example_generated_file || echo -n  "$ANSI_FG_RED ls mnt: Missing  example_generated_file  $ANSI_RESET"
     test_pattern 1 ' heap ' $f
 
@@ -124,6 +129,23 @@ local mnt=${1:-mnt}
         echo  "$ANSI_FG_GREEN OK $ANSI_RESET"
     fi
 
+
+    echo "${ANSI_INVERSE}Test preload ZIPsFS/lr/$ANSI_RESET"
+    local f=autogen_test_files/MS-rawfile/Cal20240223150943030.wiff
+    local p="$MNT/ZIPsFS/lr/${f}"
+    test_checksum 1 e6e39d2c $MNT/$f
+    rm  "$p" 2>/dev/null
+    echo; cat "$p@SOURCE.TXT"
+    test_pattern  1 /root/  "$p@SOURCE.TXT"
+    test_checksum 1 e6e39d2c $p
+    echo; cat "$p@SOURCE.TXT"
+    test_pattern  1 preloaded_by_path        "$p@SOURCE.TXT"
+    read -t 5 -r -p 'Enter or wait 5s'
+
+    test_checksum 1 e6e39d2c          "$p"
+    test_pattern  1 preloaded_by_path "$p@SOURCE.TXT"
+
+    read -t 5 -r -p 'Enter or wait 5s';
 
     echo "${ANSI_INVERSE}Test by curl$ANSI_RESET"
         test_pattern 2 ' warranties '  $MNT/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README
@@ -162,6 +184,11 @@ local mnt=${1:-mnt}
     test_checksum 2 93f172e3 $MNT/ZIPsFS/a/autogen_test_files/data/report.parquet.tsv
     test_checksum 2 353901EB $MNT/ZIPsFS/a/autogen_test_files/MS-rawfile/Cal20240223150943030.wiff.mgf
     test_checksum 2 FB68D3A4 $MNT/ZIPsFS/a/autogen_test_files/MS-rawfile/Cal20240223150943030.wiff.mzML
+
+
+
+
+
 }
 
 DO_RUN_ZIPSFS=0

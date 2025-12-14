@@ -121,7 +121,7 @@ static int transient_cache_find_realpath(const int opt, struct zippath *zpath, c
 
 static void transient_cache_store(const struct zippath *zpath, const char *vp,const int vp_l){
   struct zippath *zp=transient_cache_get_or_create_zpath(true,!zpath,vp,vp_l);
-  //log_debug_now("%s %d %s  zpath: %s",vp,vp_l,zp?GREEN_SUCCESS:RED_FAIL,zpath?VP():NULL);
+  //log_debug_now("%s %d %s  zpath: %s",vp,vp_l,success_or_fail(zp),zpath?VP():NULL);
   if (zp){
     if (!zpath){
       zp->flags|=ZP_DOES_NOT_EXIST; /* Not found in any root. */
