@@ -124,7 +124,7 @@ To get the real storage place of the file, append
 cat \[ti]/test/ZIPsFS/mnt/my_file.txt\[at]SOURCE.TXT
 \f[R]
 .fi
-.SS Access web resources as regular files
+.SS Access web resources as regular files (Not fully tested yet)
 .PP
 Make sure the UNIX tool curl is installed.
 .IP
@@ -146,7 +146,8 @@ gunzip -c \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,unipr
 .fi
 .PP
 Even though the file is only available in compressed form on the server,
-you can leave off the \f[V].gz\f[R] extension.
+you can directly access the decompressed file by leave off the
+\f[V].gz\f[R] extension.
 .PP
 The file length is an estimate before the file content is loaded.
 .IP
@@ -161,13 +162,14 @@ head \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,cu
 From now on, the file size is known.
 .PP
 The disadvantage is that the repositories are not browsable.
-In preparation.
-Public repositories (Pride, genomes, PDB, Swissprot)
+Browsing public repositories (Pride, Genomes, PDB, Swissprot)
 .PP
-Please install https://curlftpfs.sourceforge.net/
+Warning: this new feature is not yet fully tested!
+.PP
+Please install https://curlftpfs.sourceforge.net/ and curl.
 .SS Browsing FTP sites
 .PP
-The script file ZIPsFS_prepare_branch_for_ftp.sh prepares an example
+The script file ZIPsFS_prepare_branch_for_ftp.sh generates an example
 folder \f[V]\[ti]/.ZIPsFS/DBcurlftpfs\f[R] with Curlftpfs mounts to be
 used in ZIPsFS.
 .PP
@@ -189,45 +191,31 @@ ls \[ti]/test/ZIPsFS/mnt/DBcurlftpfs
 \f[R]
 .fi
 .PP
-Gnu-zip compressed files are transparently de-compressed.
-They appear in the file listing also without gz-file suffix.
-Initially, they have an estimated file length.
+GZ compressed files are transparently de-compressed.
+Files with the ending \f[V].gz\f[R] also appear in the file listing
+without gz suffix.
+Initially, they have an estimated file size.
 After reading the virtual file, the exact length of the decompressed
 data is known.
 .SS Considerations
 .PP
-Performance: There is no trailing slash and therefore
-\f[V]/DBcurlftpfs/\f[R] will be part of the virtual paths.
-This is essential, because it avoids that the curlftpfs file systems
-will be requested for each file lookup.
-Only if virtual paths start with \f[V]/DBcurlftpfs/\f[R], the curlftpfs
-file systems will be considered.
+Performance: Without a trailing slash in the command line, the folder
+name \f[V]/DBcurlftpfs/\f[R] will be the beginning of virtual paths.
+This is important for performance, because it avoids that the curlftpfs
+file systems will be requested for each file lookup.
+Only if virtual paths start with \f[V]/DBcurlftpfs/\f[R], curlftpfs gets
+involved.
 .PP
 Stability: There are several open questions.
 .IP
 .nf
 \f[C]
-- Is curlftpfs stable. Does it reliably reconnect
-- If requests hang, is it rescued by a timeout?
+- Is curlftpfs stable? Does it reliably reconnect?
+- What if requests hang, will it become responding again after  timeout?
 \f[R]
 .fi
 .PP
-Many tests and further optimizations might be needed.
-In preparation: Decompress on download
-.PP
-To download without decompression, just use the default folder
-\f[V]/ZIPsFS/n/\f[R].
-.IP
-.nf
-\f[C]
-gunzip -c  \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/https,,,files.rcsb.org,download,1SBT.pdb.gz
-\f[R]
-.fi
-.PP
-Here, the HTTP header does not have a \f[V]Content-Length\f[R] field.
-Bevore the file is downloaded, its file size is not known.
-ZIPsFS will display a wrong file size which might be a problem for some
-software.
+Tests and further optimizations might be needed.
 .SH DESCRIPTION
 .SS ZIPsFS is a Union / overlay file system
 .PP

@@ -90,7 +90,7 @@ To get the real storage place of the file, append ``@SOURCE.TXT``
 
     cat ~/test/ZIPsFS/mnt/my_file.txt@SOURCE.TXT
 
-### Access web resources as regular files
+### Access web resources as regular files (Not fully tested yet)
 Make sure the UNIX tool curl is installed.
 
     curl --version
@@ -101,7 +101,7 @@ Note that "//:" and all slashes in the URL are replaced by commas.
 
     gunzip -c ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz
 
-Even though the file is only available in compressed form on the server, you can leave off the ``.gz`` extension.
+Even though the file is only available in compressed form on the server, you can directly access the decompressed file by leave off the ``.gz`` extension.
 
 The file length is an estimate before the file content is loaded.
 
@@ -113,14 +113,16 @@ From now on, the file size is known.
 
 The disadvantage is that the repositories are not browsable.
 
-<details><summary>In preparation. Public repositories (Pride, genomes, PDB, Swissprot)</summary>
+<details><summary>Browsing  public repositories (Pride, Genomes, PDB, Swissprot)</summary>
 
 
-Please install https://curlftpfs.sourceforge.net/
+Warning: this new feature is not yet fully tested!
+
+Please install https://curlftpfs.sourceforge.net/ and curl.
 
 ### Browsing FTP sites
 
-The script file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) prepares an example  folder
+The script file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) generates an example  folder
 ``~/.ZIPsFS/DBcurlftpfs`` with  Curlftpfs mounts to be used in ZIPsFS.
 
 
@@ -134,34 +136,23 @@ Lets try
     ls ~/test/ZIPsFS/mnt/DBcurlftpfs
 
 
-Gnu-zip compressed  files are transparently de-compressed. They appear in the file listing also without gz-file suffix.
-Initially, they have an estimated file length. After reading the virtual file, the exact length of the
+GZ compressed  files are transparently de-compressed. Files with the ending ``.gz`` also  appear in the file listing without gz suffix.
+Initially, they have an estimated file size. After reading the virtual file, the exact length of the
 decompressed data is known.
 
 
 #### Considerations
 
-Performance: There is no trailing slash and therefore ``/DBcurlftpfs/`` will be part of the virtual paths.  This
-is essential, because it avoids that the  curlftpfs file systems will be requested for each file lookup.
-Only if virtual paths start with ``/DBcurlftpfs/``, the curlftpfs file systems will be considered.
+Performance:  Without a trailing slash in the command line,  the folder name  ``/DBcurlftpfs/`` will be the beginning of virtual paths.  This
+is important for performance, because it avoids that the  curlftpfs file systems will be requested for each file lookup.
+Only if virtual paths start with ``/DBcurlftpfs/``,  curlftpfs gets involved.
 
 Stability: There are several open questions.
 
-    - Is curlftpfs stable. Does it reliably reconnect
-    - If requests hang, is it rescued by a timeout?
+    - Is curlftpfs stable? Does it reliably reconnect?
+    - What if requests hang, will it become responding again after  timeout?
 
-Many tests and further optimizations might be needed.
-
-</details>
-
-<details><summary>In preparation: Decompress on download</summary>
-
-To download without decompression, just use the default folder ``/ZIPsFS/n/``.
-
-    gunzip -c  ~/test/ZIPsFS/mnt/ZIPsFS/n/https,,,files.rcsb.org,download,1SBT.pdb.gz
-
-Here,  the HTTP header does not have a ``Content-Length`` field. Bevore the file is downloaded, its file size is not known. ZIPsFS will display a
-wrong file size which might be a problem for some software.
+Tests and further optimizations might be needed.
 
 </details>
 

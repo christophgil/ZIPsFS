@@ -126,6 +126,7 @@ static int fd_dev_null();
 static int cg_exec(const char  *cmd[], const char *env[],const int fd_out,const int fd_err);
 static bool cg_fork_exec(const char *cmd[], const char *env[],const int fd_out,const int fd_err);
 static bool is_installed_program(const char *prg);
+static bool is_installed_wget();
 static int differs_filecontent_from_string(const int opt,const char* path, const long seek,const char* text,const long text_l);
 static bool cg_pid_exists_proc(const pid_t pid);
 static int cg_read_gzip(const int in, const int out);

@@ -106,7 +106,10 @@ static bool cg_download_url(int opt, const char *url, const char *outfile){
       if ((opt&COPY_NO_CURL) || !is_installed_curl()) continue;
       P="curl"; P="-o"; P="-"; if (opt&COPY_HEADER) P="-I";
     }else{
-      if ((opt&COPY_NO_WGET) || !is_installed_wget()) continue;
+      if ((opt&COPY_NO_WGET) || !is_installed_wget() || DEBUG_NOW==DEBUG_NOW) continue;
+
+      // --spider https://www.zyxware.com/articles/2402/viewing-http-headers-using-wget
+
       P="wget"; P="-O";
       if (opt&COPY_HEADER){
         P="/dev/null"; P="-S"; P="-q";
