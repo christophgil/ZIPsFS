@@ -146,10 +146,11 @@ gunzip -c \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,unipr
 .fi
 .PP
 Even though the file is only available in compressed form on the server,
-you can directly access the decompressed file by leave off the
-\f[V].gz\f[R] extension.
+you can directly access the decompressed file.
+Omit the \f[V].gz\f[R] extension.
 .PP
-The file length is an estimate before the file content is loaded.
+The decompressed file size is an estimate.
+It becomes exactly known after reading the file.
 .IP
 .nf
 \f[C]
@@ -161,7 +162,9 @@ head \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,cu
 .PP
 From now on, the file size is known.
 .PP
-The disadvantage is that the repositories are not browsable.
+Above method allows to access any remote file.
+The disadvantage over the method below is, that repositories are not
+browsable.
 Browsing public repositories (Pride, Genomes, PDB, Swissprot)
 .PP
 Warning: this new feature is not yet fully tested!

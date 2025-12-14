@@ -101,9 +101,9 @@ Note that "//:" and all slashes in the URL are replaced by commas.
 
     gunzip -c ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz
 
-Even though the file is only available in compressed form on the server, you can directly access the decompressed file by leave off the ``.gz`` extension.
+Even though the file is only available in compressed form on the server, you can directly access the decompressed file. Omit  the ``.gz`` extension.
 
-The file length is an estimate before the file content is loaded.
+The decompressed file size is an estimate. It becomes exactly known after reading the file.
 
     ls -l ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
 
@@ -111,7 +111,7 @@ The file length is an estimate before the file content is loaded.
 
 From now on, the file size is known.
 
-The disadvantage is that the repositories are not browsable.
+Above method allows to access any remote file. The disadvantage over the method below is, that repositories are not browsable.
 
 <details><summary>Browsing  public repositories (Pride, Genomes, PDB, Swissprot)</summary>
 
