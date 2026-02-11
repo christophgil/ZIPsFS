@@ -33,7 +33,7 @@ Any newly created or modified files are stored in the first file location, while
 ZIPsFS treats **ZIP files as expandable folders**, typically naming them by appending ``.Contents/`` to the original ZIP file name.
 However, this behavior can be customized using filename-based rules. Extensive configuration options allow adjustments. Changes can be applied without disrupting the file system.
 
-With a trailing slash, the folder name is not part of the virtual path, in accordance with  the trailing slash semantics of many UNIX tools.
+With a trailing slash, the folder name is not part of the virtual path, in accordance with  the trailing slash semantics of many UNIX tools. More flexibility provides the property ``@path-prefix=...``.
 
 ZIPsFS includes specialized features like **automatic file conversions** and performance
 optimizations tailored for efficiently storing and accessing **large-scale mass spectrometry** data.
@@ -128,53 +128,6 @@ computer. The following are test examples of files remotely stored as bz2 and xz
 Above method allows to access any remote file. The disadvantage over the method below is, that repositories are not browsable.
 
 
-## Special directory prefixes
-
- - <mount-point>/ZIPsFS/p   Rapid navigation and file name searching without time consuming ZIP file expansion.
- - <mount-point>/ZIPsFS/n   Internet files. Take URL and replace colon and slashes by comma. See above tutorial.
- - <mount-point>/ZIPsFS/lrz Remote and zipped files are prefetched before reading. For FragPipe, use raw files from here.
- - <mount-point>/ZIPsFS/c   Converted files like mgf and mzML from raw mass spectrometry files or tsv from parquet files. Note that the mzML files are not suitable for FragPipe. FragPipe is generating its own mzML variant.
- - <mount-point>/ZIPsFS/1   All files ever written or generated or modified.
-
-Details are found in the contained readme files.
-
-## Properties of upstream file trees
-
-In the command line, root file paths  can be followed by expressions like @immutable=1 to set specific properties.
-Alternatively, properties can be written in a file ``<property-path>.ZIPsFS.properties``. Take a look at ZIPsFS_prepare_branch_for_ftp.sh.
-
-List (Incomplete) of root path properties:
-
-- ``path-prefix=dir/subdir/subsubdir``  Files in this root are accessible  with paths starting with  <mount-point>/dir/subdir/subsubdir/...
-- ``one-file-system=1``   Mount points or  symbolic links expanded in ZIPsFS can point outside this file system.  This is prevented with this  property. Consider this
-  property when the ZIPsFS file system is accessible from other computers.
-- ``follow-symlinks=1`` Symlinks are expanded within ZIPsFS. Dangerous! Consider combining with ``@one-file-system=1``.
-- ``immutable=1``  In the respective file tree, no files are changed, deleted or created. This optimizes caching. Cached file attributs and listings will not expire.
-- ``worm=1``       File tree is write-once-read-many. Same consequence as above.
-- ``preload=1``    Before reading file content,  files are downloaded to the first file tree.
-- ``preload-gz=1``    If a non-existing file is requested while a gz-compressed file exists, the decompressed file will be generated. Also available bz2, lrz, Z and xz.
-
-
-<details><summary>Security: Symbolic links and mount points</summary>
-
-
-When the FUSE file system is exported via NFS or Samba, navigation into forbiddeden folders  such as ``/etc/passwd`` needs to be prevented.
-Symbolic links and mount points could direct into other file systems.
-
-Even though symbolic links can be created in the virtual file system and work as expected, on the local machine, they are normally not expanded inside ZIPsFS and
-the target may not be visible through NFS or SMB.
-
-In rare cases symbolic links need to be expanded in ZIPsFS. In this case the respective root-path
-need the property ``follow-symlinks=1``.  Either this is added as a line to a textfile with a path
-formed by appending ``.ZIPsFS.properties`` to the root-path or with a command line parameter
-``@follow-symlinks=1`` after the root-path.
-
-Expansion of symlinks is performed only if the target is within the given file trees or if the
-configurable function ``config_allow_expand_symlink(orig_path,expanded_path)`` returns true.
-
-
-Users may expose sensitive files by creating an empty folder as mount point and running ``bindfs /etc   created-empty-folder``.
-Redirection can be prevented by adding the property ``one-file-system=1``.
 
 
 </details>
@@ -270,47 +223,6 @@ The default configuration includes a few exceptions tailored to specific use cas
 
 
 
-## File content pre-load
-
-
-Non-linear file loading in a random-access manner is inefficient for remote or ZIP-compressed files.
-This is the case for the MS-programs Diann and FragPipe (Fragger).
-
-<details><summary>Preload files</summary>
-
-
-Remote or compressed files can be preloaded in two different ways: (I) into RAM or (II) to the local disk.
-
-### Preloading into RAM
-
-File names to be cached in RAM  are specified in the configurable method ``config_advise_cache_in_ram()``.  The default
-setting includes Brukertimstof mass-spectrometry files. Preloading to the RAM is appropriate for these files because
-each file is loaded only once per analysis. It is necessary because these mass-spectrometry files are loaded from varying file positions which would be inefficient for
-remote or compressed files.
-The ``-l`` option sets an upper limit on memory usage
-for the ZIP RAM cache.  When available memory runs low, ZIPsFS can either pause, proceed without
-caching file data or just ignore the memory restriction depending on the configuration.
-
-### Preloading to local disk
-
-File reading of remote or compressed files can be improved by caching the file content on the local disk.
-This is for example necessary for Thermo  mass-spectrometry raw files analyzed in FragPipe.
-Above method of preloading into RAM is here  inappropriate because each raw file is
-opened and closed multiple times during computation such that the large files would be transfered from the NAS several times.
-
-All remote (r) or compressed (c) or zippded (z) files
-accessed through the following folders will be first copied to local disk:
-
-    <mount-point>/ZIPsFS/lr/
-    <mount-point>/ZIPsFS/lrc/
-    <mount-point>/ZIPsFS/lrz/
-
-The Readme in these folders provide further information.
-Alternatively, the entire root-path can be marked for preloading with the property ``@preload``.
-Decompression is enabled with properties like ``@preload-gz``
-
-</details>
-
 ## ZIPsFS Options
 
 
@@ -362,6 +274,96 @@ Options for the FUSE system  come after the **colon** in the command line.
 
 **-o allow_other**
 Other users are granted access.
+
+
+
+## Special directory prefixes
+
+ - <mount-point>/ZIPsFS/p   Rapid navigation and file name searching without time consuming ZIP file expansion.
+ - <mount-point>/ZIPsFS/n   Internet files. Take URL and replace colon and slashes by comma. See above tutorial.
+ - <mount-point>/ZIPsFS/lrz Remote and zipped files are prefetched before reading. For FragPipe, use raw files from here.
+ - <mount-point>/ZIPsFS/c   Converted files like mgf and mzML from raw mass spectrometry files or tsv from parquet files. Note that the mzML files are not suitable for FragPipe. FragPipe is generating its own mzML variant.
+ - <mount-point>/ZIPsFS/1   Files of the first branch only. This includes all files ever written or generated or modified.
+
+Details are found in the contained readme files.
+
+## Properties of upstream file trees
+
+In the command line, root file paths  can be followed by expressions like @immutable=1 to set specific properties.
+Alternatively, properties can be written in a file ``<property-path>.ZIPsFS.properties``. This is demonstrated in   [ZIPsFS_prepare_branch_for_ftp.sh](ZIPsFS_prepare_branch_for_ftp.sh).
+
+List (Incomplete) of root path properties:
+
+- ``path-prefix=dir/subdir/subsubdir``  Files in this root are accessible  with paths starting with  <mount-point>/dir/subdir/subsubdir/. The last path component of the mount point can be set as path prefix simply by omitting the trailing slash.
+- ``one-file-system=1``   Mount points or  symbolic links expanded in ZIPsFS can point outside this file system.  This is prevented with this  property. Consider this
+  property when the ZIPsFS file system is accessible from other computers.
+- ``follow-symlinks=1`` Symlinks are expanded within ZIPsFS. Dangerous! Consider combining with ``@one-file-system=1``.
+- ``immutable=1``  In the respective file tree, no files are changed, deleted or created. This optimizes caching. Cached file attributs and listings will not expire.
+- ``worm=1``       File tree is write-once-read-many. Same consequence as above.
+- ``preload=1``    Before reading file content,  files are downloaded to the first file tree. Useful for remote files.
+- ``preload-gz=1`` Files are generated from a gz-compressed files. Useful for Windows software that cannot read gnu-zipped files. Also available bz2, lrz, Z and xz.
+
+
+<details><summary>Preload files</summary>
+
+
+Non-linear file loading in a random-access manner is inefficient for remote or ZIP-compressed files.
+This is the case for the MS-programs Diann and FragPipe (Fragger).
+
+## File content pre-load
+
+Remote or compressed files can be preloaded in two different ways: (I) into RAM or (II) to the local disk.
+
+### Preloading into RAM
+
+File names to be cached in RAM  are specified in the configurable method ``config_advise_cache_in_ram()``.  The default
+setting includes Brukertimstof mass-spectrometry files. Preloading to the RAM is appropriate for these files because
+each file is loaded only once per analysis. It is necessary because these mass-spectrometry files are loaded from varying file positions which would be inefficient for
+remote or compressed files.
+The ``-l`` option sets an upper limit on memory usage
+for the ZIP RAM cache.  When available memory runs low, ZIPsFS can either pause, proceed without
+caching file data or just ignore the memory restriction depending on the configuration.
+
+### Preloading to local disk
+
+File reading of remote or compressed files can be improved by caching the file content on the local disk.
+This is for example necessary for Thermo  mass-spectrometry raw files analyzed in FragPipe.
+Above method of preloading into RAM is here  inappropriate because each raw file is
+opened and closed multiple times during computation such that the large files would be transfered from the NAS several times.
+
+All remote (r) or compressed (c) or zippded (z) files
+accessed through the following folders will be first copied to local disk:
+
+    <mount-point>/ZIPsFS/lr/
+    <mount-point>/ZIPsFS/lrc/
+    <mount-point>/ZIPsFS/lrz/
+
+The Readme in these folders provide further information.
+Alternatively, the entire root-path can be marked for preloading with the property ``@preload``.
+Decompression is enabled with properties like ``@preload-gz``
+
+</details>
+
+<details><summary>Security: Symbolic links and mount points</summary>
+
+
+When the FUSE file system is exported via NFS or Samba, navigation into forbiddeden folders  such as ``/etc/passwd`` needs to be prevented.
+Symbolic links and mount points could direct into other file systems.
+
+Even though symbolic links can be created in the virtual file system and work as expected, on the local machine, they are normally not expanded inside ZIPsFS and
+the target may not be visible through NFS or SMB.
+
+In rare cases symbolic links need to be expanded in ZIPsFS. In this case the respective root-path
+need the property ``follow-symlinks=1``.  Either this is added as a line to a textfile with a path
+formed by appending ``.ZIPsFS.properties`` to the root-path or with a command line parameter
+``@follow-symlinks=1`` after the root-path.
+
+Expansion of symlinks is performed only if the target is within the given file trees or if the
+configurable function ``config_allow_expand_symlink(orig_path,expanded_path)`` returns true.
+
+
+Users may expose sensitive files by creating an empty folder as mount point and running ``bindfs /etc   created-empty-folder``.
+Redirection can be prevented by adding the property ``one-file-system=1``.
 
 
 
