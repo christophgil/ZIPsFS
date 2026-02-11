@@ -423,29 +423,26 @@ To see the real local file path append ***@SOURCE.TXT*** to the file path.
 The http-header is updated according to a time-out rule in **ZIPsFS_configuration.c**.
 Whether the file itself needs updating is decided upon the *Last-Modified* attribute in the http or ftp header.
 
-Additionally, the file is accessible with a file-name containing the data in the header.
+Additionally, the file is accessible with a file-name containing the time  reported in the header.
 This feature can be conditionally deactivated.
 
-
-This works also when the FUSE file system is accessed remotely  via SMB or NFS.
-However, Windows PCs fail to access these files. This is because files do not exist for Windows, when they are not listed in the file list of the parent.
 
 ## Generation of files using programming language C
 
 By modifying the file *ZIPsFS_configuration_c.c*, users can easily implement
-files where the file content is generated dynamically using the programming language C.
+file generation using the programming language C.
 
-Here is a predefined minimal example which explains how it works:
+This path gives the output of the included minimal example.
 
     <mount point>/example_generated_file/example_generated_file.txt
 
 
 
-## Automatic Virtual File Generation and Conversion Rules
+## File conversion rules
 
-ZIPsFS can generate and display virtual files automatically. This feature is enabled by setting the preprocessor macro **WITH_AUTOGEN** to **1** in *ZIPsFS_configuration.h*.
+ZIPsFS can generate  virtual files by file conversion. This feature is enabled by setting the preprocessor macro **WITH_FILECONVERSION** to **1** in *ZIPsFS_configuration.h*.
 Generated files are stored in the first file branch, allowing them to be served instantly upon repeated requests.
-A common use case for this feature is file conversion. The default rules, defined in *ZIPsFS_configuration_autogen.c*, include:
+The default rules, defined in *ZIPsFS_configuration_fileconversion.c*, include:
 
 - **Image files (JPG, JPEG, PNG, GIF):**  Smaller versions at 25% and 50% scaling.
 - **Image files (OCR):** Extracted text using Optical Character Recognition (OCR).
