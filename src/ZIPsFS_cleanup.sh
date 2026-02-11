@@ -25,17 +25,18 @@ call_df(){
     read -r filesystem CAPACITY used AVAILABLE remaining< <(df -BG $PWD |tee /dev/stderr |tail -n 1| tr G ' ')
     : $filesystem $remaining $used
 }
-
+# find  /path -perm -1000
 del_old_files(){
-    local d="$1"
+    local d="$1" cond="$2"
+
     echo "${ANSI_INVERSE}${SRC##*/} $d  days:$ATIME$ANSI_RESET" >&2
     [[ ${d%/*} != */ZIPsFS ]] && echo "${ANSI_FG_RED}This script is in the wrong directory. Abort"$ANSI_RESET >&2 && return
     local action=-delete
     ((DRYRUN)) && action=''
     set -x
-    find "$d" -atime +$ATIME -print $action
-    find "$d" -atime +1 -name '*[0-9].bak' -print $action
-    find "$d" -atime +1 -name '*[0-9].tmp' -print $action
+    find "$d" -atime +$ATIME $cond -print $action
+    find "$d" -atime +1 -name '*[0-9].bak' $cond -print $action
+    find "$d" -atime +1 -name '*[0-9].tmp' $cond -print $action
     set +x
 }
 
@@ -60,9 +61,9 @@ main(){
     ((WANT_FREE_GIGABYTE>CAPACITY)) && echo "$ANSI_FG_RED WANT_FREE_GIGABYTE ($WANT_FREE_GIGABYTE) > CAPACITY ($CAPACITY)$ANSI_RESET" >&2 && ((DRYRUN==0 && CD_TO_SCRIPT_PARENT)) && return
     for ((ATIME=DAYS_MAX; ATIME>=DAYS_MIN; ATIME=2*ATIME/3)); do
         ((WANT_FREE_GIGABYTE<AVAILABLE)) && echo "${ANSI_FG_GREEN}WANT_FREE_GIGABYTE<CAPACITY  $WANT_FREE_GIGABYTE<$CAPACITY$ANSI_RESET" >&2
-        del_old_files $PWD/.preloaded_by_path
-        del_old_files $PWD/.preloaded_by_root
-        del_old_files $PWD/a
+        del_old_files $PWD "-perm -1000"
+        # Those files are reconginzed by sticky flag S_ISVTX
+        del_old_files $PWD/ZIPsFS/c  # fileconversion
     done
 }
 

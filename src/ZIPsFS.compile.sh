@@ -89,42 +89,26 @@ ${ANSI_INVERSE}Options:$ANSI_RESET
 EOF
 }
 
-####################
-### Directories  ###
-####################
-SRC="${1:-}"
-[[ -z $SRC ]] && SRC=${BASH_SOURCE[0]}
-DIR=${SRC%/*}
-DIR=${DIR%%/}
-[[ $DIR != /* ]] && DIR=$PWD/$DIR
-TEMP=~/tmp/ZIPsFS/compilation
-! mkdir -p $TEMP && press_enter
-for f in $TEMP/*; do
-    [[ -e $f && $SRC -nt $f ]] && rm "$f"
-done
-
 #############################
 ### Command line options  ###
 #############################
+
+IS_CG=0; [[ $(hostname). == s-mcpb-ms0* && $USER == cgille ]] && IS_CG=1 && echo 'Is PC of developer'
+
 LIBFUSE=''
 LIBZIP=''
-WITH_SANITIZER=1
+WITH_SANITIZER=0
 WITH_PROFILER=0
 WITH_RPATH=0
-CCOMPILER=${CC:-gcc}
+CCOMPILER=${CC:-gcc}; clang --version >/dev/null &&  CCOMPILER=clang
 OPT_PROFILER=''
-
 CC_OPTS='-D_FILE_OFFSET_BITS=64'
 
+if ((IS_CG)); then
+    export PATH=/usr/lib/llvm-13/bin:/usr/lib/llvm-14/bin/:$PATH
+    WITH_SANITIZER=1
+fi
 
-clang --version >/dev/null &&  CCOMPILER=clang
-
-
-press_enter(){
-    local what=${1:-continue}
-    echo >&2
-    read -r -p  "Press Enter to $what"
-}
 while getopts 'RhsgF:Z:' o; do
     case $o in
         R) WITH_RPATH=1;;
@@ -137,12 +121,27 @@ while getopts 'RhsgF:Z:' o; do
     esac
 done
 shift $((OPTIND-1))
-IS_CG=0; [[ $(hostname). == s-mcpb-ms0* && $USER == cgille ]] && IS_CG=1 && echo 'Is PC of developer'
-if ((IS_CG)); then
-    export PATH=/usr/lib/llvm-13/bin:/usr/lib/llvm-14/bin/:$PATH
-    WITH_SANITIZER=0
-    # WITH_PROFILER=1
-fi
+####################
+### Directories  ###
+####################
+SRC="${1:-}"; [[ -z $SRC ]] && SRC=${BASH_SOURCE[0]}
+
+DIR=${SRC%/*}
+DIR=${DIR%%/}
+[[ $DIR != /* ]] && DIR=$PWD/$DIR
+TEMP=~/tmp/ZIPsFS/compilation
+! mkdir -p $TEMP && press_enter
+for f in $TEMP/*; do
+    [[ -e $f && $SRC -nt $f ]] && rm "$f"
+done
+
+
+
+press_enter(){
+    local what=${1:-continue}
+    echo >&2
+    read -r -p  "Press Enter to $what"
+}
 
 
 

@@ -21,7 +21,7 @@ static char *_warning_channel_name[1<<WARN_SHIFT_MAX]={0},*_warning_color[1<<WAR
 //char *_warning_pfx[1<<WARN_SHIFT_MAX]={0};
 static int _warning_count[1<<WARN_SHIFT_MAX];
 static FILE *_fWarnErr[2];
-static struct ht _ht_warning;
+static ht_t _ht_warning;
 static void _warning(const char *fn,int line,const uint32_t channel,const char* path,const char *format,...){
   const int e=errno;
   static pthread_mutex_t mutex;
@@ -30,7 +30,8 @@ static void _warning(const char *fn,int line,const uint32_t channel,const char* 
   const bool iserror=(channel&(WARN_FLAG_ERROR|WARN_FLAG_MAYBE_EXIT));
   if (!channel){
     assert(_fWarnErr[0]!=NULL);
-    assert(_fWarnErr[1]!=NULL);
+        assert(_fWarnErr[1]!=NULL);
+
     initialized=true;
     pthread_mutex_init(&mutex,NULL);
     ht_init(&_ht_warning,"warning",7);

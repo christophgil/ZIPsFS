@@ -25,6 +25,11 @@
 #define CG_THREAD_OBJECT_ASSERT_LOCK(x)
 #endif
 
+
+#ifndef PRINTINFO
+
+#define PRINTINFO(...) fprintf(stderr,__VA_ARGS__)
+#endif
 ////////////
 /// Hash ///
 ////////////
@@ -87,20 +92,20 @@ static off_t _mstore_common(struct mstore *m,int opt,const void *pointer){
   return sum;
 }
 
-static int mstore_report_memusage_to_strg(char *strg,int max_bytes,struct mstore *m){
-  int n=0;
-#define S(...) n+=PRINTF_STRG_OR_STDERR(strg,n,max_bytes-n,__VA_ARGS__)
+
+
+
+static int mstore_report_memusage(int n,struct mstore *m){
   if (!m){
-    S("(Name #id  B:#Blocks-used M:Mem(Bytes) B:Bytes-per-block  flags)");
+    PRINTINFO("(Name #id  B:#Blocks-used M:Mem(Bytes) B:Bytes-per-block  flags)");
   }else{
-    S("(%s %d  B:%'d M:%'ld S:%'ld %s%s)",snull(m->name), m->iinstance,(int)mstore_count_blocks(m),(long)mstore_usage(m),(long)m->bytes_per_block,
+    PRINTINFO("(%s %d  B:%'d M:%'ld S:%'ld %s%s)",snull(m->name), m->iinstance,(int)mstore_count_blocks(m),(long)mstore_usage(m),(long)m->bytes_per_block,
       (m->opt&MSTORE_OPT_MMAP_WITH_FILE?" MMAPFILE":""),
       (_MSTORE_IS_MALLOC(m)?" MALLOC":""));
-
   }
-#undef S
   return n;
 }
+
 
 //////////////////////////////////////////////////////////////////////////
 // Location of MMAP with file                                           //
@@ -173,7 +178,7 @@ static int _mstore_openfile(struct mstore *m,const uint32_t block,const off_t ad
   char path[PATH_MAX+1];  mstore_file(path,m,block);
   /* Note, there might be several with same name. Unique file names by adding iinstance to the file name */
   const int fd=open(path,O_RDWR|O_CREAT|O_TRUNC,0640);
-  if (fd<2) DIE("Open failed: %s fd: %d\n",path,fd);
+  if (fd<2) DIE("Open failed: '%s' fd: %d  mstore_base_path: '%s'\n",path,fd,mstore_base_path());
   //  struct stat st; if (fstat(fd,&st)<0) log_error("fstat failed: %s\n",path);
   if (ftruncate(fd,adim) || write(fd,"",1)!=1){
     log_errno("write failed: %s\n",path);

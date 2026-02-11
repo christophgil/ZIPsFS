@@ -52,6 +52,23 @@
 #endif
 ////////////////////////////////////////
 
+#if IS_LINUX && WITH_EXTRA_ASSERT
+#include <pwd.h>
+static bool cg_uid_is_developer(){
+  static int ok;
+  if (!ok){
+     struct passwd *pw=getpwuid(getuid());
+     ok=(!pw || strcmp("cgille",pw->pw_name))?-1:1;
+  }
+  return ok==1;
+}
+#else
+#define cg_uid_is_developer() false
+#endif
+
+/**********/
+/* Memory */
+/**********/
 static time_t _whenStarted;
 
 static void *malloc_untracked(const size_t size){
@@ -85,7 +102,7 @@ static void puts_stderr(const char *s){
 /// perror ///
 //////////////
 #define C(x)  case x: return #x
-static const char *error_symbol(const int x){
+static const char *cg_error_symbol(const int x){
   switch(x){
 #include "cg_utils_error_codes.c"
   };
@@ -110,7 +127,7 @@ static void fprint_strerror(FILE *f,int err){
   if (err && f){
 
     //    char s[1024];  strerror_r(err,s,1023);   fprintf(f," strerror_r=%s \n",s);
-    fprintf(f," Error %d %s: %s ",err,error_symbol(err),strerror(err));
+    fprintf(f," Error %d %s: %s ",err,cg_error_symbol(err),strerror(err));
   }
 }
 
@@ -188,13 +205,13 @@ static void *_cg_realloc_array(const int id,const int size1AndOpt,const void *pO
 }
 
 
-//static struct ht _mmap_debug;
+//static ht_t _mmap_debug;
 
 static void *_cg_mmap(const int id, const off_t length, const int fd_or_zero, const char *file, const int line){
   const int fd=fd_or_zero?fd_or_zero:-1;
   const off_t offset=0;
   const int flags=fd==-1?(MAP_SHARED|MAP_ANONYMOUS):MAP_SHARED;  /* FreeBSD requires fd -1 for MAP_ANONYMOUS. Otherwise EINVAL */
-  void *ptr=mmap(NULL,length,PROT_READ|PROT_WRITE,flags,fd, offset);
+  void *ptr=mmap(NULL,length,PROT_READ|PROT_WRITE,flags,fd,offset);
   if (ptr){
     //    if (!_mmap_debug.capacity){ ht_init(&_mmap_debug,"_mmap_debug",HT_FLAG_NUMKEY|16);}
     COUNTER1_ADD(id,length);
@@ -207,7 +224,7 @@ static void *_cg_mmap(const int id, const off_t length, const int fd_or_zero, co
 }
 static int _cg_munmap(const int id,const void *ptr,const off_t length){
   if (!ptr) return -1;
-  assert(length>0);
+  ASSERT(length>0);
   COUNTER2_ADD(id,length);
   COUNTER2_INC(id);
   return munmap((void*)ptr,length);
@@ -218,12 +235,26 @@ static int _cg_munmap(const int id,const void *ptr,const off_t length){
 //////////////
 /// String ///
 //////////////
+
+static int cg_last_nospace_char(const char *s){
+  int l=-1;
+  for(int i=0;s[i];i++) if (!isspace(s[i])) l=i;
+  return l;
+}
+static char cg_last_char(const char *s){
+  return !s||!*s?0:s[strlen(s)-1];
+}
 static char* cg_strrchr_null(const char *path, const char c){
   const char *found=strrchr(path,c);
   return (char*)(found?found:path+strlen(path));
 }
 
 
+static int cg_count_chr(const char *str, const char c){
+  int count=0;
+  if (str) for(const char *s=str; *s; s++) if (*s==c) count++;
+  return count;
+}
 
 
 static uint32_t hash32(const char* key, const uint32_t len){
@@ -242,17 +273,6 @@ static uint64_t hash64(const char* key, const off_t len){
   }
   return hash64;
 }
-
-static struct strg *strg_init(struct strg *strg,const char *s){
-  assert(s);
-  const int l=strlen(s);
-  assert(l<=MAX_PATHLEN);
-  strcpy(strg->s,s);
-  strg->l=l;
-  strg->hash=hash32(strg->s,strg->l);
-  return strg;
-}
-
 
 static int cg_str_str(const char *s,const char *substr){
   if (!s||!substr) return -1;
@@ -329,22 +349,28 @@ static bool cg_endsWithZip(const char *s, const int len_or_0){
   return s && ENDSWITHI(s,len,".zip");
 }
 
-static bool cg_endsWithGZ(const char *s, const int len_or_0){
-  const int l=len_or_0?len_or_0:cg_strlen(s);
-  return l>2 && s[l-3]=='.' && (s[l-2]|32)=='g' && (s[l-1]|32)=='z';
-}
+
+
+/* static bool cg_ends_with_compression_ext(const int iCompress,const char *s, const int len_or_0){ */
+/*   if (!iCompress) return true; */
+/*   int e_l; */
+/*   const char *e=cg_compression_file_ext(iCompress,&e_l); */
+/*   return !e || cg_endsWith(0,s,len_or_0?len_or_0:cg_strlen(s), e,e_l); */
+/* } */
+
+
 
 
 static bool cg_isURL(const char *url){
   const int url_l=cg_strlen(url);
   if (url_l<8) return false;
-    switch(*url){
+  switch(*url){
 #define S(s) cg_startsWith(url,url_l,s,sizeof(s)-1)
-    case 'h': if(S("http://")||S("https://")) return true; break;
-    case 'f': if(S("ftp://")||S("ftps://")) return true; break;
+  case 'h': if(S("http://")||S("https://")) return true; break;
+  case 'f': if(S("ftp://")||S("ftps://")) return true; break;
 #undef S
-    }
-    return false;
+  }
+  return false;
 }
 
 /*
@@ -364,7 +390,7 @@ static bool cg_endsWithDotD(const char *s, int len){
 static int cg_find_suffix(const int opt,const char *s, const int s_l,const char **xx,const int *xx_l){
   if (xx && s){
     for(int i=0; xx[i]; i++){
-      if (cg_endsWith((opt&FIND_SUFFIX_IC)!=0?ENDSWITH_FLAG_IC:0, s,s_l,xx[i],xx_l?xx_l[i]:0)) return i;
+      if (cg_endsWith((opt&FIND_SUFFIX_IC)!=0?ENDSWITH_FLAG_IC:0,s,s_l,xx[i],xx_l?xx_l[i]:0)) return i;
     }
   }
   return -1;
@@ -459,6 +485,29 @@ static int cg_strsplit(int opt_and_sep, const char *s, const int s_l, const char
   return count;
 }
 
+
+static int cg_str_join(char *tmp, const int soft_max, const int hard_max, const char **ss, const char *sep){
+  bool overflow=false;
+  char *t=tmp;
+  *t=0;
+  int count=0;
+  for(int sep_l=cg_strlen(sep); ss && *ss; ss++){
+    const int s_l=strlen(*ss),l=(t-tmp)+s_l+(count?sep_l:0);
+    if (l>=(count?hard_max:soft_max)){overflow=true; break;}
+    if (count++) t=stpcpy(t,sep);
+    t=stpcpy(t,*ss);
+  }
+  if (overflow){
+    if (!count){
+      stpcpy(stpncpy(t,*ss,hard_max-3),"...");
+    }else{
+      if (tmp-t+4<=soft_max) stpcpy(t," ...");
+      else stpcpy(MIN(t,tmp+hard_max-3),"...");
+    }
+  }
+  return (int)(t-tmp);
+}
+
 static const char *rm_pfx_us(const char *s){
   const char *us=!s?NULL:strchr(s,'_');
   return us?us+1:NULL;
@@ -471,8 +520,6 @@ static int64_t currentTimeMillis(void){
   gettimeofday(&tv,NULL);
   return tv.tv_sec*1000+tv.tv_usec/1000;
 }
-
-
 
 #define cg_sleep_ms(...) _cg_sleep_ms(__VA_ARGS__,__func__,__LINE__)
 static void _cg_sleep_ms(const int millisec, const char *msg, const char *func,const int line){
@@ -490,19 +537,14 @@ static void cg_nanosleep(long nanos){
 
 static void cg_usleep(int usec){
   struct timespec ts={usec>>20,((usec&((1<<20)-1)))<<10};
-  //log_debug_now("ts=%ld   %'ld ", ts.tv_sec,ts.tv_nsec);
+  //log_debug_now("ts=%ld   %'ld ",ts.tv_sec,ts.tv_nsec);
   nanosleep(&ts,NULL);
 }
-
-
-
 
 
 ///////////////////
 /// file path   ///
 ///////////////////
-
-
 
 // static int slash_not_trailing(const char *path){ const char *p=strchr(path,'/');  return p && p[1]?(int)(p-path):-1; }
 static int cg_pathlen_ignore_trailing_slash(const char *p){
@@ -514,6 +556,36 @@ static int cg_pathlen_ignore_trailing_slash(const char *p){
 }
 static bool cg_path_equals_or_is_parent(const char *subpath,const int subpath_l,const char *path,const int path_l){
   return subpath && path && (subpath_l==path_l||(subpath_l<path_l&&path[subpath_l]=='/')) && !memcmp(path,subpath,subpath_l);
+}
+
+
+static int cg_readlink_absolute(const bool resolve,const char *symlink_path, char absolute_target[PATH_MAX+1]){
+  char link_target[PATH_MAX+1], absolute_tmp[PATH_MAX+1];
+  *link_target=*absolute_target=0;
+  if (resolve && *symlink_path!='/'){
+    log_error("symlink_path is not absolute: '%s'",symlink_path);
+    return EINVAL;
+  }
+  const int len=readlink(symlink_path,link_target,PATH_MAX);
+  if (len==-1){ log_errno("readlink '%s'",symlink_path); return errno; }
+  link_target[len]=0;
+  if (*link_target=='/') {
+    cg_strncpy0(absolute_tmp,link_target,PATH_MAX);
+  }else{
+    // Relative target → resolve against symlink directory
+    const int slash=cg_last_slash(symlink_path);
+    strncpy(absolute_tmp,symlink_path,slash+1);
+    strncpy(absolute_tmp+slash+1,link_target,PATH_MAX-slash-1);
+  }
+  if (!resolve){
+    strcpy(absolute_target,absolute_tmp);
+  }else{
+    if (!realpath(absolute_tmp,absolute_target)) {
+      log_errno("Resolve '%s' \n",absolute_tmp);
+      return errno;
+    }
+  }
+  return 0;
 }
 static bool *cg_validchars(enum enum_validchars type){
   static bool ccc[VALIDCHARS_NUM][128];
@@ -534,7 +606,6 @@ static bool *cg_validchars(enum enum_validchars type){
   }
   return ccc[type];
 }
-
 static int cg_find_invalidchar(enum enum_validchars type,const char *s,const int len){
   if (s){
     const bool *bb=cg_validchars(type);
@@ -544,7 +615,6 @@ static int cg_find_invalidchar(enum enum_validchars type,const char *s,const int
   }
   return -1;
 }
-
 static int url_encode(char *dst, const int dst_l, const char *name){
   static const bool *bb;
   bb=cg_validchars(VALIDCHARS_FILE);
@@ -564,20 +634,23 @@ static int url_encode(char *dst, const int dst_l, const char *name){
   return i;
 }
 
-
-static void cg_path_for_fd(const char *title, char *path, int fd){
+#define cg_path_for_fd(path,fd) _cg_path_for_fd(__func__,__LINE__,path,fd)
+static char * _cg_path_for_fd(const char *func, const int line, char *path, const int fd){
+  static char path0[PATH_MAX+1];
+  if (!path) path=path0;
   *path=0;
-  if (!has_proc_fs()) return;
-  char buf[99];
-  sprintf(buf,"/proc/self/fd/%d",fd);
-
-  const ssize_t n=readlink(buf,path, MAX_PATHLEN-1);
-  if (n<=0){
-    *path=0;
-    log_errno("\n%s  %s: ",snull(title),buf);
-  }else{
-    path[n]=0;
+  if (has_proc_fs()){
+    char buf[99];
+    sprintf(buf,"/proc/self/fd/%d",fd);
+    const ssize_t n=readlink(buf,path, MAX_PATHLEN-1);
+    if (n<=0){
+      *path=0;
+      log_errno("\n%s:%d  %s: ",func,line,buf);
+    }else{
+      path[n]=0;
+    }
   }
+  return path;
 }
 
 static int cg_count_fd_this_prg(void){
@@ -597,7 +670,7 @@ static bool cg_check_path_for_fd(const char *title, const char *path, int fd){
     log_error("%s  Failed realpath(%s)\n",snull(title),path);
     return false;
   }
-  cg_path_for_fd(title,check_path,fd);
+  cg_path_for_fd(check_path,fd);
   if (strncmp(rp,path,MAX_PATHLEN-1)){
     log_error("%s  fd=%d,%s   D_VP(d)=%s   realpath(path)=%s\n",title,fd,check_path,path,rp);
     return false;
@@ -663,6 +736,7 @@ static bool is_square_number(unsigned int y){
   return s*s==y;
 }
 
+/* Schnapszahl */
 static long closest_with_identical_digits(const long num){
   int count=0;
   long n=num;
@@ -689,6 +763,15 @@ static MAYBE_INLINE int64_t cg_atol_kmgt(const char *s){
   *c&=~32;
   return atol(s)<<(*c=='K'?10:*c=='M'?20:*c=='G'?30:*c=='T'?40:0);
 }
+
+
+
+
+
+///////////////////
+/// file stat   ///
+///////////////////
+
 static void cg_log_file_mode(mode_t m){
   char txt[11];
   int i=0;
@@ -701,12 +784,6 @@ static void cg_log_file_mode(mode_t m){
   txt[i++]=0;
   puts_stderr(txt);
 }
-
-
-//
-///////////////////
-/// file stat   ///
-///////////////////
 
 static const struct stat empty_stat={0};
 static long cg_file_size(const char *path){
@@ -725,10 +802,10 @@ static bool cg_file_exists(const char *path){
 #define cg_pid_exists(pid)  (!kill(pid,0)) // Or   getpgid(pid)>=0
 
 #define ST_BLKSIZE 4096
-static void cg_clear_stat(struct stat *st){ if(st) *st=empty_stat;}
+
 static void stat_init(struct stat *st, int64_t size,const struct stat *uid_gid){
   const bool isdir=size<0;
-  cg_clear_stat(st);
+  *st=empty_stat;
   st->st_mode=isdir?(S_IFDIR|0777):(S_IFREG|0666);
   st->st_nlink=1;
   if (!isdir){
@@ -748,6 +825,15 @@ static void stat_init(struct stat *st, int64_t size,const struct stat *uid_gid){
     st->st_gid=getgid();
     st->st_uid=getuid();
   }
+}
+
+
+static bool cg_stat_parent_and_file(const char *parent, const int parent_l, const char *n, const int n_l, struct stat *st){
+  char rp[parent_l+n_l+2];
+  char *e=stpcpy(rp,parent);
+  *e++='/';
+  stpcpy(e,n);
+  return !stat(rp,st);
 }
 
 #define cg_log_file_stat(...) _cg_log_file_stat(__func__,__VA_ARGS__)
@@ -856,7 +942,8 @@ static bool cg_file_set_mtime(const char *path, const time_t time){
   struct timeval tt[2]={0};
   tt[1].tv_sec=time;
   if (utimes(path,tt)){
-    perror(path);
+    perror("");
+    fprintf(stderr,"path: %s",path);
     return false;
   }
   return true;
@@ -894,6 +981,28 @@ static bool cg_fd_write_str(const int fd,const char *t){
 }
 
 
+
+static ssize_t cg_copy_file_content_fd(const int i, const int o){
+  char buf[1<<16];
+  ssize_t n,count=0;
+  while ((n=read(i,buf,1<<16))>0){
+    if (write(o,buf,n)==-1) return -errno;
+    count+=n;
+  }
+  return n==-1?-errno:count;
+}
+static ssize_t cg_copy_file_content(const char *infile, const char *outfile){
+  int i=0,o=0;
+  ssize_t count=0;
+  if ((i=open(infile,O_RDONLY))>0 && (o=open(outfile,O_WRONLY|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR|S_IRGRP))>0){
+    count=cg_copy_file_content_fd(i,o);
+  }
+  if (i>0) close(i);
+  if (o>0) close(o);
+  return i<=0 || o<=0?-errno:count;
+}
+
+
 static int cg_rename(const char *old, const char *n){
   if (!old || !n || !*old || !*n) return -1;
   const int ret=rename(old,n);
@@ -905,10 +1014,20 @@ static bool cg_unlink(const char *f){
   if (!f || !*f) return false;
   int err=0;
   if (unlink(f)==-1) err=errno;
-  if (cg_file_exists(f)){ log_errno("unlink(%s)  %s",f,error_symbol(err));return false;}
+  if (cg_file_exists(f)){ log_errno("unlink(%s)  %s",f,cg_error_symbol(err));return false;}
   return true;
 }
 
+static int cg_vmtouch_e(const char *f){
+  int err=0;
+#if !defined(HAS_POSIX_FADVISE) || HAS_POSIX_FADVISE
+  const int fi=open(f,O_RDONLY);
+  if (fi<=0) return errno;
+  err=posix_fadvise(fi,0,0,POSIX_FADV_DONTNEED);
+  close(fi);
+#endif //HAS_POSIX_FADVISE
+  return err;
+}
 
 static int cg_symlink_overwrite_atomically(const char *src,const char *lnk){
   log_verbose("src: %s lnk: %s \n",src,lnk);
@@ -968,7 +1087,6 @@ static void log_list_filedescriptors(const int fd){
 
 
 static char* cg_path_expand_tilde(char *dst, const int dst_max, const char *path){
-
   if (!dst) dst=(char*)path;
   if (dst){
     char *d=dst;
@@ -995,6 +1113,39 @@ static char* cg_path_expand_tilde(char *dst, const int dst_max, const char *path
   return dst;
 }
 #define cg_copy_path(dst,src) cg_path_expand_tilde(dst,PATH_MAX,src)
+
+
+
+
+///////////////////
+///    tmp file ///
+///////////////////
+
+
+static void _tmp_for_file(char tmp[], const char *f){
+  if (!strncmp(f,"/dev/",5)){
+    strcpy(tmp,f);
+  }else{
+    static int count; sprintf(tmp,"%s.%d.%d.tmp",f,getpid(),count++);
+    unlink(tmp);
+    cg_recursive_mk_parentdir(tmp);
+  }
+
+}
+
+#define TMP_FOR_FILE(tmp,f)   char tmp[strlen(f)+99]; _tmp_for_file(tmp,f)
+
+
+static bool cg_rename_tmp_outfile(const char *tmp, const char *f){
+
+  //log_entered_function("(%s,%s) ",tmp,f);
+  if (!(tmp && *tmp && f && *f)) return false;
+  if (!strcmp(tmp,f)) return true;
+  //log_debug_now("Going cg_rename(%s,%s) ",tmp,f);
+  cg_rename(tmp,f);
+  return cg_file_exists(f);
+}
+
 ///////////////////
 ///    time     ///
 ///////////////////
@@ -1061,11 +1212,13 @@ static bool cg_is_member_of_group_docker(void){
 ///  process    ///
 ///////////////////
 //static bool cg_log_exec_fd(const int fd, char const * const * const cmd, char const * const * const env){
+
 static bool cg_log_exec_fd(const int fd, const char *cmd[], const char  *env[]){
   bool compact=cmd && !env;
   if (compact){
     int len=0;
-    for(const char **a=cmd; *a; a++) len+=cg_strlen(*a);
+    //for(const char **a=cmd; a&&*a; a++) len+=cg_strlen(*a);
+    FOREACH_CSTRING(a,cmd) len+=cg_strlen(*a);
     if (len<60) compact=true;
   }
 
@@ -1138,12 +1291,17 @@ static int fd_dev_null(){
   if (!fd && (fd=open("/dev/null",O_WRONLY))<=0){ perror(__FILE__":"STRINGIZE(__LINE__)" /dev/null"); exit(1);}
   return fd;
 }
-static int cg_exec(const char  *cmd[], const char *env[],const int fd_out,const int fd_err){
+
+
+static int cg_exec(const char *cmd[], const char *env[],const int fd_in,const int fd_out,const int fd_err){
   errno=0;
   if(fd_out>0) dup2(fd_out,STDOUT_FILENO);
   if(fd_err>0) dup2(fd_err,STDERR_FILENO);
+  if (fd_in>0) dup2(fd_in,STDIN_FILENO);
+
   if(fd_out>0) close(fd_out);
   if(fd_err>0 && fd_err!=fd_out) close(fd_err);
+  if(fd_in>0) close(fd_in);
   cg_log_exec_fd(STDERR_FILENO,cmd,env);
 #if defined(HAS_EXECVPE) && HAS_EXECVPE
   execvpe(cmd[0],(char *const *)cmd,(char *const *)env);
@@ -1157,13 +1315,15 @@ static int cg_exec(const char  *cmd[], const char *env[],const int fd_out,const 
   E("cg_exec");
   return errno;
 }
-static bool cg_fork_exec(const char *cmd[], const char *env[],const int fd_out,const int fd_err){
+
+static bool cg_fork_exec(const char *cmd[], const char *env[],const int fd_in,const int fd_out,const int fd_err){
+  log_entered_function("cmd: %s",cmd[0]);
   const pid_t pid=fork(); /* Make real file by running external prg */
   if (pid<0){ log_errno("fork() waitpid 1 returned %d",pid);return false;}
   if (!pid){
     cg_array_remove_element(cmd,"");
     cg_log_exec_fd(STDERR_FILENO,cmd,NULL);
-    exit(cg_exec(cmd,env,fd_out,fd_err));
+    exit(cg_exec(cmd,env,fd_in,fd_out,fd_err));
   }
   int wstatus;
   waitpid(pid,&wstatus,0);
@@ -1172,43 +1332,52 @@ static bool cg_fork_exec(const char *cmd[], const char *env[],const int fd_out,c
 }
 static bool is_installed_program(const char *prg){
   const char *cmd[]={prg,"--version",(char*)0};
-  return cg_fork_exec(cmd,NULL,fd_dev_null(),fd_dev_null());
+  return cg_fork_exec(cmd,NULL,0,fd_dev_null(),fd_dev_null());
 }
 
 #define I(program) static int i;  if (!i) i=is_installed_program(program)?1:-1;  return i==1
 static bool is_installed_curl(){ I("curl");}
-static bool is_installed_wget(){
-  //if (DEBUG_NOW==DEBUG_NOW) return false;
-  I("wget");}
 #undef I
 
-//////////////////////////////////////////////////////////////////////
-// Compare text and file content
-//////////////////////////////////////////////////////////////////////
-#if CODE_NOT_NEEDED
-#define DIFFERS_F_S_REPORT_NEXIST (1<<1)
-static int differs_filecontent_from_string(const int opt,const char* path, const long seek,const char* text,const long text_l){
-  const int fd=open(path,O_RDONLY);
-  if (fd<0){ if (0!=(opt&DIFFERS_F_S_REPORT_NEXIST)) log_errno("open(\"%s\",O_RDONLY)",path); return -1;}
-  char buf[4096];
-  int n;
-  long pos=0;
-  while((n=read(fd,buf,sizeof(buf)))>0){
-    RLOOP(i_buf,n){
-      const long i_txt=pos-seek+i_buf;/* TODO inefficient */
-      if (i_txt>=0 && i_txt<text_l){
-        //        printf("%c %c \n", text[i_txt],buf[i_buf]);
-        if (text[i_txt]!=buf[i_buf]) return true;
-      }
-    }
-    pos+=n;
+
+/***************/
+/* Compression */
+/***************/
+static char *cg_compression_file_ext(const int i,int *ext_l){
+  switch(i){
+#define X(lower,upper) case COMPRESSION_##upper: if (ext_l) *ext_l=sizeof(#lower);  return "."#lower;
+    XMACRO_COMPRESSION();
+#undef X
   }
-  if (pos<seek+text_l) return true;
-  if (n<0) log_errno("read(fd,...) %s",path);
-  close(fd);
+  return "";
+}
+static int cg_compression_for_filename(const char *s, const int len_or_0){
+  const int s_l=len_or_0?len_or_0:cg_strlen(s); // cppcheck-suppress unreadVariable
+  FOR(i,1,COMPRESSION_NUM){
+    int e_l;
+    const char *e=cg_compression_file_ext(i,&e_l);
+    if (e && cg_endsWith(0,s,len_or_0?len_or_0:cg_strlen(s),e,e_l)) return i;
+  }
   return 0;
 }
-#endif //CODE_NOT_NEEDED
+
+#define DECOMPRESS_CMD_MAX 8
+static bool cg_cmd_decompress(const int i,const char **cmd, const char *src){
+  *cmd=NULL;
+  int n=0;
+#define C(a) cmd[n++]=a
+#define S() C(src);C(NULL);assert(n<=DECOMPRESS_CMD_MAX)
+  switch(i){
+    /* Not needed. using zlib       case COMPRESSION_GZ:  C("gzip");C("-dc");S(); return true; */
+  case COMPRESSION_BZ2:  C("bzip2");C("-dc");S(); return true;
+  case COMPRESSION_LRZ:  C("lrzip");C("-df");C("-o");C("-");S(); return true;
+  case COMPRESSION_XZ:   C("xz");C("-dc");S(); return true;
+  case COMPRESSION_Z:   C("decompress");C("-c");S(); return true; /* apt-get install ncompress */
+  }
+#undef C
+#undef S
+  return false;
+}
 
 #undef E
 #endif // _cg_utils_dot_c
@@ -1222,24 +1391,8 @@ static bool cg_pid_exists_proc(const pid_t pid){
 }
 
 int main(int argc, char *argv[]){
-
-
-  struct stat stbuf, *st=&stbuf;
-  stat_init(st,0,NULL);
-  st->st_mtime=time(NULL);
-  cg_log_file_stat("",st);
-  //  cg_log_file_mode();  fputc('\n',stderr);
-  //  printf("  cg_endsWith: %d \n",cg_endsWith(0,argv[1],0,argv[2],0));
-  //printf("  cg_endsWith: %d \n",cg_endsWith(ENDSWITH_FLAG_PRECEED_SLASH,argv[1],0,argv[2],0));
-  //FOR(i,1,argc) printf("%s %d  ",argv[i],cg_starts_digits_char(argv[i],8,'_'));
-  //cg_mkdir(argv[1],S_IRWXU);
-  return 0;
-
-  /*  char *h=strdup("/data/PLACEHOLDER_INFILE_NAMEx"); */
-  /*  cg_str_replace(0,h,0,"PLACEHOLDER_INFILE_NAMEx",0, "report.parquet",0); */
-  /*  fprintf(stderr,"h: %s\n",h); */
-  /* return 0; */
-  switch(14){
+  printf("cg_uid_is_developer(): %d",cg_uid_is_developer()); return 0;
+  switch(16){
   case 0:{
     bool *ccpath=cg_validchars(VALIDCHARS_PATH);
     fprintf(stderr,"ccpath\n");
@@ -1328,14 +1481,34 @@ int main(int argc, char *argv[]){
     assert(argc==3);
     printf("cg_file_is_newer_than %d \n",cg_file_is_newer_than(argv[1],argv[2]));
     break;
+
   case 14:{
+    char target[PATH_MAX+1];
+    FOR(i,1,argc){
+      int res;
+      res=cg_readlink_absolute(false,argv[i],target);
+      printf("rel %s '%s' => '%s'\n",success_or_fail(res==0), argv[i],target);
+      res=cg_readlink_absolute(true,argv[i],target);
+      printf("abs %s '%s' => '%s'\n",success_or_fail(res==0), argv[i],target);
+    }
+    break;
+
+
+  }
+
+  case 15:{
     const char *aa[]={"","a","b","","","c","",NULL};
     //    const char *aa[]={"",NULL};
     cg_array_remove_element(aa,"");
     for(int i=0;aa[i];i++) printf("%2d '%s'\n",i,aa[i]);
     printf("cg_array_length: %d\n",cg_array_length(aa));
     break;
+
   }
+
+  case 16:
+    cg_copy_file_content(argv[1], argv[2]);
+    break;
 
     /* case 14:{ */
     /*   char *aa[99]; */

@@ -4,29 +4,29 @@
 /////////////////////////////////////////////////////////////////
 // cppcheck-suppress-file unusedFunction
 // cppcheck-suppress-file knownConditionTrueFalse
-static int countFhandleWithPreloadfileram(const char *path, int len,int h){
+static int countFhandleWithPreloadram(const char *path, int len,int h){
   if (!len) len=strlen(path);
   if (!h) h=hash32(path,len);
   int count=0;
-  IF1(WITH_PRELOADFILERAM,foreach_fhandle(id,d)     if (D_VP_HASH(d)==h && d->preloadfileram && d->preloadfileram->txtbuf && !strcmp(path,D_VP(d))) count++);
+  IF1(WITH_PRELOADRAM,foreach_fhandle(id,d)     if (D_VP_HASH(d)==h && d->preloadram && d->preloadram->txtbuf && !strcmp(path,D_VP(d))) count++);
   return count;
 }
 
-#define fhandleWithPreloadfileramPrint(...) _fhandleWithPreloadfileramPrint(__func__,__LINE__,__VA_ARGS__)
-static void _fhandleWithPreloadfileramPrint(const char *func,int line,const char *path, int len,int h){
-#if WITH_PRELOADFILERAM
+#define fhandleWithPreloadramPrint(...) _fhandleWithPreloadramPrint(__func__,__LINE__,__VA_ARGS__)
+static void _fhandleWithPreloadramPrint(const char *func,int line,const char *path, int len,int h){
+#if WITH_PRELOADRAM
   ASSERT_LOCKED_FHANDLE();
   if (!len) len=strlen(path);
   if (!h) h=hash32(path,len);
   foreach_fhandle(id,d){
     if (D_VP_HASH(d)==h){
-      const struct preloadfileram *m=d->preloadfileram;
-      if (m && (m->txtbuf||m->preloadfileram_status) && !strcmp(path,D_VP(d))){
-        log_msg("%s:%d fhandleWithPreloadfileramPrint: %d %s  preloadfileram_status: %s preloadfileram_l: %lld\n",func,line,id,path,PRELOADFILERAM_STATUS_S[m->preloadfileram_status],(LLD)m->preloadfileram_l);
+      const struct preloadram *m=d->preloadram;
+      if (m && (m->txtbuf||m->preloadram_status) && !strcmp(path,D_VP(d))){
+        log_msg("%s:%d fhandleWithPreloadramPrint: %d %s  preloadram_status: %s preloadram_l: %lld\n",func,line,id,path,PRELOADRAM_STATUS_S[m->preloadram_status],(LLD)m->preloadram_l);
       }
     }
   }
-#endif //WITH_PRELOADFILERAM
+#endif //WITH_PRELOADRAM
 }
 
 
@@ -46,10 +46,10 @@ static bool _debugSpecificPath(int mode, const char *path, int path_l){
   case 3: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d");break;
   }
   if (b){
-    const int n=countFhandleWithPreloadfileram(path,path_l,0);
+    const int n=countFhandleWithPreloadram(path,path_l,0);
     if (n>1){
-      log_error("path=%s   countFhandleWithPreloadfileram=%d\n",path,n);
-      fhandleWithPreloadfileramPrint(path,path_l,0);
+      log_error("path=%s   countFhandleWithPreloadram=%d\n",path,n);
+      fhandleWithPreloadramPrint(path,path_l,0);
     }
     return true;
   }
@@ -77,7 +77,7 @@ static void _assert_validchars(enum enum_validchars t,const char *s,int s_l,cons
   unlock(mutex_validchars);
 }
 #define  assert_validchars_direntries(...) _assert_validchars_direntries(__VA_ARGS__,__func__)
-static void _assert_validchars_direntries(const struct directory *dir,const char *fn){
+static void _assert_validchars_direntries(const directory_t *dir,const char *fn){
   if (dir){
     RLOOP(i,dir->core.files_l){
       const char *s=dir->core.fname[i];
@@ -87,7 +87,7 @@ static void _assert_validchars_direntries(const struct directory *dir,const char
 }
 
 /* #define debug_directory_print(dir) _debug_directory_print(dir,__func__,__LINE__); */
-/*   static void _debug_directory_print(const struct directory *dir,const char *fn,const int line){ */
+/*   static void _debug_directory_print(const directory_t *dir,const char *fn,const int line){ */
 /*     if (dir){ */
 /*       const struct directory_core *d=&dir->core; */
 /*       log_msg("%s():%d "ANSI_INVERSE"Directory"ANSI_RESET" rp: %s files_l: %d  destroyed: %d debug: %d\n",fn,line,DIR_RP(dir), d->files_l, dir->dir_is_destroyed,dir->debug); */
@@ -119,10 +119,10 @@ EXIT(0);
 /////////////////////////////////////////////////////////////
 
 #define directory_print(dir,maxNum) _directory_print(__func__,__LINE__,dir,maxNum)
-static void _directory_print(const char *func,const int line,const struct directory *dir,const int maxNum){
+static void _directory_print(const char *func,const int line,const directory_t *dir,const int maxNum){
   const struct directory_core *d=&dir->core;
   ASSERT(d->fname);
-  const struct ht *hti=IF01(WITH_TIMEOUT_READDIR,NULL,dir->ht_intern_names);
+  const ht_t *hti=IF01(WITH_TIMEOUT_READDIR,NULL,dir->ht_intern_names);
   fprintf(stderr,"\n"ANSI_INVERSE"%s:%d  Directory %p '%s'   files_l: %d/%d  destroyed: %s success: %s  ht-intern: %s\n"ANSI_RESET,func,line,dir,DIR_RP(dir),d->files_l,  dir->files_capacity, yes_no(dir->dir_is_destroyed), yes_no(dir->dir_is_success),yes_no(NULL!=hti));
   assert(d->files_l<=dir->files_capacity);
   FOR(i,0,d->files_l){
@@ -164,7 +164,7 @@ static bool debug_path(const char *vp){
 
 
 
-static bool debug_fhandle(const struct fHandle *d){
+static bool debug_fhandle(const fHandle_t *d){
   return d && !d->n_read && tdf_or_tdf_bin(D_VP(d));
 }
 static void debug_fhandle_listall(void){
@@ -185,7 +185,7 @@ static void debug_fhandle_listall(void){
 */
 #if DEBUG_DIRCACHE_COMPARE_CACHED
 #define dde_print(f,...) fprintf(stderr,ANSI_YELLOW"DDE "ANSI_RESET f,__VA_ARGS__)
-static void debug_compare_directory_a_b(struct directory *A,struct directory *B){
+static void debug_compare_directory_a_b(directory_t *A,directory_t *B){
   bool diff=false;
 #define print_realpath() dde_print("dir_realpath  '%s'  '%s'\n",DIR_RP(A),DIR_RP(B))
   if (DIR_RP(A) && DIR_RP(B) &&  strcmp(DIR_RP(A),DIR_RP(B))){

@@ -5,24 +5,53 @@
 //////////////////////////////////////////////////////////////////////////
 enum enum_async_job_status{ASYNC_JOB_IDLE,ASYNC_JOB_SUBMITTED,ASYNC_JOB_PICKED};
 #define OK_OR_TIMEOUT(code_ok,code_timeout)    LOCK(mutex_async,if (id==ID){code_ok;G=0;}else{code_timeout;})
-//#define DIE_IF_TIMEOUT(path) IF0(IS_CHECKING_CODE, if (!finished) DIE_DEBUG_NOW("!finished %s ",path))
 #define DIE_IF_TIMEOUT(path)
-#define ASYNC_WAIT(path,t)  for(int j=1; G==ASYNC_JOB_PICKED && ((j%255) || (time(NULL)-(t)<=TO));j++) usleep(256);\
-  LOCK_N(mutex_async, const bool finished=!G; ID++);\
-  if (!finished) log_warn("Timeout G=%d  %s root: '%s': path: '%s'   %'ld  <= %d",G,ASYNC_S[A],rootpath(r),path   ,time(NULL)-(t),TO)
 
-#define TO (A==ASYNC_STAT?STAT_TIMEOUT_SECONDS:A==ASYNC_OPENFILE?OPENFILE_TIMEOUT_SECONDS:A==ASYNC_OPENZIP?OPENZIP_TIMEOUT_SECONDS:A==ASYNC_READDIR?READDIR_TIMEOUT_SECONDS:0)
-#define R()  struct rootdata *r=zpath->root; if (!r || ROOT_NOT_RESPONDING(r)) continue  // r is null e.g. for warnings.log
+#define R()  root_t *r=zpath->root; if (!r || ROOT_NOT_RESPONDING(r)) continue  // r is null e.g. for warnings.log
 #define L() pthread_mutex_lock(r->async_mtx+A)
 #define UL() LOCK(mutex_async, G=0); pthread_mutex_unlock(r->async_mtx+A)
 #define G           r->async_go[A]
 #define ID     r->async_task_id[A]
+#define TO (A==ASYNC_STAT?r->stat_timeout_seconds:A==ASYNC_OPENFILE?r->openfile_timeout_seconds:A==ASYNC_OPENZIP?OPENZIP_TIMEOUT_SECONDS:A==ASYNC_READDIR?r->readdir_timeout_seconds:0)
+
+#if WITH_TIMEOUT_STAT || WITH_TIMEOUT_READDIR || WITH_TIMEOUT_OPENFILE || WITH_TIMEOUT_OPENZIP
+static bool async_wait(const char *path, const time_t t,root_t *r,const int A){
+  time_t lastLog=0;
+
+  for(int j=1; G==ASYNC_JOB_PICKED; j++){
+    if (j%255 || !TO) continue;
+    const time_t diff=time(NULL)-t;
+    if (diff>TO) break;
+    if (diff-lastLog>4){ lastLog=diff*3/2; log_verbose("%s path: %s %d s",ASYNC_S[A],path,(int)diff);}
+    usleep(256);
+  }
+  LOCK_N(mutex_async, const bool finished=!G; ID++);
+  if (!finished) log_warn("Timeout G=%d  %s root: '%s': path: '%s'   %'ld  <= %d",G,ASYNC_S[A],rootpath(r),path,time(NULL)-(t),TO);
+  return finished;
+}
+static void async_wait_picked(root_t *r,const int A){
+  time_t lastLog=0;
+  for(int j=1; G==ASYNC_JOB_SUBMITTED; j++){
+    if ((j%255) || !TO) continue;
+    const time_t diff=time(NULL)-ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC);
+    if (diff>TO) break;
+    usleep(256);
+    if (diff-lastLog>4) lastLog=diff*3/2;
+  }
+}
+#endif // WITH_TIMEOUT_xxx
+#define ASYNC_WAIT(path,t) const bool finished=async_wait(path,t,r,A)
 /*
   This variant leads to timeout on     find mnt/
   #define WAIT_PICKED() { time_t time0=time(NULL); for(int j=1; G==ASYNC_JOB_SUBMITTED && ((j%255) || ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC)-time0<=TO);j++) usleep(256);}
 */
-#define WAIT_PICKED(code) LOCK_N(mutex_async,++ID;code;G=ASYNC_JOB_SUBMITTED);\
-  for(int j=1; G==ASYNC_JOB_SUBMITTED  && ((j%255) || time(NULL)-ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC)<=TO);j++) usleep(256)
+
+
+#define WAIT_PICKED(code) LOCK_N(mutex_async,++ID;code;G=ASYNC_JOB_SUBMITTED); async_wait_picked(r,A)
+
+
+
+
 #define SET_PICKED(code)\
   int id;\
   lock(mutex_async);\
@@ -31,15 +60,18 @@ enum enum_async_job_status{ASYNC_JOB_IDLE,ASYNC_JOB_SUBMITTED,ASYNC_JOB_PICKED};
   unlock(mutex_async);\
   if (go!=ASYNC_JOB_SUBMITTED) return false;
 
-static bool directory_rp_stat(struct directory *dir){
+static bool directory_rp_stat(directory_t *dir){
   if (dir->dir_zpath.stat_rp.st_ino) return true;
   if (!DIR_RP_L(dir)) return false;
   if (!stat(DIR_RP(dir),&dir->dir_zpath.stat_rp)) return true;
   warning(WARN_STAT|WARN_FLAG_ERRNO,DIR_RP(dir),"stat");
   return false;
 }
-static bool readdir_now(struct directory *dir){
-  if (!readdir_from_zip(dir) && !readir_from_filesystem(dir)) return false;
+static bool readdir_now(directory_t *dir){
+  _debug_is_readdir++;
+  const bool ok=readdir_from_zip(dir) || readir_from_filesystem(dir);
+  _debug_is_readdir--;
+  if (!ok) return false;
   directory_rp_stat(dir);
   dir->core.dir_mtim=dir->dir_zpath.stat_rp.ST_MTIMESPEC;
   //IF1(WITH_ZIPENTRY_PLACEHOLDER,directory_any_file_with_placeholder(dir));
@@ -55,11 +87,11 @@ static bool readdir_now(struct directory *dir){
 */
 
 #if WITH_DIRCACHE
-static void directory_to_queue(const struct directory *dir){
+static void directory_to_queue(const directory_t *dir){
   root_start_thread(DIR_ROOT(dir),PTHREAD_ASYNC,false);
   LOCK(mutex_dircache_queue,  ht_only_once(&DIR_ROOT(dir)->dircache_queue,DIR_RP(dir),0));
 }
-static bool async_periodically_dircache(struct rootdata *r){
+static bool async_periodically_dircache(root_t *r){
   bool success=false;
   char path[PATH_MAX+1];
   struct stat stbuf={0};
@@ -67,7 +99,7 @@ static bool async_periodically_dircache(struct rootdata *r){
     *path=0;
     { /*Pick path from an entry and put in stack variable path */
       lock_ncancel(mutex_dircache_queue);
-      struct ht_entry *ee=HT_ENTRIES(&r->dircache_queue);
+      ht_entry_t *ee=HT_ENTRIES(&r->dircache_queue);
       RLOOP(i,r->dircache_queue.capacity){
         if (ee[i].key){
           cg_strncpy0(path,ee[i].key,MAX_PATHLEN);
@@ -77,16 +109,15 @@ static bool async_periodically_dircache(struct rootdata *r){
       unlock_ncancel(mutex_dircache_queue);
     }
     if (!*path) break;
-    struct strg strg={0};    strg_init(&strg,path);
-    if (IF1(WITH_STAT_CACHE,stat_from_cache(&stbuf,&strg,r)||)  stat_direct(&stbuf,&strg,r)){
-      struct directory mydir={0}, *dir=&mydir;
-      struct zippath *zpath=directory_init_zpath(dir,NULL);
+    if (IF1(WITH_STAT_CACHE,stat_from_cache(0,&stbuf,path,r)||)  stat_direct(0,&stbuf,path,strlen(path),r)){
+      directory_t mydir={0}, *dir=&mydir;
+      zpath_t *zpath=directory_init_zpath(dir,NULL);
       zpath->stat_rp=stbuf;
       zpath->realpath=zpath_newstr(zpath);
       zpath_strcat(zpath,path);
       RP_L()=zpath_commit(zpath);
       zpath->root=r;
-      zpath->flags|=ZP_ZIP;
+      zpath->flags|=ZP_TRY_ZIP;
       dir->async_never=true;
       assert(DIR_ROOT(dir)==r);
       if (readdir_now(dir)){
@@ -99,13 +130,13 @@ static bool async_periodically_dircache(struct rootdata *r){
   return success;
 }
 #endif //WITH_DIRCACHE
-static void async_zipfile_init(struct async_zipfile *zip,const struct zippath *zpath){
+static void async_zipfile_init(struct async_zipfile *zip,const zpath_t *zpath){
   *zip=async_zipfile_empty;
   zip->azf_zpath=*zpath;
 }
 static void openzip_now(struct async_zipfile *zip){
   if (!zip) return;
-  struct zippath *zpath=&zip->azf_zpath;
+  zpath_t *zpath=&zip->azf_zpath;
   //log_entered_function("rp: '%s' entry: '%s' ",RP(),EP());
   if (!zip->za) zip->za=my_zip_open(RP());
   assert(!zip->zf);
@@ -115,7 +146,7 @@ static void openzip_now(struct async_zipfile *zip){
 static void closezip_now(struct async_zipfile *z){
   if (!z) return;
   LOCK_N(mutex_async,  zip_file_t *zf=z->zf; z->zf=NULL;  struct zip *za=z->za; z->za=NULL);
-  const struct zippath *zpath=&z->azf_zpath;
+  const zpath_t *zpath=&z->azf_zpath;
   my_zip_fclose(zf,RP());
   my_zip_close(za,RP());
 }
@@ -123,25 +154,29 @@ static void closezip_now(struct async_zipfile *z){
 #define A ASYNC_STAT
 #if WITH_TIMEOUT_STAT
 /* That is the most simple as nothing needs to be closed or destructed */
-static inline bool async_periodically_stat(struct rootdata *r){
+static inline bool async_periodically_stat(root_t *r){
   struct stat st=empty_stat;
-  struct strg path;
-  SET_PICKED(r->async_stat=empty_stat; path=r->async_stat_path; assert(path.s!=NULL));
-  const bool success=stat_direct(&st,&path,r);
+  char *rp;
+  SET_PICKED(r->async_stat=empty_stat; rp=r->async_stat_path; ASSERT(rp!=NULL));
+  bool success=stat_direct(0,&st,rp,r);
   OK_OR_TIMEOUT(r->async_stat=success?st:empty_stat,);
   return success;
 }
 #endif //WITH_TIMEOUT_STAT
-static bool async_stat(const struct strg *path,struct stat *st,struct rootdata *r){
+static bool async_stat(const int opt_filldir_findrp,const char *rp,const int rp_l,struct stat *st,root_t *r){
   if (r && ROOT_NOT_RESPONDING(r)) return false;
-  IF1(WITH_TIMEOUT_STAT,if (!isRootRemote(r))) return stat_direct(st,path,r);
+
+  IF1(WITH_STAT_CACHE, if (stat_from_cache(opt_filldir_findrp,st,rp,r)) return true);
+
+  IF1(WITH_TIMEOUT_STAT,if (!r||!r->with_timeout)) return stat_direct(opt_filldir_findrp,st,rp,rp_l,r);
 #if WITH_TIMEOUT_STAT
-  assert(path); assert(path->s); assert(*path->s);
+  //log_debug_now(ANSI_RED"Going async_stat %s"ANSI_RESET,rp);
+  assert(rp); assert(*rp);
   L();
-  WAIT_PICKED(r->async_stat_path=*path);
+  WAIT_PICKED(r->async_stat_path=rp;  );
   const time_t t0=time(NULL);
-  ASYNC_WAIT(path->s,t0);
-  DIE_IF_TIMEOUT(path->s);
+  ASYNC_WAIT(rp,t0);
+  DIE_IF_TIMEOUT(rp);
   *st=finished?r->async_stat:empty_stat;
   UL();
   return st->st_ino!=0;
@@ -153,7 +188,7 @@ static bool async_stat(const struct strg *path,struct stat *st,struct rootdata *
 
 
 #if WITH_TIMEOUT_OPENFILE
-static inline bool async_periodically_openfile(struct rootdata *r){
+static inline bool async_periodically_openfile(root_t *r){
   char path[PATH_MAX+1];
   int flags;
   //log_entered_function("'%s' G:%d",rootpath(r),G);
@@ -164,10 +199,11 @@ static inline bool async_periodically_openfile(struct rootdata *r){
   if (timeout && fd>0) close(fd);
   return fd>0;
 }
-static int async_openfile(struct zippath *zpath,const int flags){
+static int async_openfile(zpath_t *zpath,const int flags){
+  if (!RP_L()) return 0;
   do{
     R();
-    if (!isRootRemote(r)) return open(RP(),flags);
+    if (!r->with_timeout) return open(RP(),flags);
     L();
     WAIT_PICKED(r->async_openfile_flags=flags;  strcpy(r->async_openfile_path,RP()));
     const time_t t0=time(NULL);
@@ -186,7 +222,7 @@ static int async_openfile(struct zippath *zpath,const int flags){
 /* ================================================================================ */
 #define A ASYNC_OPENZIP
 #if WITH_TIMEOUT_OPENZIP
-static inline bool async_periodically_openzip(struct rootdata *r){
+static inline bool async_periodically_openzip(root_t *r){
   struct async_zipfile zip;
   //log_debug_now("%s",rootpath(r));
   SET_PICKED(zip=*r->async_zipfile);
@@ -197,10 +233,10 @@ static inline bool async_periodically_openzip(struct rootdata *r){
 }
 static void async_openzip(struct async_zipfile *zip){
   assert(zip);
-  struct zippath *zpath=&zip->azf_zpath;
+  zpath_t *zpath=&zip->azf_zpath;
   do{
     R();
-    if (!r->remote){ openzip_now(zip);break;}
+    if (!r->with_timeout){ openzip_now(zip);break;}
     L();
     ASSERT(EP_L());
     WAIT_PICKED(r->async_zipfile=zip);
@@ -216,11 +252,13 @@ static void async_openzip(struct async_zipfile *zip){
 #endif //WITH_TIMEOUT_OPENZIP
 #undef A
 /* ================================================================================ */
-/* For a small number of member files the arrays are not stored on the heap but within the struct.  */
+/*****************************************************************************************************/
+/* Copy the directory data hold in directory_t.                                                 */
+/* For a small number of member files the arrays are not stored on the heap but within the struct.   */
+/*****************************************************************************************************/
 #define A ASYNC_READDIR
 #if WITH_TIMEOUT_READDIR
-
-static void directory_copy(struct directory *dst,const struct directory *src, struct rootdata *r){
+static void directory_copy(directory_t *dst,const directory_t *src, root_t *r){
   lock(mutex_dircache);
   const int n=src->core.files_l;
   directory_ensure_capacity(dst,n,n);
@@ -236,21 +274,24 @@ static void directory_copy(struct directory *dst,const struct directory *src, st
   unlock(mutex_dircache);
 }
 
-static inline bool async_periodically_readdir(struct rootdata *r){
-  static struct directory dir={0}; dir.ht_intern_names=&r->dircache_ht_fname;
+static inline bool async_periodically_readdir(root_t *r){
+  static directory_t dir={0}; dir.ht_intern_names=&r->ht_int_fname;
   SET_PICKED(assert(r->async_dir!=NULL); directory_init_zpath(&dir,&r->async_dir->dir_zpath));
+  dir.when_readdir_call_stat_and_store_in_cache=true;
   const bool success=readdir_now(&dir);
   OK_OR_TIMEOUT(if (success) directory_copy(r->async_dir,&dir,r),);
   //log_debug_now("'%s'  %s files_l: %d ",DIR_RP(&dir),success_or_fail(success), dir.core.files_l);    directory_print(&dir,5);
   return success;
 }
-static bool readdir_async(struct directory *dir){
+static bool readdir_async(directory_t *dir){
   assert(dir!=NULL);
-  struct zippath *zpath=&dir->dir_zpath;
+  zpath_t *zpath=&dir->dir_zpath;
   do{
     R();
     ASSERT(RP_L());
-    if (!r->with_timeout||dir->async_never) return readdir_now(dir);
+    if (!r->with_timeout||dir->async_never){
+      return readdir_now(dir);
+    }
     L();
     WAIT_PICKED(r->async_dir=dir);
     root_update_time(r,-PTHREAD_ASYNC);
@@ -281,11 +322,12 @@ static bool readdir_async(struct directory *dir){
 /******************************/
 /* Thread and Infinity loops  */
 /******************************/
-static void root_start_thread(struct rootdata *r,const enum enum_root_thread t,const bool evenIfAlreadyStarted){
+static void root_start_thread(root_t *r,const enum enum_root_thread t,const bool evenIfAlreadyStarted){
+  if (!r) return;
   lock(mutex_start_thread);
   if (!r->thread_already_started[t] ||evenIfAlreadyStarted){
     log_verbose("Going to start thread %s / %s",r->rootpath,PTHREAD_S[t]);
-    void *(*f)(void *)=IF1(WITH_PRELOADFILERAM,t==PTHREAD_PRELOAD?&infloop_preloadfile:) t==PTHREAD_ASYNC?infloop_async:  t==PTHREAD_MISC?infloop_misc: NULL;
+    void *(*f)(void *)=IF1(WITH_PRELOADRAM,t==PTHREAD_PRELOAD?&infloop_preloadfile:) t==PTHREAD_ASYNC?infloop_async:  t==PTHREAD_MISC?infloop_misc: NULL;
     if (f){
       const int count=r->thread_count_started[t]++;
       if (pthread_create(&r->thread[t],NULL,f,(void*)r)){
@@ -299,15 +341,15 @@ static void root_start_thread(struct rootdata *r,const enum enum_root_thread t,c
   }
   unlock(mutex_start_thread);
 }
-static void log_infinity_loop(const struct rootdata *r, const enum enum_root_thread t){
+static void log_infinity_loop(const root_t *r, const enum enum_root_thread t){
   const int flag=
-    t==PTHREAD_PRELOAD?LOG_INFINITY_LOOP_PRELOADFILERAM:
+    t==PTHREAD_PRELOAD?LOG_INFINITY_LOOP_PRELOADRAM:
     t==PTHREAD_ASYNC?LOG_INFINITY_LOOP_DIRCACHE:
     t==PTHREAD_MISC?LOG_INFINITY_LOOP_MISC: 0;
   IF_LOG_FLAG(flag) log_verbose("Thread: %s  Root: %s ",PTHREAD_S[t],rootpath(r));
 }
 
-static void root_update_time(struct rootdata *r, int t){
+static void root_update_time(root_t *r, int t){
   const bool success=t>0;
   if (t<0) t=-t;
   assert(r!=NULL);
@@ -318,10 +360,10 @@ static void root_update_time(struct rootdata *r, int t){
 
 
 static void *infloop_async(void *arg){
-  struct rootdata *r=arg;
+  root_t *r=arg;
   assert(r!=NULL);
   init_infloop(r,PTHREAD_ASYNC);
-  long nanos=ASYNC_SLEEP_USECONDS*1000; /* The shorter the higher the responsiveness, but increased CPU usage */
+  long nanos=(ASYNC_SLEEP_USECONDS*1000); /* The shorter the higher the responsiveness, but increased CPU usage */
   for(int loop=0; ;loop++){
     cg_nanosleep(nanos);
     if (nanos<ASYNC_SLEEP_USECONDS*1000)      nanos++;
@@ -339,9 +381,9 @@ static void *infloop_async(void *arg){
       }
     }
     if (r->remote){
-      if (!success && !(loop&255) && ROOT_SUCCESS_SECONDS_AGO(r)>MAX(1,ROOT_RESPONSE_WITHIN_SECONDS/4)){
+      if (!success && !(loop&255) && ROOT_SUCCESS_SECONDS_AGO(r)>MAX(1,r->check_response_seconds/4)){
         success=!statvfs(rootpath(r),&r->statvfs);
-        if (!success) log_verbose(RED_FAIL"statvfs(%s)",rootpath(r));
+        if (!success) log_verbose(RED_FAIL"statvfs(%s)",r->check_response_path);
       }
       if (!(loop&255)||success) root_update_time(r,success?PTHREAD_ASYNC:-PTHREAD_ASYNC);
     }
@@ -352,30 +394,30 @@ static void *infloop_async(void *arg){
 static bool _cleanup_running;
 static void *_cleanup_files_runnable(void *arg){
   _cleanup_running=true;
-    //const pid_t pid0=getpid();
-    if (fork()){
-      perror(_cleanup_script);
-    }else{
-      execlp("bash","bash",_cleanup_script,(char*)0);
-      exit(errno);
-    }
+  //const pid_t pid0=getpid();
+  if (fork()){
+    perror(_cleanup_script);
+  }else{
+    execlp("bash","bash",_cleanup_script,(char*)0);
+    exit(errno);
+  }
   _cleanup_running=false;
   return NULL;
 }
 static void *infloop_misc(void *arg){
-  struct rootdata *r=arg;
+  root_t *r=arg;
   init_infloop(r,PTHREAD_MISC);
   for(int j=0;;j++){
     log_infinity_loop(r,PTHREAD_MISC);
     root_update_time(r,-PTHREAD_MISC);
     usleep(1000*1000);
     LOCK_NCANCEL(mutex_fhandle,fhandle_destroy_those_that_are_marked());
-#if WITH_AUTOGEN||WITH_PRELOADFILEDISK
+#if WITH_FILECONVERSION||WITH_PRELOADDISK
     if (_root_writable && (j&0xFff)==256){
       static pthread_t t;
       if (!_cleanup_running && cg_file_exists(_cleanup_script)) pthread_create(&t,NULL,&_cleanup_files_runnable,NULL);
     }
-#endif //WITH_AUTOGEN||WITH_PRELOADFILEDISK
+#endif //WITH_FILECONVERSION||WITH_PRELOADDISK
     if (!(j&3)){
       static struct pstat pstat1,pstat2;
       cpuusage_read_proc(&pstat2,getpid());
@@ -389,43 +431,51 @@ static void *infloop_misc(void *arg){
   }
 }
 
+static void root_loading_active(void *root){
+  if (!root) return;
+  root_t *r=(root_t*)root;
+  root_update_time(r,PTHREAD_PRELOAD);
+  //log_debug_now("r:%s",r?r->rootpath:NULL);
+}
 
 /* Each remote root has its own  infloop_preloadfile thread. Loading file content into RAM asynchronously. */
-#if WITH_PRELOADFILERAM || WITH_PRELOADFILEDISK
+#if WITH_PRELOADRAM || WITH_PRELOADDISK
 static void *infloop_preloadfile(void *arg){
-  struct rootdata *r=arg;
+  root_t *r=arg;
   init_infloop(r,PTHREAD_PRELOAD);
   /* pthread_cleanup_push(infloop_preloadfile_start,r); Does not work because pthread_cancel not working when root blocked. */
   for(int i=0;;i++){
-    struct fHandle *dm=NULL,*dl=NULL,*d=NULL; // cppcheck-suppress constVariablePointer
+    fHandle_t *dm=NULL,*dl=NULL; // cppcheck-suppress constVariablePointer
+#define d() (dl?dl:dm)
     {
       lock(mutex_fhandle);
       foreach_fhandle(id,e){
-        IF1(WITH_PRELOADFILERAM,if (e->preloadfileram && e->preloadfileram->preloadfileram_status==preloadfileram_queued && e->preloadfileram->m_zpath.root==r) d=dm=e);
-        if (e->zpath.root==r && e->flags&FHANDLE_FLAG_LCOPY_QUEUE) d=dl=e; // cppcheck-suppress unreadVariable
+        IF1(WITH_PRELOADRAM,if (e->preloadram && e->preloadram->preloadram_status==preloadram_queued && e->preloadram->m_zpath.root==r) dm=e);
+        if (e->zpath.root==r && e->flags&FHANDLE_PRELOADFILE_QUEUE) dl=e; // cppcheck-suppress unreadVariable
       }
       unlock(mutex_fhandle);
     }
-    if (d && wait_for_root_timeout(r)){
+    if (d() && wait_for_root_timeout(r)){
       {
         lock(mutex_fhandle);
-        atomic_fetch_add(&d->is_preloading,1); /* Prevents destruction */
-        IF1(WITH_PRELOADFILERAM,  if (dm && preloadfileram_queued!=preloadfileram_get_status(dm))  dm=NULL;   preloadfileram_set_status(dm,preloadfileram_reading));
-        IF1(WITH_PRELOADFILEDISK, if (dl && !(dl->flags&FHANDLE_FLAG_LCOPY_QUEUE))  dl=NULL; if (dl) { dl->flags|=FHANDLE_FLAG_LCOPY_RUN; dl->flags&=~FHANDLE_FLAG_LCOPY_QUEUE;});
+        atomic_fetch_add(&d()->is_preloading,1); /* Prevents destruction */
+        IF1(WITH_PRELOADRAM,  if (dm && preloadram_queued!=preloadram_get_status(dm))  dm=NULL;   preloadram_set_status(dm,preloadram_reading));
+        IF1(WITH_PRELOADDISK, if (dl && !(dl->flags&FHANDLE_PRELOADFILE_QUEUE))  dl=NULL; if (dl) { dl->flags|=FHANDLE_PRELOADFILE_RUN; dl->flags&=~FHANDLE_PRELOADFILE_QUEUE;});
         unlock(mutex_fhandle);
       }
-      IF1(WITH_PRELOADFILERAM,  if (dm) preloadfileram_now(dm,r));
-      IF1(WITH_PRELOADFILEDISK, if (dl){ char dst[MAX_PATHLEN+1];   if (preloadfiledisk_realpath(&dl->zpath,dst)) preloadfiledisk_now(dst,NULL,dl);});
+      IF1(WITH_PRELOADRAM,  if (dm) preloadram_now(dm,r));
+      IF1(WITH_PRELOADDISK, if (dl){ char dst[MAX_PATHLEN+1];   if (preloaddisk_writable_realpath(&dl->zpath,dst)) preloaddisk_now(dst,NULL,dl);});
       {
         lock(mutex_fhandle);
-        atomic_fetch_add(&d->is_preloading,-1);
-        IF1(WITH_PRELOADFILERAM,  preloadfileram_set_status(dm,preloadfileram_done));
+        atomic_fetch_add(&d()->is_preloading,-1);
+        IF1(WITH_PRELOADRAM,  preloadram_set_status(dm,preloadram_done));
         unlock(mutex_fhandle);
       }
     }/* if (d) */
     root_update_time(r,-PTHREAD_PRELOAD);
-    usleep(100*1000);
+    usleep(500*1000);
   }
+#undef d
 }
 
 
@@ -436,16 +486,16 @@ static void *infloop_preloadfile(void *arg){
 // infloop_preloadfile() infloop_prefetch_file()
 // config_advise_cache_in_ram() config_advise_prefetch_file_to_ram
 #if PRELOADFILE_TIMEOUT_SECONDS
-bool preloadfile_time_exceeded(const char *func, const struct fHandle *d,const int counter){
+bool preloadfile_time_exceeded(const char *func, const fHandle_t *d,const int counter){
   lock(mutex_fhandle);
-  struct rootdata *r=d->zpath.root;
+  root_t *r=d->zpath.root;
   assert(r!=NULL);
   time_t t=time(NULL)-ROOT_WHEN_ITERATED(r,PTHREAD_PRELOAD);
   unlock(mutex_fhandle);
   if (t>PRELOADFILE_TIMEOUT_SECONDS){
-      warning(WARN_PRELOADFILE,D_RP(d),"%s Timeout > "STRINGIZE(PRELOADFILE_TIMEOUT_SECONDS)" s",func);
-      COUNTER1_INC(counter);
-      return true;
+    warning(WARN_PRELOADFILE,D_RP(d),"%s Timeout > "STRINGIZE(PRELOADFILE_TIMEOUT_SECONDS)" s",func);
+    COUNTER1_INC(counter);
+    return true;
   }
   return false;
 }
@@ -453,13 +503,14 @@ bool preloadfile_time_exceeded(const char *func, const struct fHandle *d,const i
 #define preloadfile_time_exceeded(...) false
 #endif //PRELOADFILE_TIMEOUT_SECONDS
 
-#endif //WITH_PRELOADFILERAM || WITH_PRELOADFILEDISK
+#endif //WITH_PRELOADRAM || WITH_PRELOADDISK
 ///////////////////////////////////////////////
 /// Capability to unblock requires that     ///
 /// pthreads have different gettid() and    ///
 /// /proc- file system                      ///
 ///////////////////////////////////////////////
-static void init_infloop(const struct rootdata *r, const enum enum_root_thread ithread){
+// cppcheck-suppress constParameterPointer
+static void init_infloop(root_t *r, const enum enum_root_thread ithread){
   IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE)log_entered_function("Thread: %s  Root: %s ",PTHREAD_S[ithread],rootpath(r));
   IF1(WITH_CANCEL_BLOCKED_THREADS,
       pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,&_unused_int);
@@ -476,7 +527,7 @@ static void unblock_periodically(){
   foreach_root(r){
     FOR(t,1,PTHREAD_LEN){
       if (t==PTHREAD_MISC || !r->thread_already_started[t]) continue;
-      const int threshold=t==PTHREAD_PRELOAD?UNBLOCK_AFTER_SECONDS_THREAD_PRELOADFILERAM: t==PTHREAD_ASYNC?UNBLOCK_AFTER_SECONDS_THREAD_ASYNC: 0;
+      const int threshold=t==PTHREAD_PRELOAD?UNBLOCK_AFTER_SECONDS_THREAD_PRELOADRAM: t==PTHREAD_ASYNC?UNBLOCK_AFTER_SECONDS_THREAD_ASYNC: 0;
       if (!threshold || !r->thread_count_started[t] || !r->thread[t]) continue;
       const long now=time(NULL), last=MAX_long(ROOT_WHEN_ITERATED(r,t),r->thread_when_canceled[t]);
       if (!last) continue;
@@ -512,24 +563,24 @@ static void unblock_periodically(){
 /* 2. Return false for remote file roots (starting with double slash) that has not responded for long time */
 /* 2. Wait until last respond of root is below threshold.                                                  */
 /***********************************************************************************************************/
-static void log_root_blocked(struct rootdata *r,const bool blocked){
+static void log_root_blocked(root_t *r,const bool blocked){
   if (r && r->blocked!=blocked){
     warning(WARN_ROOT|WARN_FLAG_ERROR,rootpath(r),"Remote root %s"ANSI_RESET"\n",blocked?ANSI_FG_RED"not responding.":ANSI_FG_GREEN"responding again.");
     r->blocked=blocked;
   }
 }
-static bool wait_for_root_timeout(struct rootdata *r){
+static bool wait_for_root_timeout(root_t *r){
   if (!r || !r->remote){ log_root_blocked(r,false);return true;}
   const int N=10000;
   RLOOP(iTry,N){
     const time_t delay=ROOT_SUCCESS_SECONDS_AGO(r);
     //log_debug_now("delay: %ld ",delay);
-    if (delay>ROOT_GIVEUP_AFTER_SECONDS) break;
-    if (delay<ROOT_RESPONSE_WITHIN_SECONDS){
+    if (delay>ROOT_RESPONSE_TIMEOUT_SECONDS) break;
+    if (delay<r->check_response_seconds){
       log_root_blocked(r,false);
       return true;
     }
-    cg_sleep_ms(ROOT_RESPONSE_WITHIN_SECONDS/N,"");
+    cg_sleep_ms(r->check_response_seconds/N,"");
     bool log=iTry>N/2 && iTry%(N/10)==0;
     IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE) log=true;
     if (log) log_verbose("%s %d/%d\n",rootpath(r),iTry,N);

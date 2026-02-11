@@ -3,7 +3,6 @@
 /////////////////////////////////////////////////////////////////
 
 // cppcheck-suppress-file unusedFunction
-
 #define _IF1_IS_1(...) __VA_ARGS__
 #define _IF1_IS_0(...)
 #define _IF0_IS_0(...) __VA_ARGS__
@@ -88,7 +87,7 @@ typedef enum yes_zero_no { NO=-1,ZERO,YES} yes_zero_no_t;
 ////////////////////////////////////////
 #define FOR(var,from,to) for(int var=from;var<(to);var++)
 #define RLOOP(var,from) for(int var=from;--var>=0;)
-#define FOREACH_CSTRING(s,ss)  for(char **s=(char**)ss; *s; s++)
+#define FOREACH_CSTRING(s,ss)  for(char **s=(char**)ss; s&&*s; s++)
 
 #define ERROR_MSG_NO_PROC_FS "No /proc file system on this computer"
 
@@ -213,7 +212,6 @@ M(MAX,long)
 //#define Assert(...) assert(__VA_ARGS__)
 // ---
 #define free_untracked(x) free(x)
-#define PRINTF_STRG_OR_STDERR(strg,n,N,...) (strg && N>n?snprintf(strg+n,N-n,__VA_ARGS__):fprintf(stderr,__VA_ARGS__))
 // ---
 
 //////////////////////////
@@ -259,20 +257,25 @@ enum enum_validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHA
 
 
 typedef uint32_t ht_hash_t;
-struct strg{
-  char s[MAX_PATHLEN+1];
-  ht_hash_t hash;
-  int l;
-};
-
 #define ENDSWITH_FLAG_IC (1<<1)
 #define ENDSWITH_FLAG_PRECEED_SLASH (1<<2)
 
-#endif // _cg_utils_dot_h
+
 
 #define MMAP_FD -1   // FreeBSD MAP_ANONYMOUS requires -1 rather than 0
 
 #define WITH_POPEN_NOSHELL 0
-#define TMP_FOR_FILE(tmp,f)   char tmp[strlen(f)+32];  static int count; sprintf(tmp,"%s.%d.%d.tmp",f,getpid(),count++)
 
-#define NEW_VAR_APPEND_GZ(f,f_l)  char f##gz[f_l+4];  *f##gz=0;  if (!cg_endsWithGZ(f,f_l)) stpcpy(stpcpy(f##gz,f),".gz")
+enum enum_compression_types{COMPRESSION_NIL,COMPRESSION_GZ,COMPRESSION_BZ2,COMPRESSION_LRZ,COMPRESSION_XZ,COMPRESSION_Z,COMPRESSION_NUM};
+
+
+
+#define COMPRESSION_MASK     7
+_Static_assert((COMPRESSION_NUM&COMPRESSION_MASK)==COMPRESSION_NUM,"COMPRESSION_MASK");
+#define COMPRESSION_EXT_MAX_LEN 7
+
+
+
+#define XMACRO_COMPRESSION()      X(gz,GZ)X(bz2,BZ2)X(lrz,LRZ)X(xz,XZ)X(Z,Z)
+
+#endif // _cg_utils_dot_h

@@ -194,7 +194,6 @@ static bool addr2line(const char *addr, int lineNb){ // cppcheck-suppress unused
 
 // https://stackoverflow.com/questions/15129089/is-there-a-way-to-dump-stack-trace-with-line-number-from-a-linux-release-binary
 static void cg_print_stacktrace(int calledFromSigInt){
-
   log_entered_function("%d",HAS_BACKTRACE);
 #if HAS_BACKTRACE
   void* buffer[MAX_BACKTRACE_LINES];

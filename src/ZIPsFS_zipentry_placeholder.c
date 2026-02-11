@@ -6,7 +6,7 @@
 /// This will save space in cache.                                                            ///
 /// Many ZIP files will have identical table-of-content and thus kept only once in the cache. ///
 /////////////////////////////////////////////////////////////////////////////////////////////////
-static const char *zipentry_placeholder_insert(char *s,const char *u, struct directory *dir){
+static const char *zipentry_placeholder_insert(char *s,const char *u, directory_t *dir){
   if (dir->has_file_containing_placeholder) return u;
   const int ulen=cg_strlen(u);
   if (!ulen || ulen>MAX_PATHLEN) return u;

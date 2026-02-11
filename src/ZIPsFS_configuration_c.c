@@ -50,7 +50,6 @@ static bool config_c_readdir(const int flags,const char *vp, const int vp_l,cons
 
 
 
-
 static bool config_c_read(c_read_handle_t handle,const int flags,const char *vp, const int vp_l){
   if (CONFIG_C_IS_EXAMPLE(vp,vp_l)){
     const char *src=__FILE__;

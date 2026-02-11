@@ -2,8 +2,7 @@
 /// COMPILE_MAIN=ZIPsFS                                       ///
 /// Controling ZIPsFS by the user accessing magic file names  ///
 /////////////////////////////////////////////////////////////////
-// cppcheck-suppress-file literalWithCharPtrCompare
-
+_Static_assert(WITH_PRELOADRAM,"");
 #define MAGIC_SFX_SET_ATIME  ".magicSfxSetAccessTime"
 
 //enum enum_ctrl_action{ACT_NIL,ACT_KILL_ZIPSFS,ACT_FORCE_UNBLOCK,ACT_CANCEL_THREAD,ACT_NO_LOCK,ACT_BAD_LOCK,ACT_CLEAR_CACHE};
@@ -85,7 +84,9 @@ static bool trigger_files(const bool isGenerated,const char *path,const int path
     posHours+=sizeof(MAGIC_SFX_SET_ATIME)-1;
     char path2[MAX_PATHLEN+1];
     cg_stpncpy0(path2,path,len);
-    bool found;FIND_REALPATH(path2);
+    NEW_VIRTUALPATH(path2);
+
+    bool found;FIND_REALPATH(&vipa);
     if (found){
       cg_file_set_atime(RP(),&zpath->stat_rp,3600L*atoi(posHours));
       return true;

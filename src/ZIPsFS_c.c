@@ -3,11 +3,12 @@
 /// Dynamically generated files                           ///
 /// This file can be customized by the user               ///
 /////////////////////////////////////////////////////////////
+_Static_assert(WITH_CCODE,"");
 #define FSIZE_FROM_HASHTABLE(st,vp,vp_l,default)  if (0>=(st->st_size=fsize_from_hashtable((st->st_ino=inode_from_virtualpath(vp,vp_l))))) st->st_size=default
 #define FSIZE_TO_HASHTABLE(bb,vp,vp_l)  fsize_to_hashtable(vp,vp_l, bb[0]?textbuffer_length(bb[0]):0)
 #define ZIPSFS_C_IS_DIR_A (1<<0)
-#define ZIPSFS_C_MMAP (1<<1)
-typedef struct textbuffer** c_read_handle_t;
+#define ZIPSFS_C_MMAP     (1<<1)
+typedef textbuffer_t** c_read_handle_t;
 
 
 
@@ -15,96 +16,76 @@ typedef struct textbuffer** c_read_handle_t;
 
 
 #define X(...)  c_from_exec_output(__VA_ARGS__)
-#define H(b,txt,size) textbuffer_add_segment(0,                  _zipsfs_c_init_tb(b),txt,size);
-#define M(b,txt,size) textbuffer_add_segment(TXTBUFSGMT_MUNMAP,  _zipsfs_c_init_tb(b),txt,size);
-#define C(b,txt,size) textbuffer_add_segment(TXTBUFSGMT_NO_FREE, _zipsfs_c_init_tb(b),txt,size);
+#define H(b,txt,size) textbuffer_add_segment(TXTBUFSGMT_NO_COUNT,                    _zipsfs_c_init_tb(b),txt,size);
+#define M(b,txt,size) textbuffer_add_segment(TXTBUFSGMT_NO_COUNT|TXTBUFSGMT_MUNMAP,  _zipsfs_c_init_tb(b),txt,size);
+#define C(b,txt,size) textbuffer_add_segment(TXTBUFSGMT_NO_FREE,                     _zipsfs_c_init_tb(b),txt,size);
 #include "ZIPsFS_configuration_c.c"
 #undef H
 #undef M
 #undef C
 #undef X
 
-#define a(vp,vp_l)   const bool inDirA=PATH_STARTS_Z(vp,vp_l,DIR_AUTOGEN,sizeof(DIR_AUTOGEN)-1)
-#define o()   (inDirA?DIR_AUTOGEN_L:0)
-#define f()   inDirA?ZIPSFS_C_IS_DIR_A:0
-
-
-static int c_from_exec_output(struct textbuffer **bb,const uint8_t flags,const char *cmd[],const char *env[]){
-
-    return textbuffer_from_exec_output((flags&ZIPSFS_C_MMAP)?TXTBUFSGMT_MUNMAP:0,
-                                       _zipsfs_c_init_tb(bb),
-                                       //(const char*const*)
-                                       cmd,
-                                       //(const char*const*)
-                                       env,NULL);
+#define C_FLAGS_FROM_ZPATH()   (ZPATH_IS_FILECONVERSION()?ZIPSFS_C_IS_DIR_A:0)
+static int c_from_exec_output(textbuffer_t **bb,const uint8_t flags,const char *cmd[],const char *env[]){
+  return textbuffer_from_exec_output((flags&ZIPSFS_C_MMAP)?TXTBUFSGMT_MUNMAP:0,
+                                     _zipsfs_c_init_tb(bb),
+                                     cmd,
+                                     env,NULL);
 }
 
-static struct textbuffer *_zipsfs_c_init_tb(struct textbuffer **bb){
+
+
+static textbuffer_t *_zipsfs_c_init_tb(textbuffer_t **bb){
   if (!bb[0]){
     cg_thread_assert_not_locked(mutex_fhandle);
-    bb[0]=textbuffer_new(COUNT_MALLOC_PRELOADFILERAM_TXTBUF);
+    bb[0]=textbuffer_new(COUNT_MALLOC_PRELOADRAM_TXTBUF);
   }
   return bb[0];
 }
+//static fHandle_t *c_fuse_open(const zpath_t *zpath, uint64_t *fh){  return  config_c_open(f(),VP(),VP_L())?fhandle_create(FHANDLE_IS_CCODE,fh,zpath):NULL;}
 
 
-static  int64_t c_fuse_open(const struct zippath *zpath){
-  a(VP(),VP_L());
-  return  !config_c_open(f(),VP()+o(),VP_L()-o())?0:  fhandle_create(FHANDLE_FLAG_IS_CCODE,next_fh(),zpath)->fh;
-}
-static bool c_getattr(struct stat *st, const char *vp,const int vp_l){
-  a(vp,vp_l);
+static bool c_getattr(struct stat *st, const virtualpath_t *vipa){
   stat_init(st,0,NULL);
   st->st_mtime=time(NULL);
-  if (!config_c_getattr(f(),vp+o(),vp_l-o(),st)){
+  if (!config_c_getattr((vipa->dir==DIR_FILECONVERSION)?ZIPSFS_C_IS_DIR_A:0,vipa->vp,vipa->vp_l,st)){
     return false;
   }
-  if (st->st_mode&S_IFDIR) stat_set_dir(st,vp);
-  if (!st->st_ino) st->st_ino=inode_from_virtualpath(vp+o(),vp_l-o());
+  if (st->st_mode&S_IFDIR) stat_set_dir(st);
+  if (!st->st_ino) st->st_ino=inode_from_virtualpath(vipa->vp,vipa->vp_l);
   return true;
 }
 
-static void c_file_content_to_fhandle(struct fHandle *d){
-  if (!(d->flags&FHANDLE_FLAG_IS_CCODE)) return;
-  //    if (d->preloadfileram && d->preloadfileram->txtbuf){ d->flags|=FHANDLE_FLAG_NOT_CCODE; return;}
-  const char *vp=D_VP(d);
-  const int vp_l=D_VP_L(d);
-  a(vp,vp_l);
-  struct textbuffer *bb[1]={0};
-  if (config_c_read(bb,f(),vp+o(), vp_l-o())){
-    assert(bb[0]);
-    lock(mutex_fhandle);
-    if (!fhandle_set_text(d,bb[0])){
-      FREE_NULL_MALLOC_ID(bb[0]);
-    }else{
-      IF1(WITH_PRELOADFILERAM,d->preloadfileram->txtbuf=bb[0];preloadfileram_set_status(d,preloadfileram_done));
-      d->flags|=FHANDLE_FLAG_PRELOADFILERAM_COMPLETE;
-    }
-    unlock(mutex_fhandle);
+static bool c_file_content_to_fhandle(fHandle_t *d){
+  if (!(d->flags&FHANDLE_IS_CCODE)) return false;
+  const zpath_t *zpath=&d->zpath;
+  textbuffer_t *bb[1]={0};
+  if (!config_c_read(bb,C_FLAGS_FROM_ZPATH(),VP(), VP_L())) return false;
+  lock(mutex_fhandle);
+  if (!fhandle_set_text(d,bb[0])){
+    FREE_NULL_MALLOC_ID(bb[0]);
+  }else{
+    IF1(WITH_PRELOADRAM,d->preloadram->txtbuf=bb[0];preloadram_set_status(d,preloadram_done));
+    d->flags|=FHANDLE_PRELOADRAM_COMPLETE;
   }
+  unlock(mutex_fhandle);
+  return true;
 }
-static void c_readdir(const struct zippath *zpath,void *buf, fuse_fill_dir_t filler,struct ht *no_dups){
-  a(VP(),VP_L());
-  //log_entered_function("%s inDirA: %d",VP(),inDirA);
+static bool c_readdir(const zpath_t *zpath,void *buf, fuse_fill_dir_t filler,ht_t *no_dups){
   char fname[MAX_PATHLEN+1];
-  bool isDirectory[1];
+  bool isDirectory[1], ok=false;
   FOR(i,0,ZIPSFS_C_MAX_NUM){
     *fname=0;
-    if (!config_c_readdir(f(),VP()+o(),VP_L()-o(),i,fname,MAX_PATHLEN,isDirectory)) break;
+    if (!config_c_readdir(C_FLAGS_FROM_ZPATH(),VP(),VP_L(),i,fname,MAX_PATHLEN,isDirectory)) break;
     if (*fname){
+      ok=true;
       struct stat st={0};
       stat_init(&st,*isDirectory?-1:0,NULL);
-      st.st_ino=inode_from_virtualpath(VP()+o(),VP_L()-o());
+      st.st_ino=inode_from_virtualpath(VP(),VP_L());
       filler_add(0,filler,buf, fname,0, &st,NULL /*no_dups*/);
     }
-
   }
+  return ok;
 }
 
-
-
-
-
 #undef f
-#undef a
-#undef o

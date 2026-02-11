@@ -1,265 +1,191 @@
-////////////////////////////////////
-/// COMPILE_MAIN=ZIPsFS          ///
-/// D download to the local disk ///
-////////////////////////////////////
+/***********************************************************************/
+/* COMPILE_MAIN=ZIPsFS                                                 */
+/* D download to the local disk                                        */
+/* Downloaded files get the sticky bit S_ISVTX to facilitate cleanup.  */
+/*  find $M -type f  -perm -1000  */
+/***********************************************************************/
+_Static_assert(WITH_PRELOADDISK,"");
 
 
-
-
-/*****************************************************************************************/
-/* Depending on the virtual file path return the special folder path.                    */
-/* Cut, length of the additional path components before the normal virtual path starts.  */
-/* negative values of cut: Folder for update preloaded files                             */
-/*****************************************************************************************/
-
-
-static const char *preloadfiledisk_type(int *cut, const char *vp, const int vp_l){
-  *cut=0;
-  if (!VP_STARTS(DIR_ZIPsFS)) return NULL;
-  const char *dir=NULL;
-
-  //#define C(d) if (VP_EQ_Z(d) || VP_STARTS_Z(d)){ dir=d; *cut=sizeof(d)-1;} else
-#define C(d) if (PATH_STARTS_WITH_OR_EQ(vp,vp_l,d)){ dir=d; *cut=sizeof(d)-1;} else
-  C(DIR_PRELOADFILEDISK_R) C(DIR_PRELOADFILEDISK_RC) C(DIR_PRELOADFILEDISK_RZ) C(DIR_ZIPsFS){};
-#undef C
-  if (dir){
-    if (PATH_STARTS_WITH_OR_EQ(vp+*cut+1,vp_l-*cut-1,DIRNAME_PRELOADED_UPDATE)){
-      *cut=-*cut-sizeof(DIRNAME_PRELOADED_UPDATE);
-    }
-    if (dir!=DIR_ZIPsFS || *cut) return dir;
-  }
-  *cut=0;
-  return NULL;
-}
-
-
-
-static int preloadfiledisk_zpath_prepare_realpath(const bool fst_root_try_preload, struct zippath *zpath, const struct rootdata *r){
-  const char *vp=VP();
-  const int vp_l=VP_L();
-  int cut=0;
-  const char *dir=preloadfiledisk_type(&cut,vp,vp_l);
-  if (!fst_root_try_preload && dir==DIR_ZIPsFS) return 0;
-  const bool update=cut<0;
-  //log_entered_function("%s %s",r->rootpath, vp);
-  if (dir){
-    if (update){
-      if (r!=_root_writable) return INT_MAX;
-      cut=-cut; /* ZIPsFS/lrc/_UPDATE_PRELOADED_FILES/xyz -> ZIPsFS/lr/ */
-      //log_debug_now("vp:%s dir:%s cut:%d update:%d",vp, dir,cut,update);
-      zpath->flags|=ZP_PRELOADFILEDISK_UPDATE;  /* Reading the file willt trigger preloadfiledisk() */
-      zpath_strcat(zpath,dir==DIR_ZIPsFS?DIR_PRELOADED_BY_ROOT:DIR_PRELOADED_BY_PATH);
-    }else if (dir==DIR_PRELOADED_BY_ROOT){
-      return r!=_root_writable?INT_MAX:0;
-    }else if (r==_root_writable){ /* All different virtual DIR_PRELOADFILEDISK_XXX  use the same DIR_PRELOADFILEDISK_R for storage. */
-      zpath_strcat(zpath,DIR_PRELOADED_BY_PATH);   /* ZIPsFS/lrc/xyz -> ZIPsFS/lr/ */
-    }else{ /* Files in DIR_PRELOADFILEDISK_XXX need to be copied to _root_writable under certain conditions */
-#define C(t,f) (dir==t && (zpath->flags&(f)) || r->remote)
-      if (C(DIR_PRELOADFILEDISK_R,0) || C(DIR_PRELOADFILEDISK_RC,ZP_ZIP|ZP_IS_COMPRESSED) || C(DIR_PRELOADFILEDISK_RZ,ZP_ZIP))  zpath->flags|=ZP_PRELOADFILEDISK;
-#undef C
-    }
-    return cut;
-  }
-
-  //log_debug_now("%s %s   r->preload:%d "ANSI_RESET,r->preload?ANSI_MAGENTA:"",vp,r->preload);
-  if (r->preload && r!=_root_writable){
-    zpath->flags|=ZP_PRELOADFILEDISK;
-  }
-
-  if (fst_root_try_preload){  /* mnt/xyz  -> mnt/ZIPsFS/preload/ */
-    /* The realpath in _root_writable has not been found previously. Now look in DIR_PRELOADED_BY_ROOT */
-    assert(r==_root_writable);
-    zpath_strcat(zpath,DIR_PRELOADED_BY_ROOT);
-  }
-  return 0;
-}
 
 /***********************************************************/
-/* Given a virtual file within DIR_PRELOADFILEDISK_XXX.    */
+/* Given a virtual file within DIR_PRELOADDISK_XXX.    */
 /* Construct the path of the preloaded file                    */
 /* Return true if this file exists.                        */
 /***********************************************************/
-static bool preloadfiledisk_realpath(const struct zippath *zpath, char dst[MAX_PATHLEN+1]){
-  int cut;
-  preloadfiledisk_type(&cut,VP(), VP_L());
-  if (cut<0) return false;
-  stpcpy(stpcpy(stpcpy(dst,_root_writable->rootpath),zpath->root->preload? DIR_PRELOADED_BY_ROOT:DIR_PRELOADED_BY_PATH),cut+VP());
+
+static bool preloaddisk_writable_realpath(const zpath_t *zpath, char dst[MAX_PATHLEN+1]){
+  if (!is_preloaddisk_zpath(zpath)) return false;
+  //stpcpy(stpcpy(stpcpy(dst,_root_writable->rootpath), zpath->preloadpfx?DIR_PRELOADDISK_R:""),VP());
+  stpcpy(stpcpy(dst,_root_writable->rootpath),VP());
+    log_exited_function("dst: %s",dst);;
   return true;
 }
-
-static bool _preloadfiledisk_now(const char *dst,struct zippath *zpath,struct fHandle *d){
-  TMP_FOR_FILE(tmp,dst);
-  unlink(tmp);
-  off_t n=-4;
-  if (ZPF(ZP_ZIP)){
+static bool _preloaddisk_now(const char *dst,zpath_t *zpath,fHandle_t *d){
+  log_entered_function("RP:%s dst: %s  decomp:%s",RP(),dst,cg_compression_file_ext(zpath->is_decompressed,NULL));
+  bool ok=false;
+  if (ZPF(ZP_TRY_ZIP)){
     zip_t *za=NULL;
     zip_file_t *zip=(za=my_zip_open(RP()))?my_zip_fopen(za,EP(),ZIP_RDONLY,RP()):NULL;
-    //log_debug_now("'%s'    za: %p, zip: %p ",RP(), ,za,zip);
     if (zip){
-      n=-3;
+      TMP_FOR_FILE(tmp,dst);
       cg_recursive_mk_parentdir(dst);
       fputc('r',stderr);
-      log_verbose("Going to write %s",tmp);
+      //log_verbose("Going to write %s",tmp);
       const int fo=open(tmp,O_WRONLY|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR);
       if (fo){
         char buf[1<<20];
-        while((n=zip_fread(zip,buf,1<<20))>0){
-          //log_debug_now("n=%ld",n);
+        for(int n; (n=zip_fread(zip,buf,1<<20))>0;){
           PRELOADFILE_ROOT_UPDATE_TIME(d,NULL,true);
-          write(fo,buf,n);
+          if (write(fo,buf,n)>0) ok=true;
           PRELOADFILE_ROOT_UPDATE_TIME(d,NULL,true);
         }
         close(fo);
       }else{
-        warning(WARN_PRELOADFILEDISK|WARN_FLAG_ERROR|WARN_FLAG_ERRNO,tmp,"open()");
+        warning(WARN_PRELOADDISK|WARN_FLAG_ERROR|WARN_FLAG_ERRNO,tmp,"open()");
+      }
+      if (!ok){
+        warning(WARN_PRELOADDISK|WARN_FLAG_ERROR|WARN_FLAG_ERRNO,RP(),"Read error -> %s %lld bytes ",tmp,(LLD)cg_file_size(tmp));
+        unlink(tmp);
+      }else if (!cg_rename_tmp_outfile(tmp,dst)){
+        warning(WARN_PRELOADDISK|WARN_FLAG_ERROR|WARN_FLAG_ERRNO,dst,"rename");
+        ok=false;
       }
     }
     if (zip) zip_fclose(zip);
     if (za) zip_close(za);
-    int fi=open(RP(),O_RDONLY);
-    if (fi>0){ posix_fadvise(fi,0,0,POSIX_FADV_DONTNEED); close(fi);}
+    cg_vmtouch_e(RP());
   }else{
-    if (zpath->flags&ZP_EXISTS_AS_GZ_ONLY){
-      char gz[RP_L()+5]; stpcpy(stpcpy(gz,RP()),".gz");
-      cg_copy_url_or_file(COPY_GUNZIP,gz,dst);
-    }else{
-      cg_copy_url_or_file(0,RP(),dst);
-    }
+    ok=cg_copy_url_or_file(zpath->is_decompressed,RP(),dst,&root_loading_active,(void*)zpath->root);
   }
-  if (n>0 && strstr(_mnt,"/cgille/") && cg_file_size(dst)>=0) DIE_DEBUG_NOW(RED_WARNING" File dst: '%s' exists",dst);
-  struct stat st;
-  if (n<0){
-    warning(WARN_PRELOADFILEDISK|WARN_FLAG_ERROR|WARN_FLAG_ERRNO,RP(),"Read error -> %s  n: %d",tmp,n);
-    unlink(tmp);
-    return false;
-  }else if (stat(tmp,&st)){
-    warning(WARN_PRELOADFILEDISK|WARN_FLAG_ERROR|WARN_FLAG_ERRNO,tmp,"%s",RP());
-    unlink(tmp);
-    return false;
-  }else if (cg_rename(tmp,dst)){
-    warning(WARN_PRELOADFILEDISK|WARN_FLAG_ERROR|WARN_FLAG_ERRNO,dst,"rename");
-    unlink(tmp);
-    return false;
-  }else{
-    log_verbose("Going cg_file_set_mtime %s %s",dst, ST_MTIME(&zpath->stat_vp));
-    cg_file_set_mtime(dst,zpath->stat_vp.st_mtime);
-    return true;
+  if (ok){
+    struct stat st;
+    if (stat(dst, &st)==-1) log_errno("fstat  %s",dst);
+    else if (chmod(dst,st.st_mode|S_ISVTX)==-1) log_errno("fchmod  %s",dst);
+    cg_file_set_mtime(dst,zpath->stat_vp.st_mtime); /* Note using same fd for futimes() fails*/
+    IF1(WITH_ZIPINLINE_CACHE, LOCK(mutex_dircache, zipinline_cache_drop_vp(VP(),VP_L())));
   }
-  return true;
+  //log_exited_function("%s  %s",dst,success_or_fail(ok));
+  return ok;
 }
-
-static bool preloadfiledisk_now(const char *dst,struct zippath *zpath,struct fHandle *d){
+static bool preloaddisk_now(const char *dst,zpath_t *zpath,fHandle_t *d){
   assert(_root_writable);
-  struct zippath zp;
+  zpath_t zp;
   if (!zpath){ if (!d) return false;  LOCK(mutex_fhandle, zp=d->zpath; zpath=&zp); }
   assert(zpath->root!=_root_writable);
-
-
-  //char url[PATH_MAX+1];
-  //  if (find_dot_url(url, root, VP()) || ){
-    //    cg_copy_file(0,*url?url:RP(),
-
-  const bool success=_preloadfiledisk_now(dst,zpath,d);
-
-  LOCK(mutex_fhandle, d->flags&=~(FHANDLE_FLAG_LCOPY_RUN|FHANDLE_FLAG_LCOPY_QUEUE));
-  log_exited_function("%s %s",RP(),success_or_fail(success));
+  LOCK(mutex_fhandle, if (d) d->flags=(d->flags&~FHANDLE_PRELOADFILE_QUEUE)|FHANDLE_PRELOADFILE_RUN);
+  const bool success=_preloaddisk_now(dst,zpath,d);
+  LOCK(mutex_fhandle, if (d) d->flags&=~(FHANDLE_PRELOADFILE_RUN|FHANDLE_PRELOADFILE_QUEUE));
   return success;
 }
-
-
-
-
 /*******************************************************************************/
-/* Any fHandle instance with the same path which is already queued or loaded.  */
+/* Any fHandle_t instance with the same path which is already queued or loaded.  */
 /* Avoid loading same path several times                                       */
 /*******************************************************************************/
-static struct fHandle *preloadfiledisk_fhandle(const struct fHandle *d){
+static fHandle_t *preloaddisk_fhandle(const fHandle_t *d){
   const char *vp=D_VP(d);
   const int vp_l=D_VP_L(d);
   foreach_fhandle(id,e){
-    if (e!=d && (e->flags&(FHANDLE_FLAG_LCOPY_QUEUE|FHANDLE_FLAG_LCOPY_RUN)) && D_VP_L(e)==vp_l && !memcmp(D_VP(e),vp,vp_l)){
-      return e;
-    }
+    if (e!=d && (e->flags&(FHANDLE_PRELOADFILE_QUEUE|FHANDLE_PRELOADFILE_RUN)) && D_VP_L(e)==vp_l && !memcmp(D_VP(e),vp,vp_l)) return e;
   }
   return NULL;
 }
-
-
 /**********************************************************************************************************************************/
 /* Given a virtual file, this function finds the preloaded local file.                                                            */
-/* The virtual file must be contained in specific places like DIR_PRELOADFILEDISK_R.                                              */
-/* Alternatively it can be located in a root  with the rootdata->prefetch==true.                                                  */
-/* If the preloaded file does not yet exist, the struct fHandle is marked such that the preload is performed from another thread. */
+/* The virtual file must be contained in specific places like DIR_PRELOADDISK_R.                                              */
+/* Alternatively it can be located in a root  with the root_t->prefetch==true.                                                  */
+/* If the preloaded file does not yet exist, the fHandle_t is marked such that the preload is performed from another thread. */
 /**********************************************************************************************************************************/
 
-static bool preloadfiledisk(struct fHandle *d){
-  if (!d || !_root_writable) return false;
-  struct zippath *zpath=&d->zpath;
-  struct rootdata *r=zpath->root;
-  if (!r) return false;
-  LOCK_N(mutex_fhandle, bool ok=(ZPF(ZP_PRELOADFILEDISK)) && zpath->root && (VP_L()+_root_writable->rootpath_l+50<MAX_PATHLEN));
-  if (!ok) return false;
-  //log_entered_function("%s", D_VP(d));
+
+#define   D_IS_PRELOADDISK_UPDATE(d)      (_root_writable &&  d->zpath.root==_root_writable && d->zpath.dir==DIR_PRELOADED_UPDATE)
+
+static bool is_preloaddisk_zpath(const zpath_t *zpath){
+  if (zpath->dir==DIR_PLAIN) return false;
+  const root_t *r=zpath->root;
+  if (r && _root_writable){
+    ASSERT(zpath->flags|ZP_CHECKED_EXISTENCE_COMPRESSED);
+    /* Note:  (!zpath->is_decompressed) means uninitialized. Once initialized at least (1<<COMPRESSION_NIL) is set. */
+    if (r->preload_flags && (!(zpath->flags|ZP_CHECKED_EXISTENCE_COMPRESSED) || (r->preload_flags&((1<<zpath->is_decompressed)|PRELOAD_YES)))){
+      return true;
+    }
+    if (zpath->preloadpfx){
+      if ((zpath->preloadpfx==DIR_PRELOADDISK_R || zpath->preloadpfx==DIR_PRELOADDISK_RC || zpath->preloadpfx==DIR_PRELOADDISK_RZ) && r->remote) return true;
+      if (zpath->preloadpfx==DIR_PRELOADDISK_RZ && ZPF(ZP_IS_ZIP)) return true;
+      if (zpath->preloadpfx==DIR_PRELOADDISK_RC && (ZPF(ZP_IS_ZIP|ZP_IS_COMPRESSEDZIPENTRY)==(ZP_IS_ZIP|ZP_IS_COMPRESSEDZIPENTRY) || (r->preload_flags&~(1<<COMPRESSION_NIL)))) return true;
+
+    }
+  }
+  return false;
+}
+
+static int preloaddisk(fHandle_t *d){
+  zpath_t *zpath=&d->zpath;
+  root_t *r=zpath->root;
+  if (!r || r==_root_writable) return EACCES;
+  //  LOCK_N(mutex_fhandle, bool ok=zpath->preloadpfx || zpath->root && zpath->root->preload && (VP_L()+_root_writable->rootpath_l+50<MAX_PATHLEN));
+  LOCK_N(mutex_fhandle, bool ok=is_preloaddisk_zpath(zpath) && (VP_L()+_root_writable->rootpath_l+50<MAX_PATHLEN));
+  //log_entered_function("%s  r:%s ok:%d",D_VP(d),rootpath(r),ok);
+  if (!ok) return ENOENT;
   char dst[MAX_PATHLEN+1];
   struct stat st={0};
-  ok=preloadfiledisk_realpath(zpath,dst) && !stat(dst,&st);
+  ok=preloaddisk_writable_realpath(zpath,dst) && !stat(dst,&st);
   if (!ok){
     root_start_thread(zpath->root,PTHREAD_PRELOAD,false);
   again_with_other_root:
-    for(int i=0;;i++){
-      LOCK_N(mutex_fhandle,  struct fHandle *g=preloadfiledisk_fhandle(d); if (!g && !(d->flags&(FHANDLE_FLAG_LCOPY_QUEUE|FHANDLE_FLAG_LCOPY_RUN))) d->flags|=FHANDLE_FLAG_LCOPY_QUEUE);
+    while(true){
+      LOCK_N(mutex_fhandle,  fHandle_t *g=preloaddisk_fhandle(d); if (!g && !(d->flags&(FHANDLE_PRELOADFILE_QUEUE|FHANDLE_PRELOADFILE_RUN))) d->flags|=FHANDLE_PRELOADFILE_QUEUE);
       PRELOADFILE_ROOT_UPDATE_TIME(d,NULL,false);
-      while(true){
-        LOCK(mutex_fhandle, ok=!((g?g:d)->flags&(FHANDLE_FLAG_LCOPY_QUEUE|FHANDLE_FLAG_LCOPY_RUN)));
-        if (ok && stat(dst,&st)) ok=false;
+      for(int i=0;;i++){
+        LOCK(mutex_fhandle, ok=!((g?g:d)->flags&(FHANDLE_PRELOADFILE_QUEUE|FHANDLE_PRELOADFILE_RUN)));
         if (ok) break;
-        //if(preloadfile_time_exceeded(__func__,g?g:d,COUNT_LCOPY_WAITFOR_TIMEOUT)) break;
-        //if (i%10==0) log_debug_now("Waiting for %s",dst);
-        if (i%10==0) fputc('P',stderr);
         usleep(1000*100);
       }
       PRELOADFILE_ROOT_UPDATE_TIME(d,r,false);
-      if (ok) break;
-      if (!g){
-        if (find_realpath_other_root(zpath)){
-          LOCK(mutex_fhandle, d->flags&=~FHANDLE_FLAG_LCOPY_RUN);
-          goto again_with_other_root;
-        }
+      ok=ok && !stat(dst,&st);
+      if (!g && find_realpath_other_root(zpath)){
+        LOCK(mutex_fhandle, d->flags&=~FHANDLE_PRELOADFILE_RUN);
+        goto again_with_other_root;
       }
+      break;
     }
-    ok=st.st_ino;
-    if (!ok) log_error("Not exists %s",dst);
+    ok=st.st_ino!=0;
   }
   if (ok){
     LOCK(mutex_fhandle, zpath_copy_rp(zpath,dst,&st); zpath->root=_root_writable);
-  }else{
-    log_failed("%s RP:%s", VP(),RP());
+    ok=(d->fd_real=open(RP(),O_RDONLY))>0;
   }
-  //log_exited_function("%s %s %p   RP:%s",success_or_fail(ok), D_VP(d),d,D_RP(d));
-  return ok;
+  //log_exited_function("%s %s %p   RP:%s  %'ld bytes",success_or_fail(ok), D_VP(d),d,D_RP(d),cg_file_size(RP()));
+  return ok?0:ENOENT;
 }
-
-static void zpath_copy_rp(struct zippath *zpath, const char *rp, const struct stat *st){
+static void zpath_copy_rp(zpath_t *zpath, const char *rp, const struct stat *st){
   zpath_reset_keep_VP(zpath);
   zpath->realpath=zpath_newstr(zpath);
   zpath_strcat(zpath, rp);
   zpath->stat_rp=zpath->stat_vp=*st;
 }
-
-
 /*****************************************************/
 /* virtual files should also exist if file.gz exists */
 /*****************************************************/
-static bool path_with_gz_exists(struct zippath *zpath, struct rootdata *r){
-  if (!r->stripgz || cg_endsWithGZ(VP(),VP_L())) return false;
-  char gz[RP_L()+4]; stpcpy(stpcpy(gz,RP()),".gz");
-  if (!stat(gz,&zpath->stat_rp)){
-    zpath->stat_vp=zpath->stat_rp;
-    zpath->stat_vp.st_size=closest_with_identical_digits(10*zpath->stat_rp.st_size);
-    zpath->flags|=ZP_EXISTS_AS_GZ_ONLY;
-    return true;
+static bool path_with_gz_exists(zpath_t *zpath, const root_t *r){
+  //log_entered_function("'%s' preloadpfx:'%s'",VP(),zpath->preloadpfx);
+  const int decompress_flags=zpath->preloadpfx || !r?-1:r->decompress_flags;
+  if (!decompress_flags) return false;
+  char gz[RP_L()+4], *e=stpcpy(gz,RP());
+  if (!(zpath->flags&ZP_CHECKED_EXISTENCE_COMPRESSED)){
+    zpath->is_decompressed=COMPRESSION_NIL;
+    FOR(iCompress,1,COMPRESSION_NUM){
+      if (decompress_flags&(1<<iCompress)){
+        stpcpy(e,cg_compression_file_ext(iCompress,NULL));
+        if (!stat(gz,&zpath->stat_rp)) zpath->is_decompressed=iCompress;
+      }
+    }
+    zpath->flags|=ZP_CHECKED_EXISTENCE_COMPRESSED;
   }
-  return false;
+  if (zpath->is_decompressed==COMPRESSION_NIL) return false;
+  zpath->stat_vp=zpath->stat_rp;
+  zpath->stat_vp.st_size=closest_with_identical_digits(100*zpath->stat_rp.st_size);
+  return true;
 }
 /*****************************************************************************************************************/
 /*  Users trigger updating  pre-loaded files by reading corresponding                                            */
@@ -268,55 +194,50 @@ static bool path_with_gz_exists(struct zippath *zpath, struct rootdata *r){
 /*  If the original exists and has a different mtime or size then the function tries to make a local copy .      */
 /*  If this failes, the old local file will be kept.                                                             */
 /*****************************************************************************************************************/
-static void preloadfiledisk_uptodate_or_update(struct fHandle *d){
-  IF1(WITH_PRELOADFILERAM,if (d->preloadfileram && d->preloadfileram->txtbuf) return);
-  char buf[222+2*MAX_PATHLEN]; int n=0;
-  int cut=0;
-  const char *pfxdir=preloadfiledisk_type(&cut,D_VP(d),D_VP_L(d));
-  assert(cut<0);
-  NEW_ZIPPATH(D_VP(d)-cut);
-  const int found=find_realpath_roots_by_mask(zpath,pfxdir==DIR_ZIPsFS?_rootmask_preload:~1L);
+static void preloaddisk_uptodate_or_update(fHandle_t *d){
+  //log_entered_function("%s",D_VP(d));
+  IF1(WITH_PRELOADRAM,if (d->preloadram && d->preloadram->txtbuf) return);
+  const int preloadpfx_l=cg_strlen(d->zpath.preloadpfx);
+  NEW_VIRTUALPATH(D_VP(d)+preloadpfx_l);
+  NEW_ZIPPATH(&vipa);
+  const bool found=find_realpath_roots_by_mask(0,zpath,~1L);
   const char *dst=D_RP(d);
-  zpath_stat(zpath,NULL);
   const struct stat *copy=&d->zpath.stat_rp;
-  //ZPATH_LOG_FILE_STAT(&d->zpath); DIE_DEBUG_NOW("");
   const char *status=found?ANSI_FG_MAGENTA"found-original"ANSI_RESET:ANSI_FG_RED"not-found-original"ANSI_RESET;
-  n+=sprintf(buf+n,"Preloaded\t%s\t%'ld\t%s\t%s\n",ST_MTIME(copy),copy->st_size,dst,status);
-  log_debug_now("Preloaded %s",ST_MTIME(copy));
+  char buf[222+2*MAX_PATHLEN];
+  int n=sprintf(buf,"Preloaded\t%s\t%'ld\t%s\t%s\n",ST_MTIME(copy),copy->st_size,dst,status);
   if (found){
     const struct stat *orig=&zpath->stat_vp;
     status=ANSI_FG_BLUE"up-to-date"ANSI_RESET;
-    log_debug_now("orig: %s  copy: %s ",ST_MTIME(orig),ST_MTIME(copy));
-    if ((orig->st_mtime!=copy->st_mtime  ||  orig->st_size!=copy->st_size)){
-      log_debug_now("Not up-to-date");
+    if ((orig->st_mtime!=copy->st_mtime)){
       char bak[MAX_PATHLEN+60];
       sprintf(bak,"%s.%d.bak",dst,getpid());
       cg_rename(dst,bak);
-      preloadfiledisk_now(dst,zpath,NULL);
+      preloaddisk_now(dst,zpath,NULL);
       if (cg_file_size(dst)>=0){
         cg_unlink(bak);
-        status=GREEN_SUCCESS"xxx";
+        status=ANSI_FG_GREEN"Updated"ANSI_RESET;
       }else{
         status=RED_FAIL;
         cg_rename(bak,dst);
       }
     }
-    n+=sprintf(buf+n,"Original\t%s\t%'ld\t%s\t%s\n",ST_MTIME(orig),orig->st_size,RP(),status);
+    n+=sprintf(buf+n,"Original\t%s\t%'ld\t%s%s\t%s\n",ST_MTIME(orig),orig->st_size,RP(),cg_compression_file_ext(zpath->is_decompressed,NULL),status);
   }
   buf[n++]='\n';
 #undef T
-#if WITH_PRELOADFILERAM
-  struct textbuffer *b=textbuffer_new(COUNT_MALLOC_PRELOADFILERAM_TXTBUF);
+#if WITH_PRELOADRAM
+  textbuffer_t *b=textbuffer_new(COUNT_MALLOC_PRELOADRAM_TXTBUF);
   textbuffer_add_segment(TXTBUFSGMT_DUP,b,buf,n);
   lock(mutex_fhandle);
   if (!fhandle_set_text(d,b)){
     FREE_NULL_MALLOC_ID(b);
   }else{
-    IF1(WITH_PRELOADFILERAM,preloadfileram_set_status(d,preloadfileram_done));
-    d->flags|=FHANDLE_FLAG_PRELOADFILERAM_COMPLETE;
+    IF1(WITH_PRELOADRAM,preloadram_set_status(d,preloadram_done));
+    d->flags|=FHANDLE_PRELOADRAM_COMPLETE;
   }
   unlock(mutex_fhandle);
 #else
   write(STDERR_FILENO,buf,n);
-#endif //WITH_PRELOADFILERAM
+#endif //WITH_PRELOADRAM
 }

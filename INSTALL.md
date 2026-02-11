@@ -4,11 +4,13 @@
  - bash, unzip, tmux
  - libfuse any version
  - libzip
+ - zlib
 
 
 <details><summary>Optional requirements</summary>
 
  - binutils       (Provides /usr/bin/addr2line, which is used for debugging.  Back-traces show location in source code)
+ - curl           Support for remote files
 
 ZIPsFS allows transparent on-the-fly file conversion which requires the following:
 
@@ -75,7 +77,7 @@ However, we found the following problems:
 <details><summary>Ubuntu, Debian and friends (Linux)</summary>
 
     apt-get update
-    apt-get install fuse-zip   libfuse3-dev  libzip-dev  unzip lynx tmux
+    apt-get install fuse-zip   libfuse3-dev  libzip-dev  unzip lynx tmux curl
     addr2line -H || apt-get install binutils
 
     apt-get install gcc
@@ -94,7 +96,7 @@ Download and install macFUSE https://osxfuse.github.io/
 
 Open terminal and run:
 
-    sudo port install libzip bindfs wget unzip tmux lynx
+    sudo port install libzip bindfs wget unzip tmux lynx curl
 
 Load the kernel. Give the correct OSX version, here 15.
 
@@ -129,7 +131,7 @@ In another terminal check whether you see the content of the home directory at t
 
 Become root.
 
-    pkg install fuse-zip unzip zip lynx tmux sysutils/fusefs-libs3 libzip bash wget
+    pkg install fuse-zip unzip zip lynx tmux sysutils/fusefs-libs3 libzip bash wget curl
 
 Check whether fuse file systems works as root. fuse-zip is a simple FUSE file system for testing.
 
@@ -174,7 +176,7 @@ If not then run
 
 <details><summary>NetBSD</summary>
 
-    pkg_add -u zip unzip libzip fuse-unionfs perfuse bash wget tmux lynx
+    pkg_add -u zip unzip libzip fuse-unionfs perfuse bash wget tmux lynx curl
 
 
 

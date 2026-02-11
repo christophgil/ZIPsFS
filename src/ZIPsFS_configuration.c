@@ -9,10 +9,10 @@
 /// Local helper functions  ///
 ///////////////////////////////
 
-static bool _is_zip(const char *s){
+static bool _isZipIC(const char *s){
   return *s=='.' && (s[1]|32)=='z' && (s[2]|32)=='i' && (s[3]|32)=='p';
 }
-static bool _is_Zip(const char *s){
+static bool _isZip(const char *s){
   return *s=='.' && s[1]=='Z' && s[2]=='i' && s[3]=='p';
 }
 static bool _is_tdf_or_tdf_bin(const char *path){
@@ -32,8 +32,12 @@ static bool _is_tdf_or_tdf_bin(const char *path){
 ///
 //////////////////////////////////////////////////////////////
 static const int config_virtual_dirpath_to_zipfile(const char *b, const char *e,char *append[]){
-  if (e-b>12 && _is_zip(e-12)  && !memcmp(e-8,EXT_CONTENT,8)) return -8;
-  if (e[-2]=='.' && (e[-1]|32)=='d') {
+  *append=NULL;
+  //  if (e-b>12 &&   e[-12]=='.'&&(e[-11]|32)=='z'&&(e[-10]|32)=='i'&&(e[-9]|32)=='p'      &&  !memcmp(e-8,EXT_CONTENT,8)){
+  if (e-b>12 &&   _isZipIC(e-12)   &&  !memcmp(e-8,EXT_CONTENT,8)){
+    return -8;
+  }
+  if (e[-2]=='.' && e[-1]=='d') {
     *append=".Zip";
     return 0;
   }
@@ -60,33 +64,49 @@ static const int config_virtual_dirpath_to_zipfile(const char *b, const char *e,
 #include "ZIPsFS_configuration_zipfile.c"
 #endif //WITH_ZIPINLINE
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-/// When a cached struct stat is found the the cache, is it still valid and for how long?       ///
-/// Unlimited for remote branches and files that are read-only files.                           ///
-///////////////////////////////////////////////////////////////////////////////////////////////////
+ /************************************************************************************************/
+ /* When a cached struct stat is found the the cache, is it still valid and for how long?        */
+ /* Unlimited for remote branches and files that are read-only files.                            */
+ /* st_or_null is NULL for getting from cache.                                                   */
+ /************************************************************************************************/
+
+
 #if WITH_STAT_CACHE
-static uint64_t config_file_attribute_valid_seconds(const int opt, const char *path,const int path_l){
+#define IS_STAT_READONLY(st) !(st->st_mode&(S_IWUSR|S_IWGRP|S_IWOTH))
+static uint64_t config_file_attribute_valid_seconds(const int opt, const char *path,const int path_l, const struct stat *st_or_null){
   /* Available Flags:
      (opt&STAT_CACHE_ROOT_IS_WRITABLE)
      (opt&STAT_CACHE_ROOT_IS_REMOTE)
-     (opt&STAT_CACHE_FILE_IS_READONLY)
+     (opt&STAT_CACHE_ROOT_IS_PRELOADING)
+     (opt&STAT_CACHE_ROOT_WITH_TIMEOUT)
+     (opt&STAT_CACHE_IS_PFXPLAIN))
+     (opt&STAT_CACHE_ROOT_IS_WORM))
+          (opt&STAT_CACHE_ROOT_IS_IMMUTABLE))
+
   */
-  if ((opt&STAT_CACHE_ROOT_IS_REMOTE) && cg_endsWithZip(path,path_l)  && (strstr(path,"/fularchiv")||strstr(path,"/store/")||strstr(path,"/CHA-CHA-RALSER-RAW"))){
-    return (opt&STAT_CACHE_FILE_IS_READONLY)?UINT64_MAX:1;
+  //log_debug_now("path:'%s' path_l:%d",path,path_l);
+  IF1(WITH_TIMEOUT_STAT, if (opt&STAT_CACHE_ROOT_WITH_TIMEOUT) return 300);
+  if (opt&STAT_CACHE_IS_PFXPLAIN){
+    /* Navigation through <mountpoint>/ZIPsFS/p/ */
+    //log_debug_now("STAT_CACHE_FILE_IS_READONLY: %d",(opt&STAT_CACHE_FILE_IS_READONLY));
+    //log_debug_now("path:%s %p %d %d",path,  st_or_null, !!(opt&STAT_CACHE_ROOT_IS_WORM),st_or_null && IS_STAT_READONLY(st_or_null));
+    if ((opt&(STAT_CACHE_ROOT_IS_WORM|STAT_CACHE_ROOT_IS_IMMUTABLE)) &&  (!st_or_null || IS_STAT_READONLY(st_or_null))) return UINT32_MAX;
   }
   return 0;
 }
 #endif //WITH_STAT_CACHE
-/////////////////////////////////////////////
-/// A ZIP file is shown as a folder.
-/// Convert the ZIP filename to a virtual folder name
-/////////////////////////////////////////////
+
+ /*****************************************************/
+ /* A ZIP file is shown as a folder.                  */
+ /* Convert the ZIP filename to a virtual folder name */
+ /*****************************************************/
+
 
 
 static bool config_zipfilename_to_virtual_dirname(char *dirname,const char *zipfile,const int zipfile_l){
   *dirname=0;
   const char *e=zipfile+zipfile_l;
-  if (zipfile_l>4 && _is_zip(e-4)){
+  if (zipfile_l>4 && _isZipIC(e-4)){
     strcpy(dirname,zipfile);
     if(zipfile_l>9 && !strcmp(zipfile+zipfile_l-6,".d.Zip")){
       dirname[zipfile_l-4]=0;
@@ -99,7 +119,7 @@ static bool config_zipfilename_to_virtual_dirname(char *dirname,const char *zipf
 }
 #if WITH_ZIPINLINE
 static bool config_skip_zipfile_show_zipentries_instead(const char *zipfile,const int zipfile_l){
-  if(zipfile_l>20 && _is_Zip(zipfile+zipfile_l-4)){
+  if(zipfile_l>20 && _isZip(zipfile+zipfile_l-4)){
     static int WITHOUT_PARENT_LEN[10];
     static const char *WITHOUT_PARENT[]={".wiff.Zip",".wiff2.Zip",".rawIdx.Zip",".raw.Zip",NULL};
     if (!WITHOUT_PARENT_LEN[0]){
@@ -126,7 +146,7 @@ static bool config_not_report_stat_error(const char *path,const int path_l){
 #undef E
 #undef S
 }
-#if WITH_PRELOADFILERAM
+#if WITH_PRELOADRAM
 
 
 ////////////////////////////////////////////////////////////
@@ -141,7 +161,7 @@ static off_t config_advise_preload_file_ram(const int flags,const char *virtualp
   if (vp_l>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e') return -1; /* The exe files hold the icon for File Explorer */
   if (flags&ADVISE_CACHE_BY_POLICY) return filesize;
   off_t need=filesize;
-  bool cache=((flags&ADVISE_CACHE_IS_CMPRESSED)&&(flags&ADVISE_CACHE_IS_SEEK_BW))
+  bool cache=((flags&ADVISE_CACHE_IS_COMPRESSEDZIPENTRY)&&(flags&ADVISE_CACHE_IS_SEEK_BW))
     || ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin");
     //         || ENDSWITH(virtualpath,vp_l,".raw") && STARTSWITH(cg_strrchr_null(virtualpath,'/'),"/20")
     /*  Thermo raw files: Not applicable to FragPipe because raw file opened and closed multiple times. */
@@ -158,7 +178,7 @@ static off_t config_advise_preload_file_ram(const int flags,const char *virtualp
   }
   return cache?need:-1;
 }
-#endif //WITH_PRELOADFILERAM
+#endif //WITH_PRELOADRAM
 
 
 static bool config_advise_evict_from_filecache(const char *realpath,const int realpath_l, const char *zipentryOrNull, const off_t filesize){
@@ -200,8 +220,9 @@ static bool config_not_overwrite(const char *path,const int path_l){
 /// Maybe remote folders that have not changed recently  ///
 ////////////////////////////////////////////////////////////
 #if WITH_DIRCACHE
-static bool config_advise_cache_directory_listing(const char *path,const int path_l,const struct timespec mtime, const int flags){
-  if (flags&ADVISE_DIRCACHE_IS_ZIP) return true;
+static bool config_advise_cache_directory_listing(const int flags,const char *path,const int path_l,const struct timespec mtime){
+  if (!(flags&ADVISE_DIRCACHE_IS_DIRPLAIN)) return false;
+  if ((flags&ADVISE_DIRCACHE_IS_ZIP))  return true;
   if (flags&ADVISE_DIRCACHE_IS_REMOTE){
     struct timeval tv={0};
     gettimeofday(&tv,NULL);
@@ -316,8 +337,27 @@ static bool config_has_sufficient_storage_space(const char *realpath, const long
 static bool config_internet_update_header(const char *url, const struct stat *st){
   return time(NULL)-st->st_mtime>60*60;
 }
-
-static bool configuration_internet_with_date_in_filename(const char *url){
+static bool config_internet_hardlink_with_date_in_filename(const char *url){
   return true;
 }
+static int config_internet_try_compressed(const char *vp,const int vp_l){
+  return
+    //(1<<COMPRESSION_XZ)|
+    //(1<<COMPRESSION_LRZ)|
+    (1<<COMPRESSION_BZ2)|
+    (1<<COMPRESSION_GZ);
+}
 #endif //WITH_INTERNET_DOWNLOAD
+
+
+
+ /*************************************************************************************************************************/
+ /* Symlinks are not expanded by ZIPsFS and  are shown as symlinks, unless for root-paths marked with @follow-symlinks.   */
+ /* Then all symlinks are expanded that stay within the file trees.                                                       */
+ /* Outgoing symlinks are expanded only if this function returns true.                                                    */
+ /*************************************************************************************************************************/
+static bool config_allow_expand_symlink(const char *orig, const char *expanded){
+  /* The following could be used to include FTP sites from avfs */
+  if (strstr(expanded,"/#ftp:")) return true;  /* For symlinks pointing into avfs */
+  return false;
+}

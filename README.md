@@ -71,6 +71,7 @@ Virtual file paths in that branch will start with *mount point*``/branch3/``.
 ### Start ZIPsFS
 In production, it is recommended to start ZIPsFS in *tmux*. For testing, just use your regular command line.
 
+
     ZIPsFS   $b1 $b2 $b3 $b4  :  ~/test/ZIPsFS/mnt
 
 ### Browse the virtual file tree
@@ -101,9 +102,14 @@ Note that "//:" and all slashes in the URL are replaced by commas.
 
     gunzip -c ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz
 
+
 Even though the file is only available in compressed form on the server, you can directly access the decompressed file. Omit  the ``.gz`` extension.
 
 The decompressed file size is an estimate. It becomes exactly known after reading the file.
+
+    head ~/test/ZIPsFS/mnt/ZIPsFS/n/http,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
+    head ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
+
 
     ls -l ~/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
 
@@ -111,7 +117,70 @@ The decompressed file size is an estimate. It becomes exactly known after readin
 
 From now on, the file size is known.
 
+The gz compression is built-in using the zlib C library. The bz2, xz and lrz
+decompression work only if activated in the config (default) and if the respective backends are installed on the
+computer. The following are test examples of files remotely stored as bz2 and xz, respectively.
+
+    head ~/test/ZIPsFS/mnt/ZIPsFS/n/http,,,ftp.gnu.org,gnu,binutils,binutils-2.23.1.tar   # Remote file is .tar.bz2
+    head ~/test/ZIPsFS/mnt/ZIPsFS/n/http,,,ftp.gnu.org,gnu,gawk,gawk-4.0.2.tar            # Remote file is .tar.xz
+
+
 Above method allows to access any remote file. The disadvantage over the method below is, that repositories are not browsable.
+
+
+## Special directory prefixes
+
+ - <mount-point>/ZIPsFS/p   Rapid navigation and file name searching without time consuming ZIP file expansion.
+ - <mount-point>/ZIPsFS/n   Internet files. Take URL and replace colon and slashes by comma. See above tutorial.
+ - <mount-point>/ZIPsFS/lrz Remote and zipped files are prefetched before reading. For FragPipe, use raw files from here.
+ - <mount-point>/ZIPsFS/c   Converted files like mgf and mzML from raw mass spectrometry files or tsv from parquet files. Note that the mzML files are not suitable for FragPipe. FragPipe is generating its own mzML variant.
+ - <mount-point>/ZIPsFS/1   All files ever written or generated or modified.
+
+Details are found in the contained readme files.
+
+## Properties of upstream file trees
+
+In the command line, root file paths  can be followed by expressions like @immutable=1 to set specific properties.
+Alternatively, properties can be written in a file ``<property-path>.ZIPsFS.properties``. Take a look at ZIPsFS_prepare_branch_for_ftp.sh.
+
+List (Incomplete) of root path properties:
+
+- ``path-prefix=dir/subdir/subsubdir``  Files in this root are accessible  with paths starting with  <mount-point>/dir/subdir/subsubdir/...
+- ``one-file-system=1``   Mount points or  symbolic links expanded in ZIPsFS can point outside this file system.  This is prevented with this  property. Consider this
+  property when the ZIPsFS file system is accessible from other computers.
+- ``follow-symlinks=1`` Symlinks are expanded within ZIPsFS. Dangerous! Consider combining with ``@one-file-system=1``.
+- ``immutable=1``  In the respective file tree, no files are changed, deleted or created. This optimizes caching. Cached file attributs and listings will not expire.
+- ``worm=1``       File tree is write-once-read-many. Same consequence as above.
+- ``preload=1``    Before reading file content,  files are downloaded to the first file tree.
+- ``preload-gz=1``    If a non-existing file is requested while a gz-compressed file exists, the decompressed file will be generated. Also available bz2, lrz, Z and xz.
+
+
+<details><summary>Security: Symbolic links and mount points</summary>
+
+
+When the FUSE file system is exported via NFS or Samba, navigation into forbiddeden folders  such as ``/etc/passwd`` needs to be prevented.
+Symbolic links and mount points could direct into other file systems.
+
+Even though symbolic links can be created in the virtual file system and work as expected, on the local machine, they are normally not expanded inside ZIPsFS and
+the target may not be visible through NFS or SMB.
+
+In rare cases symbolic links need to be expanded in ZIPsFS. In this case the respective root-path
+need the property ``follow-symlinks=1``.  Either this is added as a line to a textfile with a path
+formed by appending ``.ZIPsFS.properties`` to the root-path or with a command line parameter
+``@follow-symlinks=1`` after the root-path.
+
+Expansion of symlinks is performed only if the target is within the given file trees or if the
+configurable function ``config_allow_expand_symlink(orig_path,expanded_path)`` returns true.
+
+
+Users may expose sensitive files by creating an empty folder as mount point and running ``bindfs /etc   created-empty-folder``.
+Redirection can be prevented by adding the property ``one-file-system=1``.
+
+
+</details>
+
+
+
 
 <details><summary>Browsing  public repositories (Pride, Genomes, PDB, Swissprot)</summary>
 
@@ -119,8 +188,9 @@ Above method allows to access any remote file. The disadvantage over the method 
 Warning: this new feature is not yet fully tested!
 
 Please install https://curlftpfs.sourceforge.net/ and curl.
+Consider to add timeout like  ``curl_easy_setopt(easy,CURLOPT_TIMEOUT,3600);`` into the ``main()`` function in ``ftpfs.c``.
 
-### Browsing FTP sites
+### Browsing FTP sites using nested Curlftpfs
 
 The script file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) generates an example  folder
 ``~/.ZIPsFS/DBcurlftpfs`` with  Curlftpfs mounts to be used in ZIPsFS.
@@ -128,31 +198,28 @@ The script file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_
 
 Above command line to start ZIPsFS can extended to include this folder:
 
-    ZIPsFS   $b1 $b2 $b3 $b4  --preload ~/.ZIPsFS/DBcurlftpfs  :  ~/test/ZIPsFS/mnt
+    ZIPsFS   $b1 $b2 $b3 $b4  --preload ~/.ZIPsFS/DB  :  ~/test/ZIPsFS/mnt
 
 Due to the option ``--preload``, files are mirrord to the first branch on the local file system for fast access.
 Lets try
 
     ls ~/test/ZIPsFS/mnt/DBcurlftpfs
 
-
-GZ compressed  files are transparently de-compressed. Files with the ending ``.gz`` also  appear in the file listing without gz suffix.
+GZ compressed files are transparently de-compressed. Files with the ending ``.gz`` also  appear in the file listing without gz suffix.
 Initially, they have an estimated file size. After reading the virtual file, the exact length of the
 decompressed data is known.
 
-
-#### Considerations
-
-Performance:  Without a trailing slash in the command line,  the folder name  ``/DBcurlftpfs/`` will be the beginning of virtual paths.  This
+Performance:  Without a trailing slash in the command line,  the folder name  ``/DB/`` will be the beginning of virtual paths.  This
 is important for performance, because it avoids that the  curlftpfs file systems will be requested for each file lookup.
-Only if virtual paths start with ``/DBcurlftpfs/``,  curlftpfs gets involved.
+Only if virtual paths start with ``/DB/``,  curlftpfs gets involved.
 
-Stability: There are several open questions.
 
-    - Is curlftpfs stable? Does it reliably reconnect?
-    - What if requests hang, will it become responding again after  timeout?
+### Browsing FTP sites using nested Avfs
 
-Tests and further optimizations might be needed.
+Avfs can also be used. Please see
+[ZIPsFS_prepare_branch_for_ftp_avfs.sh](./ZIPsFS_prepare_branch_for_ftp_avfs.sh)
+
+
 
 </details>
 
@@ -209,29 +276,39 @@ The default configuration includes a few exceptions tailored to specific use cas
 Non-linear file loading in a random-access manner is inefficient for remote or ZIP-compressed files.
 This is the case for the MS-programs Diann and FragPipe (Fragger).
 
-<details><summary>More preload</summary>
+<details><summary>Preload files</summary>
 
 
-File types are specified in the configurable method ``config_advise_cache_in_ram()``.  The default
-setting includes Brukertimstof files. Preloading to the RAM is appropriate for these files because
-each file is loaded only once per analysis.  The ``-l`` option sets an upper limit on memory usage
+Remote or compressed files can be preloaded in two different ways: (I) into RAM or (II) to the local disk.
+
+### Preloading into RAM
+
+File names to be cached in RAM  are specified in the configurable method ``config_advise_cache_in_ram()``.  The default
+setting includes Brukertimstof mass-spectrometry files. Preloading to the RAM is appropriate for these files because
+each file is loaded only once per analysis. It is necessary because these mass-spectrometry files are loaded from varying file positions which would be inefficient for
+remote or compressed files.
+The ``-l`` option sets an upper limit on memory usage
 for the ZIP RAM cache.  When available memory runs low, ZIPsFS can either pause, proceed without
 caching file data or just ignore the memory restriction depending on the configuration.
 
-For Thermo raw files analyzed in FragPipe, preloading entire files into RAM  would  be inappropriate because each raw file is opened and closed multiple times during  computation.
-In this case  prefetch remote or compressed files to the local disk is the best choice.
+### Preloading to local disk
+
+File reading of remote or compressed files can be improved by caching the file content on the local disk.
+This is for example necessary for Thermo  mass-spectrometry raw files analyzed in FragPipe.
+Above method of preloading into RAM is here  inappropriate because each raw file is
+opened and closed multiple times during computation such that the large files would be transfered from the NAS several times.
 
 All remote (r) or compressed (c) or zippded (z) files
 accessed through the following folders will be first copied to local disk:
 
     <mount-point>/ZIPsFS/lr/
     <mount-point>/ZIPsFS/lrc/
-    <mount-point>/ZIPsFS/lrz/    # use this for FragPipe
+    <mount-point>/ZIPsFS/lrz/
 
-Periodically ZIPsFS will call ``<path-of-branch1>/ZIPsFS/ZIP_cleanup.sh``.
-This customizable script can cleanup old files to free up disk space.
+The Readme in these folders provide further information.
+Alternatively, the entire root-path can be marked for preloading with the property ``@preload``.
+Decompression is enabled with properties like ``@preload-gz``
 
-Additional caching mechanisms are designed to accelerate file listing in large directories for ZIP entries.
 </details>
 
 ## ZIPsFS Options
@@ -245,11 +322,6 @@ Prints brief usage information.
 
 **-s *path-of-symbolic-link**
 This is discussed in section Configuration.
-
-
-** --nosymlink **
-Creating symlinks will fail with EPERM. For security, this is recommended before exporting with NFS or Samba.
-
 
 
 **-c \[NEVER,SEEK,RULE,COMPRESSED,ALWAYS\]**

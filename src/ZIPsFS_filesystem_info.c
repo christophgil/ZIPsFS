@@ -4,6 +4,11 @@
 /////////////////////////////////////////////////////////////////
 // cppcheck-suppress-file unusedFunction
 // cppcheck-suppress-file variableScope
+_Static_assert(WITH_PRELOADRAM,"");
+
+
+
+
 
 #define END_HR()  PRINTINFO("</TR>%s",isHeader?"</THEAD>":"")
 #define BEGIN_H1(is_html) (is_html?"<HR><H1>":ANSI_INVERSE)
@@ -12,19 +17,17 @@
 #define END_PRE(is_html) (is_html?"</PRE>":"")
 #define INFO_TABLE_DESCRIPTION() n=info_table_description(n,describe,sizeof(describe),dc)
 
-
+static bool _info_get_size;
 static int log_print_roots(int n);
-static int _info_capacity=0;
-static char *_info=NULL;
+static int _info_capacity;
+static char *_info;
 static char *_info_sprint_address(const int n){
-  return _info && n>=0 && _info_capacity>n?_info+n:NULL;
+  return !_info_get_size &&_info && n>=0 && _info_capacity>n?_info+n:NULL;
 }
 static int _info_sprint_max(const int n){
-  return _info && n>=0 && _info_capacity>n?_info_capacity-n:0;
+  return !_info_get_size &&_info && n>=0 && _info_capacity>n?_info_capacity-n-1:0;
 }
 
-
-#define PRINTINFO(...)   n+=snprintf(_info_sprint_address(n),_info_sprint_max(n),__VA_ARGS__)
 #if IS_CHECKING_CODE
 #define R(cond,title,descr,format,...) if (cond && *title && *descr){ printf(format,__VA_ARGS__); }
 #else
@@ -59,21 +62,15 @@ static int append_description(const char *title, const char *descr, char *descri
 #endif //IS_CHECKING_CODE
 
 
-
-
 static int info_table_description(int n,char *txt, const int txt_max, const int txt_l){
   if (txt_l<txt_max){
     txt[txt_l]=0;
     PRINTINFO("<UL>%s</UL>\n",txt);
   }else{
-    warning(WARN_FLAG_ERROR,SPECIAL_FILES[SFILE_INFO],"String variable '<I>describe</I>' too small");
+    warning(WARN_FLAG_ERROR,SFILE_NAMES[SFILE_INFO],"String variable '<I>describe</I>' too small");
   }
   return n;
 }
-
-
-
-
 
 static bool isKnownExt(const char *path, int len){
   static int index_not_needed;
@@ -84,10 +81,9 @@ static int info_counts_by_filetype_by_root(int n){
   foreach_root(r) n=_counts_by_filetype_r(n,r,&count_explain);
   return n;
 }
-static int _counts_by_filetype_r(int n,struct rootdata *r, const int *count_explain){
-  struct ht_entry *ee=HT_ENTRIES(&r->ht_filetypedata);
+static int _counts_by_filetype_r(int n, root_t *r, const int *count_explain){
+  ht_entry_t *ee=HT_ENTRIES(&r->ht_filetypedata);
   int headerDone=0;
-
   int dc=0; // cppcheck-suppress variableScope
   char describe[3333]; // cppcheck-suppress variableScope
   FOR(pass,0,r->ht_filetypedata.capacity){
@@ -103,7 +99,7 @@ static int _counts_by_filetype_r(int n,struct rootdata *r, const int *count_expl
           C(00,ZIP_READ_NOCACHE_SEEK_SUCCESS)+C(8,ZIP_READ_NOCACHE_SEEK_FAIL)+
           C(00,ZIP_READ_CACHE_SUCCESS)+C(12,ZIP_READ_CACHE_FAIL)+
           C(14,ZIP_READ_CACHE_CRC32_SUCCESS)+C(00,ZIP_READ_CACHE_CRC32_FAIL)+
-          C(00,COUNT_RETRY_PRELOADFILERAM)+
+          C(00,COUNT_RETRY_PRELOADRAM)+
           (isKnownExt(d->ext,0)?(1L<<28):0);
 #undef C
       }else if (!x || d->rank>x->rank){
@@ -129,7 +125,7 @@ static int _counts_by_filetype_r(int n,struct rootdata *r, const int *count_expl
         SF("Seek","Count setting file pointer to a different position"sf,ZIP_READ_NOCACHE_SEEK);
         SF("Checksum match/mismatch","If entirely read, count computation of CRC32 checksum"sf,ZIP_READ_CACHE_CRC32);
         R(true,"Cumul wait","Threads reading cached file data need to wait until the cache is filled to the respective position. Cumulative waiting time in s","%.2f",((float)x->wait)/CLOCKS_PER_SEC);
-        R(true,"Retry cache","Count success on retry reading into RAM cache","%d",G(COUNT_RETRY_PRELOADFILERAM));
+        R(true,"Retry cache","Count success on retry reading into RAM cache","%d",G(COUNT_RETRY_PRELOADRAM));
 #undef sf
 #undef G
         END_HR();
@@ -146,7 +142,7 @@ static int _counts_by_filetype_r(int n,struct rootdata *r, const int *count_expl
 
 
 
-static long counter_getattr_rank(const struct ht_entry *e){
+static long counter_getattr_rank(const ht_entry_t *e){
   const int *vv=e->value;
   return !vv?0:
     ((vv[COUNTER_GETATTR_FAIL]+vv[COUNTER_READDIR_FAIL])<<10L)+
@@ -162,8 +158,8 @@ static int info_counts_by_filetype(int n){
   bool done[c];
   memset(done,0,sizeof(done));
   FOR(pass,0,c){
-    const struct ht_entry *x=NULL;
-    struct ht_entry *ee=HT_ENTRIES(&ht_count_by_ext);
+    const ht_entry_t *x=NULL;
+    ht_entry_t *ee=HT_ENTRIES(&ht_count_by_ext);
     RLOOP(i,c){
       if (!done[i] && ee[i].key && (!x || counter_getattr_rank(ee+i) < counter_getattr_rank(x))) x=ee+i;
     }
@@ -230,15 +226,16 @@ static void log_virtual_memory_size(void){
 }
 
 
+
+
 static int log_memusage_ht(int n,const bool html){
   PRINTINFO("%sMemory usage of hash maps%s%s\n",BEGIN_H1(html),END_H1(html),BEGIN_PRE(html));
-#define M(ht) n+=ht_report_memusage_to_strg(_info_sprint_address(n), _info_sprint_max(n),ht,html)
+#define M(ht) n+=ht_report_memusage(n,ht,html)
   M(NULL);
   FOR(i,0,9){
-    struct ht *ht=
-      IF1(WITH_STAT_CACHE, i==0?&stat_ht:)
+    ht_t *ht=
       IF1(WITH_ZIPINLINE_CACHE, i==1?&ht_zinline_cache_vpath_to_zippath:)
-      IF1(WITH_AUTOGEN,i==2?&ht_fsize:)
+      IF1(WITH_FILECONVERSION,i==2?&ht_fsize:)
       i==3?&ht_intern_fileext:
       i==4?&ht_count_by_ext:
       i==5?&_ht_valid_chars:
@@ -252,24 +249,25 @@ static int log_memusage_ht(int n,const bool html){
     M(NULL);
     FOR(i,0,12){
 #define C(n,ht) i==n?&r->ht:
-      struct ht *ht=
+      ht_t *ht=
         C(0,dircache_queue)
         C(1,dircache_ht)
         C(3,ht_inodes)
         C(4,ht_filetypedata)
 #if WITH_DIRCACHE || WITH_STAT_CACHE
-        C(7,dircache_ht_fname)
-        C(8,dircache_ht_fnamearray)
+        C(7,ht_int_fname)
+        C(8,ht_int_fnamearray)
 #endif
+        IF1(WITH_STAT_CACHE, C(9,stat_ht))
         NULL;
 #undef C
       if (ht) M(ht);
     }
     PRINTINFO("\n");
-    IF1(WITH_DIRCACHE,    n+=mstore_report_memusage_to_strg(_info+n,_info_capacity-n,&r->dircache_mstore));
+        IF1(WITH_DIRCACHE,    n+=mstore_report_memusage(n,&r->dircache_mstore));
   }
   PRINTINFO("\n%sMemory storages%s\n",html?"<B>":ANSI_BOLD,html?"</B>":ANSI_RESET);
-  n+=mstore_report_memusage_to_strg(_info+n,_info_capacity-n, &mstore_persistent);
+  n+=mstore_report_memusage(n,&mstore_persistent);
   PRINTINFO("\n\n%s\n",END_PRE(html));
   return n;
 #undef M
@@ -303,7 +301,7 @@ static int info_malloc(int n,const bool html){
     const long xB=_countersB1[i],yB=i<COUNT_PAIRS_END?_countersB2[i]:0;
     if (x||y){
       if (i<COUNT_PAIRS_END){
-        const char *mark=(x==y||x-y==1&&(i==COUNT_MALLOC_PRELOADFILERAM_TXTBUF||i==COUNT_FHANDLE_CONSTRUCT||i==COUNTm_FHANDLE_ARRAY_MALLOC))?" ":diffMarker;
+        const char *mark=(x==y||x-y==1&&(i==COUNT_MALLOC_PRELOADRAM_TXTBUF||i==COUNT_FHANDLE_CONSTRUCT||i==COUNTm_FHANDLE_ARRAY_MALLOC))?" ":diffMarker;
         if (!header++) PRINTINFO("\n%s%44s %14s %14s %s %20s %20s %s %s\n",html?"<u>":ANSI_UNDERLINE,"ID", "Count","Count release","&#916;","Bytes","Bytes released","&#916;",html?"</u>":ANSI_RESET);
         PRINTINFO("%44s %'14ld %'14ld %s %'20ld %'20ld %s\n", COUNT_S[i], x,y,mark,xB,yB,xB==yB?" ":diffMarker);
       }else{
@@ -335,8 +333,7 @@ static int info_print_open_files(int n, int *fd_count){
         static char proc_path[PATH_MAX+1];
         snprintf(proc_path,PATH_MAX,"/proc/%d/fd/%s",getpid(),dp->d_name);
         const int l=readlink(proc_path,path,255);path[MAX(l,0)]=0;
-        if (cg_endsWith(ENDSWITH_FLAG_PRECEED_SLASH,path,0,SPECIAL_FILES[SFILE_LOG_WARNINGS],SPECIAL_FILES_L[SFILE_LOG_WARNINGS])||
-            !strncmp(path,"/dev/",5)|| !strncmp(path,"/proc/",6) || !strncmp(path,"pipe:",5)) continue;
+        if (!strncmp(path,"/dev/",5)|| !strncmp(path,"/proc/",6) || !strncmp(path,"pipe:",5)) continue;
         PRINTINFO("<LI>%47s %s</LI>\n",proc_path,path);
       }
       closedir(dir);
@@ -446,19 +443,19 @@ static int print_fhandle(int n,const char *title){
 #define K(x) (((1<<10)-1+x)>>10)
   FOR(ir,-1,_fhandle_n){
     const bool isHeader=ir<0;
-    struct fHandle *d=isHeader?NULL:fhandle_at_index(ir);
+     fHandle_t *d=isHeader?NULL:fhandle_at_index(ir);
     if (d && !d->flags) continue;
     PRINTINFO("%s<TR>\n",isHeader?"<THEAD>\n":"");
     R(true,"Path","","%s",!d?"Null":D_VP(d));
     R(true,"Last-access","How many s ago","%'lld s",!d?0:(LLD)(d->accesstime?(t0-d->accesstime):-1));
-#if WITH_PRELOADFILERAM
-    const struct preloadfileram *m=d?d->preloadfileram:NULL;
-    const struct textbuffer *tb=m?m->txtbuf:NULL; // cppcheck-suppress unreadVariable
+#if WITH_PRELOADRAM
+    const struct preloadram *m=d?d->preloadram:NULL;
+    const textbuffer_t *tb=m?m->txtbuf:NULL; // cppcheck-suppress unreadVariable
     R(tb!=NULL,"Cache-ID",        "",                                                     "%05x",!m?0:m->id);
-    R(tb!=NULL,"Cache-read-kB",   "Number of KB already read into cache",                 "%'lld",!m?0:(LLD)K(m->preloadfileram_already));
-    R(tb!=NULL,"Entry-kB",        "Total size of file content",                           "%'lld",!m?0:(LLD)K(m->preloadfileram_l));
-    R(tb!=NULL,"Millisec",        "How long did it take to read file content into cache.","%'lld",!m?0:(LLD)m->preloadfileram_took_mseconds);
-#endif //WITH_PRELOADFILERAM
+    R(tb!=NULL,"Cache-read-kB",   "Number of KB already read into cache",                 "%'lld",!m?0:(LLD)K(m->preloadram_already));
+    R(tb!=NULL,"Entry-kB",        "Total size of file content",                           "%'lld",!m?0:(LLD)K(m->preloadram_l));
+    R(tb!=NULL,"Millisec",        "How long did it take to read file content into cache.","%'lld",!m?0:(LLD)m->preloadram_took_mseconds);
+#endif //WITH_PRELOADRAM
     const bool locked=d && pthread_mutex_trylock(&d->mutex_read);
     if (d && !locked) pthread_mutex_unlock(&d->mutex_read);
     const char *status_descr="<UL><LI>(D)elete indicates that it is marked for closing</LI>"
@@ -466,10 +463,10 @@ static int print_fhandle(int n,const char *title){
     "<LI>(L)ocked: Cannot be released. Two reasons:"
     "<OL><LI>xmp_read() is currently run</LI><LI>The cache is needed by another file descriptor  with the same virtual path.</LI></OL>"
     "</UL>";
-    R(true,"Status",status_descr,"%c%c%c",locked?'L':' ',(d->flags&FHANDLE_FLAG_DESTROY_LATER)?'D':' ', fhandle_currently_reading_writing(d)?'K':' ');
+    R(true,"Status",status_descr,"%c%c%c",locked?'L':' ',(d->flags&FHANDLE_DESTROY_LATER)?'D':' ', fhandle_currently_reading_writing(d)?'K':' ');
     R(true,"Busy","Number of threads in currently in xmp_read()",  "%d",d->is_busy);
 #if WITH_TRANSIENT_ZIPENTRY_CACHES
-    const struct ht *ht=d?d->ht_transient_cache:NULL;
+    const ht_t *ht=d?d->ht_transient_cache:NULL;
     R(ht!=NULL,"Transient-cache","Number of cached paths, count fetched non-existing paths, count fetched existing","%'u %d %d", ht->length, ht->client_value_int[0], ht->client_value_int[1]);
 #endif //WITH_TRANSIENT_ZIPENTRY_CACHES
     END_HR();
@@ -485,7 +482,6 @@ static int print_fhandle(int n,const char *title){
 #define MAKE_INFO_ALL (1<<2)
 
 static int print_all_info(const int flags){
-  //log_entered_function("print_all_info _info_capacity=%d \n",_info_capacity);
   int n=0;
   const bool html=flags&MAKE_INFO_HTML;
   if (html){
@@ -518,20 +514,38 @@ TD {text-align:right;}\n\
     LOCK(mutex_fhandle,n=print_fhandle(n,""));
     //    n=print_maps(n);
     PRINTINFO("<HR><H1>Cache</H1>");
-    PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",  IF01(WITH_PRELOADFILERAM,"!WITH_PRELOADFILERAM",WHEN_PRELOADFILERAM_S[_preloadfileram_policy]));
+    PRINTINFO("Policy for caching ZIP entries: %s<BR>\n",  IF01(WITH_PRELOADRAM,"!WITH_PRELOADRAM",WHEN_PRELOADRAM_S[_preloadram_policy]));
     //  PRINTINFO("_cumul_time_store=%lf\n<BR>",((double)_cumul_time_store)/CLOCKS_PER_SEC);
     LOCK(mutex_fhandle,n=info_counts_by_filetype(n));
     LOCK(mutex_fhandle,n=info_counts_by_filetype_by_root(n));
   }
   // n=log_memusage_ht(n,html);
+  //log_debug_now("info_malloc n:%d  capacity:%d  max:%d addr:%p",n, _info_capacity, _info_sprint_max(n), _info_sprint_address(n));
   n=info_malloc(n,html);
   n=info_mutex_locks(n,html);
 
   if (html) PRINTINFO("</BODY>\n</HTML>\n");
-  if (_info && n<_info_capacity) _info[n]=0;
   return n+1;
 }
 
+static bool make_info(const int flags){
+  log_entered_function("");
+  cg_thread_assert_locked(mutex_special_file);
+  _info_get_size=true;
+  int l=print_all_info(flags);
+  log_verbose("_info_capacity: %d l: %d",_info_capacity,l);
+  l+=3333;
+  if (l>_info_capacity){
+    free_untracked(_info);
+    if (!(_info=calloc_untracked(_info_capacity=l,1))){
+      warning(WARN_MALLOC|WARN_FLAG_EXIT,_dot_ZIPsFS,"%s realloc failed.\n",SFILE_NAMES[SFILE_INFO]);
+      return false;
+    }
+  }
+  _info_get_size=false;
+  print_all_info(flags);
+  return true;
+}
 #if 0 // Currently not needed
 static void info_fuse_process(void){
   if (!has_proc_fs()) return;
@@ -562,12 +576,17 @@ static const char *zip_fdopen_err(int err){
   return "zip_fdopen - Unknown error";
 #undef ZIP_FDOPEN_ERR
 }
-static void fhandle_log_cache(const struct fHandle *d){
+static void fhandle_log_cache(const fHandle_t *d){
   if (!d){ log_char('\n');return;}
   ASSERT_LOCKED_FHANDLE();
-  const struct preloadfileram *m=d->preloadfileram;
-  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %lld/%lld   hasc: %s\n",d,D_VP(d),yes_no(m && m->txtbuf),!m?0:PRELOADFILERAM_STATUS_S[m->preloadfileram_status],(LLD)(!m?-1:m->preloadfileram_already),(LLD)(!m?-1:m->preloadfileram_l),yes_no(m && m->preloadfileram_l>0));
+  const struct preloadram *m=d->preloadram;
+  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %lld/%lld   hasc: %s\n",d,D_VP(d),yes_no(m && m->txtbuf),!m?0:PRELOADRAM_STATUS_S[m->preloadram_status],(LLD)(!m?-1:m->preloadram_already),(LLD)(!m?-1:m->preloadram_l),yes_no(m && m->preloadram_l>0));
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/// Generate comprehensive HTML report about the inner state of this FUSE file system ///
+/////////////////////////////////////////////////////////////////////////////////////////
+
 #endif //0
 
 #undef R

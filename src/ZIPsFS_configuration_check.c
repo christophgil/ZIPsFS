@@ -26,7 +26,7 @@
   T(WITH_TESTING_REALLOC,== 0);\
   T(WITH_PTHREAD_LOCK,== 1);\
   T(WITH_ZIPENTRY_PLACEHOLDER,== 1);\
-  T(WITH_PRELOADFILEDISK,== 1);\
+  T(WITH_PRELOADDISK,== 1);\
   T(WITH_CCODE,== 1);\
   T(WITH_INTERNET_DOWNLOAD,== 1);
 
@@ -39,7 +39,7 @@
 
 #define CHECK_CACHES_ON()\
   T(WITH_DIRCACHE,== 1);\
-  T(WITH_PRELOADFILERAM,== 1);\
+  T(WITH_PRELOADRAM,== 1);\
   T(WITH_ZIPINLINE_CACHE,== 1);\
   T(WITH_STAT_CACHE,== 1);\
   T(WITH_TRANSIENT_ZIPENTRY_CACHES,== 1)
@@ -53,12 +53,13 @@ static bool check_configuration1(){
   T(WITH_ZIPINLINE,== 1);
   T(WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,== 0);
   T(WITH_ZIPENTRY_PLACEHOLDER,== 1);
-  T(WITH_AUTOGEN,== 1);
+  T(WITH_FILECONVERSION,== 1);
   T(WITH_CCODE,== 1);
   T(WITH_INTERNET_DOWNLOAD,== 1);
   T(WITH_POPEN_NOSHELL,== 0);
   T(READDIR_TIMEOUT_SECONDS,> 9);
   T(WITH_ZIPENTRY_PLACEHOLDER,== 1);
+  T(DEBUG_THROTTLE_DOWNLOAD,==0);
   return warn;
 }
 #if !(defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0)
@@ -71,7 +72,7 @@ static bool check_configuration(const char *mnt){
     const char *M="/s-mcpb-ms03/union/.mountpoints/is/";
     if (!strncmp(m,M,strlen(M))){
       log_verbose("Recognized mount-point %s",M);
-      T(WITH_AUTOGEN,== 0);
+      T(WITH_FILECONVERSION,== 0);
       T(WITH_ZIPINLINE,== 1);
     }
   }
@@ -95,11 +96,6 @@ static bool check_configuration(const char *mnt){
 
   if (_root_writable){
     #define EXPLAIN_WRITABLE "The first upstream root is writable.'nIf an empty string is given as first root, it will not be possible to store files in the virtual file system.\n"
-    if(_root_writable->retain_dirname_l){
-      fprintf(stderr,"%s"RED_WARNING"The first root retains the path component '%s'\n"
-              "Writing files will not work. This can be fixed by adding a terminal slash: '%s"ANSI_FG_RED"/"ANSI_RESET".'\n\n",EXPLAIN_WRITABLE,_root_writable->retain_dirname,_root_writable->rootpath);
-      warn=true;
-    }
     if (_root_writable->remote){
       fprintf(stderr,"%sThe leading double slash indicates a remote path which is probably not intended\n",EXPLAIN_WRITABLE);
       warn=true;
@@ -108,7 +104,7 @@ static bool check_configuration(const char *mnt){
     warn=true;
     fprintf(stderr,"The first root-path is an empty string.\n%s\n",EXPLAIN_WRITABLE);
   }
-  IF1(WITH_AUTOGEN,if (!cg_is_member_of_group("docker")){ log_warn(HINT_GRP_DOCKER); warn=true;});
+  IF1(WITH_FILECONVERSION,if (!cg_is_member_of_group("docker")){ log_warn(HINT_GRP_DOCKER); warn=true;});
   return warn;
 }
 #else //__INCLUDE_LEVEL__
