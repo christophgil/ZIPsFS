@@ -275,6 +275,7 @@ Options for the FUSE system  come after the **colon** in the command line.
 **-o allow_other**
 Other users are granted access.
 
+The last argument is the mount point which is an empty folder.
 
 
 ## Special directory prefixes
