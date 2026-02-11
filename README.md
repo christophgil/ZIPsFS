@@ -295,9 +295,13 @@ Alternatively, properties can be written in a file ``<property-path>.ZIPsFS.prop
 List (Incomplete) of root path properties:
 
 - ``path-prefix=dir/subdir/subsubdir``  Files in this root are accessible  with paths starting with  <mount-point>/dir/subdir/subsubdir/. The last path component of the mount point can be set as path prefix simply by omitting the trailing slash.
-- ``one-file-system=1``   Mount points or  symbolic links expanded in ZIPsFS can point outside this file system.  This is prevented with this  property. Consider this
-  property when the ZIPsFS file system is accessible from other computers.
-- ``follow-symlinks=1`` Symlinks are expanded within ZIPsFS. Dangerous! Consider combining with ``@one-file-system=1``.
+- ``one-file-system=1``   Mount points or  symbolic links expanded in ZIPsFS can lead outside this file system and may expose sensitive files.
+   With this  property, only files of the same file system will be shown. Nested mount points will be hidden.  Consider this
+  property when the ZIPsFS file system is exported.
+- ``follow-symlinks=1`` Symlinks are expanded within ZIPsFS. Dangerous! Consider combining with
+  ``@one-file-system=1``. Expansion of symlinks with targets (realpath) outside the root path is controled by the configurable function
+  ``config_allow_expand_symlink(orig_path,expanded_path)``.
+
 - ``immutable=1``  In the respective file tree, no files are changed, deleted or created. This optimizes caching. Cached file attributs and listings will not expire.
 - ``worm=1``       File tree is write-once-read-many. Same consequence as above.
 - ``preload=1``    Before reading file content,  files are downloaded to the first file tree. Useful for remote files.
@@ -343,29 +347,6 @@ Alternatively, the entire root-path can be marked for preloading with the proper
 Decompression is enabled with properties like ``@preload-gz``
 
 </details>
-
-<details><summary>Security: Symbolic links and mount points</summary>
-
-
-When the FUSE file system is exported via NFS or Samba, navigation into forbiddeden folders  such as ``/etc/passwd`` needs to be prevented.
-Symbolic links and mount points could direct into other file systems.
-
-Even though symbolic links can be created in the virtual file system and work as expected, on the local machine, they are normally not expanded inside ZIPsFS and
-the target may not be visible through NFS or SMB.
-
-In rare cases symbolic links need to be expanded in ZIPsFS. In this case the respective root-path
-need the property ``follow-symlinks=1``.  Either this is added as a line to a textfile with a path
-formed by appending ``.ZIPsFS.properties`` to the root-path or with a command line parameter
-``@follow-symlinks=1`` after the root-path.
-
-Expansion of symlinks is performed only if the target is within the given file trees or if the
-configurable function ``config_allow_expand_symlink(orig_path,expanded_path)`` returns true.
-
-
-Users may expose sensitive files by creating an empty folder as mount point and running ``bindfs /etc   created-empty-folder``.
-Redirection can be prevented by adding the property ``one-file-system=1``.
-
-
 
 
 <details><summary>Project status</summary>

@@ -411,14 +411,17 @@ The last path component of the mount point can be set as path prefix
 simply by omitting the trailing slash.
 .IP \[bu] 2
 \f[V]one-file-system=1\f[R] Mount points or symbolic links expanded in
-ZIPsFS can point outside this file system.
-This is prevented with this property.
-Consider this property when the ZIPsFS file system is accessible from
-other computers.
+ZIPsFS can lead outside this file system and may expose sensitive files.
+With this property, only files of the same file system will be shown.
+Nested mount points will be hidden.
+Consider this property when the ZIPsFS file system is exported.
 .IP \[bu] 2
 \f[V]follow-symlinks=1\f[R] Symlinks are expanded within ZIPsFS.
 Dangerous!
 Consider combining with \f[V]\[at]one-file-system=1\f[R].
+Expansion of symlinks with targets (realpath) outside the root path is
+controled by the configurable function
+\f[V]config_allow_expand_symlink(orig_path,expanded_path)\f[R].
 .IP \[bu] 2
 \f[V]immutable=1\f[R] In the respective file tree, no files are changed,
 deleted or created.
@@ -484,33 +487,6 @@ The Readme in these folders provide further information.
 Alternatively, the entire root-path can be marked for preloading with
 the property \f[V]\[at]preload\f[R].
 Decompression is enabled with properties like \f[V]\[at]preload-gz\f[R]
-Security: Symbolic links and mount points
-.PP
-When the FUSE file system is exported via NFS or Samba, navigation into
-forbiddeden folders such as \f[V]/etc/passwd\f[R] needs to be prevented.
-Symbolic links and mount points could direct into other file systems.
-.PP
-Even though symbolic links can be created in the virtual file system and
-work as expected, on the local machine, they are normally not expanded
-inside ZIPsFS and the target may not be visible through NFS or SMB.
-.PP
-In rare cases symbolic links need to be expanded in ZIPsFS.
-In this case the respective root-path need the property
-\f[V]follow-symlinks=1\f[R].
-Either this is added as a line to a textfile with a path formed by
-appending \f[V].ZIPsFS.properties\f[R] to the root-path or with a
-command line parameter \f[V]\[at]follow-symlinks=1\f[R] after the
-root-path.
-.PP
-Expansion of symlinks is performed only if the target is within the
-given file trees or if the configurable function
-\f[V]config_allow_expand_symlink(orig_path,expanded_path)\f[R] returns
-true.
-.PP
-Users may expose sensitive files by creating an empty folder as mount
-point and running \f[V]bindfs /etc   created-empty-folder\f[R].
-Redirection can be prevented by adding the property
-\f[V]one-file-system=1\f[R].
 Project status
 .PP
 Author: Christoph Gille
