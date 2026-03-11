@@ -225,10 +225,9 @@ find_bugs(){
 ### main function  ###
 ######################
 main(){
-
 		mkdir -p $DIR/tmp
 		local f
-		for f in include_*; do
+		for f in $DIR/include_*; do
 				local c=$DIR/tmp/$f.c
 				if [[ ! ( $c -nt $f && $c -nt $SRC ) ]]; then
 						echo "Update $c" >&2
