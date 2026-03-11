@@ -228,7 +228,7 @@ main(){
 		mkdir -p $DIR/tmp
 		local f
 		for f in $DIR/include_*; do
-				local c=$DIR/tmp/$f.c
+				local c=$DIR/tmp/${f##*/}.c
 				if [[ ! ( $c -nt $f && $c -nt $SRC ) ]]; then
 						echo "Update $c" >&2
 						{ sed -e '/#FILTER_OUT/d' -e '/^#/d' -e $'y|\t| |' -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/;s/$/\\n"/' $f;echo ';'; } > $c.$$.tmp && mv $c.$$.tmp $c
