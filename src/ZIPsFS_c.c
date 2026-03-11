@@ -25,7 +25,7 @@ typedef textbuffer_t** c_read_handle_t;
 #undef C
 #undef X
 
-#define C_FLAGS_FROM_ZPATH()   (ZPATH_IS_FILECONVERSION()?ZIPSFS_C_IS_DIR_A:0)
+#define C_FLAGS_FROM_ZPATH(zpath)   (ZPATH_IS_FILECONVERSION(zpath)?ZIPSFS_C_IS_DIR_A:0)
 static int c_from_exec_output(textbuffer_t **bb,const uint8_t flags,const char *cmd[],const char *env[]){
   return textbuffer_from_exec_output((flags&ZIPSFS_C_MMAP)?TXTBUFSGMT_MUNMAP:0,
                                      _zipsfs_c_init_tb(bb),
@@ -60,15 +60,8 @@ static bool c_file_content_to_fhandle(fHandle_t *d){
   if (!(d->flags&FHANDLE_IS_CCODE)) return false;
   const zpath_t *zpath=&d->zpath;
   textbuffer_t *bb[1]={0};
-  if (!config_c_read(bb,C_FLAGS_FROM_ZPATH(),VP(), VP_L())) return false;
-  lock(mutex_fhandle);
-  if (!fhandle_set_text(d,bb[0])){
-    FREE_NULL_MALLOC_ID(bb[0]);
-  }else{
-    IF1(WITH_PRELOADRAM,d->preloadram->txtbuf=bb[0];preloadram_set_status(d,preloadram_done));
-    d->flags|=FHANDLE_PRELOADRAM_COMPLETE;
-  }
-  unlock(mutex_fhandle);
+  if (!config_c_read(bb,C_FLAGS_FROM_ZPATH(zpath),VP(),VP_L()) || !bb[0]) return false;
+  fhandle_set_text_or_free(d,bb[0]);
   return true;
 }
 static bool c_readdir(const zpath_t *zpath,void *buf, fuse_fill_dir_t filler,ht_t *no_dups){
@@ -76,13 +69,13 @@ static bool c_readdir(const zpath_t *zpath,void *buf, fuse_fill_dir_t filler,ht_
   bool isDirectory[1], ok=false;
   FOR(i,0,ZIPSFS_C_MAX_NUM){
     *fname=0;
-    if (!config_c_readdir(C_FLAGS_FROM_ZPATH(),VP(),VP_L(),i,fname,MAX_PATHLEN,isDirectory)) break;
+    if (!config_c_readdir(C_FLAGS_FROM_ZPATH(zpath),VP(),VP_L(),i,fname,MAX_PATHLEN,isDirectory)) break;
     if (*fname){
       ok=true;
       struct stat st={0};
       stat_init(&st,*isDirectory?-1:0,NULL);
       st.st_ino=inode_from_virtualpath(VP(),VP_L());
-      filler_add(0,filler,buf, fname,0, &st,NULL /*no_dups*/);
+      filler_add(0,filler,buf, fname,0,ZPATH_FILLDIR_SFX(zpath) ,&st,NULL /*no_dups*/);
     }
   }
   return ok;

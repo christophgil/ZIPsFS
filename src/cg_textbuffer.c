@@ -63,8 +63,8 @@ static int textbuffer_char_at(const textbuffer_t *b, const off_t pos){
   int i=b->n-1;
   while(--i>=0 && pos<_TXTBFFR_E(b,i));
   if (i>=0){
-    const int j=pos-_TXTBFFR_E(b,i);
-    if (j>=0 && pos<_TXTBFFR_E(b,i+1)) return _TXTBFFR_S(b,i+1)[j];
+	const int j=pos-_TXTBFFR_E(b,i);
+	if (j>=0 && pos<_TXTBFFR_E(b,i+1)) return _TXTBFFR_S(b,i+1)[j];
   }
   return -1;
 }
@@ -77,21 +77,21 @@ static off_t _textbuffer_copy_to_or_compare(const bool isCopy,const textbuffer_t
   if (from>=to) return 0;
   off_t f0=0,count=0;
   FOR(i,0,b->n){
-    const off_t e0=_TXTBFFR_E(b,i);
-    if (e0>from){
-      const off_t f=MAX(f0,from),t=MIN(e0,to);
-      if (f>=to) break;
-      if (t>f){
-        if (isCopy){
-          //assert(f-from+t-f<=to);
-          memcpy(dst+f-from, _TXTBFFR_S(b,i)+(f-f0),t-f);
-        }else{
-          if (memcmp(dst+f-from,_TXTBFFR_S(b,i)+(f-f0),t-f)) return 1;
-        }
-        count+=(t-f);
-      }
-    }
-    f0=e0;
+	const off_t e0=_TXTBFFR_E(b,i);
+	if (e0>from){
+	  const off_t f=MAX(f0,from),t=MIN(e0,to);
+	  if (f>=to) break;
+	  if (t>f){
+		if (isCopy){
+		  //assert(f-from+t-f<=to);
+		  memcpy(dst+f-from, _TXTBFFR_S(b,i)+(f-f0),t-f);
+		}else{
+		  if (memcmp(dst+f-from,_TXTBFFR_S(b,i)+(f-f0),t-f)) return 1;
+		}
+		count+=(t-f);
+	  }
+	}
+	f0=e0;
   }
   //assert(count==(MIN_long(to,textbuffer_length(b))-from));
   return isCopy?count:0;
@@ -118,11 +118,11 @@ static void _free_or_munmap(const int flags,const void *p,const off_t size){
 
 static bool _textbuffer_assert_capacity(textbuffer_t *b,const int n){
   if (n>=TEXTBUFFER_DIM_STACK && n>=b->capacity){
-    const int c=b->capacity=(n<<2);
+	const int c=b->capacity=(n<<2);
 #define C(f) assert(b->f!=b->_onstack##f); if (!(b->f=cg_realloc_array(COUNT_TXTBUF_SEGMENT_MALLOC, sizeof(*b->f), b->f, n, c))) return false;
-    C(_segment);
-    C(_segment_e);
-    C(_segment_flags);
+	C(_segment);
+	C(_segment_e);
+	C(_segment_flags);
 #undef C
   }
   return true;
@@ -131,17 +131,17 @@ static int textbuffer_add_segment(const uint8_t flags,textbuffer_t *b, const cha
   if (!b || !bytes) return -1;
   const off_t size=size_or_zero?size_or_zero:strlen(bytes);
   if (flags&TXTBUFSGMT_DUP){
-    bytes=COPY_TO_HEAP(COUNT_TXTBUF_SEGMENT_MALLOC,bytes,size);
-    //textbuffer_memusage(0,size);
+	bytes=COPY_TO_HEAP(COUNT_TXTBUF_SEGMENT_MALLOC,bytes,size);
+	//textbuffer_memusage(0,size);
   }
   if (b->max_length && textbuffer_length(b)+size>b->max_length) goto enomem;
   const int n=b->n++;
   if (!_textbuffer_assert_capacity(b,n)) goto enomem;
   const off_t length=(n?_TXTBFFR_E(b,n-1):0);
   if (size>0){
-    _TXTBFFR_E(b,n)=length+size;
-    _TXTBFFR_S(b,n)=(char*)bytes;
-    _TXTBFFR_F(b,n)=flags;
+	_TXTBFFR_E(b,n)=length+size;
+	_TXTBFFR_S(b,n)=(char*)bytes;
+	_TXTBFFR_F(b,n)=flags;
   }
   return 0;
  enomem:
@@ -155,35 +155,70 @@ static int textbuffer_add_segment(const uint8_t flags,textbuffer_t *b, const cha
   TEXTBUFFER_SET_ENOMEM(b);
   return ENOMEM;
 }
-static char *textbuffer_malloc(const int flags,textbuffer_t *b, off_t size){
+
+static char *textbuffer_malloc(int flags,textbuffer_t *b, off_t size){
   char *buf=malloc_or_mmap(flags,size);
   if (buf && textbuffer_add_segment(flags,b,buf,size)) return NULL;
   TEXTBUFFER_SET_ENOMEM(b);
   return buf;
 }
 
+static off_t textbuffer_read_lines(uint8_t flags,textbuffer_t *b,const int fd){
+  flags&=~(TXTBUFSGMT_MUNMAP|TXTBUFSGMT_DUP);
+  FILE *f=fdopen(fd,"r");
+  char *line=NULL;
+  size_t line_l=0;
+  off_t count=0;
+  for(ssize_t n; (n=getline(&line,&line_l,f))!=-1; ){
+	if (flags&TXTBUFSGMT_READ_LINES_TRIMR){
+	  while(n>0 && isspace(line[n-1])) n--;
+	}else{
+	  while(n>0 && (line[n-1]=='\r'||line[n-1]=='\n')) n--;
+	}
+	if (!n){
+	  textbuffer_add_segment(TXTBUFSGMT_NO_FREE,b,"\n",1);
+	}else{
+	  char *buf=malloc_or_mmap(flags,n+2);
+	  memcpy(buf,line,n);
+	  buf[n]='\n';
+	  buf[n+1]=0;
+	  textbuffer_add_segment(flags,b,buf,n+1);
+	}
+	count+=n+1;
+  }
+  free_untracked(line);
+  fclose(f);
+  return count;
+}
+
+
+
 static off_t textbuffer_read(const uint8_t flags,textbuffer_t *b,const int fd){
+  if (flags&TXTBUFSGMT_READ_LINES) return textbuffer_read_lines(flags,b,fd);
   const int blocksize=b->read_bufsize?b->read_bufsize:1024*1024;
   off_t count=0;
+
+
   while(true){
-    char *buf=malloc_or_mmap(flags,blocksize);
-    if (!buf){
-      TEXTBUFFER_SET_ENOMEM(b);
-      break;
-    }
-    const ssize_t n=read(fd,buf,blocksize);
-    if (n<=0){ free_or_munmap(flags,buf,blocksize); break;}
-    count+=n;
-    if (n!=blocksize){
-      char *buf2=malloc_or_mmap(flags,n);
-      assert(buf2);
-      memcpy(buf2,buf,n);
-      free_or_munmap(flags,buf,blocksize);
-      buf=buf2;
-    }
-    textbuffer_add_segment(flags,b,buf,n);
+	char *buf=malloc_or_mmap(flags,blocksize);
+	if (!buf){
+	  TEXTBUFFER_SET_ENOMEM(b);
+	  break;
+	}
+	const ssize_t n=read(fd,buf,blocksize);
+	if (n<=0){ free_or_munmap(flags,buf,blocksize); break;}
+	count+=n;
+	if (n!=blocksize){
+	  char *buf2=malloc_or_mmap(flags,n);
+	  assert(buf2);
+	  memcpy(buf2,buf,n);
+	  free_or_munmap(flags,buf,blocksize);
+	  buf=buf2;
+	}
+	textbuffer_add_segment(flags,b,buf,n);
   }
   close(fd);
+
   return count;
 }
 //static int textbuffer_from_exec_output(const uint8_t flags,textbuffer_t *b,char const * const cmd[],char const * const env[], const char *path_stderr){
@@ -196,15 +231,15 @@ static int textbuffer_from_exec_output(const uint8_t flags,textbuffer_t *b, cons
   if (!cg_recursive_mk_parentdir(path_stderr)) path_stderr=NULL;
   if (pid<0){ log_errno("fork() returned %d",pid); return EIO;}
   if (pid){
-    close(pipefd[1]);
-    textbuffer_read(flags,b,pipefd[0]);
-    int status;
-    return (b->flags&TEXTBUFFER_ENOMEM)?ENOMEM:waitpid(pid,&status,0),cg_log_waitpid(pid,status,path_stderr,false,cmd,env);
+	close(pipefd[1]);
+	textbuffer_read(flags,b,pipefd[0]);
+	int status;
+	return (b->flags&TEXTBUFFER_ENOMEM)?ENOMEM:waitpid(pid,&status,0),cg_log_waitpid(pid,status,path_stderr,false,cmd,env);
   }else{
-    close(pipefd[0]);
-    const int fd_err=!path_stderr?-1:open(path_stderr,O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR);
-    cg_exec(cmd,env,0,pipefd[1],fd_err);
-    if (fd_err>0) close(fd_err);
+	close(pipefd[0]);
+	const int fd_err=!path_stderr?-1:open(path_stderr,O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR);
+	cg_exec(cmd,env,0,pipefd[1],fd_err);
+	if (fd_err>0) close(fd_err);
   }
   log_errno("After execvp should not happen\n");
   return -1;
@@ -213,13 +248,13 @@ static void textbuffer_reset(textbuffer_t *b){
   if (!b) return;
   off_t e1=0;
   FOR(i,0,b->n){
-    const off_t e=_TXTBFFR_E(b,i), n=e-e1;
-    e1=e;
-    const uint8_t f=_TXTBFFR_F(b,i);
-    if (!(f&TXTBUFSGMT_NO_FREE)){
-      free_or_munmap(f,_TXTBFFR_S(b,i),n);  /* No free for  strings constants */
-    }
-    if (i>=TEXTBUFFER_DIM_STACK) b->_segment[i]=NULL;
+	const off_t e=_TXTBFFR_E(b,i), n=e-e1;
+	e1=e;
+	const uint8_t f=_TXTBFFR_F(b,i);
+	if (!(f&TXTBUFSGMT_NO_FREE)){
+	  free_or_munmap(f,_TXTBFFR_S(b,i),n);  /* No free for  strings constants */
+	}
+	if (i>=TEXTBUFFER_DIM_STACK) b->_segment[i]=NULL;
   }
   b->capacity=b->n=0;
 }
@@ -233,27 +268,36 @@ static char *textbuffer_first_segment_with_min_capacity(const int flags,textbuff
 
 static void textbuffer_destroy(textbuffer_t *b){
   if (b && !(b->flags&TEXTBUFFER_DESTROYED)){
-    b->flags|=TEXTBUFFER_DESTROYED;
-    textbuffer_reset(b);
+	b->flags|=TEXTBUFFER_DESTROYED;
+	textbuffer_reset(b);
 #define C(f) assert(b->f!=b->_onstack##f); /*log_debug_now("Going free %p",b->f);*/ cg_free_null(COUNT_TXTBUF_SEGMENT_MALLOC,b->f);
-    C(_segment);
-    C(_segment_e);
-    C(_segment_flags);
+	C(_segment);
+	C(_segment_e);
+	C(_segment_flags);
 #undef C
   }
 }
-static bool textbuffer_write_fd(textbuffer_t *b,const int fd){
+static bool textbuffer_write_fd(const textbuffer_t *b,const int fd){
   if (!b) return false;
   off_t e1=0;
   FOR(i,0,b->n){
-    const off_t e=_TXTBFFR_E(b,i), n=e-e1;
-    e1=e;
-    assert(n>0);
-    if (!cg_fd_write(fd,_TXTBFFR_S(b,i),n)) return false;
+	const off_t e=_TXTBFFR_E(b,i), n=e-e1;
+	e1=e;
+	ASSERT(n>0);
+	if (!cg_fd_write(fd,_TXTBFFR_S(b,i),n)) return false;
   }
   return true;
 }
-static bool textbuffer_write_file(textbuffer_t *b,const char *path,const int mode){
+
+static char *textbuffer_get_line(const textbuffer_t *b,int i){
+  if (!b || i<0 || i>=b->n) return NULL;
+  return _TXTBFFR_S(b,i);
+}
+
+
+
+
+static bool textbuffer_write_file(const textbuffer_t *b,const char *path,const int mode){
   const int fd=open(path,O_WRONLY|O_CREAT|O_TRUNC,mode);
   if (fd<0){ log_errno("open(\"%s\",O_WRONLY|O_CREAT|O_TRUNC)",path); return false;}
   textbuffer_write_fd(b,fd);
@@ -261,12 +305,13 @@ static bool textbuffer_write_file(textbuffer_t *b,const char *path,const int mod
   return true;
 }
 
-static int textbuffer_differs_from_filecontent_fd(const textbuffer_t *b,const int fd){
+static int textbuffer_differs_from_filecontent_fd(const textbuffer_t *b,const int fd, const char *path){
+  log_entered_function("path:'%s'  len:%ld",path,textbuffer_length(b));
   char buf[4096];
   int n;
   long pos=0;
   for(;(n=read(fd,buf,sizeof(buf)))>0;pos+=n){
-    if (textbuffer_differs_from_string(b,pos,pos+n,buf)) return 1;
+	if (textbuffer_differs_from_string(b,pos,pos+n,buf)) return 1;
   }
   if (n<0) log_errno("read(fd,...)");
   return n<0||pos<textbuffer_length(b)?-1:0;
@@ -277,17 +322,18 @@ static int textbuffer_differs_from_filecontent_fd(const textbuffer_t *b,const in
 
 
 static int exec_on_file(const int opts,const enum enum_exec_on_file type, char *output, const int output_max, const char *path ){
+  log_entered_function("type:%d path:%s",type,path);
 #define C(p) cmd[i++]=p
   textbuffer_t b={0};
   const char *cmd[9];
   {
-  int i=0;
-  switch(type){
-  case EXECF_MOUNTPOINT_USING_DF: C("df"); C(path); break;
-  case EXECF_MOUNTPOINT_USING_FINDMNT: C("findmnt"); C("-n"); C("-o"); C("TARGET"); C("--target"); C(path); break;
-  default: return -1;
-  }
-  C(NULL);
+	int i=0;
+	switch(type){
+	case EXECF_MOUNTPOINT_USING_DF: C("df"); C(path); break;
+	case EXECF_MOUNTPOINT_USING_FINDMNT: C("findmnt"); C("-n"); C("-o"); C("TARGET"); C("--target"); C(path); break;
+	default: return -1;
+	}
+	C(NULL);
   }
 #undef C
   textbuffer_reset(&b);
@@ -298,24 +344,24 @@ static int exec_on_file(const int opts,const enum enum_exec_on_file type, char *
   int pathB=0, pathE=0;
   bool prevSpc=type!=EXECF_MOUNTPOINT_USING_DF;
   FOR(i,0,len){
-    const char c=output[i];
-    const bool spc=(c==' '), lf=(c=='\n');
-    if (prevSpc && c=='/'){
-      if (!pathB) pathB=i+1;
-    }
-    if (spc||lf){
-      if (pathB && !pathE) pathE=i+1;
-    }
-    prevSpc=spc;
+	const char c=output[i];
+	const bool spc=(c==' '), lf=(c=='\n');
+	if (prevSpc && c=='/'){
+	  if (!pathB) pathB=i+1;
+	}
+	if (spc||lf){
+	  if (pathB && !pathE) pathE=i+1;
+	}
+	prevSpc=spc;
   }/*for*/
   if (pathB && !pathE) pathE=len;
   const char *src=NULL;
   char *dst=NULL;
   if (type==EXECF_MOUNTPOINT_USING_FINDMNT || type==EXECF_MOUNTPOINT_USING_DF){
-    if (!pathB) return (*output=0);
-    src=output+pathB-1;
-    dst=output;
-    len=pathE-pathB;
+	if (!pathB) return (*output=0);
+	src=output+pathB-1;
+	dst=output;
+	len=pathE-pathB;
   }
   if (dst && src>dst) while ((*dst++=*src++));
   output[len]=0;
@@ -331,7 +377,7 @@ static void test_ps_pid(const int pid){
   char spid[99];
   sprintf(spid,"%d",pid);
   //char const * const cmd[]={"ps","-p",spid,NULL};
-    const char *cmd[]={"ps","-p",spid,NULL};
+  const char *cmd[]={"ps","-p",spid,NULL};
 
   textbuffer_t b={0};
   textbuffer_reset(&b);
@@ -344,8 +390,8 @@ static void test_ps_pid(const int pid){
 static void test_write_byte_by_byte(const textbuffer_t *b){
   const off_t l=textbuffer_length(b);
   FOR(i,0,l){
-    const char c=textbuffer_char_at(b,i);
-    putchar(c<0?'!':c);
+	const char c=textbuffer_char_at(b,i);
+	putchar(c<0?'!':c);
   }
 }
 static void test_write_bytes_block(const int fd,const textbuffer_t *b){
@@ -353,35 +399,35 @@ static void test_write_bytes_block(const int fd,const textbuffer_t *b){
   char buf[BUF];
   const off_t l=textbuffer_length(b);
   for(off_t i=0;i<l-BUF-1;i+=BUF){
-    const int n=textbuffer_copy_to(b,i,i+BUF,buf);
-    if (fd>=0) write(fd,buf,n);
+	const int n=textbuffer_copy_to(b,i,i+BUF,buf);
+	if (fd>=0) write(fd,buf,n);
   }
 #undef BUF
 }
 static void test_exec(void){
   FOR(i,0,EXECF_NUM){
-    char output[4444]={0};
-    FOR(k,0,2){
-      const char *dir=k?"/var/log":"/etc/fstab";
-      exec_on_file(0,i,output,sizeof(output)-1,dir);
-      printf("type: %d   %s -> output='%s';\n",i,dir,output);
-    }
+	char output[4444]={0};
+	FOR(k,0,2){
+	  const char *dir=k?"/var/log":"/etc/fstab";
+	  exec_on_file(0,i,output,sizeof(output)-1,dir);
+	  printf("type: %d   %s -> output='%s';\n",i,dir,output);
+	}
   }
 }
 
 static void _argc_n(const int n, const int argc){
   if (argc!=n+1){
-    fprintf(stderr,"Need %d parameters\n",n);
-    exit(1);
+	fprintf(stderr,"Need %d parameters\n",n);
+	exit(1);
   }
 }
 static void _test_write_file(int argc,  char *argv[]){
   bool dup=false;
   textbuffer_t b={0};
   FOR(i,1,argc){
-    const char *txt=argv[i];
-    textbuffer_add_segment(dup?0:TXTBUFSGMT_NO_FREE,&b,dup?strdup_untracked(txt):txt,strlen(txt));
-    textbuffer_add_segment(TXTBUFSGMT_NO_FREE,&b,",",1);
+	const char *txt=argv[i];
+	textbuffer_add_segment(dup?0:TXTBUFSGMT_NO_FREE,&b,dup?strdup_untracked(txt):txt,strlen(txt));
+	textbuffer_add_segment(TXTBUFSGMT_NO_FREE,&b,",",1);
   }
   const char *f="/home/cgille/tmp/t.txt";
   textbuffer_write_file(&b,f,0644);
@@ -392,25 +438,44 @@ static void _test_write_file(int argc,  char *argv[]){
 int main(int argc,char *argv[]){
 
   /*
-    textbuffer_t b={0};
-    FOR(i,0,10){
-    char *buf=malloc_untracked(10);
-    textbuffer_add_segment(0,&b,buf,10);
-    }
-    textbuffer_destroy(&b);
-    return 0;
+	textbuffer_t b={0};
+	FOR(i,0,10){
+	char *buf=malloc_untracked(10);
+	textbuffer_add_segment(0,&b,buf,10);
+	}
+	textbuffer_destroy(&b);
+	return 0;
   */
-  switch(0){
+  switch(4){
   case 0: test_exec();break;
   case 1: test_ps_pid(getpid());break;
   case 2:{
-    long  count=131072,  from=2147479552,  to=2147610624, textbuffer_l=2177810432;
-    fprintf(stderr,"count=%ld\n",count);
-    fprintf(stderr,"expre=%ld\n",(MIN_long(to,textbuffer_l)-from));
+	long  count=131072,  from=2147479552,  to=2147610624, textbuffer_l=2177810432;
+	fprintf(stderr,"count=%ld\n",count);
+	fprintf(stderr,"expre=%ld\n",(MIN_long(to,textbuffer_l)-from));
   } break;
   case 3:
-    _test_write_file(argc,argv);
-    break;
+	_test_write_file(argc,argv);
+	break;
+  case 4:{
+	textbuffer_t b={0};
+	int fd=open("/etc/fstab",O_RDONLY);
+	textbuffer_read(TXTBUFSGMT_READ_LINES|TXTBUFSGMT_READ_LINES_TRIMR,&b,fd);
+	textbuffer_write_fd(&b,STDOUT_FILENO);
+	break;
+  }
+  case 5:{
+	textbuffer_t b={0};
+	int fd=open("/etc/fstab",O_RDONLY);
+	textbuffer_read(TXTBUFSGMT_READ_LINES,&b,fd);
+	char *line;
+	for(int i=0; (line=textbuffer_get_line(&b,i));i++){
+	  printf("'%s'\n",line);
+	}
+	break;
+  }
+
+
   }
   //log_list_filedescriptors(STDERR_FILENO);
 

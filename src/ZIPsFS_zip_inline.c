@@ -50,10 +50,11 @@ static bool readdir_inline_from_cache(const int opt, const zpath_t *zpath, const
       const char *n2=dir.core.fname[j];
       if (n2 && !strchr(n2,'/')){
         stat_init(&st,(Nth0(dir.core.fflags,j)&DIRENT_ISDIR)?-1:Nth0(dir.core.fsize,j),&zpath->stat_rp);
-        st.st_ino=make_inode(zpath->stat_rp.st_ino,zpath->root,Nth(dir.core.finode,j,j),RP());
+        //st.st_ino=make_inode(zpath->stat_rp.st_ino,zpath->root,Nth(dir.core.finode,j,j),RP());
+        st.st_ino=zpath_make_inode(zpath,Nth(dir.core.finode,j,j));
         char n[MAX_PATHLEN+1];
         const int n_l=zipentry_placeholder_expand(n,n2,u,NULL);
-        if (config_containing_zipfile_of_virtual_file(0,n,n_l,NULL)) filler_add(opt,filler,buf,n,n_l,&st,no_dups);
+        if (config_containing_zipfile_of_virtual_file(0,n,n_l,NULL)) filler_add(opt,filler,buf,n,n_l,ZPATH_FILLDIR_SFX(zpath),&st,no_dups);
       }
     }
     directory_destroy(&dir);

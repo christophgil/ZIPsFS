@@ -455,16 +455,12 @@ The default rules, defined in *ZIPsFS_configuration_fileconversion.c*, include:
 
 
 
-For testing, copy an image file with the following command:
+For testing, you can copy an image file (png,jpg) and find the downscaled version in the branch
 
-    cp file.png ~/test/ZIPsFS/mnt/
-
-Auto-generated files can be viewed in the example configuration by listing the contents of:
-
-    ls ~/test/ZIPsFS/mnt/ZIPsFS/a/
+   <mount point>/ZIPsFS/c/
 
 
-Note that some of the conversions may require Docker support.  ZIPsFS must be run by a user belonging to the *docker* group.
+Note that some of the conversions may require Docker support and membership of the *docker* group.
 
 
 ### Handling Unknown File Sizes in Virtual File Systems
@@ -478,12 +474,17 @@ However, this behavior does not translate well to FUSE-based file systems.
 For FUSE, returning a file size of zero to represent an unknown or dynamic size is not
 recommended. Many programs interpret a size of 0 as an empty file and will not attempt to read from
 it at all.
-In ZIPsFS,  a placeholder or estimated size is returned if the file content has not been generated  at the time of stat().
+In ZIPsFS,  a placeholder or estimated size is returned if the file content has not been generated.
 The estimate should be large enough to allow reading the full content.
 If the size is underestimated, data may be read incompletely, leading to truncated output or application errors.
 This workaround allows programs to read the file as if it had content,
 even though the size isn’t known in advance.
 However, it may still break software that relies on accurate size reporting for buffering or memory allocation.
+
+Example Diann: The mass-spectrometry program Diann does not rely on correct file sizes when
+reading fasta files.  Since Diann does not support fasta.gz files directly, it can benefit from
+ZIPsFS capability to decompress on download.
+
 
 Example Fragpipe: Fragpipe is a software to process mass-spectrometry files. Processing
 Thermo-Fisher mass-spectrometry files with the suffix raw, those are converted by Fragpipe into the
@@ -503,24 +504,19 @@ recommended to use a persistent terminal multiplexer such as tmux. This enables 
 observation of all messages and facilitates long-running sessions.
 Additional log files are stored in:
 
-    ~/.ZIPsFS
+	~/.ZIPsFS
 
 For each mount point there are files specifying more  logs.
 
-    log_flags.conf
+	log_flags.conf
 
 See readme for details:
 
-    log_flags.conf.readme
+	log_flags.conf.readme
 
 
-ZIPsFS dynamically generates an HTML status file within the virtual file system.
-You can find it under the path: <Mount-Point>/ZIPsFS/
-For example:
-
-    ~/test/ZIPsFS/mnt/ZIPsFS/file_system_info.html
-
-This file provides real-time information about the system’s current state.
+ZIPsFS dynamically generates a HTML status file in <Mount-Point>/ZIPsFS/
+with real-time information.
 </details>
 <details><summary>Fault management. Timouts for remote upstream file systems. Duplicated remote trees</summary>
 Accessing remote files inherently carries a higher risk of failure. Requests may either:
@@ -538,29 +534,27 @@ To avoid blocking the main file system thread, remote file operations are execut
 
 ## Timeouts
 
-ZIPsFS remains responsive even if a remote file access hangs.
+Timeouts are activiated with the respective macro definitions WITH_ASYNC_XXXXXX.
+The work for root-paths starting with tripple slash.
 The fuse thread delegates the file operation to another thread and waits for its completion.
 After the configurable timeout it gives up.
 
-## Duplicated file paths
+Timeout  is not fully tested yet. It should be considered only for remote paths when blocks are observed.
 
-For redundantly stored files (i.e., available on multiple branches), another branch may take over
-transparently if one fails or becomes unresponsive.
-
-
-## Blocked worker threads
-The worker thread may block permanently. In this case it can be killed automatically and restarted. However killing this thread sometimes does not work.
+The worker thread may block permanently. In this case it may be killed automatically and restarted. However killing this thread sometimes does not work.
 
 If the stalled thread cannot be terminated, ZIPsFS will not create a new thread.
 To check whether all threads are responding, activate logging. For details see
 
-    ~/.ZIPsFS/.../log_flags.conf.readme
+	~/.ZIPsFS/.../log_flags.conf.readme
 
-This is best resolved by restarting ZIPsFS without interrupting ongoing file accesses.
-
-
+This problem is best resolved by replacing the current by a new ZIPsFS session using the -s command line option.
 
 
+## Duplicated file trees
+
+For redundantly stored files (i.e., available on multiple branches), another branch may take over
+transparently if one fails or becomes unresponsive.
 
 
 
@@ -579,8 +573,6 @@ work correctly.
 See ZIPsFS.compile.sh for activation of sanitizers.
 </details>
 <details><summary>File integrity checks</summary>
-## Data Integrity for ZIP Entries
-
 For ZIP entries loaded entirely into RAM:
 ZIPsFS performs CRC checksum validation.
 Any detected inconsistencies are logged, helping to detect corruption or transmission errors.
@@ -820,10 +812,6 @@ Only <i>read(int fd, void *buf, size_t count)</i> and the equivalent for ZIP ent
 There are some  Limitations:
 
 
-### Software
-
-Seems not to work for Thermo raw files in Fragpipe - under investigation
-
 ### Hard Links
 
 Hard links are not supported, though symlinks are fully functional.
@@ -840,6 +828,12 @@ If you require this functionality, please submit a feature request.
 
 Simultaneous reading and writing of a file using the same file descriptor will only function
 correctly for files stored in the writable source.
+
+
+### File size
+
+When  file sizes are not known, an over-estimate will be reported.
+If the estimate  is too low, the read file content will be truncated.
 </details>
 <details><summary>See also related sites</summary>
 - https://github.com/openscopeproject/ZipROFS

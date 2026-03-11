@@ -1,7 +1,8 @@
 #ifndef _cg_exec_pipe_dot_c
 #define _cg_exec_pipe_dot_c
+#include <errno.h>
 #include <zlib.h>
-const char *_CMD_ZLIB[]={NULL,NULL};
+const char *_PSEUDO_CMD_ZLIB[]={NULL,NULL};
 #ifndef DEBUG_THROTTLE_DOWNLOAD
 #define DEBUG_THROTTLE_DOWNLOAD 0
 #endif
@@ -43,7 +44,7 @@ static bool cg_exec_pipe(const char  *cmd1[], const char  *env[], const char *cm
   if (!pid){
     close(pipefd[1]);
     int ev=0;
-    if (cmd2==_CMD_ZLIB){
+    if (cmd2==_PSEUDO_CMD_ZLIB){
       const long nread=cg_read_gzip(pipefd[0],fdout,progress,progress_para);
       ev=nread>0?0:-nread;
     }else{
@@ -101,12 +102,12 @@ int main(int argc, char *argv[]){
     // curl  -o  -  ftp://ftp.uniprot.org/pub/databases/uniprot/LICENSE
     const char *cmd1[]={"curl","-o","-","ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/complete/docs/keywlist.xml.gz",NULL};
     const char *cmd2[]={"gzip","-dc",NULL};
-      const char *outfile="/home/cgille/tmp/test_out";
-      const int fdout=open(outfile,O_WRONLY|O_CREAT|O_TRUNC,0644);
-      if (fdout==-1) { log_errno("open(%s)",outfile); return false;}
-      bool ok=cg_exec_pipe(cmd1,NULL,_CMD_ZLIB,fdout,NULL,NULL);
-      log_exited_function("%s  ok: %s",outfile,success_or_fail(ok));
-      exit(0);
+    const char *outfile="/home/cgille/tmp/test_out";
+    const int fdout=open(outfile,O_WRONLY|O_CREAT|O_TRUNC,0644);
+    if (fdout==-1) { log_errno("open(%s)",outfile); return false;}
+    bool ok=cg_exec_pipe(cmd1,NULL,_PSEUDO_CMD_ZLIB,fdout,NULL,NULL);
+    log_exited_function("%s  ok: %s",outfile,success_or_fail(ok));
+    exit(0);
   }
 
 

@@ -25,11 +25,6 @@
 #define CG_THREAD_OBJECT_ASSERT_LOCK(x)
 #endif
 
-
-#ifndef PRINTINFO
-
-#define PRINTINFO(...) fprintf(stderr,__VA_ARGS__)
-#endif
 ////////////
 /// Hash ///
 ////////////
@@ -62,31 +57,31 @@ static off_t _mstore_common(struct mstore *m,int opt,const void *pointer){
   //  CG_THREAD_OBJECT_ASSERT_LOCK(m);
   off_t sum=0;
   FOR(sgmt,0,m->capacity){
-    char *d=_MSTORE_BLOCK(m,sgmt);
-    if (d){
-      switch(opt){
-      case _mstore_destroy:
-        if (sgmt){
-          m->_data[sgmt]=NULL;
-          if (_MSTORE_IS_MALLOC(m)) cg_free(_MSTORE_COUNTER_MALLOC(m),d); else cg_munmap(_MSTORE_COUNTER_MMAP(m),d,_MSTORE_LEADING+MSTORE_BLOCK_CAPACITY(d));
-        }
-        break;
-      case _mstore_usage: sum+=MSTORE_OFFSET_NEXT_FREE(d); break;
-      case _mstore_blocks:  if (MSTORE_OFFSET_NEXT_FREE(d)>_MSTORE_LEADING) sum++;  break;
-      case _mstore_clear:
-        MSTORE_OFFSET_NEXT_FREE(d)=_MSTORE_LEADING; // cppcheck-suppress unreadVariable
+	char *d=_MSTORE_BLOCK(m,sgmt);
+	if (d){
+	  switch(opt){
+	  case _mstore_destroy:
+		if (sgmt){
+		  m->_data[sgmt]=NULL;
+		  if (_MSTORE_IS_MALLOC(m)) cg_free(_MSTORE_COUNTER_MALLOC(m),d); else cg_munmap(_MSTORE_COUNTER_MMAP(m),d,_MSTORE_LEADING+MSTORE_BLOCK_CAPACITY(d));
+		}
+		break;
+	  case _mstore_usage: sum+=MSTORE_OFFSET_NEXT_FREE(d); break;
+	  case _mstore_blocks:  if (MSTORE_OFFSET_NEXT_FREE(d)>_MSTORE_LEADING) sum++;  break;
+	  case _mstore_clear:
+		MSTORE_OFFSET_NEXT_FREE(d)=_MSTORE_LEADING; // cppcheck-suppress unreadVariable
 #ifdef HOOK_MSTORE_CLEAR
-        HOOK_MSTORE_CLEAR(m);
+		HOOK_MSTORE_CLEAR(m);
 #endif
-        break;
-      case _mstore_contains:
-        if (d+_MSTORE_LEADING<=(char*)pointer && (char*)pointer<d+MSTORE_BLOCK_CAPACITY(d)){
-          sum=1;
-          break;
-        }
-        break;
-      }
-    }
+		break;
+	  case _mstore_contains:
+		if (d+_MSTORE_LEADING<=(char*)pointer && (char*)pointer<d+MSTORE_BLOCK_CAPACITY(d)){
+		  sum=1;
+		  break;
+		}
+		break;
+	  }
+	}
   }
   unlock(m->mutex);
   return sum;
@@ -95,15 +90,14 @@ static off_t _mstore_common(struct mstore *m,int opt,const void *pointer){
 
 
 
-static int mstore_report_memusage(int n,struct mstore *m){
+static void mstore_report_memusage(FILE *file,struct mstore *m){
   if (!m){
-    PRINTINFO("(Name #id  B:#Blocks-used M:Mem(Bytes) B:Bytes-per-block  flags)");
+	fputs("(Name #id  B:#Blocks-used M:Mem(Bytes) B:Bytes-per-block  flags)",file);
   }else{
-    PRINTINFO("(%s %d  B:%'d M:%'ld S:%'ld %s%s)",snull(m->name), m->iinstance,(int)mstore_count_blocks(m),(long)mstore_usage(m),(long)m->bytes_per_block,
-      (m->opt&MSTORE_OPT_MMAP_WITH_FILE?" MMAPFILE":""),
-      (_MSTORE_IS_MALLOC(m)?" MALLOC":""));
+	fprintf(file,"(%s %d  B:%'d M:%'ld S:%'ld %s%s)",snull(m->name), m->iinstance,(int)mstore_count_blocks(m),(long)mstore_usage(m),(long)m->bytes_per_block,
+	  (m->opt&MSTORE_OPT_MMAP_WITH_FILE?" MMAPFILE":""),
+	  (_MSTORE_IS_MALLOC(m)?" MALLOC":""));
   }
-  return n;
 }
 
 
@@ -113,17 +107,17 @@ static int mstore_report_memusage(int n,struct mstore *m){
 static const char *mstore_set_base_path(const char *f){
   static char base[MAX_PATHLEN+1];
   if (f && !*base){
-    cg_recursive_mkdir(cg_copy_path(base,f));
-    DIR *dir=opendir(base);
-    if (dir){
-      char fn[MAX_PATHLEN+1];
-      const struct dirent *de;
-      while((de=readdir(dir))){
-        snprintf(fn,MAX_PATHLEN,"%s/%s",base,de->d_name);
-        unlink(fn);
-      }
-      closedir(dir);
-    }else log_errno("Deleting old cache files %s",base);
+	cg_recursive_mkdir(cg_copy_path(base,f));
+	DIR *dir=opendir(base);
+	if (dir){
+	  char fn[MAX_PATHLEN+1];
+	  const struct dirent *de;
+	  while((de=readdir(dir))){
+		snprintf(fn,MAX_PATHLEN,"%s/%s",base,de->d_name);
+		unlink(fn);
+	  }
+	  closedir(dir);
+	}else log_errno("Deleting old cache files %s",base);
   }
   assert(base);
   return base;
@@ -153,8 +147,8 @@ static struct mstore *_mstore_init(struct mstore *m,const char *name, const int 
   static atomic_int count;
   m->iinstance=atomic_fetch_add(&count,1);
   if (size_and_opt&MSTORE_OPT_MMAP_WITH_FILE){
-    assert(0==(size_and_opt&MSTORE_OPT_MALLOC));
-    assert(name);
+	assert(0==(size_and_opt&MSTORE_OPT_MALLOC));
+	assert(name);
   }
   m->bytes_per_block=MAX_int(16,size_and_opt&_MSTORE_MASK_SIZE);
   m->opt=size_and_opt&~_MSTORE_MASK_SIZE;
@@ -181,8 +175,8 @@ static int _mstore_openfile(struct mstore *m,const uint32_t block,const off_t ad
   if (fd<2) DIE("Open failed: '%s' fd: %d  mstore_base_path: '%s'\n",path,fd,mstore_base_path());
   //  struct stat st; if (fstat(fd,&st)<0) log_error("fstat failed: %s\n",path);
   if (ftruncate(fd,adim) || write(fd,"",1)!=1){
-    log_errno("write failed: %s\n",path);
-    return 0;
+	log_errno("write failed: %s\n",path);
+	return 0;
   }
   return fd;
 }
@@ -218,10 +212,10 @@ static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align){
   int ib=0;
   char *block=NULL;
   for(;true;ib++){
-    if (ib>=m->capacity) _mstore_double_capacity(m);
-    block=_MSTORE_BLOCK(m,ib);
-    if (!block) break;
-    if ((dst=_mstore_block_try_allocate(m,block,bytes,align))) return dst;
+	if (ib>=m->capacity) _mstore_double_capacity(m);
+	block=_MSTORE_BLOCK(m,ib);
+	if (!block) break;
+	if ((dst=_mstore_block_try_allocate(m,block,bytes,align))) return dst;
   }
   assert(ib>0);
   assert(!_MSTORE_BLOCK(m,ib));
@@ -230,16 +224,16 @@ static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align){
   m->bytes_per_block=blockCapacity<<1; /* Growing size */
   assert(blockCapacity>0);
   if (_MSTORE_IS_MALLOC(m)){
-    if (!(block=cg_malloc(_MSTORE_COUNTER_MALLOC(m),blockCapacity+_MSTORE_LEADING))) DIE("Malloc failed");
+	if (!(block=cg_malloc(_MSTORE_COUNTER_MALLOC(m),blockCapacity+_MSTORE_LEADING))) DIE("Malloc failed");
   }else{
-    const int fd=(m->opt&MSTORE_OPT_MMAP_WITH_FILE)?_mstore_openfile(m,ib,blockCapacity+_MSTORE_LEADING):0;
-    if (MAP_FAILED==(block=cg_mmap(_MSTORE_COUNTER_MMAP(m),blockCapacity+_MSTORE_LEADING,fd))) block=NULL;
-    if (!block) DIE("Allocation failed   %lld  fd: %d",(LLD)(blockCapacity+_MSTORE_LEADING),fd);
+	const int fd=(m->opt&MSTORE_OPT_MMAP_WITH_FILE)?_mstore_openfile(m,ib,blockCapacity+_MSTORE_LEADING):0;
+	if (MAP_FAILED==(block=cg_mmap(_MSTORE_COUNTER_MMAP(m),blockCapacity+_MSTORE_LEADING,fd))) block=NULL;
+	if (!block) DIE("Allocation failed   %lld  fd: %d",(LLD)(blockCapacity+_MSTORE_LEADING),fd);
   }
   _mstore_block_init_with_capacity(block,blockCapacity);
   m->_data[ib]=block;
   if (!(dst=_mstore_block_try_allocate(m,block,bytes,align))){
-    DIE("dst is NULL.  block: %p bytes: %lld align: %d  ib: %d",block, (LLD)bytes,align, ib);
+	DIE("dst is NULL.  block: %p bytes: %lld align: %d  ib: %d",block, (LLD)bytes,align, ib);
   }
   assert(MSTORE_BLOCK_CAPACITY(block)>=bytes);
   return dst;
@@ -279,29 +273,29 @@ static void test_mstore1(int argc,char *argv[]){
   const int method=atoi(argv[1]);
   printf("method=%d\n",method);
   FOR(i,2,argc){
-    char *a=argv[i];
-    switch(method){
-    case 0:{
-      const int align=8;
-      tt[i]=mstore_malloc(&m,1+strlen(a), align);
-      assert( ((long)tt[i]) % align==0);
-      strcpy(tt[i],a);
-      break;
-    }
-    case 1:
-      tt[i]=(char*)mstore_addstr(&m,a,strlen(a));
-      break;
-    case 2:
-      tt[i]=(char*)mstore_add(&m,a,strlen(a)+1,4);
-      break;
-    default: DIE("Wrong para");
-    }
+	char *a=argv[i];
+	switch(method){
+	case 0:{
+	  const int align=8;
+	  tt[i]=mstore_malloc(&m,1+strlen(a), align);
+	  assert( ((long)tt[i]) % align==0);
+	  strcpy(tt[i],a);
+	  break;
+	}
+	case 1:
+	  tt[i]=(char*)mstore_addstr(&m,a,strlen(a));
+	  break;
+	case 2:
+	  tt[i]=(char*)mstore_add(&m,a,strlen(a)+1,4);
+	  break;
+	default: DIE("Wrong para");
+	}
   }
   //  tt[argc-3]="This string should rise error";
   FOR(i,2,argc){
-    if (!tt[i]){ fprintf(stderr,"Error tt[%d] is NULL\n",i); EXIT(1);}
-    fprintf(stderr,"%4d %p  %s\n",i,(void*)tt[i],tt[i]);
-    if (strcmp(tt[i],argv[i])){ DIE(RED_ERROR" tt memaddr: %p tt=%s argv=%s\n",(void*)tt[i],tt[i],argv[i]); }
+	if (!tt[i]){ fprintf(stderr,"Error tt[%d] is NULL\n",i); EXIT(1);}
+	fprintf(stderr,"%4d %p  %s\n",i,(void*)tt[i],tt[i]);
+	if (strcmp(tt[i],argv[i])){ DIE(RED_ERROR" tt memaddr: %p tt=%s argv=%s\n",(void*)tt[i],tt[i],argv[i]); }
   }
   fprintf(stderr," Usage %lu\n",mstore_usage(&m));
   mstore_destroy(&m);
@@ -315,16 +309,16 @@ static void test_mstore2(int argc, char *argv[]){
   int data[N][10];
   int *intern[N];
   FOR(i,0,N){
-    //fprintf(stderr,"%d\n",i);
-    FOR(j,0,5){
-      data[i][j]=rand();
-    }
+	//fprintf(stderr,"%d\n",i);
+	FOR(j,0,5){
+	  data[i][j]=rand();
+	}
   }
   const int data_l=10*sizeof(int);
   FOR(i,0,N){
-    //    int * internalized=mstore_add(&ms,data[i],data_l,sizeof(int));
-    int * internalized=mstore_malloc(&ms,data_l,sizeof(int));
-    //intern[i]=(int*)ht_set(&ht,(char*)data[i],data_l,0,data[i]);
+	//    int * internalized=mstore_add(&ms,data[i],data_l,sizeof(int));
+	int * internalized=mstore_malloc(&ms,data_l,sizeof(int));
+	//intern[i]=(int*)ht_set(&ht,(char*)data[i],data_l,0,data[i]);
   }
   mstore_destroy(&ms);
 }
@@ -336,18 +330,18 @@ static void test_duplicate_name(void){
 }
 int main(int argc,char *argv[]){
   if (0){
-    mstore_set_base_path("~/test/mstore_test");
-    printf("mstore_base_path %s\n",mstore_base_path());
-    struct mstore m={0};
-    mstore_init(&m,"test",MSTORE_OPT_MMAP_WITH_FILE|1024);
-    fprintf(stderr,"m->bytes_per_block: %lld\n",(LLD)m.bytes_per_block);
-    FOR(i,0,8){
-      char *s=mstore_malloc(&m,1024,4);
-      fprintf(stderr,"%d) s: %p\n",i,s);
-      fprintf(stderr,"===================================\n");
-      fflush(stderr);
-    }
-    return 0;
+	mstore_set_base_path("~/test/mstore_test");
+	printf("mstore_base_path %s\n",mstore_base_path());
+	struct mstore m={0};
+	mstore_init(&m,"test",MSTORE_OPT_MMAP_WITH_FILE|1024);
+	fprintf(stderr,"m->bytes_per_block: %lld\n",(LLD)m.bytes_per_block);
+	FOR(i,0,8){
+	  char *s=mstore_malloc(&m,1024,4);
+	  fprintf(stderr,"%d) s: %p\n",i,s);
+	  fprintf(stderr,"===================================\n");
+	  fflush(stderr);
+	}
+	return 0;
   }
 
 

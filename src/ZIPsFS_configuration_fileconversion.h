@@ -15,7 +15,7 @@ _Static_assert(WITH_FILECONVERSION,"");
 #define FILECONVERSION_MAX_INFILES 5 /*  Dynamically generated file can depend on n input files.  Prevents runaway loop */
 
 /* Unfortunately, Windows will not be able to open folder a when it is not shown in the parent file listing. */
-#define FILECONVERSION_DELETE_FILES_AFTER_DAYS "99"
+
 
 
 
@@ -27,3 +27,5 @@ _Static_assert(WITH_FILECONVERSION,"");
 /* The user can add additional flags for  struct fileconversion_rule -> flags */
 #define CA_FLAG_MY_FLAG       (1<<1)
 #define CA_FLAG_MY_other_FLAG (1<<2)
+
+#define FC_NOT_UPTODATE  (1<<1)

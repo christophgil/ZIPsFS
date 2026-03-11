@@ -24,8 +24,8 @@ static void struct_fileconversion_files_init(struct fileconversion_files *ff,con
 
 
 static void struct_fileconversion_files_destroy_txtbuf(struct fileconversion_files *ff){
-  textbuffer_destroy(ff->af_txtbuf);
-  FREE_NULL_MALLOC_ID(ff->af_txtbuf);
+  textbuffer_destroy(ff->fc_txtbuf);
+  FREE_NULL_MALLOC_ID(ff->fc_txtbuf);
 }
 
 static void struct_fileconversion_files_destroy(struct fileconversion_files *ff){
@@ -59,9 +59,8 @@ static void fc_wait_concurrent(const struct fileconversion_rule *ac, const int i
 /// This is run once when ZIPsFS is started.                       ///
 //////////////////////////////////////////////////////////////////////
 static void fc_init(void){
-  static char realpath_fileconversion_heap[MAX_PATHLEN+1]; // cppcheck-suppress unassignedVariable
-  if (!_root_writable) return;
-  stpcpy(stpcpy(_realpath_fileconversion=realpath_fileconversion_heap,_root_writable->rootpath),DIR_FILECONVERSION);
+  //  if (!_writable_path_l) return;
+  if (_writable_path_l) stpcpy(stpcpy(_fileconversion_rp=malloc_untracked(1+DIR_FILECONVERSION_L+_writable_path_l),_writable_path),DIR_FILECONVERSION);
   FOREACH_FILECONVERSION_RULE(idx,ac){
     assert(idx<FILECONVERSION_MAX_RULES);
     ac->_seqnum=idx;
@@ -179,7 +178,6 @@ static bool _fileconversion_rule_matches(struct fileconversion_files *ff){
   return false;
 }
 static int _fileconversion_realinfiles(struct fileconversion_files *ff,const struct fileconversion_rule *ac){
-
   //log_entered_function("%s",ff->virtualpath);
   ff->rule=ac;
   const int n=_fileconversion_rule_matches(ff);
@@ -210,11 +208,12 @@ static int _fileconversion_realinfiles(struct fileconversion_files *ff,const str
 /// Return the dependent files for generating this not yet existing file. ///
 /////////////////////////////////////////////////////////////////////////////
 static int fileconversion_realinfiles(struct fileconversion_files *ff){
-  int num_infiles=0;
+  if (!ff) return 0;
   const FOREACH_FILECONVERSION_RULE(iac,ac){
-    if ((num_infiles=_fileconversion_realinfiles(ff,ac))) break;
+    int n=_fileconversion_realinfiles(ff,ac);
+    if (n) return n;
   }
-  return num_infiles;
+  return 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -249,7 +248,6 @@ static int _fc_fd_open(const char *path, int *fd){
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static int fc_run(struct fileconversion_files *ff){
-  if (!_realpath_fileconversion) return -EACCES;
   const struct fileconversion_rule *ac=ff->rule;
   if (!ac || !ff->infiles_n) return -EIO;
   int res=0;
@@ -265,14 +263,14 @@ static int fc_run(struct fileconversion_files *ff){
     }
   }
   IF_LOG_FLAG(LOG_FILECONVERSION) log_verbose("ff->rinfiles[0]: %s size: %lld  ac->out:%d ff->out:%d",snull(ff->rinfiles[0]), (LLD)ff->infiles_stat[0].st_size,ac->out,ff->out);
-  unlink(ff->log);
-  unlink(ff->fail);
+  cg_unlink(ff->log);
+  cg_unlink(ff->fail);
   fc_wait_concurrent_begin(ac);
   Assert(FILECONVERSION_RUN_SUCCESS==0); // cppcheck-suppress knownConditionTrueFalse
   if (!res &&  (res=config_fileconversion_run(ff))==FILECONVERSION_RUN_NOT_APPLIED){
     res=isOUTF?mk_parentdir_if_sufficient_storage_space(ff->grealpath):0;
     int fd_err=-1;
-    if (!res && !ac->no_redirect) res=_fc_fd_open(ff->log,&fd_err);
+    if (_fileconversion_rp && !res && !ac->no_redirect) res=_fc_fd_open(ff->log,&fd_err);
     if (!res){
       if (fd_err>=0 && ac->info){ R(ac->info);R("\n");}
       const char *cmd[FILECONVERSION_ARGV+1]={0};
@@ -282,8 +280,8 @@ static int fc_run(struct fileconversion_files *ff){
       config_fileconversion_modify_exec_args(cmd,ff);
       cg_log_exec_fd(STDERR_FILENO, cmd,NULL);
       if (isRAM){   /* Output of external prg  into textbuffer_t */
-        (ff->af_txtbuf=textbuffer_new(COUNT_FILECONVERSION_MALLOC_TXTBUF))->max_length=isMMAP?FILECONVERSION_MMAP_MAX_BYTES:FILECONVERSION_MALLOC_MAX_BYTES;
-        if ((res=textbuffer_from_exec_output(isMMAP?TXTBUFSGMT_MUNMAP:0,ff->af_txtbuf,cmd,ac->env,ff->log))){
+        (ff->fc_txtbuf=textbuffer_new(COUNT_FILECONVERSION_MALLOC_TXTBUF))->max_length=isMMAP?FILECONVERSION_MMAP_MAX_BYTES:FILECONVERSION_MALLOC_MAX_BYTES;
+        if ((res=textbuffer_from_exec_output(isMMAP?TXTBUFSGMT_MUNMAP:0,ff->fc_txtbuf,cmd,ac->env,ff->log))){
           log_failed("textbuffer_from_exec_output  %s ",ff->rinfiles[0]);
           if (res==ENOMEM && mk_parentdir_if_sufficient_storage_space(ff->grealpath)){
             ff->out=STDOUT_TO_OUTFILE;
@@ -312,7 +310,7 @@ static int fc_run(struct fileconversion_files *ff){
         }
       }
       if (fd_out>0) close(fd_out);
-      fileconversion_free_argv((char const*const*)cmd,ac->cmd);
+      fileconversion_free_argv(cmd,(const char **)ac->cmd);
     }
     if (fd_err>0) close(fd_err);
   }/* if (!res) */
@@ -323,12 +321,14 @@ static int fc_run(struct fileconversion_files *ff){
 #undef isRAM
 #undef isMMAP
 #undef isOUTF
-}
+} /*fc_run()*/
 
 static int _fileconversion_filecontent_append(const int flags, struct fileconversion_files *ff, const char *s,const long s_l){
-  if (!ff->af_txtbuf) ff->af_txtbuf=textbuffer_new(COUNT_FILECONVERSION_MALLOC_TXTBUF);
-  return textbuffer_add_segment(flags,ff->af_txtbuf,s,s_l);
+  if (!ff->fc_txtbuf) ff->fc_txtbuf=textbuffer_new(COUNT_FILECONVERSION_MALLOC_TXTBUF);
+  return textbuffer_add_segment(flags,ff->fc_txtbuf,s,s_l);
 }
 #undef ALOCK
 #undef R
-// COUNT_FILECONVERSION_MALLOC_TXTBUF  af_txtbuf
+// COUNT_FILECONVERSION_MALLOC_TXTBUF  fc_txtbuf
+// Testing with file  bunzip2 -c  mnt/ZIPsFS/c/test_fileconvert/small.parquet.TSV.bz2
+// mnt/ZIPsFS/c/test_fileconvert/src.zip.txt

@@ -7,6 +7,9 @@
 
 #define T(var,x)  if (!(var x)) warn=true, printf("%-30s   ( "ANSI_FG_BLUE"Value"ANSI_RESET" "ANSI_ITALIC"OPERATOR"ANSI_RESET" Recommended )   ( "ANSI_FG_BLUE"%d"ANSI_RESET" %s )   "ANSI_FG_RED"false"ANSI_RESET"\n",#var,var,#x)
 #if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
+#include <time.h>
+#include <stddef.h>
+#include <time.h>
 #include "ZIPsFS_configuration.h"
 #include "ZIPsFS_early.h"
 #include "cg_utils.h"
@@ -69,40 +72,39 @@ static bool check_configuration(const char *mnt){
   cg_str_replace(0,m,0,".charite.de",0,"",0);
   cg_str_replace(0,m,0,"//",2,"/",1);
   {
-    const char *M="/s-mcpb-ms03/union/.mountpoints/is/";
-    if (!strncmp(m,M,strlen(M))){
-      log_verbose("Recognized mount-point %s",M);
-      T(WITH_FILECONVERSION,== 0);
-      T(WITH_ZIPINLINE,== 1);
-    }
+	const char *M="/s-mcpb-ms03/union/.mountpoints/is/";
+	if (!strncmp(m,M,strlen(M))){
+	  log_verbose("Recognized mount-point %s",M);
+	  T(WITH_FILECONVERSION,== 0);
+	  T(WITH_ZIPINLINE,== 1);
+	}
   }
-  //log_debug_now("m: %s mnt: %s",m,mnt);
   free_untracked(m);
   if (!HAS_BACKTRACE){
-    fprintf(stderr,"Warning: No stack-traces can be written in case of a program error.\n");
-    warn=true;
+	fprintf(stderr,"Warning: No stack-traces can be written in case of a program error.\n");
+	warn=true;
   }else if (!HAS_ADDR2LINE && !HAS_ATOS){
-    fprintf(stderr,"For better stack-traces (debugging) it is recommended to install "ANSI_FG_BLUE IF01(IS_APPLE,"addr2line (package binutils)","atos")ANSI_RESET".\n");
-    warn=true;
+	fprintf(stderr,"For better stack-traces (debugging) it is recommended to install "ANSI_FG_BLUE IF01(IS_APPLE,"addr2line (package binutils)","atos")ANSI_RESET".\n");
+	warn=true;
   }
 #if WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
   if (DIRECTORY_CACHE_SIZE*NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE<64*1024*1024){
-    log_msg(RED_WARNING"Small file attribute and directory cache of only %d\n",NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE*NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE/1024);
-    warn=true;
+	log_msg(RED_WARNING"Small file attribute and directory cache of only %d\n",NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE*NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE/1024);
+	warn=true;
   }
 #endif
 
   if (MAX_NUM_OPEN_FILES<8000){ fprintf(stderr,RED_WARNING"Consider to increase MAX_NUM_OPEN_FILES\n\n"); warn=true;}
 
-  if (_root_writable){
-    #define EXPLAIN_WRITABLE "The first upstream root is writable.'nIf an empty string is given as first root, it will not be possible to store files in the virtual file system.\n"
-    if (_root_writable->remote){
-      fprintf(stderr,"%sThe leading double slash indicates a remote path which is probably not intended\n",EXPLAIN_WRITABLE);
-      warn=true;
-    }
+  if (_writable_path_l){
+	#define EXPLAIN_WRITABLE "The first upstream root is writable.'nIf an empty string is given as first root, it will not be possible to store files in the virtual file system.\n"
+	if (_root_writable->remote){
+	  fprintf(stderr,"%sThe leading double slash indicates a remote path which is probably not intended\n",EXPLAIN_WRITABLE);
+	  warn=true;
+	}
   }else{
-    warn=true;
-    fprintf(stderr,"The first root-path is an empty string.\n%s\n",EXPLAIN_WRITABLE);
+	warn=true;
+	fprintf(stderr,"The first root-path is an empty string.\n%s\n",EXPLAIN_WRITABLE);
   }
   IF1(WITH_FILECONVERSION,if (!cg_is_member_of_group("docker")){ log_warn(HINT_GRP_DOCKER); warn=true;});
   return warn;

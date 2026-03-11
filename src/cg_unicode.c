@@ -143,10 +143,10 @@
 \======================================================*/
 static int cg_unicode(char *s, const int c,const bool html){
   if (html){
-    return sprintf(s,"&#%d;",c>>16);
+	return sprintf(s,"&#%d;",c>>16);
   }else{
-    s[0]=0xe2; s[1]=(c>>8)&255; s[2]=c&255; s[3]=0;
-    return 3;
+	s[0]=0xe2; s[1]=(c>>8)&255; s[2]=c&255; s[3]=0;
+	return 3;
   }
 }
 #endif //_cg_unicode_dot_c

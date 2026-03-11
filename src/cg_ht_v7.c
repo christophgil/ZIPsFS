@@ -83,10 +83,10 @@ static ht_t *_ht_init_with_keystore(ht_t *ht,const char *name,uint32_t flags_log
   if (!ht) return NULL;
   memset(ht,0,sizeof(ht_t)); // CPPCHECK-SUPPRESS ctunullpointerOutOfMemory
   if (m){
-    ht->keystore=m;
+	ht->keystore=m;
   }else if(mstore_dim){
-    if (mstore_dim&MSTORE_OPT_MMAP_WITH_FILE) ASSERT(name!=NULL); /* Needed for file */
-    _mstore_init(ht->keystore=&ht->keystore_buf,name,mstore_dim);
+	if (mstore_dim&MSTORE_OPT_MMAP_WITH_FILE) ASSERT(name!=NULL); /* Needed for file */
+	_mstore_init(ht->keystore=&ht->keystore_buf,name,mstore_dim);
   }
   ht->name=name?name:"";
   static atomic_int count; ht->iinstance=atomic_fetch_add(&count,1);
@@ -94,10 +94,10 @@ static ht_t *_ht_init_with_keystore(ht_t *ht,const char *name,uint32_t flags_log
 
   C=(flags_log2initalCapacity&0xff)?(1<<(flags_log2initalCapacity&0xff)):0;
   if (C>_HT_DIM_STACK){
-    if (!(ht->_entries=_ht_malloc_entries(C))) return NULL;
+	if (!(ht->_entries=_ht_malloc_entries(C))) return NULL;
   }else{
-    memset(ht->_stack_ht_entry,0,sizeof(ht_entry_t)*_HT_DIM_STACK);
-    C=_HT_DIM_STACK;
+	memset(ht->_stack_ht_entry,0,sizeof(ht_entry_t)*_HT_DIM_STACK);
+	C=_HT_DIM_STACK;
   }
   assert(C>0);
 
@@ -112,26 +112,26 @@ static void ht_destroy(ht_t *ht){
   if (!ht) return;
   CG_THREAD_OBJECT_ASSERT_LOCK(ht);
   if (ht->keystore && ht->keystore->capacity){ /* All keys are in the keystore */
-    mstore_destroy(ht->keystore);
+	mstore_destroy(ht->keystore);
   }else if (_HT_IS_KEY_STRDUP(ht)){ /* Each key has been stored on the heap individually */
-    RLOOP(i,C){
-      ht_entry_t *e=HT_ENTRIES(ht)+i;
-      if (e->key) cg_free_null(_HT_KEY_MALLOC_ID(m),e->key);
-    }
+	RLOOP(i,C){
+	  ht_entry_t *e=HT_ENTRIES(ht)+i;
+	  if (e->key) cg_free_null(_HT_KEY_MALLOC_ID(m),e->key);
+	}
   }
   _ht_free_entries(ht);
   struct mstore *m=ht->valuestore;
   if (m){
-    ht->valuestore=NULL;
-    mstore_destroy(m);
+	ht->valuestore=NULL;
+	mstore_destroy(m);
   }
 }
 static void ht_clear(ht_t *ht){
   CG_THREAD_OBJECT_ASSERT_LOCK(ht);
   ht_entry_t *e=HT_ENTRIES(ht);
   if (e){
-    memset(e,0,C*sizeof(ht_entry_t));
-    mstore_clear(ht->keystore);
+	memset(e,0,C*sizeof(ht_entry_t));
+	mstore_clear(ht->keystore);
   }
 }
 static MAYBE_INLINE int debug_count_empty(const ht_entry_t *ee, const uint32_t capacity){
@@ -145,17 +145,17 @@ static ht_entry_t* _ht_get_entry_ee(ht_entry_t *ee, const uint32_t capacity, con
   // cppcheck-suppress-macro unreadVariable
 #define _HT_LOOP_TILL_EMPTY_ENTRY(cond)  int count_wrap_around=0;while (e->key cond)
   if (intkey){
-    _HT_LOOP_TILL_EMPTY_ENTRY(|| e->keylen_hash || e->value){
-      if (e->keylen_hash==keylen_hash && key==e->key) break;
-      _HT_AT_END_OF_ENTRIES_WRAP_AROUND();
-    }
+	_HT_LOOP_TILL_EMPTY_ENTRY(|| e->keylen_hash || e->value){
+	  if (e->keylen_hash==keylen_hash && key==e->key) break;
+	  _HT_AT_END_OF_ENTRIES_WRAP_AROUND();
+	}
   }else{
-    ASSERT(key);
-    ASSERT(capacity);
-    _HT_LOOP_TILL_EMPTY_ENTRY(){
-      if (e->key && e->keylen_hash==keylen_hash && (key==e->key || !memcmp(e->key,key,keylen_hash>>HT_KEYLEN_SHIFT))) break;
-      _HT_AT_END_OF_ENTRIES_WRAP_AROUND();
-    }
+	ASSERT(key);
+	ASSERT(capacity);
+	_HT_LOOP_TILL_EMPTY_ENTRY(){
+	  if (e->key && e->keylen_hash==keylen_hash && (key==e->key || !memcmp(e->key,key,keylen_hash>>HT_KEYLEN_SHIFT))) break;
+	  _HT_AT_END_OF_ENTRIES_WRAP_AROUND();
+	}
   }
 #undef _HT_LOOP_TILL_EMPTY_ENTRY
 #undef _HT_AT_END_OF_ENTRIES_WRAP_AROUND
@@ -173,10 +173,10 @@ static int _ht_expand(ht_t *ht){
   ht_entry_t* new_ee=_ht_malloc_entries(new_capacity);
   assert(new_ee);
   for(uint32_t i=0; i<C; i++){
-    const ht_entry_t *e=HT_ENTRIES(ht)+i;
-    if (e->key || e->keylen_hash){
-      *_ht_get_entry_ee(new_ee,new_capacity,0!=(ht->flags&HT_FLAG_NUMKEY),e->key,e->keylen_hash)=*e;
-    }
+	const ht_entry_t *e=HT_ENTRIES(ht)+i;
+	if (e->key || e->keylen_hash){
+	  *_ht_get_entry_ee(new_ee,new_capacity,0!=(ht->flags&HT_FLAG_NUMKEY),e->key,e->keylen_hash)=*e;
+	}
   }
   _ht_free_entries(ht);
   ht->_entries=new_ee;
@@ -205,25 +205,25 @@ static const char* _newKey(ht_t *ht,const char *key,ht_keylen_hash_t keylen_hash
 static ht_entry_t *ht_get_entry(ht_t *ht, const char* key,const ht_keylen_t key_l,ht_hash_t hash,const bool create){
   let_e_get_entry(ht,key,keylen_hash);
   if (create && HT_ENTRY_IS_EMPTY(e)){
-    if (_ht_expand(ht)==1) e=E();
-    e->key=_newKey(ht,key,e->keylen_hash=keylen_hash);
-    ht->length++;
+	if (_ht_expand(ht)==1) e=E();
+	e->key=_newKey(ht,key,e->keylen_hash=keylen_hash);
+	ht->length++;
   }
   return e;
 }
 static void ht_clear_entry(const ht_t *ht,ht_entry_t *e){
   if (e){
-    CG_THREAD_OBJECT_ASSERT_LOCK(ht);
-    if (_HT_IS_KEY_STRDUP(ht)) cg_free(_HT_KEY_MALLOC_ID(ht),(char*)e->key);
-    e->key=e->value=NULL;
-    e->keylen_hash=0;
+	CG_THREAD_OBJECT_ASSERT_LOCK(ht);
+	if (_HT_IS_KEY_STRDUP(ht)) cg_free(_HT_KEY_MALLOC_ID(ht),(char*)e->key);
+	e->key=e->value=NULL;
+	e->keylen_hash=0;
   }
 }
 static ht_entry_t* ht_remove(ht_t *ht,const char* key,const ht_keylen_t key_l, ht_hash_t hash ){
   let_e_get_entry(ht,key,keylen_hash);
   if (e->key || e->keylen_hash==keylen_hash){
-    ht_clear_entry(ht,e);
-    ht->length--;
+	ht_clear_entry(ht,e);
+	ht->length--;
   }
   return e;
 }
@@ -231,16 +231,16 @@ static void *ht_set(ht_t *ht,const char* key,const ht_keylen_t key_l,ht_hash_t h
   if (!key) {DIE("ht-> %s ",!ht?"ht is null":ht->name); return NULL;}
   let_e_get_entry(ht,key,keylen_hash);
   if (!e->key && !e->keylen_hash){ /* Didn't find key, allocate+copy if needed, then insert it. */
-    if (_ht_expand(ht)==1) e=E();
-    if (!(ht->flags&(HT_FLAG_KEYS_ARE_STORED_EXTERN|HT_FLAG_NUMKEY))){
-      if (!(key=_newKey(ht,key,keylen_hash))){
-        log_error("ht.c: Store key with %s\n",ht->keystore?"keystore":"strdup");
-        return NULL;
-      }
-    }
-    ht->length++;
-    e->key=key;
-    e->keylen_hash=keylen_hash;
+	if (_ht_expand(ht)==1) e=E();
+	if (!(ht->flags&(HT_FLAG_KEYS_ARE_STORED_EXTERN|HT_FLAG_NUMKEY))){
+	  if (!(key=_newKey(ht,key,keylen_hash))){
+		log_error("ht.c: Store key with %s\n",ht->keystore?"keystore":"strdup");
+		return NULL;
+	  }
+	}
+	ht->length++;
+	e->key=key;
+	e->keylen_hash=keylen_hash;
   }
   void *old=e->value;
   e->value=(void*)value;
@@ -269,7 +269,7 @@ static const void *ht_intern(ht_t *ht,const void *bytes,const off_t bytes_l,ht_h
   if (!hash) hash=hash32(bytes,bytes_l);
   ht_entry_t *e=ht_get_entry(ht,bytes,bytes_l,hash,true);
   if (!e->value){
-    e->key=e->value=(void*)(memoryalign==HT_MEMALIGN_FOR_STRG?mstore_addstr(ht->keystore,bytes,bytes_l): mstore_add(ht->keystore,bytes,bytes_l,memoryalign));
+	e->key=e->value=(void*)(memoryalign==HT_MEMALIGN_FOR_STRG?mstore_addstr(ht->keystore,bytes,bytes_l): mstore_add(ht->keystore,bytes,bytes_l,memoryalign));
   }
   return e->value;
 }
@@ -311,10 +311,10 @@ static ht_entry_t *ht_numkey_get_entry(ht_t *ht, ht_keylen_hash_t key_high_varia
   if (!key_high_variability && !key2) return &ht->entry_zero;
   ht_entry_t *e=E();
   if (!e->key && !e->keylen_hash && create){
-    if (_ht_expand(ht)==1) e=E();
-    e->key=(char*)key2;
-    e->keylen_hash=key_high_variability;
-    ht->length++;
+	if (_ht_expand(ht)==1) e=E();
+	e->key=(char*)key2;
+	e->keylen_hash=key_high_variability;
+	ht->length++;
   }
   return e;
 #undef E
@@ -334,19 +334,18 @@ static void *ht_numkey_set(ht_t *ht, ht_keylen_hash_t key_high_variability, cons
 
 
 
-static int ht_report_memusage(int n,ht_t *ht,const bool html){
-#define M(m) n+=mstore_report_memusage(n,m)
+static void ht_report_memusage(FILE *file,ht_t *ht,const bool html){
+#define M(m) mstore_report_memusage(file,m)
   if (!ht){
-    PRINTINFO("%s%36s %4s %10s %12s",html?"":ANSI_UNDERLINE,  "HashTable-Name","ID","#Entries","Bytes");
-    M(NULL);
-    if (!html) PRINTINFO(ANSI_RESET);
+	fprintf(file,"%s%36s %4s %10s %12s",html?"":ANSI_UNDERLINE,  "HashTable-Name","ID","#Entries","Bytes");
+	M(NULL);
+	if (!html) fputs(ANSI_RESET,file);
   }else{
-    PRINTINFO("%36s %4d %'10u %'12ld ",  snull(ht->name),ht->iinstance,ht->length,(long)(ht->capacity*sizeof(ht_entry_t)));
-    if (ht->keystore){ PRINTINFO("    Keystore: "); M(ht->keystore); }
-    if (ht->valuestore){ PRINTINFO("    Value-store: "); M(ht->valuestore); }
+	fprintf(file,"%36s %4d %'10u %'12ld ",  snull(ht->name),ht->iinstance,ht->length,(long)(ht->capacity*sizeof(ht_entry_t)));
+	if (ht->keystore){ fputs("    Keystore: ",file); M(ht->keystore); }
+	if (ht->valuestore){ fputs("    Value-store: ",file); M(ht->valuestore); }
   }
-  PRINTINFO("\n");
-  return n;
+  fputc('\n',file);
 #undef M
 }
 
@@ -354,11 +353,11 @@ static int ht_report_memusage(int n,ht_t *ht,const bool html){
 static void ht_debug_print_keys(const ht_t *ht){
   const ht_entry_t *ee=HT_ENTRIES(ht);
   for(uint32_t i=0;i<C;i++){
-    const char *k=ee[i].key;
-    if (k){
-      printf("ht_debug_print_keys %u\t%s\n",i,k);
-      if (hash_value_strg(k)!=(ee[i].keylen_hash&UINT32_MAX)){ printf("HHHHHHHHHHHHHHHHHHHHHHHH!\n");EXIT(1);}
-    }
+	const char *k=ee[i].key;
+	if (k){
+	  printf("ht_debug_print_keys %u\t%s\n",i,k);
+	  if (hash_value_strg(k)!=(ee[i].keylen_hash&UINT32_MAX)){ printf("HHHHHHHHHHHHHHHHHHHHHHHH!\n");EXIT(1);}
+	}
   }
 }
 #undef C
@@ -373,22 +372,22 @@ static void test_ht_1(int argc, const char *argv[]){
   const char *VV[]={"A","B","C","D","E","F","G","H","I"};
   const int L=9;
   FOR(i,1,argc){
-    ht_sset(&ht,argv[i],VV[i%L]);
+	ht_sset(&ht,argv[i],VV[i%L]);
   }
   //  ht_debug_print_keys(&ht);
   FOR(i,1,argc){
-    const char *a=argv[i],*fetched=ht_sget(&ht,a);
-    printf("argv[%2d]: %s  fetched: %s  VV[%d]: %s\n",i,a,snull(fetched),i%L,VV[i%L]);
-    if (!fetched){printf(" !!!! fetched is NULL\n"); EXIT(9);}
-    assert(!strcmp(fetched,VV[i%L]));
+	const char *a=argv[i],*fetched=ht_sget(&ht,a);
+	printf("argv[%2d]: %s  fetched: %s  VV[%d]: %s\n",i,a,snull(fetched),i%L,VV[i%L]);
+	if (!fetched){printf(" !!!! fetched is NULL\n"); EXIT(9);}
+	assert(!strcmp(fetched,VV[i%L]));
   }
   ht_destroy(&ht);
   printf(" ht.length: %u\n",ht.length);
 }
 static void test_num_keys(int argc, const char *argv[]){
   if(argc!=2){
-    printf("Expected single argument. A decimal number denoting number of tests\n");
-    return;
+	printf("Expected single argument. A decimal number denoting number of tests\n");
+	return;
   }
   fprintf(stderr,"A pair of numbers as key.  x*x+y*z assigned as value (3rd column).  The 3rd and 4th column should be identical.\n");
   const int n=atoi(argv[1]);
@@ -401,20 +400,20 @@ static void test_num_keys(int argc, const char *argv[]){
   printf(ANSI_INVERSE""ANSI_BOLD"i\tj\tu\tv"ANSI_RESET"\n");
   int length=0;
   RLOOP(set,2){
-    FOR(i,0,n){
-      FOR(j,0,n){
-        const int u=i*i+j*j;
-        if (set){
-          ht_numkey_set(&ht,i,j,(void*)(uint64_t)u);
-          if (i || j) length++;
-          //          assert(u==(uint64_t)ht_numkey_get(&ht,i,j));
-        }else{
-          const uint64_t v=(uint64_t)ht_numkey_get(&ht,i,j);
-          printf("%s%d\t%d\t%d\t%"PRIu64"\n"ANSI_RESET,   u!=v?ANSI_FG_RED:ANSI_FG_GREEN, i,j,u,v);
-          if (u!=v) goto u_ne_v;
-        }
-      }
-    }
+	FOR(i,0,n){
+	  FOR(j,0,n){
+		const int u=i*i+j*j;
+		if (set){
+		  ht_numkey_set(&ht,i,j,(void*)(uint64_t)u);
+		  if (i || j) length++;
+		  //          assert(u==(uint64_t)ht_numkey_get(&ht,i,j));
+		}else{
+		  const uint64_t v=(uint64_t)ht_numkey_get(&ht,i,j);
+		  printf("%s%d\t%d\t%d\t%"PRIu64"\n"ANSI_RESET,   u!=v?ANSI_FG_RED:ANSI_FG_GREEN, i,j,u,v);
+		  if (u!=v) goto u_ne_v;
+		}
+	  }
+	}
   }
  u_ne_v:
   printf("ht.length: %u   length: %d\n",ht.length,length);
@@ -426,18 +425,18 @@ static void test_internalize(int argc, const char *argv[]){
   ht_t ht;
   ht_init_interner_file(&ht,"test_internalize",8,4096);
   FOR(i,1,argc){
-    const char *s=argv[i];
-    assert(ht_sinternalize(&ht,s)==ht_sinternalize(&ht,s));
-    assert(ht_sinternalize(&ht,s)==ht_sget(&ht,s));
-    FOR(j,0,3){
-      const char *isIntern=mstore_contains(ht.keystore,s)?"Yes":"No";
-      printf("%d\t%d\t%s\t%p\t%p\t%s\n",i,j,s,(void*)s,ht_sget(&ht,s),isIntern);
-      s=ht_sinternalize(&ht,s);
-    }
-    printf("\n");
+	const char *s=argv[i];
+	assert(ht_sinternalize(&ht,s)==ht_sinternalize(&ht,s));
+	assert(ht_sinternalize(&ht,s)==ht_sget(&ht,s));
+	FOR(j,0,3){
+	  const char *isIntern=mstore_contains(ht.keystore,s)?"Yes":"No";
+	  printf("%d\t%d\t%s\t%p\t%p\t%s\n",i,j,s,(void*)s,ht_sget(&ht,s),isIntern);
+	  s=ht_sinternalize(&ht,s);
+	}
+	printf("\n");
   }
-  ht_report_memusage(0,NULL,false);
-  ht_report_memusage(0,&ht,false);
+  ht_report_memusage(stderr,NULL,false);
+  ht_report_memusage(stderr,&ht,false);
   ht_destroy(&ht);
 }
 
@@ -459,21 +458,21 @@ static void test_intern_num(int argc, const char *argv[]){
   FOR(i,0,N) intern[i]=(int*)ht_intern(&ht,data[i],data_l,0,SINT);
   int count_ok=0, count_fail=0;
   FOR(i,0,N){
-    bool  ok;
-    ok=(intern[i]==(int*)ht_intern(&ht,intern[i],data_l,0,SINT));
+	bool  ok;
+	ok=(intern[i]==(int*)ht_intern(&ht,intern[i],data_l,0,SINT));
 
-    //      assert(hash32(intern[i],10*SINT)==hash32(data[i]));;
+	//      assert(hash32(intern[i],10*SINT)==hash32(data[i]));;
 
-    assert(ok); //if (verbose) log_verbose("ok2 %d ",ok);
+	assert(ok); //if (verbose) log_verbose("ok2 %d ",ok);
 
-    ok=(intern[i]==(int*)ht_intern(&ht,data[i],data_l,0,SINT));
-    assert(ok); //if (verbose) log_verbose("ok1 %d ",ok);
-    ok=(intern[i]==(int*)ht_get(&ht,(char*)intern[i],data_l,0));
-    assert(ok); //if (verbose) log_verbose("ok3 %d ",ok);
-    ok=(intern[i]==(int*)ht_get(&ht,(char*)data[i],data_l,0));
-    assert(ok); //if (verbose) log_verbose("ok3 %d ",ok);
-    if (verbose) putchar('\n');
-    if (ok) count_ok++; else count_fail++;
+	ok=(intern[i]==(int*)ht_intern(&ht,data[i],data_l,0,SINT));
+	assert(ok); //if (verbose) log_verbose("ok1 %d ",ok);
+	ok=(intern[i]==(int*)ht_get(&ht,(char*)intern[i],data_l,0));
+	assert(ok); //if (verbose) log_verbose("ok3 %d ",ok);
+	ok=(intern[i]==(int*)ht_get(&ht,(char*)data[i],data_l,0));
+	assert(ok); //if (verbose) log_verbose("ok3 %d ",ok);
+	if (verbose) putchar('\n');
+	if (ok) count_ok++; else count_fail++;
   }
   ht_destroy(&ht);
   printf("count_ok=%d count_fail=%d ht.length: %u \n",count_ok,count_fail,ht.length);
@@ -486,11 +485,11 @@ static void test_use_as_set(int argc, const char *argv[]){
   printf("\x1B[1m\x1B[4m");
   printf("j\ti\ts\told\tSize\n"ANSI_RESET);
   FOR(j,0,5){
-    FOR(i,1,argc){
-      const char *s=argv[i], *old=ht_sset(&ht,s,"x");
-      printf("%d\t%d\t%s\t%s\t%u\n",j,i,s,old,ht.length);
-    }
-    fputc('\n',stderr);
+	FOR(i,1,argc){
+	  const char *s=argv[i], *old=ht_sset(&ht,s,"x");
+	  printf("%d\t%d\t%s\t%s\t%u\n",j,i,s,old,ht.length);
+	}
+	fputc('\n',stderr);
   }
   printf("ht.length: %u \n",ht.length);
 }
@@ -498,7 +497,7 @@ static void test_unique(int argc, const char *argv[]){
   ht_t ht;
   ht_init_with_keystore_dim(&ht,"test",HT_FLAG_KEYS_ARE_STORED_EXTERN|8,4096);
   for(int i=1;i<argc && i<999;i++){
-    if (ht_only_once(&ht,argv[i],0)) printf("%s\t",argv[i]);
+	if (ht_only_once(&ht,argv[i],0)) printf("%s\t",argv[i]);
   }
   printf("\n ht.length: %u \n",ht.length);
 }
@@ -522,32 +521,32 @@ static void test_mstore2(int argc, const char *argv[]){
   off_t n;
   char *line=malloc_untracked(len);
   FOR(pass,0,2){
-    printf("\n pass=%d\n\n",pass);
-    FILE *f=fopen(argv[1],"r");  assert(f!=NULL);
-    for(int iLine=0;(n=getline(&line,&len,f))!=-1 && iLine<nLine;iLine++){
-      const int line_l=strlen(line)-1;
-      line[line_l]=0;
-      sprintf(value,"%x",hash32(line,line_l));
-      if (pass==0){
-        const int value_l=strlen(value);
-        //fputs("(5",stderr);
-        const char *key;
-        {
-          char line_on_stack[line_l+1];
-          strcpy(line_on_stack,line);
-          key=(char*)ht_intern(&ht_int,line_on_stack,line_l,0,HT_MEMALIGN_FOR_STRG);
-        }/* From here line_on_stack invalid. Key is internalized string  */
-        const int key_l=strlen(key);
-        const char *stored=mstore_addstr(&m,value,value_l);
-        ht_set(&ht,key,key_l,0,stored);
-        if (is_square_number(iLine)) printf(" %d ",iLine);
-      }else{
-        const char *from_cache=ht_sget(&ht,line);
-        if (is_square_number(iLine))  printf("(%4d) Line: %s  Length: %lld   hash: %s from_cache: %s \n",iLine, line,(LLD)n,value,from_cache);
-        assert(!strcmp(value,from_cache));
-      }
-    }
-    fclose(f);
+	printf("\n pass=%d\n\n",pass);
+	FILE *f=fopen(argv[1],"r");  assert(f!=NULL);
+	for(int iLine=0;(n=getline(&line,&len,f))!=-1 && iLine<nLine;iLine++){
+	  const int line_l=strlen(line)-1;
+	  line[line_l]=0;
+	  sprintf(value,"%x",hash32(line,line_l));
+	  if (pass==0){
+		const int value_l=strlen(value);
+		//fputs("(5",stderr);
+		const char *key;
+		{
+		  char line_on_stack[line_l+1];
+		  strcpy(line_on_stack,line);
+		  key=(char*)ht_intern(&ht_int,line_on_stack,line_l,0,HT_MEMALIGN_FOR_STRG);
+		}/* From here line_on_stack invalid. Key is internalized string  */
+		const int key_l=strlen(key);
+		const char *stored=mstore_addstr(&m,value,value_l);
+		ht_set(&ht,key,key_l,0,stored);
+		if (is_square_number(iLine)) printf(" %d ",iLine);
+	  }else{
+		const char *from_cache=ht_sget(&ht,line);
+		if (is_square_number(iLine))  printf("(%4d) Line: %s  Length: %lld   hash: %s from_cache: %s \n",iLine, line,(LLD)n,value,from_cache);
+		assert(!strcmp(value,from_cache));
+	  }
+	}
+	fclose(f);
   }
   free_untracked(line);
   ht_destroy(&ht);
@@ -559,10 +558,10 @@ static void test_intern_substring(int argc, const char *argv[]){
   ht_t ht;
   ht_init_with_keystore_dim(&ht,"test",HT_FLAG_KEYS_ARE_STORED_EXTERN|8,4096);
   FOR(i,1,argc){
-    const char *a=argv[i];
-    const int len2=strlen(a)/2;
-    const char *internalized=ht_intern(&ht,a,len2,0,HT_MEMALIGN_FOR_STRG);
-    printf("a: %s len/2: %d internalized: %s\n",a,len2,internalized);
+	const char *a=argv[i];
+	const int len2=strlen(a)/2;
+	const char *internalized=ht_intern(&ht,a,len2,0,HT_MEMALIGN_FOR_STRG);
+	printf("a: %s len/2: %d internalized: %s\n",a,len2,internalized);
   }
   printf("\n ht.length: %u \n",ht.length);
 }
@@ -572,17 +571,17 @@ static void test_intern_substring(int argc, const char *argv[]){
 int main(int argc,const char *argv[]){
   setlocale(LC_NUMERIC,""); /* Enables decimal grouping in fprintf */
   if (0){
-    ht_t ht={0};
-    ht_init_interner(&ht,"name",8,4096);
-    const char *key=ht_sinternalize(&ht,"key");
-    printf("key: %s contains:%d  ht.length: %u\n",key,mstore_contains(ht.keystore,key),ht.length);
-    return 1;
+	ht_t ht={0};
+	ht_init_interner(&ht,"name",8,4096);
+	const char *key=ht_sinternalize(&ht,"key");
+	printf("key: %s contains:%d  ht.length: %u\n",key,mstore_contains(ht.keystore,key),ht.length);
+	return 1;
   }
 
   switch(11){
   case 0:
-    printf("ht_entry %zu bytes\n",sizeof(ht_entry_t));
-    assert(false);break;
+	printf("ht_entry %zu bytes\n",sizeof(ht_entry_t));
+	assert(false);break;
   case 2: test_no_dups(argc,argv);break; /* a b c d */
   case 3: test_unique(argc,argv);break; /* a a a a b b b c c  */
   case 4: test_num_keys(argc,argv);break; /* 30 */
@@ -591,7 +590,7 @@ int main(int argc,const char *argv[]){
   case 7: test_internalize(argc,argv);break; /* $(seq 30) */
 
   case 8: test_use_as_set(argc,argv);break; /* $(seq 30) */
-    //  case 5: test_iteration(argc,argv);break; /* {1,2,3,4}{a,b,c,d}{x,y,z}  */
+	//  case 5: test_iteration(argc,argv);break; /* {1,2,3,4}{a,b,c,d}{x,y,z}  */
 
   case 10: test_mstore2(argc,argv); break; /*  f=~/tmp/lines.txt ; seq 100 > $f; cg_ht_v7 $f */
   case 11: test_intern_substring(argc,argv); break; /* abcdefghij   ABCD */

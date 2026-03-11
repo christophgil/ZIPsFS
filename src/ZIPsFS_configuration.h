@@ -23,7 +23,6 @@
 #define WITH_EXTRA_ASSERT    0 // Optional assertion
 #define WITH_TESTING_REALLOC 0 // Smaller initial size, earlier realloc
 #define WITH_TESTING_UNBLOCK 0
-
  /******************************************************************************************************************************************************************/
  /* Avoid blocking        0 deactivated    1 activated        Applies  to rootpaths that starting with three slashs                                                */
  /* Activate this feature if  upstream file systems suffer from becoming blocked/unresonsive                                                                       */
@@ -71,18 +70,6 @@
 // This activates storage of the ZIP file index and the file listing of rarely changing file directories in a cache.
 // The cache key is the filepath of the ZIP file or directory  plus the last-modified file  attribute.
 
-#define WITH_PRELOADRAM 1
-#define NUM_PRELOADRAM_STORE_RETRY 2
-// With WITH_PRELOADRAM, the file content of selected ZIP entries is hold in RAM while the respective file handle exists.
-// This is also required for WITH_INTERNET_DOWNLOAD WITH_FILECONVERSION and WITH_PRELOADRAM
-// This facilitates non-sequential file reading.
-// See man fseek
-// The virtual file paths are selected with the function config_advise_cache_zipentry_in_ram(). Also see CLI parameter -c.
-// Depending on the size, memory is reserved either with MALLOC() or with MMAP().
-// The memory address is kept int fHandle_t as long as the file is open.
-// When several threads are accessing the same file, then only one instance of fHandle_t has a reference to the RAM area with the file content.
-// This cache is used by all other instances of fHandle_t with the same file path.
-// Upon close, such fHandle_t instance is kept alive as long as  there are still instances with the same path. Instead, it is marked for  deletion at a later time.
 
 
 
@@ -188,13 +175,16 @@
 
 
 
+#define WITH_PRELOADRAM 1  /* The file content is hold in RAM while the respective file handle exists to facilitates non-sequential file reading. See fHandle_t */
+#define NUM_PRELOADRAM_STORE_RETRY 2
+
 ///////////////////////////////////
 /// Dynamically generated files ///
 ///////////////////////////////////
-#define WITH_FILECONVERSION           1 /* Generate files based on rules of file extensions */
+#define WITH_FILECONVERSION    1 /* Generate files based on rules of file extensions */
 #define WITH_CCODE             1 /* Generate files by C-code */
 #define WITH_INTERNET_DOWNLOAD 1 /* Access to internet files like <mount-point>/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README */
-#define WITH_PRELOADDISK   1 /* Files are preloadoed to fst branch for root paths preceded by --preload at CLI. Or for  virtual paths starting with /ZIPsFS/lr/, /ZIPsFS/lrc/, /ZIPsFS/lrz/. */
+#define WITH_PRELOADDISK       1 /* Files are preloadoed to fst branch for root paths preceded by --preload at CLI. Or for  virtual paths starting with /ZIPsFS/lr/, /ZIPsFS/lrc/, /ZIPsFS/lrz/. */
 #define WITH_PRELOADDISK_DECOMPRESS 1
 
 

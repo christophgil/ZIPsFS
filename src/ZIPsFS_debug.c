@@ -8,7 +8,7 @@ static int countFhandleWithPreloadram(const char *path, int len,int h){
   if (!len) len=strlen(path);
   if (!h) h=hash32(path,len);
   int count=0;
-  IF1(WITH_PRELOADRAM,foreach_fhandle(id,d)     if (D_VP_HASH(d)==h && d->preloadram && d->preloadram->txtbuf && !strcmp(path,D_VP(d))) count++);
+  IF1(WITH_PRELOADRAM,foreach_fhandle(id,d)  if(D_VP_HASH(d)==h && d->preloadram && d->preloadram->txtbuf && !strcmp(path,D_VP(d))) count++);
   return count;
 }
 
@@ -19,12 +19,12 @@ static void _fhandleWithPreloadramPrint(const char *func,int line,const char *pa
   if (!len) len=strlen(path);
   if (!h) h=hash32(path,len);
   foreach_fhandle(id,d){
-    if (D_VP_HASH(d)==h){
-      const struct preloadram *m=d->preloadram;
-      if (m && (m->txtbuf||m->preloadram_status) && !strcmp(path,D_VP(d))){
-        log_msg("%s:%d fhandleWithPreloadramPrint: %d %s  preloadram_status: %s preloadram_l: %lld\n",func,line,id,path,PRELOADRAM_STATUS_S[m->preloadram_status],(LLD)m->preloadram_l);
-      }
-    }
+	if (D_VP_HASH(d)==h){
+	  const struct preloadram *m=d->preloadram;
+	  if (m && (m->txtbuf||m->preloadram_status) && !strcmp(path,D_VP(d))){
+		log_msg("%s:%d fhandleWithPreloadramPrint: %d %s  preloadram_status: %s preloadram_l: %lld\n",func,line,id,path,PRELOADRAM_STATUS_S[m->preloadram_status],(LLD)m->preloadram_l);
+	  }
+	}
   }
 #endif //WITH_PRELOADRAM
 }
@@ -46,12 +46,12 @@ static bool _debugSpecificPath(int mode, const char *path, int path_l){
   case 3: b=ENDSWITH(path,path_l,"20230126_PRO1_KTT_017_30-0046_LisaKahl_P01_VNATSerAuxgM1evoM2Glycine5mM_dia_BF4_1_12110.d");break;
   }
   if (b){
-    const int n=countFhandleWithPreloadram(path,path_l,0);
-    if (n>1){
-      log_error("path=%s   countFhandleWithPreloadram=%d\n",path,n);
-      fhandleWithPreloadramPrint(path,path_l,0);
-    }
-    return true;
+	const int n=countFhandleWithPreloadram(path,path_l,0);
+	if (n>1){
+	  log_error("path=%s   countFhandleWithPreloadram=%d\n",path,n);
+	  fhandleWithPreloadramPrint(path,path_l,0);
+	}
+	return true;
   }
   return false;
 }
@@ -70,19 +70,19 @@ static void _assert_validchars(enum enum_validchars t,const char *s,int s_l,cons
   if (pos<0) return;
   lock(mutex_validchars);
   if (!ht_numkey_set(&_ht_valid_chars,hash32(s,s_l),s_l,"X")){
-    char encoded[PATH_MAX];
-    url_encode(encoded,PATH_MAX,s);
-    warning(WARN_CHARS|WARN_FLAG_ONCE_PER_PATH,encoded,ANSI_FG_BLUE"%s()"ANSI_RESET": position: %d",fn,pos);
+	char encoded[PATH_MAX];
+	url_encode(encoded,PATH_MAX,s);
+	warning(WARN_CHARS|WARN_FLAG_ONCE_PER_PATH,encoded,ANSI_FG_BLUE"%s()"ANSI_RESET": position: %d",fn,pos);
   }
   unlock(mutex_validchars);
 }
 #define  assert_validchars_direntries(...) _assert_validchars_direntries(__VA_ARGS__,__func__)
 static void _assert_validchars_direntries(const directory_t *dir,const char *fn){
   if (dir){
-    RLOOP(i,dir->core.files_l){
-      const char *s=dir->core.fname[i];
-      if (s) assert_validchars(VALIDCHARS_PATH,s,strlen(s));
-    }
+	RLOOP(i,dir->core.files_l){
+	  const char *s=dir->core.fname[i];
+	  if (s) assert_validchars(VALIDCHARS_PATH,s,strlen(s));
+	}
   }
 }
 
@@ -107,9 +107,9 @@ const char *ss[]={"/mypath/subdir/file.txt", "file_no_path.txt", "/mypath/subdir
 const uint64_t wiff=(uint64_t)".wiff";
 for(int i=0; ss[i];i++){
   LOCK(mutex_fhandle,
-       const char *e=fileExtension(ss[i],cg_strlen(ss[i]));
-       fprintf(stderr,"Testing  fileExtension()%40s %10s   is .wiff: %s\n",ss[i],e,yes_no(((uint64_t)e)==wiff));
-       );
+	   const char *e=fileExtension(ss[i],cg_strlen(ss[i]));
+	   fprintf(stderr,"Testing  fileExtension()%40s %10s   is .wiff: %s\n",ss[i],e,yes_no(((uint64_t)e)==wiff));
+	   );
  }
 EXIT(0);
 #endif //0
@@ -126,17 +126,17 @@ static void _directory_print(const char *func,const int line,const directory_t *
   fprintf(stderr,"\n"ANSI_INVERSE"%s:%d  Directory %p '%s'   files_l: %d/%d  destroyed: %s success: %s  ht-intern: %s\n"ANSI_RESET,func,line,dir,DIR_RP(dir),d->files_l,  dir->files_capacity, yes_no(dir->dir_is_destroyed), yes_no(dir->dir_is_success),yes_no(NULL!=hti));
   assert(d->files_l<=dir->files_capacity);
   FOR(i,0,d->files_l){
-    const char *n=d->fname[i];
-    if (!n) continue;
-    const int len=strnlen(n,MAX_PATHLEN);
-    if (len>=MAX_PATHLEN){ log_error("%s %s: strnlen d->fname[%d] is %d\n",__func__,func,i,len);}
-    if (i<maxNum){
-          char encoded[PATH_MAX];
-          const bool invalid=len!=url_encode(encoded,PATH_MAX,n);
-      //        fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'zu\t%s\t%u\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), Nth0(d->fsize,i),encoded,hash_value_strg(n));
-      fprintf(stderr,"%s:%d ",func,line);
-      fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'lld\t%s\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), (LLD)Nth0(d->fsize,i),encoded);
-    }
+	const char *n=d->fname[i];
+	if (!n) continue;
+	const int len=strnlen(n,MAX_PATHLEN);
+	if (len>=MAX_PATHLEN){ log_error("%s %s: strnlen d->fname[%d] is %d\n",__func__,func,i,len);}
+	if (i<maxNum){
+		  char encoded[PATH_MAX];
+		  const bool invalid=len!=url_encode(encoded,PATH_MAX,n);
+	  //        fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'zu\t%s\t%u\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), Nth0(d->fsize,i),encoded,hash_value_strg(n));
+	  fprintf(stderr,"%s:%d ",func,line);
+	  fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'lld\t%s\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), (LLD)Nth0(d->fsize,i),encoded);
+	}
   }
 }
 
@@ -145,13 +145,13 @@ static void _directory_print(const char *func,const int line,const directory_t *
 #if 0
 static bool debug_path(const char *vp){
   return vp!=NULL && NULL!=strstr(vp,
-                                  //"20230116_Z1_ZW_001_30-0061_poolmix_2ug_ZenoSWATH_T600_V4000_rep01"
-                                  "20230116_Z1_ZW_001_30-0061_poolmix_2ug_ZenoSWATH_T600_V4000_rep02"
-                                  );
+								  //"20230116_Z1_ZW_001_30-0061_poolmix_2ug_ZenoSWATH_T600_V4000_rep01"
+								  "20230116_Z1_ZW_001_30-0061_poolmix_2ug_ZenoSWATH_T600_V4000_rep02"
+								  );
   static void _debug_nanosec(const char *msg,const int i,const char *path,struct timespec *t){
-    if (!t->tv_nsec){
-      log_verbose("%s #%d path: %s\n",msg,i,path);
-    }
+	if (!t->tv_nsec){
+	  log_verbose("%s #%d path: %s\n",msg,i,path);
+	}
   }
 }
 #define DEBUG_NANOSEC(i,path,t) _debug_nanosec(__func__,i,path,t)
@@ -170,7 +170,7 @@ static bool debug_fhandle(const fHandle_t *d){
 static void debug_fhandle_listall(void){
   log_msg(ANSI_INVERSE"%s"ANSI_RESET"\n",__func__);
   foreach_fhandle(id,d){
-    log_msg("d %p path: %s fh: %llu\n",d,D_VP(d),(LLU)d->fh);
+	log_msg("d %p  '%s' fh: %llu\n",d,D_VP(d),(LLU)d->fhandle_fh);
   }
 }
 
@@ -189,27 +189,27 @@ static void debug_compare_directory_a_b(directory_t *A,directory_t *B){
   bool diff=false;
 #define print_realpath() dde_print("dir_realpath  '%s'  '%s'\n",DIR_RP(A),DIR_RP(B))
   if (DIR_RP(A) && DIR_RP(B) &&  strcmp(DIR_RP(A),DIR_RP(B))){
-    print_realpath();
-    diff=true;
+	print_realpath();
+	diff=true;
   }
   struct directory_core a=A->core,b=B->core;
   if (a.files_l!=b.files_l){
-    dde_print("files_l  %d  %d\n",a.files_l,b.files_l);
-    diff=true;
+	dde_print("files_l  %d  %d\n",a.files_l,b.files_l);
+	diff=true;
   }else{
-    FOR(i,0,b.files_l){
-      if ((!a.fname[i])!=(!b.fname[i]) || a.fname[i] && strcmp(a.fname[i],b.fname[i])){
-        dde_print("fname[%d]  %s %s\n",i,a.fname[i],b.fname[i]);
-        diff=true;
-      }
+	FOR(i,0,b.files_l){
+	  if ((!a.fname[i])!=(!b.fname[i]) || a.fname[i] && strcmp(a.fname[i],b.fname[i])){
+		dde_print("fname[%d]  %s %s\n",i,a.fname[i],b.fname[i]);
+		diff=true;
+	  }
 #define D(f,F) if (a.f && a.f[i]!=b.f[i]) { dde_print(#f " [%d]  " F " " F " \n",i,a.f[i],b.f[i]); diff=true;}
-      D(fsize,"%zu"); D(finode,"%lu"); D(fmtime,"%lu"); D(fcrc,"%u"); D(fflags,"%d");
+	  D(fsize,"%zu"); D(finode,"%lu"); D(fmtime,"%lu"); D(fcrc,"%u"); D(fflags,"%d");
 #undef D
-    }
+	}
   }
   if (diff){
-    print_realpath();
-    exit_ZIPsFS();
+	print_realpath();
+	exit_ZIPsFS();
   } //else dde_print(GREEN_SUCCESS"%s\n",DIR_RP(B));
 }
 #endif //DEBUG_DIRCACHE_COMPARE_CACHED
@@ -220,12 +220,12 @@ static void debug_compare_directory_a_b(directory_t *A,directory_t *B){
 #if DEBUG_TRACK_FALSE_GETATTR_ERRORS
 static void debug_track_false_getattr_errors(const char *vp,const int vp_l){
   if ((ENDSWITH(vp,vp_l,".SSMetaData") || ENDSWITH(vp,vp_l,".raw")  )){
-    log_verbose("vp=%s",vp);
-    NEW_ZIPPATH(vp);
-    const bool found=find_realpath_any_root(0,zpath,NULL);
-    log_zpath("",zpath);
-    exit_ZIPsFS();
-    usleep(1000*500);
+	log_verbose("vp=%s",vp);
+	NEW_ZIPPATH(vp);
+	const bool found=find_realpath_any_root(0,zpath,NULL);
+	log_zpath("",zpath);
+	exit_ZIPsFS();
+	usleep(1000*500);
   }
 }
 #endif //DEBUG_TRACK_FALSE_GETATTR_ERRORS
@@ -234,11 +234,11 @@ static void debug_track_false_getattr_errors(const char *vp,const int vp_l){
 #if WITH_EXTRA_ASSERT
 static bool debug_trigger_vp(const char *vp,const int vp_l){
   return  !strcmp("/PRO2/Data/50-0139",vp) ||
-    !strcmp("/PRO2/Data",vp) ||
-    !strcmp("/PRO2",vp) ||
-    ENDSWITH(vp,vp_l,".d") ||
-    ENDSWITH(vp,vp_l,".tdf") ||
-    ENDSWITH(vp,vp_l,".tdf_bin");
+	!strcmp("/PRO2/Data",vp) ||
+	!strcmp("/PRO2",vp) ||
+	ENDSWITH(vp,vp_l,".d") ||
+	ENDSWITH(vp,vp_l,".tdf") ||
+	ENDSWITH(vp,vp_l,".tdf_bin");
 }
 #else
 #define debug_trigger_vp(...) false

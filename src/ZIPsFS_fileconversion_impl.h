@@ -7,7 +7,8 @@ _Static_assert(WITH_FILECONVERSION,"");
 
 
 
-#define FOREACH_FILECONVERSION_RULE(i,ac)  struct fileconversion_rule *ac; for(int i=0;(ac=config_fileconversion_rules()[i]);i++)
+#define FOREACH_FILECONVERSION_RULE(i,ac)  struct fileconversion_rule *ac; for(int i=0;(ac=config_fileconversion_rules()[i]);i++)\
+                                                                             if (_writable_path_l || (ac->out==STDOUT_TO_MMAP||ac->out==STDOUT_TO_MMAP))
 //#define FOREACH_FILECONVERSION_RULE(ac)  for(const struct fileconversion_rule *ac=*config_fileconversion_rules(); ac&&ac->_idx; ac++)
 #define fileconversion_filecontent_append_nodestroy(ff,s,s_l)  _fileconversion_filecontent_append(TXTBUFSGMT_NO_FREE,ff,s,s_l)
 #define fileconversion_filecontent_append(ff,s,s_l)  _fileconversion_filecontent_append(0,ff,s,s_l)
@@ -49,8 +50,7 @@ struct fileconversion_rule{
   const char *ext;                    /* Extension of generated file.  The extension is appended at the input file to form the out-file. */
   const char *info;                   /* Will be printed into the logs. Optional. */
   const char **env;                   /* Environment. Optional NULL terminated string array like .env={MY_PATH="/local/app/lib",NULL}. See execle(). */
-  const char *cmd[FILECONVERSION_ARGV];      /* Command line parameters. */
-
+  const char *cmd[FILECONVERSION_ARGV+1];      /* Command line parameters. */
   bool fsize_not_remember;                  /* The file size is normally saved in a hashmap and reused. */
   bool fsize_is_multiple_of_infile;         /* Guessed file size is    struct fileconversion_rule.estimated_filesize  multiplied with file size of input file */
   bool ignore_errfile;                      /* Ignore outputfile.fail.txt  from previous failure and do not return EPIPE. Instead try computation again. */
@@ -72,7 +72,7 @@ struct fileconversion_files{
   char tmpout[MAX_PATHLEN+1];
   char log[MAX_PATHLEN+1];
   char fail[MAX_PATHLEN+1];
-  textbuffer_t *af_txtbuf;
+  textbuffer_t *fc_txtbuf;
     enum enum_fileconversion_capture_output out;   /* Like fileconversion_rule.out.  Corrected for low memory */
 
 };

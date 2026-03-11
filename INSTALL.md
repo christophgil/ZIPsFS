@@ -25,7 +25,7 @@ ZIPsFS allows transparent on-the-fly file conversion which requires the followin
 
 
 A ZIPsFS file system can be exported via SAMBA such and the file system can be visited with a Windows PC.
-    ZIPsFS can`` also be installed on a Windows system in  WSL.
+	ZIPsFS can`` also be installed on a Windows system in  WSL.
 
 ### Problem: Files that are not listed in the parent are not accessible
 
@@ -62,8 +62,8 @@ However, we found the following problems:
 
    When the special symbol ***PLACEHOLDER_EXTERNAL_QUEUE*** is specified instead of a direct executable path, ZIPsFS:
 
-    - Pushes the task details to a queue.
-    - Waits for the result.
+	- Pushes the task details to a queue.
+	- Waits for the result.
 
    The actual execution of these tasks is handled by the shell script ZIPsFS_autogen_queue.sh,
    which must be started manually by the user. This script polls the queue and performs the requested conversions or operations.
@@ -76,15 +76,15 @@ However, we found the following problems:
 
 <details><summary>Ubuntu, Debian and friends (Linux)</summary>
 
-    apt-get update
-    apt-get install fuse-zip   libfuse3-dev  libzip-dev  unzip lynx tmux curl
-    addr2line -H || apt-get install binutils
+	apt-get update
+	apt-get install fuse-zip   libfuse3-dev  libzip-dev  unzip lynx tmux curl
+	addr2line -H || apt-get install binutils
 
-    apt-get install gcc
+	apt-get install gcc
 
 or
 
-    apt-get install clang
+	apt-get install clang
 </details><!--- Ubuntu -->
 
 
@@ -96,11 +96,11 @@ Download and install macFUSE https://osxfuse.github.io/
 
 Open terminal and run:
 
-    sudo port install libzip bindfs wget unzip tmux lynx curl
+	sudo port install libzip bindfs wget unzip tmux lynx curl
 
 Load the kernel. Give the correct OSX version, here 15.
 
-    sudo kextload /Library/Filesystems/macfuse.fs/Contents/Extensions/15/macfuse.kext && echo Success
+	sudo kextload /Library/Filesystems/macfuse.fs/Contents/Extensions/15/macfuse.kext && echo Success
 
 An error box might pop up:
 
@@ -115,13 +115,13 @@ Maybe you need to restart and try again.
 
 To check whether fuse is working try bindfs it  is a simple FUSE file system.
 
-    mkdir -p ~/mnt/test_bindfs
-    bindfs -f ~ ~/mnt/test_bindfs
+	mkdir -p ~/mnt/test_bindfs
+	bindfs -f ~ ~/mnt/test_bindfs
 
 The -f option means that bindfs runs in foreground.
 In another terminal check whether you see the content of the home directory at the mount point.
 
-     ls ~/mnt/test_bindfs
+	 ls ~/mnt/test_bindfs
 </details><!--- MacOSX -->
 
 
@@ -131,33 +131,33 @@ In another terminal check whether you see the content of the home directory at t
 
 Become root.
 
-    pkg install fuse-zip unzip zip lynx tmux sysutils/fusefs-libs3 libzip bash wget curl
+	pkg install fuse-zip unzip zip lynx tmux sysutils/fusefs-libs3 libzip bash wget curl
 
 Check whether fuse file systems works as root. fuse-zip is a simple FUSE file system for testing.
 
-    mkdir -p ~/mnt/test_fuse
-    fuse-zip  <path-any-zip-file> ~/mnt/test_fuse
+	mkdir -p ~/mnt/test_fuse
+	fuse-zip  <path-any-zip-file> ~/mnt/test_fuse
 
 If it does not please check fuse kernel module
 
-    kldstat
+	kldstat
 
 You shoud see a line with fusefs. If not
 
-    kldload fusefs
+	kldload fusefs
 
 To load it automatically on boot, add the line to /etc/rc.conf
 
-    kldload fusefs
-    kld_list="fusefs"
+	kldload fusefs
+	kld_list="fusefs"
 
 ## Try FUSE as root
 
-    mkdir -p ~/mnt/zip ~/test &&  zip -j ~/test/test.zip /etc/os-release &&  fuse-zip ~/test/test.zip ~/mnt/zip
+	mkdir -p ~/mnt/zip ~/test &&  zip -j ~/test/test.zip /etc/os-release &&  fuse-zip ~/test/test.zip ~/mnt/zip
 
 The zip file is mounted here:
 
-    ls ~/mnt/zip
+	ls ~/mnt/zip
 
 
 ## Allow FUSE for normal user
@@ -165,18 +165,18 @@ The zip file is mounted here:
 Now check whether fuse-zip  works if run as a normal user.
 If not then run
 
-    sysctl vfs.usermount=1
-    echo vfs.usermount=1 >>  /etc/sysctl.conf
-    pw groupadd fuse
-    chgrp fuse /dev/fuse
-    pw groupmod group -m <user-id>
+	sysctl vfs.usermount=1
+	echo vfs.usermount=1 >>  /etc/sysctl.conf
+	pw groupadd fuse
+	chgrp fuse /dev/fuse
+	pw groupmod group -m <user-id>
 </details><!--- FreeBSD -->
 
 
 
 <details><summary>NetBSD</summary>
 
-    pkg_add -u zip unzip libzip fuse-unionfs perfuse bash wget tmux lynx curl
+	pkg_add -u zip unzip libzip fuse-unionfs perfuse bash wget tmux lynx curl
 
 
 
@@ -188,7 +188,7 @@ Running ZIPsFS as root worked well.  Normally, ZIPsFS will not run as root unles
 given.  However, we could not run ZIPsFS as a normal user because of acceess failure for /dev/puffs.
 We added the user to group wheel and did
 
-    chmod go+rw /dev/puffs
+	chmod go+rw /dev/puffs
 
 without success.
 
@@ -206,9 +206,9 @@ Shared libs libzip and libfuse were not found.  This could be fixed with
 <details>
 <summary>OpenBSD</summary>
 
-    pkg_add fuse-zip libzip
-    pkg_add  rsync lynx
-    pkg_info -Q    ## Search
+	pkg_add fuse-zip libzip
+	pkg_add  rsync lynx
+	pkg_info -Q    ## Search
 
 </details><!--- OpenBSD -->
 
@@ -221,15 +221,15 @@ However, it did not work.
 
 
 
-    pkg install fuse libzip
-    pkg install tmux
-    clang || pkg install developer/clang-18 # You can specify any clang version here.
+	pkg install fuse libzip
+	pkg install tmux
+	clang || pkg install developer/clang-18 # You can specify any clang version here.
 
 
 ## Installing fuse
 There seems to be no fuse package.
 
-    pkg search fuse
+	pkg search fuse
 
 This software provides FUSE. Please install it.
 [Please install solaris-sparc-fuse](https://github.com/myaut/solaris-sparc-fuse)
@@ -237,14 +237,14 @@ This software provides FUSE. Please install it.
 
 ## Prepare running ZIPsFS
 
-    export PATH=$PATH:/local/illumos-sshfs-master/libfuse/:/local/illumos-sshfs-master/libfuse/amd64
-    mkdir -p /usr/lib/fs/fuse
-    cp /local/illumos-sshfs-master/libfuse/amd64/fusermount.bin /usr/lib/fs/fuse/
-    echo user_allow_other >>/etc/fuse.conf
+	export PATH=$PATH:/local/illumos-sshfs-master/libfuse/:/local/illumos-sshfs-master/libfuse/amd64
+	mkdir -p /usr/lib/fs/fuse
+	cp /local/illumos-sshfs-master/libfuse/amd64/fusermount.bin /usr/lib/fs/fuse/
+	echo user_allow_other >>/etc/fuse.conf
 
 ## For compilation use option -F
 
-    ./src/ZIPsFS.compile.sh -F /local/illumos-sshfs-master/libfuse/proto/usr/lib/amd64/libfuse.so.2.7.1
+	./src/ZIPsFS.compile.sh -F /local/illumos-sshfs-master/libfuse/proto/usr/lib/amd64/libfuse.so.2.7.1
 
 ## TroubleShooting
 
@@ -258,9 +258,9 @@ I changed the permissions of /dev/fuse without success.
 OpenIndiana is an Illumos distribution and a descendant of OpenSolaris
 
 
-     pkg update
-     pkg install tmux fuse libzip pkg:/metapackages/build-essential
-     pkg install tmux fuse libzip build-essential
+	 pkg update
+	 pkg install tmux fuse libzip pkg:/metapackages/build-essential
+	 pkg install tmux fuse libzip build-essential
 
 <!-- OpenSolaris -->
 <!-- * https://artemis.sh/2022/03/07/pkgsrc-openindiana-illumos.html -->
@@ -284,21 +284,23 @@ More work is needed to understand the permission. At least, ZIPsFS compiles.
 
 # Downloading
 
-    I=~/test/ZIPsFS/installation
-    U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
-    mkdir -p $I
-    cd $I
-    rm main.zip 2>/dev/null
-    if curl --version  >/dev/null; then curl -O -L $U; else wget -N $U; fi
-    unzip main.zip
-    cd ZIPsFS-main
-    export PATH+=:$PWD
+Run at the command prompt:
+
+	I=~/test/ZIPsFS/installation
+	U=https://github.com/christophgil/ZIPsFS/archive/refs/heads/main.zip
+	mkdir -p $I
+	cd $I
+	rm main.zip 2>/dev/null
+	if curl --version  >/dev/null; then curl -O -L $U; else wget -N $U; fi
+	unzip main.zip
+	cd ZIPsFS-main
+	export PATH+=:$PWD
 
 # Compilation
 
 Run
 
-     ./src/ZIPsFS.compile.sh
+	 ./src/ZIPsFS.compile.sh
 
 This creates the executable file **ZIPsFS**.
 
@@ -338,9 +340,10 @@ Quick guide to fix the problem:
 
 # Testing the installed ZIPsFS
 
-    src/ZIPsFS_testing.sh  <Path to ZIPsFS executable>
+	mkdir -p ~/test/ZIPsFS/mnt
+	src/ZIPsFS_testing.sh  ~/test/ZIPsFS/mnt
 
-    Or run the Mini tutorial in the README
+Or run the Mini tutorial in the README
 
 
 <details><summary>Trouble Shooting Running ZIPsFS</summary>
@@ -358,17 +361,17 @@ This can be done by testing another FUSE file system like **sshfs** or **fuse-zi
 <details><summary>Testing fuse-zip</summary>
 
 Install fuse-zip. Ubuntu, Debian ...
-    sudo apt get install fuse-zip
+	sudo apt get install fuse-zip
 
 
 In the following, an empty folder is created which serves as mount point. Then a ZIP file is made and mounted with fuse-zip.
 Finally, the files at the mount point are shown.
 
 
-    mkdir -p ~/test/ZIPsFS/mnt
-    zip --fifo  ~/test/ZIPsFS/test.zip  <(date)
-    fuse-zip  ~/test/ZIPsFS/test.zip ~/test/ZIPsFS/mnt
-    ls -R  ~/test/ZIPsFS/mnt
+	mkdir -p ~/test/ZIPsFS/mnt
+	zip --fifo  ~/test/ZIPsFS/test.zip  <(date)
+	fuse-zip  ~/test/ZIPsFS/test.zip ~/test/ZIPsFS/mnt
+	ls -R  ~/test/ZIPsFS/mnt
 </details><!--- fuse-zip --><!--- -->
 
 
@@ -379,9 +382,9 @@ Install fuse-unionfs.
 The following will mount */etc* onto *~/mnt/test-unionfs*.
 This test may be performed as a normal user or as **root**.
 
-    m=~/mnt/test-unionfs/
-    unionfs-fuse /etc=RO $m
-    ls $m
+	m=~/mnt/test-unionfs/
+	unionfs-fuse /etc=RO $m
+	ls $m
 
 </details><!--- fuse-unionfs -->
 

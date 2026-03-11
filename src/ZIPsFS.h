@@ -74,6 +74,8 @@
 #define PATH_STARTS_WITH_DIR_ZIPsFS(p)    (p[0]=='/'&&p[1]=='Z'&&p[2]=='I'&&p[3]=='P'&&p[4]=='s'&&p[5]=='F'&&p[6]=='S'&&(p[7]=='/'||!p[7]))
 
 #define DIR_FIRST_ROOT          DIR_ZIPsFS"/1"
+#define DIR_EXCLUDE_FIRST_ROOT  DIR_ZIPsFS"/~1"
+
 
 #define DIR_PRELOADDISK_R        DIR_ZIPsFS"/lr"
 #define DIR_PRELOADDISK_RC       DIR_ZIPsFS"/lrc"
@@ -82,17 +84,23 @@
 #define DIR_FILECONVERSION                  DIR_ZIPsFS"/c"
 #define DIR_FILECONVERSION_L                (sizeof(DIR_FILECONVERSION)-1)
 #define DIR_INTERNET                 DIR_ZIPsFS"/n"
-#define DIR_PLAIN                    DIR_ZIPsFS"/p"
 #define DIR_INTERNET_L               (sizeof(DIR_INTERNET)-1)
+
+#define DIR_INTERNET_UPDATE         DIR_ZIPsFS"/n/_UPDATE_"
+#define DIR_INTERNET_UPDATE_L       (sizeof(DIR_INTERNET_UPDATE)-1)
+
+#define DIR_PLAIN                    DIR_ZIPsFS"/p"
+
 #define DIR_INTERNET_GZ_L            (DIR_INTERNET_L+3)
 
 
 #define FILE_CLEANUP_SCRIPT          DIR_ZIPsFS"/ZIPsFS_cleanup.sh"
 
-#define DIRNAME_PRELOADED_UPDATE     "Update_Preloaded_Files"
+#define DIRNAME_PRELOADED_UPDATE     "_UPDATE_PRELOADED_FILES_"
 #define DIRNAME_PRELOADED_UPDATE_L   (sizeof(DIRNAME_PRELOADED_UPDATE)-1)
 #define DIR_PRELOADED_UPDATE         DIR_ZIPsFS"/"DIRNAME_PRELOADED_UPDATE
-
+#define DIR_PRELOADED_UPDATE_L       (sizeof(DIR_PRELOADED_UPDATE)-1)
+#define DIR_REQUIRES_WRITABLE_ROOT(dir) (((dir))==DIR_FIRST_ROOT || (dir)==DIR_PRELOADED_UPDATE || (dir)==DIR_INTERNET || (dir)==DIR_INTERNET_UPDATE)
 
 
 
@@ -122,26 +130,32 @@ enum enum_counter_rootdata{
 
 // cppcheck-suppress-macro staticStringCompare
 #define XMACRO_SPECIAL_FILES()\
-  X(0,                                 "warnings.log",                         DIR_ZIPsFS,           SFILE_LOG_WARNINGS)\
-  X(0,                                 "errors.log",                           DIR_ZIPsFS,           SFILE_LOG_ERRORS)\
-  X(0,                                 NULL,                                   "",                   SFILE_DEBUG_CTRL)\
-  X(0,                                 NULL,                                   "",                   SFILE_WITH_REALPATH_NUM)\
-  X(0,                                 NULL,                                   "",                   SFILE_BEGIN_IN_RAM)\
-  X(0,                                 "file_system_info.html",                DIR_ZIPsFS,           SFILE_INFO)\
-  X(0,                                 "ZIPsFS_set_file_access_time.command",  DIR_ZIPsFS,           SFILE_SET_ATIME_SH)\
-  X(0,                                 "ZIPsFS_set_file_access_time.ps1",      DIR_ZIPsFS,           SFILE_SET_ATIME_PS)\
-  X(0,                                 "ZIPsFS_set_file_access_time.bat",      DIR_ZIPsFS,           SFILE_SET_ATIME_BAT)\
-  X(0,                                 "Read_beginning_of_selected_files.bat", DIR_ZIPsFS,           SFILE_READ_BEGINNING_OF_FILES_BAT)\
-  X(0,                                 "ZIPsFS_clear_cache.command",           DIR_ZIPsFS,           SFILE_CLEAR_CACHE)\
-  X(0,                                 "README_ZIPsFS.html",                   DIR_ZIPsFS,           SFILE_README)\
-  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_1st_root.txt",           DIR_FIRST_ROOT,       SFILE_README_FIRST_ROOT)\
-  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_plain.txt",              DIR_PLAIN,            SFILE_README_PLAIN)\
-  X(0,                                 "README_ZIPsFS_net.html",               DIR_INTERNET,         SFILE_README_INTERNET)\
-  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_fileconversion.html",    DIR_FILECONVERSION,   SFILE_README_FILECONVERSION)\
-  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_preload.html",           DIR_PRELOADDISK_R,    SFILE_README_PRELOADDISK_R)\
-  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_preload.html",           DIR_PRELOADDISK_RC,   SFILE_README_PRELOADDISK_RC)\
-  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_preload.html",           DIR_PRELOADDISK_RZ,   SFILE_README_PRELOADDISK_RZ)\
-  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_preload.html",           DIR_PRELOADED_UPDATE, SFILE_README_PRELOADDISK_UPDATE)
+  X(0,                                 "warnings.log",                         DIR_ZIPsFS,             SFILE_LOG_WARNINGS)\
+  X(0,                                 "errors.log",                           DIR_ZIPsFS,             SFILE_LOG_ERRORS)\
+  X(0,                                 NULL,                                   "",                     SFILE_DEBUG_CTRL)\
+  X(0,                                 "file_system_info.html",                DIR_ZIPsFS,             SFILE_INFO)\
+  X(0,                                 NULL,                                   "",                     SFILE_WITH_REALPATH_NUM)\
+  X(0,                                 NULL,                                   "",                     SFILE_BEGIN_IN_RAM)\
+  X(0,                                 "Clear_cache.command",				   DIR_ZIPsFS,             SFILE_CLEAR_CACHE)	\
+  X(0,                                 "Set_file_access_time.command",		   DIR_ZIPsFS,             SFILE_SET_ATIME_SH)\
+  X(0,                                 "Set_file_access_time.ps1",			   DIR_ZIPsFS,             SFILE_SET_ATIME_PS)\
+  X(0,                                 "Set_file_access_time.bat",			   DIR_ZIPsFS,             SFILE_SET_ATIME_BAT)\
+  X(0,                                 "Read_beginning_of_files.bat",          DIR_ZIPsFS,             SFILE_READ_BEGINNING_OF_FILES_BAT)\
+  X(0,                                 "Read_beginning_of_files.command",      DIR_ZIPsFS,             SFILE_READ_BEGINNING_OF_FILES_SH)\
+  X(0,                                 "README_ZIPsFS.html",                   DIR_ZIPsFS,             SFILE_README)\
+  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_1st_root.txt",           DIR_FIRST_ROOT,         SFILE_README_FIRST_ROOT)\
+  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_exclude_1st_root.txt",   DIR_EXCLUDE_FIRST_ROOT, SFILE_README_EXCLUDE_FIRST_ROOT)\
+  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_plain.txt",              DIR_PLAIN,              SFILE_README_PLAIN)\
+  X(0,                                 "README_ZIPsFS_net.html",               DIR_INTERNET,           SFILE_README_INTERNET)\
+  X(0,                                 "_NET_FETCH_.ps1",                      DIR_INTERNET,           SFILE_NET_FETCH_PS)\
+  X(0,                                 "_NET_FETCH_.command",                  DIR_INTERNET,           SFILE_NET_FETCH_SH)\
+  X(0,                                 "_NET_FETCH_.bat",                      DIR_INTERNET,           SFILE_NET_FETCH_BAT)\
+  X(0,                                 "README_ZIPsFS_Update_net.html",        DIR_INTERNET_UPDATE,    SFILE_README_INTERNET_UPDATE)\
+  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_fileconversion.html",    DIR_FILECONVERSION,     SFILE_README_FILECONVERSION)\
+  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_preload.html",           DIR_PRELOADDISK_R,      SFILE_README_PRELOADDISK_R)\
+  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_preload.html",           DIR_PRELOADDISK_RC,     SFILE_README_PRELOADDISK_RC)\
+  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_preload.html",           DIR_PRELOADDISK_RZ,     SFILE_README_PRELOADDISK_RZ)\
+  X(ZP_VP_STRIP_PFX,                   "README_ZIPsFS_preload.html",           DIR_PRELOADED_UPDATE,   SFILE_README_PRELOADDISK_UPDATE)
 
 
 #define X(opt,name,D,id) id,
@@ -171,21 +185,21 @@ enum enum_fileconversion_state{FILECONVERSION_UNINITILIZED,FILECONVERSION_SUCCES
 #define A8(x) C(mutex_nil)C(mutex_start_thread)C(mutex_fhandle)C(mutex_async)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_fileconversion_init)C(mutex_dircache_queue)C(mutex_log_count)C(mutex_crc)C(mutex_inode)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_len) //* mutex_roots must be last */
 
 #define A9(x) C(LOG_DEACTIVATE_ALL)C(LOG_FUSE_METHODS_ENTER)C(LOG_FUSE_METHODS_EXIT)C(LOG_ZIP)C(LOG_ZIP_INLINE)C(LOG_EVICT_FROM_CACHE)C(LOG_PRELOADRAM)C(LOG_REALPATH)C(LOG_FILECONVERSION)C(LOG_READ_BLOCK)\
-       C(LOG_TRANSIENT_ZIPENTRY_CACHE)\
-       C(LOG_STAT)C(LOG_OPEN)C(LOG_OPENDIR)\
-       C(LOG_INFINITY_LOOP_RESPONSE)C(LOG_INFINITY_LOOP_STAT)C(LOG_INFINITY_LOOP_PRELOADRAM)C(LOG_INFINITY_LOOP_DIRCACHE)C(LOG_INFINITY_LOOP_MISC)  C(LOG_FLAG_LENGTH)
+	   C(LOG_TRANSIENT_ZIPENTRY_CACHE)\
+	   C(LOG_STAT)C(LOG_OPEN)C(LOG_OPENDIR)\
+	   C(LOG_INFINITY_LOOP_RESPONSE)C(LOG_INFINITY_LOOP_STAT)C(LOG_INFINITY_LOOP_PRELOADRAM)C(LOG_INFINITY_LOOP_DIRCACHE)C(LOG_INFINITY_LOOP_MISC)  C(LOG_FLAG_LENGTH)
 
 #define A10(x) C(ASYNC_NIL)C(ASYNC_STAT)C(ASYNC_READDIR)C(ASYNC_OPENFILE)C(ASYNC_OPENZIP)   C(ASYNC_LENGTH)
 
 
 #define A12() C(COUNT_UNDEFINED) C(COUNT_MALLOC_TESTING)\
-       C(COUNT_HT_MALLOC_TRANSIENT_CACHE)C(COUNT_MALLOC_KEY_TRANSIENT_CACHE)\
-       C(COUNT_HT_MALLOC_MISMATCH)C(COUNT_HT_MALLOC_KEY_MISMATCH)\
-       C(COUNT_HT_MALLOC_NODUPS)\
-       C(COUNT_MSTORE_MMAP_NODUPS) C(COUNT_MSTORE_MALLOC_NODUPS)\
-       C(COUNTm_MSTORE_MMAP)                C(COUNTm_MSTORE_MALLOC)\
-       C(COUNTER_TXTBUFSGMT_MMAP) C(COUNTER_TXTBUFSGMT_MALLOC)\
-       C(COUNT_TXTBUF_SEGMENT_MALLOC)  C(COUNT_TXTBUF_SEGMENT_MMAP)\
+	   C(COUNT_HT_MALLOC_TRANSIENT_CACHE)C(COUNT_MALLOC_KEY_TRANSIENT_CACHE)\
+	   C(COUNT_HT_MALLOC_MISMATCH)C(COUNT_HT_MALLOC_KEY_MISMATCH)\
+	   C(COUNT_HT_MALLOC_NODUPS)\
+	   C(COUNT_MSTORE_MMAP_NODUPS) C(COUNT_MSTORE_MALLOC_NODUPS)\
+	   C(COUNTm_MSTORE_MMAP)                C(COUNTm_MSTORE_MALLOC)\
+	   C(COUNTER_TXTBUFSGMT_MMAP) C(COUNTER_TXTBUFSGMT_MALLOC)\
+	   C(COUNT_TXTBUF_SEGMENT_MALLOC)  C(COUNT_TXTBUF_SEGMENT_MMAP)\
   C(COUNT_MSTORE_MMAP_DIR_FILENAMES)           C(COUNT_MSTORE_MALLOC_DIR_FILENAMES)\
   C(COUNT_MSTORE_MMAP_TRANSIENT_CACHE_VALUES)       C(COUNT_MSTORE_MALLOC_TRANSIENT_CACHE_VALUES)\
   C(COUNT_HT_MALLOC_KEY)\
@@ -199,17 +213,17 @@ enum enum_fileconversion_state{FILECONVERSION_UNINITILIZED,FILECONVERSION_SUCCES
   C(COUNT_ZIP_OPEN)\
   C(COUNT_ZIP_FOPEN)\
   C(COUNT_FHANDLE_CONSTRUCT)\
-       C(COUNTm_FHANDLE_ARRAY_MALLOC)\
+	   C(COUNTm_FHANDLE_ARRAY_MALLOC)\
   C(COUNT_FHANDLE_TRANSIENT_CACHE)\
-       C(COUNT_PAIRS_END)\
+	   C(COUNT_PAIRS_END)\
 \
-       C(COUNT_PRELOADRAM_WAITFOR_TIMEOUT)\
-       C(COUNT_LCOPY_WAITFOR_TIMEOUT)\
-       C(COUNT_READZIP_PRELOADRAM)\
+	   C(COUNT_PRELOADRAM_WAITFOR_TIMEOUT)\
+	   C(COUNT_LCOPY_WAITFOR_TIMEOUT)\
+	   C(COUNT_READZIP_PRELOADRAM)\
   C(COUNT_READZIP_PRELOADRAM_BECAUSE_SEEK_BWD)\
   C(COUNT_STAT_FROM_CACHE)\
   C(COUNT_PTHREAD_LOCK)\
-       C(COUNT_SEQUENTIAL_INODE)\
+	   C(COUNT_SEQUENTIAL_INODE)\
   C(COUNT_NUM)
 
 
@@ -217,10 +231,14 @@ enum enum_fileconversion_state{FILECONVERSION_UNINITILIZED,FILECONVERSION_SUCCES
 
 #define A11() C(ZIPsFS_configuration)C(ZIPsFS_configuration_fileconversion)C(ZIPsFS_configuration_c)C(ZIPsFS_configuration_zipfile)C(ZIPsFS_configuration_NUM)
 
+#define A14() C(CLEAR_ALL_CACHES)C(CLEAR_DIRCACHE)C(CLEAR_ZIPINLINE_CACHE)C(CLEAR_STATCACHE)C(CLEAR_CACHE_LEN)
+
+
 #define C(a) a,
 enum enum_mstoreid{A1()};
 enum enum_mallocid{A12()};
 enum enum_ctrl_action{A13()};
+enum enum_clear_cache{A14()};
 enum enum_warnings{A3()};
 #if WITH_PRELOADRAM
 enum enum_preloadram_status{A4()};
@@ -244,6 +262,8 @@ static const char *MUTEX_S[]={A8()NULL};
 static const char *LOG_FLAG_S[]={A9()NULL};
 static const char *ASYNC_S[]={A10()NULL};
 static const char *ZIPSFS_CONFIGURATION_S[]={A11()NULL};
+static const char *CLEAR_CACHE_S[]={A14()NULL};
+
 #undef C
 #undef A1
 #undef A2
@@ -258,6 +278,7 @@ static const char *ZIPSFS_CONFIGURATION_S[]={A11()NULL};
 #undef A11
 #undef A12
 #undef A13
+#undef A14
 
 
 
@@ -335,7 +356,7 @@ struct zippath{
 #define ZP_NOT_EXPAND_SYMLINKS     (1<<12)
 #define ZP_IS_PATHINFO             (1<<14)
 #define ZP_VP_STRIP_PFX            (1<<17) /* the path prefix in zpath_t.dir or virtualpath.dir is removed from VP() and virtualpath.vp */
-
+#define ZP_IS_IN_FHANDLE           (1<<18)
 #define ZP_KEEP_NOT_RESET_MASK     (((1<<20)-1)&~ZP_MASK_SFILE)
   /* The following should be removed by path_reset_keep_VP() */
 
@@ -351,8 +372,12 @@ struct zippath{
 #define ZP_TRY_FILECONVERSION             (1<<30)
 #define ZPF(f) (zpath->flags&(f))
 };
-#define ZPATH_IS_FILECONVERSION() (zpath->dir==DIR_FILECONVERSION && !(zpath->flags&ZP_IS_PATHINFO))
-
+#define SFX_UPDATE ".htmL"
+#define NET_SFX_UPDATE ".html"
+#define ZPATH_IS_FILECONVERSION(zpath) ((zpath)->dir==DIR_FILECONVERSION && !((zpath)->flags&ZP_IS_PATHINFO))
+#define ZPATH_FILLDIR_SFX(zpath)   ((zpath)->dir==DIR_INTERNET_UPDATE||(zpath)->dir==DIR_PRELOADED_UPDATE?SFX_UPDATE:NULL)
+//#define ZPATH_FILLDIR_SFX_L(zpath) ((zpath)->dir==DIR_INTERNET_UPDATE||(zpath)->dir==DIR_PRELOADED_UPDATE?(sizeof(SFX_UPDATE)-1):0)
+#define ZPATH_CUT(zpath,num_chars_to_be_removed)    (zpath)->strgs[(zpath)->strgs_l-=num_chars_to_be_removed]=0
 typedef struct zippath zpath_t;
 
 struct async_zipfile{
@@ -424,12 +449,11 @@ typedef struct directory directory_t;
 #define NEW_ZIPPATH(vipa)  zpath_t __zp={0},*zpath=&__zp;zpath_init(zpath,vipa)
 #define FIND_REALPATH(virtpath)    NEW_ZIPPATH(virtpath);  found=find_realpath_any_root(0,zpath,NULL);
 #define FIND_REALPATH_NOT_EXPAND_SYMLINK(virtpath)    NEW_ZIPPATH(virtpath); zpath->flags|=ZP_NOT_EXPAND_SYMLINKS;  found=find_realpath_any_root(0,zpath,NULL);
-////////////////////////////////////////////////////////////////////////////////////////////////////
-///   The fHandle_t "file handle" holds data associated with a file descriptor.
-///   They are stored in the linear list _fhandle. The list may have holes.
-///   Preloadram: It may also contain the cached file content of the zip entry.
-///   Only one of all instances with a specific virtual path should store the cached zip entry
-////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
 
 
 
@@ -458,13 +482,13 @@ typedef struct directory directory_t;
 #define STAT_CACHE_ROOT_IS_IMMUTABLE         (1<<8)
 #define STAT_CACHE_IS_PFXPLAIN        (1<<9)
 #define STAT_CACHE_OPT_FOR_ROOT(opt_filldir_findrp,r)  (\
-                                                        ((opt_filldir_findrp&FINDRP_IS_PFXPLAIN)?STAT_CACHE_IS_PFXPLAIN:0)|\
-                                                        ((opt_filldir_findrp&FINDRP_IS_WORM)    ?STAT_CACHE_ROOT_IS_WORM:0)|\
-                                                        ((opt_filldir_findrp&FINDRP_IS_IMMUTABLE)      ?STAT_CACHE_ROOT_IS_IMMUTABLE:0)|\
-                                                         (r && r==_root_writable?STAT_CACHE_ROOT_IS_WRITABLE:0)|\
-                                                         (r && r->remote        ?STAT_CACHE_ROOT_IS_REMOTE:0)|\
-                                                         (r && r->with_timeout  ?STAT_CACHE_ROOT_WITH_TIMEOUT:0)|\
-                                                         (r && r->preload_flags ?STAT_CACHE_ROOT_IS_PRELOADING:0))
+														((opt_filldir_findrp&FINDRP_IS_PFXPLAIN)?STAT_CACHE_IS_PFXPLAIN:0)|\
+														((opt_filldir_findrp&FINDRP_IS_WORM)    ?STAT_CACHE_ROOT_IS_WORM:0)|\
+														((opt_filldir_findrp&FINDRP_IS_IMMUTABLE)      ?STAT_CACHE_ROOT_IS_IMMUTABLE:0)|\
+														 (r && r==_root_writable?STAT_CACHE_ROOT_IS_WRITABLE:0)|\
+														 (r && r->remote        ?STAT_CACHE_ROOT_IS_REMOTE:0)|\
+														 (r && r->with_timeout  ?STAT_CACHE_ROOT_WITH_TIMEOUT:0)|\
+														 (r && r->preload_flags ?STAT_CACHE_ROOT_IS_PRELOADING:0))
 
 
 
@@ -498,13 +522,20 @@ static virtualpath_t empty_virtualpath;
 #define FUSE_PREAMBLE_W(create_or_del,vpath) FUSE_PREAMBLE(vpath); er=virtualpath_error(&vipa,create_or_del); if (er) return -er
 
 
-/***************************************************************************************/
-/* This struct contains data associated with a file handle.                            */
-/* It is created in xmp_open unless for plain regular files not needing preloading.    */
-/* It is then used in xmp_read() */
-/***************************************************************************************/
+
+
+ /******************************************************************************************************************/
+ /* This struct contains data associated with a file handle.													   */
+ /* It is created in xmp_open unless for plain regular files not needing preloading.							   */
+ /* It is then used in xmp_read()																				   */
+ /* Instances  are stored in the linear list _fhandle. The list may have holes.									   */
+ /* WITH_PRELOADRAM: It may also contain the cached file content. Improve non-sequential reading				   */
+ /*                  Only one of all instances with a specific virtual path stores the cached zip entry			   */
+ /*                  See config_advise_cache_zipentry_in_ram() and  CLI parameter -c.							   */
+ /******************************************************************************************************************/
+
 struct fHandle{
-  uint64_t fh;
+  uint64_t fhandle_fh;
   int fd_real;
   struct zip *zip_archive;
   zip_file_t *zip_file;
@@ -564,7 +595,7 @@ struct rootdata{
   counter_rootdata_t filetypedata_dummy,filetypedata_all, filetypedata[FILETYPEDATA_NUM],filetypedata_frequent[FILETYPEDATA_FREQUENT_NUM];
   bool filetypedata_initialized, blocked, writable, remote,with_timeout,thread_already_started[PTHREAD_LEN],noatime, no_cross_device, follow_symlinks,worm,immutable;
   int preload_flags, /* Currently decompression exclusively works by preloading to disk and preload_flags and decompress_flags are identical. */
-    decompress_flags;  /* These flags also serve for filler_add() */
+	decompress_flags;  /* These flags also serve for filler_add() */
 
 #define PRELOAD_YES           (1<<9)
 #define FLAGS_FILLDIR_FINDRP_BEGIN    (1<<10)
@@ -580,7 +611,7 @@ struct rootdata{
 #define FINDRP_STAT_TOCACHE_ALWAYS    (1<<19)
 
   _Static_assert(((1<<COMPRESSION_NUM)-1<PRELOAD_YES) &&
-                 ((1<<COMPRESSION_NUM)-1<FLAGS_FILLDIR_FINDRP_BEGIN),"COMPRESSION_NUM ... is part of this");
+				 ((1<<COMPRESSION_NUM)-1<FLAGS_FILLDIR_FINDRP_BEGIN),"COMPRESSION_NUM ... is part of this");
   /*  In one  opt   FILLDIR_XXXX FINDRP and COMPRESSION */
 
 
@@ -603,8 +634,8 @@ struct rootdata{
 };
 typedef struct rootdata root_t;
 
-#define ROOT_PROPERTY_PATH_DENY_PATTERNS      "path-deny-patterns"
-#define ROOT_PROPERTY_PATH_ALLOW_PREFIXES     "path-allow-prefixes"
+#define ROOT_PROPERTY_PATH_DENY      "path-deny"
+#define ROOT_PROPERTY_PATH_ALLOW     "path-allow"
 #define ROOT_PROPERTY_PATH_PREFIX             "path-prefix"
 #define ROOT_PROPERTY_STAT_TIMEOUT            "stat-timeout"
 #define ROOT_PROPERTY_READDIR_TIMEOUT         "readdir-timeout"
@@ -617,8 +648,8 @@ typedef struct rootdata root_t;
 
 
 const char *ARRAY_ROOT_PROPERTY[]={
-  ROOT_PROPERTY_PATH_DENY_PATTERNS,
-  ROOT_PROPERTY_PATH_ALLOW_PREFIXES,
+  ROOT_PROPERTY_PATH_DENY,
+  ROOT_PROPERTY_PATH_ALLOW,
   ROOT_PROPERTY_PATH_PREFIX,
   ROOT_PROPERTY_STAT_TIMEOUT,
   ROOT_PROPERTY_READDIR_TIMEOUT,
@@ -697,3 +728,8 @@ struct preloadram{
 
 #define LOG_ENTERED_VPATH() log_entered_function("%s",vpath)
 #define exit_ZIPsFS() _exit_ZIPsFS(__func__,__LINE__);
+
+
+/********/
+/* Misc */
+/********/

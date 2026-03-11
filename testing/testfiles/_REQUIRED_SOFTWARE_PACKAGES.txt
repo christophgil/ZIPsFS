@@ -1,0 +1,25 @@
+############################################
+### Software needed for the tests        ###
+############################################
+
+### Compression ###
+bzip2
+lrzip
+zip
+xz
+ncompress
+
+
+### Image ###
+imagemagick
+picterm
+
+
+### Text ###
+latex ## for pdflatex
+poppler-utils ## for pdftotext
+tesseract-ocr-eng  # tesseract is OCR
+
+
+### Container ###
+docker

@@ -20,13 +20,13 @@ _scale25={.ext=".scale25%",IMG_SCALE_COMMON("%25","-"),.out=STDOUT_TO_MMAP},
   _test_zip_checksums={.ends_ic=".zip",.estimated_filesize=9999,.ext=".txt",.cmd={"unzip","-t",PLACEHOLDER_INFILE},.out=STDOUT_TO_OUTFILE},
 
   _bunzip2={.ends=".tsv.bz2",.estimated_filesize=9, .ext=".tsv",.cmd={"bunzip2","-c",PLACEHOLDER_INFILE},.out=STDOUT_TO_MMAP,
-            .generated_file_hasnot_infile_ext=true,.fsize_is_multiple_of_infile=true,.max_infilesize_for_RAM=(2<<20)},
+			.generated_file_hasnot_infile_ext=true,.fsize_is_multiple_of_infile=true,.max_infilesize_for_RAM=(2<<20)},
   _parquet={.ends=".parquet",.estimated_filesize=30, .max_infilesize_for_RAM=(1<<20), .ext=".tsv", .out=STDOUT_TO_OUTFILE, .fsize_is_multiple_of_infile=true,
-            .cmd={"docker","run","-v",PLACEHOLDER_INFILE_PARENT":/data","--rm","hangxie/parquet-tools","cat","-f","tsv","/data/"PLACEHOLDER_INFILE_NAME}},
+			.cmd={"docker","run","-v",PLACEHOLDER_INFILE_PARENT":/data","--rm","hangxie/parquet-tools","cat","-f","tsv","/data/"PLACEHOLDER_INFILE_NAME}},
 
 /* Beware circular conversions therefore upper case .TSV.bz2 */
   _parquet_bz2={.ends=".parquet",.estimated_filesize=10, .ext=".TSV.bz2", .out=STDOUT_TO_OUTFILE, .fsize_is_multiple_of_infile=true,.security_check_filename=true,
-                .cmd={"bash","-c", "docker run -v '"PLACEHOLDER_INFILE_PARENT":/data' --rm hangxie/parquet-tools cat -f tsv '/data/"PLACEHOLDER_INFILE_NAME"' |bzip2 -c"}},
+				.cmd={"bash","-c", "docker run -v '"PLACEHOLDER_INFILE_PARENT":/data' --rm hangxie/parquet-tools cat -f tsv '/data/"PLACEHOLDER_INFILE_NAME"' |bzip2 -c"}},
   _fileconversion_rule_null={};
 #undef IMG_SCALE_COMMON
 
@@ -60,27 +60,27 @@ _wiff_strings={.ends=".wiff",.estimated_filesize=99999,.ext=".strings",.cmd={"ba
 
 static struct fileconversion_rule **config_fileconversion_rules(void){
   static struct fileconversion_rule* aa[]={
-    &_pdftotext,
-    &_test_mmap,
-    &_test_textbuf,
-    &_test_cmd_notexist,&_test_malloc_fail,
-    &_test_malloc,
-    &_wiff_strings,
-    &_wiff_scan,
-    &_msconvert_mzML,
-    &_msconvert_mgf,
-    &_scale50,
-    &_scale25,
-    &_opticalCharacterRecognition,
-    &_test_zip_checksums,
-    &_parquet,
-    &_parquet_bz2,
-    /* --- At the end those with generated_file_hasnot_infile_ext --- */
-    /* --- This flag can cause unambiguity unambiguous assignment of generated file to fileconversion_rule.  Best is to put those configurations at the end of the list --- */
-    &_test_noext,
-    //   &_bunzip2,
-    NULL,NULL
-    }; /* The terminal NULL is required !! */
+	&_pdftotext,
+	&_test_mmap,
+	&_test_textbuf,
+	&_test_cmd_notexist,&_test_malloc_fail,
+	&_test_malloc,
+	&_wiff_strings,
+	&_wiff_scan,
+	&_msconvert_mzML,
+	&_msconvert_mgf,
+	&_scale50,
+	&_scale25,
+	&_opticalCharacterRecognition,
+	&_test_zip_checksums,
+	&_parquet,
+	&_parquet_bz2,
+	/* --- At the end those with generated_file_hasnot_infile_ext --- */
+	/* --- This flag can cause unambiguity unambiguous assignment of generated file to fileconversion_rule.  Best is to put those configurations at the end of the list --- */
+	&_test_noext,
+	//   &_bunzip2,
+	NULL,NULL
+	}; /* The terminal NULL is required !! */
 
   return aa;
 }
@@ -98,8 +98,8 @@ static bool config_fileconversion_exclude(const char *vp, const int vp_l,const s
 /// Later they are replaced by larger .wiff.scan files                                                  ///
 /// Return true for the generated file to be deleted.                                                   ///
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
-static bool config_fileconversion_file_is_invalid(const char *path,const int path_l, const struct stat *st, const char *rootpath){
-  if (!st) return false;
+static bool config_fileconversion_file_is_invalid(const int opt, const char *path,const int path_l, const struct stat *st, const char *rootpath){
+  if (opt&FC_NOT_UPTODATE) return true;
   if (ENDSWITH(path,path_l,".wiff.scan") && st->st_size==44) return true; /* Sciex Mass-Spectrometer: The tiny wiff.scan files are placeholders*/
   return  false;
 }
@@ -114,8 +114,8 @@ static bool config_fileconversion_file_is_invalid(const char *path,const int pat
 static long config_fileconversion_estimate_filesize(const struct fileconversion_files *ff, bool *rememberFileSize){
   long size=ff->rule->estimated_filesize;
   if (ff->rule->fsize_is_multiple_of_infile){
-    if (0==(ff->rule->fsize_not_remember)) *rememberFileSize=true;
-    size*=ff->infiles_size_sum;
+	if (0==(ff->rule->fsize_not_remember)) *rememberFileSize=true;
+	size*=ff->infiles_size_sum;
   }
   return closest_with_identical_digits(size);
 }
@@ -141,17 +141,17 @@ static int config_fileconversion_add_virtual_infiles(struct fileconversion_files
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 static enum enum_fileconversion_run_res config_fileconversion_run(struct fileconversion_files *ff){
   if (ff->rule==&_test_textbuf){ /* This example shows how file content is generated without calling an external program. */
-    /* There are three functions to add text:
-       H(): The memory had been allocated with malloc() and will be released with free()
-       C(): The memory will not be released. For example string constant.
-       M(): The memory had been obtained with mmap() and will be freed with munmap()
-    */
-    const char *t;
-    t="This is a string literal and must not be released with free().\n";
-    if (C(ff,t,strlen(t))) return FILECONVERSION_RUN_FAIL;
-    t="This text is in the heap storage. It should be released with free().\n";
-    if (H(ff,strdup(t),strlen(t))) return FILECONVERSION_RUN_FAIL;
-    return FILECONVERSION_RUN_SUCCESS;
+	/* There are three functions to add text:
+	   H(): The memory had been allocated with malloc() and will be released with free()
+	   C(): The memory will not be released. For example string constant.
+	   M(): The memory had been obtained with mmap() and will be freed with munmap()
+	*/
+	const char *t;
+	t="This is a string literal and must not be released with free().\n";
+	if (C(ff,t,strlen(t))) return FILECONVERSION_RUN_FAIL;
+	t="This text is in the heap storage. It should be released with free().\n";
+	if (H(ff,strdup(t),strlen(t))) return FILECONVERSION_RUN_FAIL;
+	return FILECONVERSION_RUN_SUCCESS;
   }
   return FILECONVERSION_RUN_NOT_APPLIED;
 }

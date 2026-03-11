@@ -19,11 +19,11 @@ static bool async_wait(const char *path, const time_t t,root_t *r,const int A){
   time_t lastLog=0;
 
   for(int j=1; G==ASYNC_JOB_PICKED; j++){
-    if (j%255 || !TO) continue;
-    const time_t diff=time(NULL)-t;
-    if (diff>TO) break;
-    if (diff-lastLog>4){ lastLog=diff*3/2; log_verbose("%s path: %s %d s",ASYNC_S[A],path,(int)diff);}
-    usleep(256);
+	if (j%255 || !TO) continue;
+	const time_t diff=time(NULL)-t;
+	if (diff>TO) break;
+	if (diff-lastLog>4){ lastLog=diff*3/2; log_verbose("%s path: %s %d s",ASYNC_S[A],path,(int)diff);}
+	usleep(256);
   }
   LOCK_N(mutex_async, const bool finished=!G; ID++);
   if (!finished) log_warn("Timeout G=%d  %s root: '%s': path: '%s'   %'ld  <= %d",G,ASYNC_S[A],rootpath(r),path,time(NULL)-(t),TO);
@@ -32,11 +32,11 @@ static bool async_wait(const char *path, const time_t t,root_t *r,const int A){
 static void async_wait_picked(root_t *r,const int A){
   time_t lastLog=0;
   for(int j=1; G==ASYNC_JOB_SUBMITTED; j++){
-    if ((j%255) || !TO) continue;
-    const time_t diff=time(NULL)-ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC);
-    if (diff>TO) break;
-    usleep(256);
-    if (diff-lastLog>4) lastLog=diff*3/2;
+	if ((j%255) || !TO) continue;
+	const time_t diff=time(NULL)-ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC);
+	if (diff>TO) break;
+	usleep(256);
+	if (diff-lastLog>4) lastLog=diff*3/2;
   }
 }
 #endif // WITH_TIMEOUT_xxx
@@ -96,36 +96,36 @@ static bool async_periodically_dircache(root_t *r){
   char path[PATH_MAX+1];
   struct stat stbuf={0};
   while(true){
-    *path=0;
-    { /*Pick path from an entry and put in stack variable path */
-      lock_ncancel(mutex_dircache_queue);
-      ht_entry_t *ee=HT_ENTRIES(&r->dircache_queue);
-      RLOOP(i,r->dircache_queue.capacity){
-        if (ee[i].key){
-          cg_strncpy0(path,ee[i].key,MAX_PATHLEN);
-          ht_clear_entry(&r->dircache_queue, ee+i);
-          break;
-        }}
-      unlock_ncancel(mutex_dircache_queue);
-    }
-    if (!*path) break;
-    if (IF1(WITH_STAT_CACHE,stat_from_cache(0,&stbuf,path,r)||)  stat_direct(0,&stbuf,path,strlen(path),r)){
-      directory_t mydir={0}, *dir=&mydir;
-      zpath_t *zpath=directory_init_zpath(dir,NULL);
-      zpath->stat_rp=stbuf;
-      zpath->realpath=zpath_newstr(zpath);
-      zpath_strcat(zpath,path);
-      RP_L()=zpath_commit(zpath);
-      zpath->root=r;
-      zpath->flags|=ZP_TRY_ZIP;
-      dir->async_never=true;
-      assert(DIR_ROOT(dir)==r);
-      if (readdir_now(dir)){
-        success=true;
-        LOCK_NCANCEL(mutex_dircache,dircache_directory_to_cache(dir));
-      }
-      directory_destroy(dir);
-    }
+	*path=0;
+	{ /*Pick path from an entry and put in stack variable path */
+	  lock_ncancel(mutex_dircache_queue);
+	  ht_entry_t *ee=HT_ENTRIES(&r->dircache_queue);
+	  RLOOP(i,r->dircache_queue.capacity){
+		if (ee[i].key){
+		  cg_strncpy0(path,ee[i].key,MAX_PATHLEN);
+		  ht_clear_entry(&r->dircache_queue, ee+i);
+		  break;
+		}}
+	  unlock_ncancel(mutex_dircache_queue);
+	}
+	if (!*path) break;
+	if (IF1(WITH_STAT_CACHE,stat_from_cache(0,&stbuf,path,r)||)  stat_direct(0,&stbuf,path,strlen(path),r)){
+	  directory_t mydir={0}, *dir=&mydir;
+	  zpath_t *zpath=directory_init_zpath(dir,NULL);
+	  zpath->stat_rp=stbuf;
+	  zpath->realpath=zpath_newstr(zpath);
+	  zpath_strcat(zpath,path);
+	  RP_L()=zpath_commit(zpath);
+	  zpath->root=r;
+	  zpath->flags|=ZP_TRY_ZIP;
+	  dir->async_never=true;
+	  assert(DIR_ROOT(dir)==r);
+	  if (readdir_now(dir)){
+		success=true;
+		LOCK_NCANCEL(mutex_dircache,dircache_directory_to_cache(dir));
+	  }
+	  directory_destroy(dir);
+	}
   }
   return success;
 }
@@ -202,16 +202,16 @@ static inline bool async_periodically_openfile(root_t *r){
 static int async_openfile(zpath_t *zpath,const int flags){
   if (!RP_L()) return 0;
   do{
-    R();
-    if (!r->with_timeout) return open(RP(),flags);
-    L();
-    WAIT_PICKED(r->async_openfile_flags=flags;  strcpy(r->async_openfile_path,RP()));
-    const time_t t0=time(NULL);
-    ASYNC_WAIT(RP(),t0);
-    DIE_IF_TIMEOUT(RP());
-    const int fd=finished?r->async_openfile_fd:0;
-    UL();
-    if (fd>0) return fd;
+	R();
+	if (!r->with_timeout) return open(RP(),flags);
+	L();
+	WAIT_PICKED(r->async_openfile_flags=flags;  strcpy(r->async_openfile_path,RP()));
+	const time_t t0=time(NULL);
+	ASYNC_WAIT(RP(),t0);
+	DIE_IF_TIMEOUT(RP());
+	const int fd=finished?r->async_openfile_fd:0;
+	UL();
+	if (fd>0) return fd;
   }while(find_realpath_other_root(zpath));
   return 0;
 }
@@ -235,16 +235,16 @@ static void async_openzip(struct async_zipfile *zip){
   assert(zip);
   zpath_t *zpath=&zip->azf_zpath;
   do{
-    R();
-    if (!r->with_timeout){ openzip_now(zip);break;}
-    L();
-    ASSERT(EP_L());
-    WAIT_PICKED(r->async_zipfile=zip);
-    const time_t t0=time(NULL);
-    ASYNC_WAIT(RP(),t0);
-    UL();
-    if (finished && zip->zf) break;
-    DIE_IF_TIMEOUT(RP());
+	R();
+	if (!r->with_timeout){ openzip_now(zip);break;}
+	L();
+	ASSERT(EP_L());
+	WAIT_PICKED(r->async_zipfile=zip);
+	const time_t t0=time(NULL);
+	ASYNC_WAIT(RP(),t0);
+	UL();
+	if (finished && zip->zf) break;
+	DIE_IF_TIMEOUT(RP());
   }while(find_realpath_other_root(zpath));
 }
 #else
@@ -266,7 +266,7 @@ static void directory_copy(directory_t *dst,const directory_t *src, root_t *r){
   const struct directory_core *d=&src->core;
   assert(NULL!=src->ht_intern_names);
   FOR(i,0,n){
-    directory_add(Nth0(d->fflags,i)|DIRENT_DIRECT_NAME,dst,  Nth0(d->finode,i), d->fname[i],Nth0(d->fsize,i),Nth0(d->fmtime,i),Nth0(d->fcrc,i));
+	directory_add(Nth0(d->fflags,i)|DIRENT_DIRECT_NAME,dst,  Nth0(d->finode,i), d->fname[i],Nth0(d->fsize,i),Nth0(d->fmtime,i),Nth0(d->fcrc,i));
   }
   dst->dir_is_success=src->dir_is_success;
   ASSERT(src->core.files_l==dst->core.files_l);
@@ -287,19 +287,19 @@ static bool readdir_async(directory_t *dir){
   assert(dir!=NULL);
   zpath_t *zpath=&dir->dir_zpath;
   do{
-    R();
-    ASSERT(RP_L());
-    if (!r->with_timeout||dir->async_never){
-      return readdir_now(dir);
-    }
-    L();
-    WAIT_PICKED(r->async_dir=dir);
-    root_update_time(r,-PTHREAD_ASYNC);
-    ASYNC_WAIT(RP(),ROOT_WHEN_ITERATED(r,PTHREAD_ASYNC));
-    //log_debug_now("%p '%s'   finished:%d  success:%d files_l: %d same: %d",dir,DIR_RP(dir),finished,dir->dir_is_success, dir->core.files_l, dir==r->async_dir);  directory_debug_filenames("dir/",dir);
-    UL();
-    if (finished) return dir->dir_is_success;
-    DIE_IF_TIMEOUT(RP());
+	R();
+	ASSERT(RP_L());
+	if (!r->with_timeout||dir->async_never){
+	  return readdir_now(dir);
+	}
+	L();
+	WAIT_PICKED(r->async_dir=dir);
+	root_update_time(r,-PTHREAD_ASYNC);
+	ASYNC_WAIT(RP(),ROOT_WHEN_ITERATED(r,PTHREAD_ASYNC));
+	//log_debug_now("%p '%s'   finished:%d  success:%d files_l: %d same: %d",dir,DIR_RP(dir),finished,dir->dir_is_success, dir->core.files_l, dir==r->async_dir);  directory_debug_filenames("dir/",dir);
+	UL();
+	if (finished) return dir->dir_is_success;
+	DIE_IF_TIMEOUT(RP());
   }while(find_realpath_other_root(&dir->dir_zpath));
   return false;
 }
@@ -326,26 +326,26 @@ static void root_start_thread(root_t *r,const enum enum_root_thread t,const bool
   if (!r) return;
   lock(mutex_start_thread);
   if (!r->thread_already_started[t] ||evenIfAlreadyStarted){
-    log_verbose("Going to start thread %s / %s",r->rootpath,PTHREAD_S[t]);
-    void *(*f)(void *)=IF1(WITH_PRELOADRAM,t==PTHREAD_PRELOAD?&infloop_preloadfile:) t==PTHREAD_ASYNC?infloop_async:  t==PTHREAD_MISC?infloop_misc: NULL;
-    if (f){
-      const int count=r->thread_count_started[t]++;
-      if (pthread_create(&r->thread[t],NULL,f,(void*)r)){
+	log_verbose("Going to start thread %s / %s",r->rootpath,PTHREAD_S[t]);
+	void *(*f)(void *)=IF1(WITH_PRELOADRAM,t==PTHREAD_PRELOAD?&infloop_preloadfile:) t==PTHREAD_ASYNC?infloop_async:  t==PTHREAD_MISC?infloop_misc: NULL;
+	if (f){
+	  const int count=r->thread_count_started[t]++;
+	  if (pthread_create(&r->thread[t],NULL,f,(void*)r)){
 #define C "Failed thread_create '%s'  Root: %d",PTHREAD_S[t],rootindex(r)
-        if (count) warning(WARN_THREAD|WARN_FLAG_EXIT|WARN_FLAG_ERRNO,rootpath(r),C); else DIE(C);
+		if (count) warning(WARN_THREAD|WARN_FLAG_EXIT|WARN_FLAG_ERRNO,rootpath(r),C); else DIE(C);
 #undef C
-      }
-      if (count) warning(WARN_THREAD,report_rootpath(r),"pthread_start %s function: %p",PTHREAD_S[t],f);
-      r->thread_already_started[t]=true;
-    }
+	  }
+	  if (count) warning(WARN_THREAD,report_rootpath(r),"pthread_start %s function: %p",PTHREAD_S[t],f);
+	  r->thread_already_started[t]=true;
+	}
   }
   unlock(mutex_start_thread);
 }
 static void log_infinity_loop(const root_t *r, const enum enum_root_thread t){
   const int flag=
-    t==PTHREAD_PRELOAD?LOG_INFINITY_LOOP_PRELOADRAM:
-    t==PTHREAD_ASYNC?LOG_INFINITY_LOOP_DIRCACHE:
-    t==PTHREAD_MISC?LOG_INFINITY_LOOP_MISC: 0;
+	t==PTHREAD_PRELOAD?LOG_INFINITY_LOOP_PRELOADRAM:
+	t==PTHREAD_ASYNC?LOG_INFINITY_LOOP_DIRCACHE:
+	t==PTHREAD_MISC?LOG_INFINITY_LOOP_MISC: 0;
   IF_LOG_FLAG(flag) log_verbose("Thread: %s  Root: %s ",PTHREAD_S[t],rootpath(r));
 }
 
@@ -365,71 +365,74 @@ static void *infloop_async(void *arg){
   init_infloop(r,PTHREAD_ASYNC);
   long nanos=(ASYNC_SLEEP_USECONDS*1000); /* The shorter the higher the responsiveness, but increased CPU usage */
   for(int loop=0; ;loop++){
-    cg_nanosleep(nanos);
-    if (nanos<ASYNC_SLEEP_USECONDS*1000)      nanos++;
-    bool success=IF01(IS_CHECKING_CODE,false,rand());
-    IF1(WITH_DIRCACHE, if (!(loop&255) && async_periodically_dircache(r)) success=true);
-    if (r->with_timeout){
-      /* Reduce waiting when many subsequent request */
-      IF1(WITH_TIMEOUT_STAT, if ((async_periodically_stat(r))){ nanos=MAX(ASYNC_SLEEP_USECONDS*1000L/50,1000*400);  success=true; sched_yield();});
-      if (!(loop&15)){ /* less often */
+	cg_nanosleep(nanos);
+	if (nanos<ASYNC_SLEEP_USECONDS*1000)      nanos++;
+	bool success=IF01(IS_CHECKING_CODE,false,rand());
+	IF1(WITH_DIRCACHE, if (!(loop&255) && async_periodically_dircache(r)) success=true);
+	if (r->with_timeout){
+	  /* Reduce waiting when many subsequent request */
+	  IF1(WITH_TIMEOUT_STAT, if ((async_periodically_stat(r))){ nanos=MAX(ASYNC_SLEEP_USECONDS*1000L/50,1000*400);  success=true; sched_yield();});
+	  if (!(loop&15)){ /* less often */
 #define C(with,fn) IF1(with,if (fn(r)){success=true;});
-        C(WITH_TIMEOUT_READDIR,async_periodically_readdir);
-        C(WITH_TIMEOUT_OPENZIP,async_periodically_openzip);
-        C(WITH_TIMEOUT_OPENFILE,async_periodically_openfile);
+		C(WITH_TIMEOUT_READDIR,async_periodically_readdir);
+		C(WITH_TIMEOUT_OPENZIP,async_periodically_openzip);
+		C(WITH_TIMEOUT_OPENFILE,async_periodically_openfile);
 #undef C
-      }
-    }
-    if (r->remote){
-      if (!success && !(loop&255) && ROOT_SUCCESS_SECONDS_AGO(r)>MAX(1,r->check_response_seconds/4)){
-        success=!statvfs(rootpath(r),&r->statvfs);
-        if (!success) log_verbose(RED_FAIL"statvfs(%s)",r->check_response_path);
-      }
-      if (!(loop&255)||success) root_update_time(r,success?PTHREAD_ASYNC:-PTHREAD_ASYNC);
-    }
-    if (!(loop&0x1023)) log_infinity_loop(r,PTHREAD_ASYNC);
+	  }
+	}
+	if (r->remote){
+	  if (!success && !(loop&255) && ROOT_SUCCESS_SECONDS_AGO(r)>MAX(1,r->check_response_seconds/4)){
+		success=!statvfs(rootpath(r),&r->statvfs);
+		if (!success) log_verbose(RED_FAIL"statvfs(%s)",r->check_response_path);
+	  }
+	  if (!(loop&255)||success) root_update_time(r,success?PTHREAD_ASYNC:-PTHREAD_ASYNC);
+	}
+	if (!(loop&0x1023)) log_infinity_loop(r,PTHREAD_ASYNC);
   }
 }
 
+#if WITH_FILECONVERSION||WITH_PRELOADDISK
 static bool _cleanup_running;
 static void *_cleanup_files_runnable(void *arg){
   _cleanup_running=true;
   //const pid_t pid0=getpid();
   if (fork()){
-    perror(_cleanup_script);
+	perror(_cleanup_script);
   }else{
-    execlp("bash","bash",_cleanup_script,(char*)0);
-    exit(errno);
+	execlp("bash","bash",_cleanup_script,(char*)0);
+	exit(errno);
   }
   _cleanup_running=false;
   return NULL;
 }
+#endif //WITH_FILECONVERSION||WITH_PRELOADDISK
 static void *infloop_misc(void *arg){
   root_t *r=arg;
   init_infloop(r,PTHREAD_MISC);
   for(int j=0;;j++){
-    log_infinity_loop(r,PTHREAD_MISC);
-    root_update_time(r,-PTHREAD_MISC);
-    usleep(1000*1000);
-    LOCK_NCANCEL(mutex_fhandle,fhandle_destroy_those_that_are_marked());
+	log_infinity_loop(r,PTHREAD_MISC);
+	root_update_time(r,-PTHREAD_MISC);
+	usleep(1000*1000);
+	LOCK_NCANCEL(mutex_fhandle,fhandle_destroy_those_that_are_marked());
 #if WITH_FILECONVERSION||WITH_PRELOADDISK
-    if (_root_writable && (j&0xFff)==256){
-      static pthread_t t;
-      if (!_cleanup_running && cg_file_exists(_cleanup_script)) pthread_create(&t,NULL,&_cleanup_files_runnable,NULL);
-    }
+	if (_writable_path_l && (j&0xFff)==256){
+	  static pthread_t t;
+	  if (!_cleanup_running && cg_file_exists(_cleanup_script)) pthread_create(&t,NULL,&_cleanup_files_runnable,NULL);
+	}
 #endif //WITH_FILECONVERSION||WITH_PRELOADDISK
-    if (!(j&3)){
-      static struct pstat pstat1,pstat2;
-      cpuusage_read_proc(&pstat2,getpid());
-      cpuusage_calc_pct(&pstat2,&pstat1,&_ucpu_usage,&_scpu_usage);
-      pstat1=pstat2;
-      IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE) if (_ucpu_usage>40||_scpu_usage>40) log_verbose("pid: %d cpu_usage user: %.2f system: %.2f\n",getpid(),_ucpu_usage,_scpu_usage);
-    }
-    log_flags_update();
-    //if (!(j&63)) debug_report_zip_count();
-    IF1(WITH_CANCEL_BLOCKED_THREADS,unblock_periodically());
+	if (!(j&3)){
+	  static struct pstat pstat1,pstat2;
+	  cpuusage_read_proc(&pstat2,getpid());
+	  cpuusage_calc_pct(&pstat2,&pstat1,&_ucpu_usage,&_scpu_usage);
+	  pstat1=pstat2;
+	  IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE) if (_ucpu_usage>40||_scpu_usage>40) log_verbose("pid: %d cpu_usage user: %.2f system: %.2f\n",getpid(),_ucpu_usage,_scpu_usage);
+	}
+	log_flags_update();
+	//if (!(j&63)) debug_report_zip_count();
+	IF1(WITH_CANCEL_BLOCKED_THREADS,unblock_periodically());
   }
 }
+
 
 static void root_loading_active(void *root){
   if (!root) return;
@@ -445,35 +448,36 @@ static void *infloop_preloadfile(void *arg){
   init_infloop(r,PTHREAD_PRELOAD);
   /* pthread_cleanup_push(infloop_preloadfile_start,r); Does not work because pthread_cancel not working when root blocked. */
   for(int i=0;;i++){
-    fHandle_t *dm=NULL,*dl=NULL; // cppcheck-suppress constVariablePointer
+	fHandle_t *dm=NULL,*dl=NULL; // cppcheck-suppress constVariablePointer
 #define d() (dl?dl:dm)
-    {
-      lock(mutex_fhandle);
-      foreach_fhandle(id,e){
-        IF1(WITH_PRELOADRAM,if (e->preloadram && e->preloadram->preloadram_status==preloadram_queued && e->preloadram->m_zpath.root==r) dm=e);
-        if (e->zpath.root==r && e->flags&FHANDLE_PRELOADFILE_QUEUE) dl=e; // cppcheck-suppress unreadVariable
-      }
-      unlock(mutex_fhandle);
-    }
-    if (d() && wait_for_root_timeout(r)){
-      {
-        lock(mutex_fhandle);
-        atomic_fetch_add(&d()->is_preloading,1); /* Prevents destruction */
-        IF1(WITH_PRELOADRAM,  if (dm && preloadram_queued!=preloadram_get_status(dm))  dm=NULL;   preloadram_set_status(dm,preloadram_reading));
-        IF1(WITH_PRELOADDISK, if (dl && !(dl->flags&FHANDLE_PRELOADFILE_QUEUE))  dl=NULL; if (dl) { dl->flags|=FHANDLE_PRELOADFILE_RUN; dl->flags&=~FHANDLE_PRELOADFILE_QUEUE;});
-        unlock(mutex_fhandle);
-      }
-      IF1(WITH_PRELOADRAM,  if (dm) preloadram_now(dm,r));
-      IF1(WITH_PRELOADDISK, if (dl){ char dst[MAX_PATHLEN+1];   if (preloaddisk_writable_realpath(&dl->zpath,dst)) preloaddisk_now(dst,NULL,dl);});
-      {
-        lock(mutex_fhandle);
-        atomic_fetch_add(&d()->is_preloading,-1);
-        IF1(WITH_PRELOADRAM,  preloadram_set_status(dm,preloadram_done));
-        unlock(mutex_fhandle);
-      }
-    }/* if (d) */
-    root_update_time(r,-PTHREAD_PRELOAD);
-    usleep(500*1000);
+	{
+	  lock(mutex_fhandle);
+	  foreach_fhandle(id,e){
+		IF1(WITH_PRELOADRAM,if (e->preloadram && e->preloadram->preloadram_status==preloadram_queued && e->preloadram->m_zpath.root==r) dm=e);
+		if (e->zpath.root==r && e->flags&FHANDLE_PRELOADFILE_QUEUE) dl=e; // cppcheck-suppress unreadVariable
+	  }
+	  unlock(mutex_fhandle);
+	}
+	if (d() && wait_for_root_timeout(r)){
+	  //log_debug_now("d: %s",D_VP(d()));
+	  {
+		lock(mutex_fhandle);
+		atomic_fetch_add(&d()->is_preloading,1); /* Prevents destruction */
+		IF1(WITH_PRELOADRAM,  if (dm && preloadram_queued!=preloadram_get_status(dm))  dm=NULL;   preloadram_set_status(dm,preloadram_reading));
+		IF1(WITH_PRELOADDISK, if (dl && !(dl->flags&FHANDLE_PRELOADFILE_QUEUE))  dl=NULL; if (dl) { dl->flags|=FHANDLE_PRELOADFILE_RUN; dl->flags&=~FHANDLE_PRELOADFILE_QUEUE;});
+		unlock(mutex_fhandle);
+	  }
+	  IF1(WITH_PRELOADRAM,  if (dm) preloadram_now(dm,r));
+	  IF1(WITH_PRELOADDISK, if (dl){ char dst[MAX_PATHLEN+1];   if (preloaddisk_writable_realpath(&dl->zpath,dst)) preloaddisk_now(dst,NULL,dl);});
+	  {
+		lock(mutex_fhandle);
+		atomic_fetch_add(&d()->is_preloading,-1);
+		IF1(WITH_PRELOADRAM,  preloadram_set_status(dm,preloadram_done));
+		unlock(mutex_fhandle);
+	  }
+	}/* if (d) */
+	root_update_time(r,-PTHREAD_PRELOAD);
+	usleep(500*1000);
   }
 #undef d
 }
@@ -493,9 +497,9 @@ bool preloadfile_time_exceeded(const char *func, const fHandle_t *d,const int co
   time_t t=time(NULL)-ROOT_WHEN_ITERATED(r,PTHREAD_PRELOAD);
   unlock(mutex_fhandle);
   if (t>PRELOADFILE_TIMEOUT_SECONDS){
-    warning(WARN_PRELOADFILE,D_RP(d),"%s Timeout > "STRINGIZE(PRELOADFILE_TIMEOUT_SECONDS)" s",func);
-    COUNTER1_INC(counter);
-    return true;
+	warning(WARN_PRELOADFILE,D_RP(d),"%s Timeout > "STRINGIZE(PRELOADFILE_TIMEOUT_SECONDS)" s",func);
+	COUNTER1_INC(counter);
+	return true;
   }
   return false;
 }
@@ -513,44 +517,44 @@ bool preloadfile_time_exceeded(const char *func, const fHandle_t *d,const int co
 static void init_infloop(root_t *r, const enum enum_root_thread ithread){
   IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE)log_entered_function("Thread: %s  Root: %s ",PTHREAD_S[ithread],rootpath(r));
   IF1(WITH_CANCEL_BLOCKED_THREADS,
-      pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,&_unused_int);
-      if (r) r->thread_pid[ithread]=gettid(); assert(_pid!=gettid()); assert(cg_pid_exists(gettid())));
+	  pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,&_unused_int);
+	  if (r) r->thread_pid[ithread]=gettid(); assert(_pid!=gettid()); assert(cg_pid_exists(gettid())));
 }
 #if WITH_CANCEL_BLOCKED_THREADS
 static void unblock_periodically(){
   static yes_zero_no_t threads_use_own_PID=0;
   if (!threads_use_own_PID){
-    threads_use_own_PID=YES;
-    if (_pid==gettid()){ threads_use_own_PID=NO;  warning(WARN_THREAD,"","Threads not using own process IDs. No unblock of blocked threads");}
+	threads_use_own_PID=YES;
+	if (_pid==gettid()){ threads_use_own_PID=NO;  warning(WARN_THREAD,"","Threads not using own process IDs. No unblock of blocked threads");}
   }
   if (threads_use_own_PID==NO) return;
   foreach_root(r){
-    FOR(t,1,PTHREAD_LEN){
-      if (t==PTHREAD_MISC || !r->thread_already_started[t]) continue;
-      const int threshold=t==PTHREAD_PRELOAD?UNBLOCK_AFTER_SECONDS_THREAD_PRELOADRAM: t==PTHREAD_ASYNC?UNBLOCK_AFTER_SECONDS_THREAD_ASYNC: 0;
-      if (!threshold || !r->thread_count_started[t] || !r->thread[t]) continue;
-      const long now=time(NULL), last=MAX_long(ROOT_WHEN_ITERATED(r,t),r->thread_when_canceled[t]);
-      if (!last) continue;
-      if (now-last>threshold){
-        log_verbose("%s  %s  now-last:%ld > threshold: %d ",r->rootpath, PTHREAD_S[t],now-last,threshold);
-        pthread_cancel(r->thread[t]); /* Double cancel is not harmful: https://stackoverflow.com/questions/7235392/is-it-safe-to-call-pthread-cancel-on-terminated-thread */
-        usleep(1000*1000);
-        const pid_t pid=r->thread_pid[t];
-        bool not_restart=pid && cg_pid_exists(pid);
-        if (not_restart && _thread_unblock_ignore_existing_pid){
-          warning(WARN_THREAD,rootpath(r),"Going to start thread %s even though pid %ld still exists.",PTHREAD_S[t],(long)pid);
-          _thread_unblock_ignore_existing_pid=not_restart=false;
-        }
-        char proc[99]; sprintf(proc,"/proc/%ld",(long)pid);
-        if (not_restart){
-          log_warn("Not yet starting thread because process  still exists %s",proc);
-        }else{
-          warning(WARN_THREAD|WARN_FLAG_SUCCESS,proc,"Going root_start_thread(%s,%s) because process does not exist any more",rootpath(r),PTHREAD_S[t]);
-          r->thread_when_canceled[t]=time(NULL);
-          root_start_thread(r,t,true);
-        }
-      }
-    }
+	FOR(t,1,PTHREAD_LEN){
+	  if (t==PTHREAD_MISC || !r->thread_already_started[t]) continue;
+	  const int threshold=t==PTHREAD_PRELOAD?UNBLOCK_AFTER_SECONDS_THREAD_PRELOADRAM: t==PTHREAD_ASYNC?UNBLOCK_AFTER_SECONDS_THREAD_ASYNC: 0;
+	  if (!threshold || !r->thread_count_started[t] || !r->thread[t]) continue;
+	  const long now=time(NULL), last=MAX_long(ROOT_WHEN_ITERATED(r,t),r->thread_when_canceled[t]);
+	  if (!last) continue;
+	  if (now-last>threshold){
+		log_verbose("%s  %s  now-last:%ld > threshold: %d ",r->rootpath, PTHREAD_S[t],now-last,threshold);
+		pthread_cancel(r->thread[t]); /* Double cancel is not harmful: https://stackoverflow.com/questions/7235392/is-it-safe-to-call-pthread-cancel-on-terminated-thread */
+		usleep(1000*1000);
+		const pid_t pid=r->thread_pid[t];
+		bool not_restart=pid && cg_pid_exists(pid);
+		if (not_restart && _thread_unblock_ignore_existing_pid){
+		  warning(WARN_THREAD,rootpath(r),"Going to start thread %s even though pid %ld still exists.",PTHREAD_S[t],(long)pid);
+		  _thread_unblock_ignore_existing_pid=not_restart=false;
+		}
+		char proc[99]; sprintf(proc,"/proc/%ld",(long)pid);
+		if (not_restart){
+		  log_warn("Not yet starting thread because process  still exists %s",proc);
+		}else{
+		  warning(WARN_THREAD|WARN_FLAG_SUCCESS,proc,"Going root_start_thread(%s,%s) because process does not exist any more",rootpath(r),PTHREAD_S[t]);
+		  r->thread_when_canceled[t]=time(NULL);
+		  root_start_thread(r,t,true);
+		}
+	  }
+	}
   }
 }
 #endif //WITH_CANCEL_BLOCKED_THREADS
@@ -565,25 +569,25 @@ static void unblock_periodically(){
 /***********************************************************************************************************/
 static void log_root_blocked(root_t *r,const bool blocked){
   if (r && r->blocked!=blocked){
-    warning(WARN_ROOT|WARN_FLAG_ERROR,rootpath(r),"Remote root %s"ANSI_RESET"\n",blocked?ANSI_FG_RED"not responding.":ANSI_FG_GREEN"responding again.");
-    r->blocked=blocked;
+	warning(WARN_ROOT|WARN_FLAG_ERROR,rootpath(r),"Remote root %s"ANSI_RESET"\n",blocked?ANSI_FG_RED"not responding.":ANSI_FG_GREEN"responding again.");
+	r->blocked=blocked;
   }
 }
 static bool wait_for_root_timeout(root_t *r){
   if (!r || !r->remote){ log_root_blocked(r,false);return true;}
   const int N=10000;
   RLOOP(iTry,N){
-    const time_t delay=ROOT_SUCCESS_SECONDS_AGO(r);
-    //log_debug_now("delay: %ld ",delay);
-    if (delay>ROOT_RESPONSE_TIMEOUT_SECONDS) break;
-    if (delay<r->check_response_seconds){
-      log_root_blocked(r,false);
-      return true;
-    }
-    cg_sleep_ms(r->check_response_seconds/N,"");
-    bool log=iTry>N/2 && iTry%(N/10)==0;
-    IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE) log=true;
-    if (log) log_verbose("%s %d/%d\n",rootpath(r),iTry,N);
+	const time_t delay=ROOT_SUCCESS_SECONDS_AGO(r);
+	//log_debug_now("delay: %ld ",delay);
+	if (delay>ROOT_RESPONSE_TIMEOUT_SECONDS) break;
+	if (delay<r->check_response_seconds){
+	  log_root_blocked(r,false);
+	  return true;
+	}
+	cg_sleep_ms(r->check_response_seconds/N,"");
+	bool log=iTry>N/2 && iTry%(N/10)==0;
+	IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE) log=true;
+	if (log) log_verbose("%s %d/%d\n",rootpath(r),iTry,N);
   }
   r->log_count_delayed_periods++;
   r->log_count_delayed++;

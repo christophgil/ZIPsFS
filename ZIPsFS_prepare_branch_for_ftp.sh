@@ -22,9 +22,6 @@ EOF
 # ========================================
 
 
-readonly DBcurlftpfs=~/.ZIPsFS/DB
-mkdir -p $DBcurlftpfs
-CLIPARAS=''
 
 go(){
     local db=$2
@@ -32,9 +29,15 @@ go(){
     local mnt=$root
     local exclude=${3:-}
 
-    if ((DO_UMOUNT)) && mountpoint $mnt >&2; then
+    if ((DO_UMOUNT)); then
         set -x
         fusermount -u $mnt
+            set +x
+        return
+    fi
+    if ((DO_UMOUNT_SUDO)); then
+        set -x
+        sudo umount -f $mnt || sudo umount -l $mnt
         set +x
         return
     fi
@@ -57,26 +60,42 @@ path-prefix=/DB
 preload
 preload-gz
 EOF
-        [[ -n $exclude ]] && echo "path-deny-patterns=$exclude" >&2
+        [[ -n $exclude ]] && echo "path-deny=$exclude"
     } >$root.ZIPsFS.properties
     # We use /usr/bin/curl for copying. Here we also give a timeout.
     echo ftp://$url >$mnt.URL
+    echo Going to test mountpoint $mnt >&2
     mountpoint $mnt >&2 && return
     curlftpfs  $url  $mnt -o cache=yes,cache_timeout=999,noforget
 }
 
 
-DO_UMOUNT=0
-[[ ${1:-} == -u ]] && DO_UMOUNT=1
+readonly DBcurlftpfs=~/.ZIPsFS/DB
+mkdir -p $DBcurlftpfs
+CLIPARAS=''
 
+DO_UMOUNT=0
+DO_UMOUNT_SUDO=0
+while getopts 'uU' o; do
+    case $o in
+        u) DO_UMOUNT=1;;
+        U) DO_UMOUNT_SUDO=1;;
+        *) echo "wrong option $o" >&2; exit 1 ;;
+    esac
+done
+shift $((OPTIND-1))
+
+
+#if false; then
 go massive-ftp.ucsd.edu                            massive
-# read -p aaaaaaaaaaa
 go ftp.pride.ebi.ac.uk/pride/data/archive          pride
 go ftp.ensembl.org/pub                             ensembl
 go ftp.ncbi.nlm.nih.gov                            ncbi
-# The folder /pub/ebi/databases/pdb/data/structures/all contains all PDB entries and reading this huge directory needs to be avoided.
-go ftp.ebi.ac.uk/pub                               ebi  ::/DB/ebi/databases/pdb/data/structures/all:/Note/that/you/can/exclude/several/paths:/colon/separates/paths::
-go ftp.pdbj.org/pub                                pdbj ::/DB/pdbj/pdb/data/structures/all
+go ftp.uniprot.org                                 uniprot
+go ftp.expasy.org                                 uniprot
+## The folder /pub/ebi/databases/pdb/data/structures/all contains all PDB entries and reading this huge directory needs to be avoided.
+go ftp.ebi.ac.uk/pub                               ebi  '::/DB/ebi/databases/pdb/data/structures/all:/Note/that/you/can/exclude/several/paths:/colon/separates/paths::'
+go ftp.pdbj.org/pub                                pdbj '::/DB/pdbj/pdb/data/structures/all'
 #go localhost                                       localhost
 
 

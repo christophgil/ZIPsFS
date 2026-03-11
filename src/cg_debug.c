@@ -4,6 +4,7 @@
 #define _cg_debug_dot_c
 #include "cg_utils.h"
 #include "cg_stacktrace.c"
+#include <time.h>
 #include <sys/resource.h>
 
 
@@ -91,6 +92,15 @@ static void assert_r_ok(const char *p, const struct stat *st){
     log_error("assert_r_ok  %s  ",p);
     cg_log_file_stat("",st);
     cg_print_stacktrace(0);
+  }
+}
+
+
+static void cg_print_stat(struct stat *st,FILE *f){
+  if (!st){
+    fputs(" struct stat is NULL. ",f);
+  }else{
+    fprintf(f," struct stat = ino:%llu size:%'llu mtime:%s ",(LLU)st->st_ino,(LLU)st->st_size,ST_MTIME(st)); cg_print_file_mode(st->st_mode,f);
   }
 }
 

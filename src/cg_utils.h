@@ -17,6 +17,8 @@
 #include <inttypes.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <sys/types.h>
 ////////////////////////////////////////
 #ifdef __cppcheck__
 #define IS_CHECKING_CODE 1
@@ -89,7 +91,7 @@ typedef enum yes_zero_no { NO=-1,ZERO,YES} yes_zero_no_t;
 #define RLOOP(var,from) for(int var=from;--var>=0;)
 #define FOREACH_CSTRING(s,ss)  for(char **s=(char**)ss; s&&*s; s++)
 
-#define ERROR_MSG_NO_PROC_FS "No /proc file system on this computer"
+#define ERROR_MSG_NO_PROC_FS "No /proc file system on this computer\n"
 
 
 #define MAX_PATHLEN 511
@@ -132,6 +134,7 @@ _Static_assert(MAX_PATHLEN<=PATH_MAX,"");
 
 
 #define GREEN_SUCCESS ANSI_GREEN" SUCCESS "ANSI_RESET
+#define GREEN_ALREADY_EXISTS ANSI_GREEN" Already exists "ANSI_RESET
 #define GREEN_DONE ANSI_GREEN" DONE "ANSI_RESET
 #define RED_WARNING ANSI_RED" WARNING "ANSI_RESET
 
@@ -256,6 +259,14 @@ enum enum_validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHA
 #endif
 
 
+#ifdef __APPLE__
+#define IS_MACOSX 1
+#else
+#define IS_MACOSX 0
+#endif
+
+
+
 typedef uint32_t ht_hash_t;
 #define ENDSWITH_FLAG_IC (1<<1)
 #define ENDSWITH_FLAG_PRECEED_SLASH (1<<2)
@@ -278,4 +289,16 @@ _Static_assert((COMPRESSION_NUM&COMPRESSION_MASK)==COMPRESSION_NUM,"COMPRESSION_
 
 #define XMACRO_COMPRESSION()      X(gz,GZ)X(bz2,BZ2)X(lrz,LRZ)X(xz,XZ)X(Z,Z)
 
+/***********/
+/* Network */
+/***********/
+struct cg_httpheader{
+  time_t mtime;
+  ssize_t size;
+  bool has_content_location, is_404, is_header;
+  int lines;
+  int compress_sfx;
+};
+typedef struct cg_httpheader cg_httpheader_t;
+static int cg_httpheader_read_fd(struct cg_httpheader *h,const int fd);
 #endif // _cg_utils_dot_h
