@@ -226,10 +226,10 @@ find_bugs(){
 ######################
 main(){
 
-		mkdir -p tmp
+		mkdir -p $DIR/tmp
 		local f
 		for f in include_*; do
-				local c=tmp/$f.c
+				local c=$DIR/tmp/$f.c
 				if [[ ! ( $c -nt $f && $c -nt $SRC ) ]]; then
 						echo "Update $c" >&2
 						{ sed -e '/#FILTER_OUT/d' -e '/^#/d' -e $'y|\t| |' -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/;s/$/\\n"/' $f;echo ';'; } > $c.$$.tmp && mv $c.$$.tmp $c
