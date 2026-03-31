@@ -3,23 +3,25 @@
 ############################################
 
 ### Compression ###
-bzip2
-lrzip
-zip
-xz
-ncompress
+		bzip2
+		lrzip
+		zip
+		xz
+		ncompress
 
 
 ### Image ###
-imagemagick
-picterm
+		imagemagick
+		picterm
 
 
 ### Text ###
-latex ## for pdflatex
-poppler-utils ## for pdftotext
-tesseract-ocr-eng  # tesseract is OCR
+		pdflatex    ## package tetex
+		pdftotext   ## package poppler-utils
+		tesseract   ## package tesseract-ocr-eng
 
+### File System
+		curlftpfs
 
 ### Container ###
-docker
+		docker

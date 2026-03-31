@@ -18,7 +18,10 @@ run_ZIPsFS(){
 		mountpoint $MNT && return
 
 		[[ -n $STORE ]] && ! ls -d $STORE && read -t 3 -r -p "Directory $STORE not found " && STORE=''
-		~/git_projects/ZIPsFS/ZIPsFS  "$@" $VERBOSE -k -l 33GB  -c rule  "$MODI/" /$REMOTE1/  $FTP_DIRS $STORE : -o 'allow_other,attr_timeout=13,entry_timeout=13,negative_timeout=13,ac_attr_timeout=13'    $MNT
+		set -x
+		fuseopt='allow_other,attr_timeout=13,entry_timeout=13,negative_timeout=13,ac_attr_timeout=13'
+		~/git_projects/ZIPsFS/ZIPsFS  "$@" $VERBOSE -k -l 33GB  -c rule  "$MODI/" /$REMOTE1/  $FTP_DIRS $STORE : -o $fuseopt    $MNT
+		set +x
 		# ~/git_projects/ZIPsFS/ZIPsFS  "$@" -k -l 33GB  -c rule  "" /$REMOTE1/  $FTP_DIRS $STORE : -o 'allow_other,attr_timeout=13,entry_timeout=13,negative_timeout=13,ac_attr_timeout=13'    $MNT
 }
 run_ZIPsFS

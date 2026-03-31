@@ -35,11 +35,11 @@ static const int config_virtual_dirpath_to_zipfile(const char *b, const char *e,
   *append=NULL;
   //  if (e-b>12 &&   e[-12]=='.'&&(e[-11]|32)=='z'&&(e[-10]|32)=='i'&&(e[-9]|32)=='p'      &&  !memcmp(e-8,EXT_CONTENT,8)){
   if (e-b>12 &&   _isZipIC(e-12)   &&  !memcmp(e-8,EXT_CONTENT,8)){
-	return -8;
+    return -8;
   }
   if (e[-2]=='.' && e[-1]=='d') {
-	*append=".Zip";
-	return 0;
+    *append=".Zip";
+    return 0;
   }
   return INT_MAX;
 }
@@ -65,7 +65,7 @@ static const int config_virtual_dirpath_to_zipfile(const char *b, const char *e,
 #endif //WITH_ZIPINLINE
 
  /************************************************************************************************/
- /* When a cached struct stat is found the the cache, is it still valid and for how long?        */
+ /* When a cached struct stat is found the the cache, is it still valid and how many seconds?    */
  /* Unlimited for remote branches and files that are read-only files.                            */
  /* st_or_null is NULL for getting from cache.                                                   */
  /************************************************************************************************/
@@ -73,25 +73,28 @@ static const int config_virtual_dirpath_to_zipfile(const char *b, const char *e,
 
 #if WITH_STAT_CACHE
 #define IS_STAT_READONLY(st) !(st->st_mode&(S_IWUSR|S_IWGRP|S_IWOTH))
-static uint64_t config_file_attribute_valid_seconds(const int opt, const char *path,const int path_l, const struct stat *st_or_null){
+static long config_file_attribute_cache_TTL(const int flags, const char *path,const int path_l, const struct stat *st_or_null, const long default_cache_TTL){
   /* Available Flags:
-	 (opt&STAT_CACHE_ROOT_IS_WRITABLE)
-	 (opt&STAT_CACHE_ROOT_IS_REMOTE)
-	 (opt&STAT_CACHE_ROOT_IS_PRELOADING)
-	 (opt&STAT_CACHE_ROOT_WITH_TIMEOUT)
-	 (opt&STAT_CACHE_IS_PFXPLAIN))
-	 (opt&STAT_CACHE_ROOT_IS_WORM))
-		  (opt&STAT_CACHE_ROOT_IS_IMMUTABLE))
-
+     (flags&STAT_CACHE_ROOT_IS_WRITABLE)
+     (flags&STAT_CACHE_ROOT_IS_REMOTE)
+     (flags&STAT_CACHE_ROOT_IS_PRELOADING)
+     (flags&STAT_CACHE_ROOT_WITH_TIMEOUT)
+     (flags&STAT_CACHE_IS_PFXPLAIN))
+     (flags&STAT_CACHE_ROOT_IS_WORM))
+     (flags&STAT_CACHE_ROOT_IS_IMMUTABLE))
   */
-  IF1(WITH_TIMEOUT_STAT, if (opt&STAT_CACHE_ROOT_WITH_TIMEOUT) return 300);
-  if (opt&STAT_CACHE_IS_PFXPLAIN){
-	/* Navigation through <mountpoint>/ZIPsFS/p/ */
-	//log_debug_now("STAT_CACHE_FILE_IS_READONLY: %d",(opt&STAT_CACHE_FILE_IS_READONLY));
-	//log_debug_now("path:%s %p %d %d",path,  st_or_null, !!(opt&STAT_CACHE_ROOT_IS_WORM),st_or_null && IS_STAT_READONLY(st_or_null));
-	if ((opt&(STAT_CACHE_ROOT_IS_WORM|STAT_CACHE_ROOT_IS_IMMUTABLE)) &&  (!st_or_null || IS_STAT_READONLY(st_or_null))) return UINT32_MAX;
+
+  if (flags&STAT_CACHE_IS_PFXPLAIN){  /* .../zipsfs/1/... */
+    /* Navigation through <mountpoint>/zipsfs/p/ */
+    //log_debug_now("STAT_CACHE_FILE_IS_READONLY: %d",(flags&STAT_CACHE_FILE_IS_READONLY));
+    //log_debug_now("path:%s %p %d %d",path,  st_or_null, !!(flags&STAT_CACHE_ROOT_IS_WORM),st_or_null && IS_STAT_READONLY(st_or_null));
+    if ((flags&(STAT_CACHE_ROOT_IS_WORM|STAT_CACHE_ROOT_IS_IMMUTABLE)) &&  (!st_or_null || IS_STAT_READONLY(st_or_null))) return UINT32_MAX;
   }
-  return 0;
+
+  return default_cache_TTL?default_cache_TTL: /* Root specific max age of file attributes seconds. */
+    (flags&STAT_CACHE_ROOT_WITH_TIMEOUT)?600:  /* Root path is starting with  Triple slash */
+    (flags&STAT_CACHE_ROOT_IS_REMOTE)?300:     /* Root path is starting with  double slash */
+    0;
 }
 #endif //WITH_STAT_CACHE
 
@@ -106,27 +109,27 @@ static bool config_zipfilename_to_virtual_dirname(char *dirname,const char *zipf
   *dirname=0;
   const char *e=zipfile+zipfile_l;
   if (zipfile_l>4 && _isZipIC(e-4)){
-	strcpy(dirname,zipfile);
-	if(zipfile_l>9 && !strcmp(zipfile+zipfile_l-6,".d.Zip")){
-	  dirname[zipfile_l-4]=0;
-	}else{
-	  strcat(dirname,EXT_CONTENT);
-	}
-	return false; /* false: Not show zipfile itself  true: Also show zipfile*/
+    strcpy(dirname,zipfile);
+    if(zipfile_l>9 && !strcmp(zipfile+zipfile_l-6,".d.Zip")){
+      dirname[zipfile_l-4]=0;
+    }else{
+      strcat(dirname,EXT_CONTENT);
+    }
+    return false; /* false: Not show zipfile itself  true: Also show zipfile*/
   }
   return false;
 }
 #if WITH_ZIPINLINE
 static bool config_skip_zipfile_show_zipentries_instead(const char *zipfile,const int zipfile_l){
   if(zipfile_l>20 && _isZip(zipfile+zipfile_l-4)){
-	static int WITHOUT_PARENT_LEN[10];
-	static const char *WITHOUT_PARENT[]={".wiff.Zip",".wiff2.Zip",".rawIdx.Zip",".raw.Zip",NULL};
-	if (!WITHOUT_PARENT_LEN[0]){
-	  for(int i=0;WITHOUT_PARENT[i];i++) WITHOUT_PARENT_LEN[i]=strlen(WITHOUT_PARENT[i]);
-	}
-	for(int i=0;WITHOUT_PARENT[i];i++){
-	  if (!strcmp(zipfile+zipfile_l-WITHOUT_PARENT_LEN[i],WITHOUT_PARENT[i])) return true;
-	}
+    static int WITHOUT_PARENT_LEN[10];
+    static const char *WITHOUT_PARENT[]={".wiff.Zip",".wiff2.Zip",".rawIdx.Zip",".raw.Zip",NULL};
+    if (!WITHOUT_PARENT_LEN[0]){
+      for(int i=0;WITHOUT_PARENT[i];i++) WITHOUT_PARENT_LEN[i]=strlen(WITHOUT_PARENT[i]);
+    }
+    for(int i=0;WITHOUT_PARENT[i];i++){
+      if (!strcmp(zipfile+zipfile_l-WITHOUT_PARENT_LEN[i],WITHOUT_PARENT[i])) return true;
+    }
   }
   return false;
 }
@@ -140,8 +143,8 @@ static bool config_not_report_stat_error(const char *path,const int path_l){
 #define E(s) ENDSWITH(path,path_l,#s)||
 #define S(s,pfx) !strncmp(path,pfx,sizeof(pfx)-1)||
   return E(/analysis.tdf-wal)  E(/analysis.tdf-journal)   E(/.ciopfs)  E(.quant)  E(/autorun.inf)  E(/.xdg-volume-info)  /* Diann */
-	E(.fragtmp) /* FragPipe */
-	S(path,"/.Trash")  S(path,"/ZIPsFS_") false;
+    E(.fragtmp) /* FragPipe */
+    S(path,"/.Trash")  S(path,"/ZIPsFS_") false;
 #undef E
 #undef S
 }
@@ -161,19 +164,19 @@ static off_t config_advise_preload_file_ram(const int flags,const char *virtualp
   if (flags&ADVISE_CACHE_BY_POLICY) return filesize;
   off_t need=filesize;
   bool cache=((flags&ADVISE_CACHE_IS_COMPRESSEDZIPENTRY)&&(flags&ADVISE_CACHE_IS_SEEK_BW))
-	|| ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin");
-	//         || ENDSWITH(virtualpath,vp_l,".raw") && STARTSWITH(cg_strrchr_null(virtualpath,'/'),"/20")
-	/*  Thermo raw files: Not applicable to FragPipe because raw file opened and closed multiple times. */
+    || ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin");
+  //	|| ENDSWITH(virtualpath,vp_l,".raw") && STARTSWITH(cg_strrchr_null(virtualpath,'/'),"/20")
+    /*  Thermo raw files: Not applicable to FragPipe because raw file opened and closed multiple times. */
 
   if (!cache && ENDSWITH(virtualpath,vp_l,"analysis.tdf") && vp_l+4<MAX_PATHLEN){ /* Note: timsdata.dll opens analysis.tdf first  and then analysis.tdf_bin */
-	cache=true;
-	char tdf_bin[MAX_PATHLEN+1]; stpcpy(stpcpy(tdf_bin,virtualpath),"_bin");
-	struct stat st_tdf_bin;
-	if (!statForVirtualpathAndRootpath(&st_tdf_bin,tdf_bin,rootpath)){
-	  //log_warn("%s:%d Warning: Missing file %s\n",__func__,__LINE__,tdf_bin);
-	  return false;
-	}
-	need+=st_tdf_bin.st_size;
+    cache=true;
+    char tdf_bin[MAX_PATHLEN+1]; stpcpy(stpcpy(tdf_bin,virtualpath),"_bin");
+    struct stat st_tdf_bin;
+    if (!statForVirtualpathAndRootpath(&st_tdf_bin,tdf_bin,rootpath)){
+      //log_warn("%s:%d Warning: Missing file %s\n",__func__,__LINE__,tdf_bin);
+      return false;
+    }
+    need+=st_tdf_bin.st_size;
   }
   return cache?need:-1;
 }
@@ -223,9 +226,9 @@ static bool config_advise_cache_directory_listing(const int flags,const char *pa
   if (!(flags&ADVISE_DIRCACHE_IS_DIRPLAIN)) return false;
   if ((flags&ADVISE_DIRCACHE_IS_ZIP))  return true;
   if (flags&ADVISE_DIRCACHE_IS_REMOTE){
-	struct timeval tv={0};
-	gettimeofday(&tv,NULL);
-	return (tv.tv_sec-mtime.tv_sec)>60*60;
+    struct timeval tv={0};
+    gettimeofday(&tv,NULL);
+    return (tv.tv_sec-mtime.tv_sec)>60*60;
   }
   return false;
 }
@@ -285,33 +288,33 @@ static void config_exclude_files(const char *path, const int path_l, const int n
   const bool is_dotd=path_l>10  && ENDSWITH(path,path_l,".d") && !strncmp(path,_writable_path,_writable_path_l);
   const bool is_dotd_Zip=(path_l>10  && ENDSWITH(path,path_l,".d.Zip"));
   if (is_dotd_Zip || is_dotd){
-	//  if (path_l>10  && !strcmp(".d.Zip",path+path_l-6)){
-	for(int i=path_l; --i>=0;){
-	  if (path[i]=='/'){
-		if (path[i+1]=='2'){
-		  if (is_dotd){
-			for(int j=num_files; --j>=0;){
-			  if (files[j] && (!strcmp("analysis.tdf-wal",files[j])||!strcmp("analysis.tdf-shm",files[j]))){
-				files[j]=NULL;
-			  }
-			}
-		  }
-		  if (is_dotd_Zip){
-			int count=0;
-			for(int k=2; --k>=0;){ /* First round: look for analysis.tdf and .tdf_bin.   Second: set to NULL. */
-			  for(int j=num_files; --j>=0;){
-				if (files[j] && *files[j]=='a' && (!strcmp("analysis.tdf",files[j])||!strcmp("analysis.tdf_bin",files[j]))){
-				  if (k) count++;
-				}else if (count>1 && !k){
-				  files[j]=NULL;
-				}
-			  }
-			}
-		  }
-		}
-		break;
-	  } /* '/' */
-	}
+    //  if (path_l>10  && !strcmp(".d.Zip",path+path_l-6)){
+    for(int i=path_l; --i>=0;){
+      if (path[i]=='/'){
+        if (path[i+1]=='2'){
+          if (is_dotd){
+            for(int j=num_files; --j>=0;){
+              if (files[j] && (!strcmp("analysis.tdf-wal",files[j])||!strcmp("analysis.tdf-shm",files[j]))){
+                files[j]=NULL;
+              }
+            }
+          }
+          if (is_dotd_Zip){
+            int count=0;
+            for(int k=2; --k>=0;){ /* First round: look for analysis.tdf and .tdf_bin.   Second: set to NULL. */
+              for(int j=num_files; --j>=0;){
+                if (files[j] && *files[j]=='a' && (!strcmp("analysis.tdf",files[j])||!strcmp("analysis.tdf_bin",files[j]))){
+                  if (k) count++;
+                }else if (count>1 && !k){
+                  files[j]=NULL;
+                }
+              }
+            }
+          }
+        }
+        break;
+      } /* '/' */
+    }
   }
 }
 
@@ -335,10 +338,10 @@ static bool config_has_sufficient_storage_space(const char *realpath, const long
 #if WITH_INTERNET_DOWNLOAD
 static int config_internet_try_compressed(const char *vp,const int vp_l){
   return
-	//(1<<COMPRESSION_XZ)|
-	//(1<<COMPRESSION_LRZ)|
-	(1<<COMPRESSION_BZ2)|
-	(1<<COMPRESSION_GZ);
+    //(1<<COMPRESSION_XZ)|
+    //(1<<COMPRESSION_LRZ)|
+    (1<<COMPRESSION_BZ2)|
+    (1<<COMPRESSION_GZ);
 }
 #endif //WITH_INTERNET_DOWNLOAD
 
@@ -349,8 +352,10 @@ static int config_internet_try_compressed(const char *vp,const int vp_l){
  /* Then all symlinks are expanded that stay within the file trees.                                                       */
  /* Outgoing symlinks are expanded only if this function returns true.                                                    */
  /*************************************************************************************************************************/
-static bool config_allow_expand_symlink(const char *orig, const char *expanded){
+static bool config_allow_expand_symlink(const char *orig, const char *target,const char *target_absolute_path){
   /* The following could be used to include FTP sites from avfs */
-  if (strstr(expanded,"/#ftp:")) return true;  /* For symlinks pointing into avfs */
-  return false;
+  bool allow=!strchr(target,'/');
+  allow=allow || strstr(target_absolute_path,"/#ftp:");  /* For symlinks pointing into avfs */
+  //log_verbose("%s -> %s    '%s' allow:%s",orig,target,target_absolute_path,yes_no(allow));
+  return allow;
 }

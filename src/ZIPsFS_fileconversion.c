@@ -47,7 +47,7 @@ static void fileconversion_mv_tmp_to_rp(const char *tmp, const char *rp){
 
 
 static void fileconversion_run(fHandle_t *d){
-  IF_LOG_FLAG(LOG_FILECONVERSION) log_entered_function("%s",D_VP(d));
+  IF_LOG_FLAG(LOG_FILECONVERSION)log_entered_function("%s",D_VP(d));
   const char *rp=ZP_RP(&d->zpath);
   struct fileconversion_files ff={0};
   struct_fileconversion_files_init(&ff,D_VP(d),D_VP_L(d));
@@ -119,7 +119,7 @@ static bool fileconversion_remove_if_not_uptodate(zpath_t *zpath){
   if (noAtime<0) {
 	struct statvfs statvfsbuf;
 	statvfs(_fileconversion_rp,&statvfsbuf);
-	noAtime=0!=(statvfsbuf.f_flag&ST_NOATIME);
+	IF1(HAS_NO_ATIME,noAtime=(statvfsbuf.f_flag&ST_NOATIME));
   }
   if (noAtime)
 #endif

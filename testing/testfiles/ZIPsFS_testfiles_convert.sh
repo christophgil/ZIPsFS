@@ -74,7 +74,7 @@ main(){
 
 
 		echo "${ANSI_INVERSE}pdf 2 txt$ANSI_RESET"
-		local f=$MNT/ZIPsFS/c/$(mk_pdf)
+		local f=$MNT/zipsfs/c/$(mk_pdf)
 		! ls -l  $f && prompt_error
 
 
@@ -89,14 +89,14 @@ main(){
 		echo "${ANSI_INVERSE}Scale images$ANSI_RESET"
 		local ext base=$(mk_test_img)
 		for ext in $EE; do
-				local f=$MNT/ZIPsFS/c$base.scale25%.$ext
+				local f=$MNT/zipsfs/c$base.scale25%.$ext
 				set -x; rm $f  2>/dev/null; set +x
 				! picterm $f && prompt_error
 				! picterm $f && prompt_error
 		done
 
 		echo "${ANSI_INVERSE}ocr$ANSI_RESET"
-		local f=$MNT/ZIPsFS/c$base.png.ocr.eng.txt
+		local f=$MNT/zipsfs/c$base.png.ocr.eng.txt
 
 		set -x; rm $f  2>/dev/null; set +x
 		! head -v $f && prompt_error
@@ -105,7 +105,7 @@ main(){
 
 		echo "${ANSI_INVERSE}parquet$ANSI_RESET"
 		local vp=$(mk_parquet)
-		local f=$MNT/ZIPsFS/c$vp.tsv
+		local f=$MNT/zipsfs/c$vp.tsv
 		set -x; rm $f 2>/dev/null; set +x
 		! ls -l $f && prompt_error
 		! head -v $f && prompt_error

@@ -26,7 +26,7 @@ main(){
 		assure_mountpoint_db pride || return 1
 		echo 'Running for the first time, you will soon see a file listing where the Zip files are not yet expanded'
 		echo 'This will take some time because the files are remote'
-		time test_zipinline /DB/pride/2025/07/PXD063487
+		time test_zipinline /db/pride/2025/07/PXD063487
 		echo 'If you run the script a again after some time, the content of the  Zip files rather than the Zip-files themselfs will be shown.'
 }
 main "$@"

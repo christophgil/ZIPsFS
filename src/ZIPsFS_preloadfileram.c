@@ -157,8 +157,8 @@ static bool is_preloadram_shared_with_other(const fHandle_t *d){
 ///  root_t may change by find_realpath_other_root()               ///
 ///  Check that preloadram is not NULL and that  root is still correct ///
 ////////////////////////////////////////////////////////////////////////
-#define is_preloadram(d,r) _is_preloadram(d,r,__func__,__LINE__)
-static bool _is_preloadram(const fHandle_t *d, const root_t *r,const char *func,const int line){
+#define is_preloadram(d,r) _viamacro_is_preloadram(d,r,__func__,__LINE__)
+static bool _viamacro_is_preloadram(const fHandle_t *d, const root_t *r,const char *func,const int line){
   ASSERT_LOCKED_FHANDLE();
   if (!d || !d->preloadram || !d->preloadram->txtbuf){
 	log_verbose("%s:%d !preloadram %s",func,line,d?D_VP(d):NULL);
@@ -229,7 +229,7 @@ static bool fhandle_check_crc32(fHandle_t *d){
 /// 2. the fHandle_t instance is not used.                                           ///
 /// 2. No other fHandle_t process is using the struct preloadram instance              ///
 //////////////////////////////////////////////////////////////////////////////////////
-static bool preloadram_store_try(fHandle_t *d, struct async_zipfile *zip, root_t *r){
+static bool preloadram_store_try(fHandle_t *d, async_zipfile_t *zip, root_t *r){
   zpath_t *zpath=&d->zpath;
   //static int count;log_entered_function("%s  #%d",VP(),++count);
   bool contin, ok;
@@ -288,7 +288,7 @@ static void preloadram_now(fHandle_t *d, root_t *r){
   log_entered_function("%s  textbuffer_memusage  head: %'lld ",VP(), (LLD)ramUsageForFilecontent());
   _Static_assert(NUM_PRELOADRAM_STORE_RETRY>0,"");
   FOR(retry,0,NUM_PRELOADRAM_STORE_RETRY){
-	struct async_zipfile zip;
+	async_zipfile_t zip;
 	bool ok,contin;
 	LOCK(mutex_fhandle, if ((ok=contin=is_preloadram(d,r))) async_zipfile_init(&zip,&d->preloadram->m_zpath));
 	if (!ok) break;

@@ -12,8 +12,8 @@ static int countFhandleWithPreloadram(const char *path, int len,int h){
   return count;
 }
 
-#define fhandleWithPreloadramPrint(...) _fhandleWithPreloadramPrint(__func__,__LINE__,__VA_ARGS__)
-static void _fhandleWithPreloadramPrint(const char *func,int line,const char *path, int len,int h){
+#define fhandleWithPreloadramPrint(...) _viamacro_fhandleWithPreloadramPrint(__func__,__LINE__,__VA_ARGS__)
+static void _viamacro_fhandleWithPreloadramPrint(const char *func,int line,const char *path, int len,int h){
 #if WITH_PRELOADRAM
   ASSERT_LOCKED_FHANDLE();
   if (!len) len=strlen(path);
@@ -62,9 +62,9 @@ static bool _debugSpecificPath(int mode, const char *path, int path_l){
 ////////////////////////
 /// Check File names ///
 ////////////////////////
-#define assert_validchars(...) _assert_validchars(__VA_ARGS__,__func__)
+#define assert_validchars(...) _viamacro_assert_validchars(__VA_ARGS__,__func__)
 
-static void _assert_validchars(enum enum_validchars t,const char *s,int s_l,const char *fn){
+static void _viamacro_assert_validchars(enum enum_validchars t,const char *s,int s_l,const char *fn){
   if (t==VALIDCHARS_PATH||t==VALIDCHARS_FILE) cg_validchars(t)[PLACEHOLDER_NAME]=true;
   const int pos=cg_find_invalidchar(t,s,s_l);
   if (pos<0) return;
@@ -76,8 +76,8 @@ static void _assert_validchars(enum enum_validchars t,const char *s,int s_l,cons
   }
   unlock(mutex_validchars);
 }
-#define  assert_validchars_direntries(...) _assert_validchars_direntries(__VA_ARGS__,__func__)
-static void _assert_validchars_direntries(const directory_t *dir,const char *fn){
+#define  assert_validchars_direntries(...) _viamacro_assert_validchars_direntries(__VA_ARGS__,__func__)
+static void _viamacro_assert_validchars_direntries(const directory_t *dir,const char *fn){
   if (dir){
 	RLOOP(i,dir->core.files_l){
 	  const char *s=dir->core.fname[i];
@@ -118,8 +118,8 @@ EXIT(0);
 
 /////////////////////////////////////////////////////////////
 
-#define directory_print(dir,maxNum) _directory_print(__func__,__LINE__,dir,maxNum)
-static void _directory_print(const char *func,const int line,const directory_t *dir,const int maxNum){
+#define directory_print(dir,maxNum) _viamacro_directory_print(__func__,__LINE__,dir,maxNum)
+static void _viamacro_directory_print(const char *func,const int line,const directory_t *dir,const int maxNum){
   const struct directory_core *d=&dir->core;
   ASSERT(d->fname);
   const ht_t *hti=IF01(WITH_TIMEOUT_READDIR,NULL,dir->ht_intern_names);
@@ -148,13 +148,13 @@ static bool debug_path(const char *vp){
 								  //"20230116_Z1_ZW_001_30-0061_poolmix_2ug_ZenoSWATH_T600_V4000_rep01"
 								  "20230116_Z1_ZW_001_30-0061_poolmix_2ug_ZenoSWATH_T600_V4000_rep02"
 								  );
-  static void _debug_nanosec(const char *msg,const int i,const char *path,struct timespec *t){
+  static void _viamacro_debug_nanosec(const char *msg,const int i,const char *path,struct timespec *t){
 	if (!t->tv_nsec){
 	  log_verbose("%s #%d path: %s\n",msg,i,path);
 	}
   }
 }
-#define DEBUG_NANOSEC(i,path,t) _debug_nanosec(__func__,i,path,t)
+#define DEBUG_NANOSEC(i,path,t) _viamacro_debug_nanosec(__func__,i,path,t)
 #endif
 
 
@@ -222,7 +222,7 @@ static void debug_track_false_getattr_errors(const char *vp,const int vp_l){
   if ((ENDSWITH(vp,vp_l,".SSMetaData") || ENDSWITH(vp,vp_l,".raw")  )){
 	log_verbose("vp=%s",vp);
 	NEW_ZIPPATH(vp);
-	const bool found=find_realpath_any_root(0,zpath,NULL);
+	const bool found=find_realpath(0,zpath,NULL);
 	log_zpath("",zpath);
 	exit_ZIPsFS();
 	usleep(1000*500);

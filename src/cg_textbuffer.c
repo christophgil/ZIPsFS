@@ -299,14 +299,14 @@ static char *textbuffer_get_line(const textbuffer_t *b,int i){
 
 static bool textbuffer_write_file(const textbuffer_t *b,const char *path,const int mode){
   const int fd=open(path,O_WRONLY|O_CREAT|O_TRUNC,mode);
-  if (fd<0){ log_errno("open(\"%s\",O_WRONLY|O_CREAT|O_TRUNC)",path); return false;}
+  if (fd<0){ log_errno("open(\"%s\",O_WRONLY|O_CREAT|O_TRUNC,mode)",path); return false;}
   textbuffer_write_fd(b,fd);
   if (close(fd)) { log_errno("close(fd) %s",path); return false;}
   return true;
 }
 
 static int textbuffer_differs_from_filecontent_fd(const textbuffer_t *b,const int fd, const char *path){
-  log_entered_function("path:'%s'  len:%ld",path,textbuffer_length(b));
+  //log_entered_function("path:'%s'  len:%lld",path,(LLD)textbuffer_length(b));
   char buf[4096];
   int n;
   long pos=0;
@@ -322,7 +322,7 @@ static int textbuffer_differs_from_filecontent_fd(const textbuffer_t *b,const in
 
 
 static int exec_on_file(const int opts,const enum enum_exec_on_file type, char *output, const int output_max, const char *path ){
-  log_entered_function("type:%d path:%s",type,path);
+  //log_entered_function("type:%d path:%s",type,path);
 #define C(p) cmd[i++]=p
   textbuffer_t b={0};
   const char *cmd[9];

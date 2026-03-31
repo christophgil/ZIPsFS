@@ -8,12 +8,13 @@
 // cppcheck-suppress-file variableScope
 //_Static_assert(WITH_PRELOADRAM,"");
 
+#define LF() fputc('\n',file)
 #define F(...) fprintf(file,__VA_ARGS__)
 #define P(txt) fputs(txt,file)
 #define END_HR()  {P("</TR>"); if (isHeader) P("</THEAD>");}
 #define H1(headline) P(IS_HTML()?"<HR><H1>":ANSI_INVERSE),P(headline),P(IS_HTML()?"</H1>":ANSI_RESET)
 #define BEGIN_PRE() if (IS_HTML()) P("<PRE>")
-#define END_PRE()   if (IS_HTML()) P("\n</PRE>")
+#define END_PRE()   if (IS_HTML()) P("\n</PRE>");else LF()
 
 #define INFO_TABLE_DESCRIPTION() info_table_description(file,describe,sizeof(describe),dc)
 #define IS_HTML() (file!=stderr)
@@ -66,7 +67,7 @@ static void counts_by_filetype(FILE *file, root_t *r){
   static int count_explain=0;
   if (!r){
 	count_explain=0;
-	foreach_root(r){ assert(r); counts_by_filetype(file,r);}
+	foreach_root(root){ counts_by_filetype(file,root);}
 	return;
   }
   ht_entry_t *ee=HT_ENTRIES(&r->ht_filetypedata);
@@ -240,12 +241,12 @@ static void log_memusage_ht(FILE *file){
 #undef C
 	  if (ht) M(ht);
 	}
-	fputc('\n',file);
+	LF();
 	IF1(WITH_DIRCACHE, mstore_report_memusage(file,&r->dircache_mstore));
   }
   F("\n%sMemory storages%s\n",IS_HTML()?"<B>":ANSI_BOLD,IS_HTML()?"</B>":ANSI_RESET);
   mstore_report_memusage(file,&mstore_persistent);
-  fputc('\n',file);
+  LF();
   END_PRE();
 #undef M
 }
@@ -393,7 +394,7 @@ static void info_print_memory(FILE *file){
   {
 	struct rlimit rl={0};
 	getrlimit(RLIMIT_AS,&rl);
-	if (rl.rlim_cur!=-1) F("Rlim soft: %lx MB   hard: %lx MB\n",rl.rlim_cur>>20,rl.rlim_max>>20);
+	if (rl.rlim_cur!=-1) F("Rlim soft: %llx MB   hard: %llx MB\n",(LLD)(rl.rlim_cur>>20),(LLD)(rl.rlim_max>>20));
   }
 #endif
 }
@@ -541,3 +542,4 @@ static void fhandle_log_cache(const fHandle_t *d){
 #undef END_PRE
 #undef P
 #undef F
+#undef LF

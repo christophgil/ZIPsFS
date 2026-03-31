@@ -130,11 +130,11 @@ static bool async_periodically_dircache(root_t *r){
   return success;
 }
 #endif //WITH_DIRCACHE
-static void async_zipfile_init(struct async_zipfile *zip,const zpath_t *zpath){
+static void async_zipfile_init(async_zipfile_t *zip,const zpath_t *zpath){
   *zip=async_zipfile_empty;
   zip->azf_zpath=*zpath;
 }
-static void openzip_now(struct async_zipfile *zip){
+static void openzip_now(async_zipfile_t *zip){
   if (!zip) return;
   zpath_t *zpath=&zip->azf_zpath;
   //log_entered_function("rp: '%s' entry: '%s' ",RP(),EP());
@@ -143,7 +143,7 @@ static void openzip_now(struct async_zipfile *zip){
   zip->zf=my_zip_fopen(zip->za,EP(),ZIP_RDONLY,RP());
   LOCK(mutex_fhandle,_rootdata_counter_inc(filetypedata_for_ext(VP(),zpath->root),zip->za?ZIP_OPEN_SUCCESS:ZIP_OPEN_FAIL));
 }
-static void closezip_now(struct async_zipfile *z){
+static void closezip_now(async_zipfile_t *z){
   if (!z) return;
   LOCK_N(mutex_async,  zip_file_t *zf=z->zf; z->zf=NULL;  struct zip *za=z->za; z->za=NULL);
   const zpath_t *zpath=&z->azf_zpath;
@@ -168,7 +168,7 @@ static bool async_stat(const int opt_filldir_findrp,const char *rp,const int rp_
 
   IF1(WITH_STAT_CACHE, if (stat_from_cache(opt_filldir_findrp,st,rp,r)) return true);
 
-  IF1(WITH_TIMEOUT_STAT,if (!r||!r->with_timeout)) return stat_direct(opt_filldir_findrp,st,rp,rp_l,r);
+  IF1(WITH_TIMEOUT_STAT, if (!r||!r->stat_timeout_seconds)) if (!(opt_filldir_findrp&FINDRP_CACHE_ONLY)) return stat_direct(opt_filldir_findrp,st,rp,rp_l,r);
 #if WITH_TIMEOUT_STAT
   //log_debug_now(ANSI_RED"Going async_stat %s"ANSI_RESET,rp);
   assert(rp); assert(*rp);
@@ -181,6 +181,7 @@ static bool async_stat(const int opt_filldir_findrp,const char *rp,const int rp_
   UL();
   return st->st_ino!=0;
 #endif //WITH_TIMEOUT_STAT
+  return false;
 }
 #undef A
 /* ================================================================================ */
@@ -203,7 +204,7 @@ static int async_openfile(zpath_t *zpath,const int flags){
   if (!RP_L()) return 0;
   do{
 	R();
-	if (!r->with_timeout) return open(RP(),flags);
+	if (!r->openfile_timeout_seconds) return open(RP(),flags);
 	L();
 	WAIT_PICKED(r->async_openfile_flags=flags;  strcpy(r->async_openfile_path,RP()));
 	const time_t t0=time(NULL);
@@ -223,7 +224,7 @@ static int async_openfile(zpath_t *zpath,const int flags){
 #define A ASYNC_OPENZIP
 #if WITH_TIMEOUT_OPENZIP
 static inline bool async_periodically_openzip(root_t *r){
-  struct async_zipfile zip;
+  async_zipfile_t zip;
   //log_debug_now("%s",rootpath(r));
   SET_PICKED(zip=*r->async_zipfile);
   openzip_now(&zip);
@@ -231,12 +232,12 @@ static inline bool async_periodically_openzip(root_t *r){
   OK_OR_TIMEOUT(*r->async_zipfile=zip,closezip_now(&zip);zip.zf=NULL);
   return success;
 }
-static void async_openzip(struct async_zipfile *zip){
+static void async_openzip(async_zipfile_t *zip){
   assert(zip);
   zpath_t *zpath=&zip->azf_zpath;
   do{
 	R();
-	if (!r->with_timeout){ openzip_now(zip);break;}
+	if (!r->openfile_timeout_seconds){ openzip_now(zip);break;}
 	L();
 	ASSERT(EP_L());
 	WAIT_PICKED(r->async_zipfile=zip);
@@ -289,12 +290,12 @@ static bool readdir_async(directory_t *dir){
   do{
 	R();
 	ASSERT(RP_L());
-	if (!r->with_timeout||dir->async_never){
+	if (!r->readdir_timeout_seconds||dir->async_never){
 	  return readdir_now(dir);
 	}
 	L();
 	WAIT_PICKED(r->async_dir=dir);
-	root_update_time(r,-PTHREAD_ASYNC);
+	root_update_time(r,-PTHREAD_ASYNC,0);
 	ASYNC_WAIT(RP(),ROOT_WHEN_ITERATED(r,PTHREAD_ASYNC));
 	//log_debug_now("%p '%s'   finished:%d  success:%d files_l: %d same: %d",dir,DIR_RP(dir),finished,dir->dir_is_success, dir->core.files_l, dir==r->async_dir);  directory_debug_filenames("dir/",dir);
 	UL();
@@ -349,13 +350,13 @@ static void log_infinity_loop(const root_t *r, const enum enum_root_thread t){
   IF_LOG_FLAG(flag) log_verbose("Thread: %s  Root: %s ",PTHREAD_S[t],rootpath(r));
 }
 
-static void root_update_time(root_t *r, int t){
-  const bool success=t>0;
-  if (t<0) t=-t;
+static void root_update_time(root_t *r, int thread,time_t now){
+  const bool success=thread>0;
+  if (thread<0) thread=-thread;
   assert(r!=NULL);
-  const time_t now=time(NULL);
-  if (success) atomic_store(r->thread_when_success+t,now);
-  atomic_store(r->thread_when+t,now);
+  if (!now) now=time(NULL);
+  if (success) atomic_store(r->thread_when_success+thread,now);
+  atomic_store(r->thread_when+thread,now);
 }
 
 
@@ -369,23 +370,24 @@ static void *infloop_async(void *arg){
 	if (nanos<ASYNC_SLEEP_USECONDS*1000)      nanos++;
 	bool success=IF01(IS_CHECKING_CODE,false,rand());
 	IF1(WITH_DIRCACHE, if (!(loop&255) && async_periodically_dircache(r)) success=true);
-	if (r->with_timeout){
+	if (r->stat_timeout_seconds || r->readdir_timeout_seconds || r->openfile_timeout_seconds){
 	  /* Reduce waiting when many subsequent request */
-	  IF1(WITH_TIMEOUT_STAT, if ((async_periodically_stat(r))){ nanos=MAX(ASYNC_SLEEP_USECONDS*1000L/50,1000*400);  success=true; sched_yield();});
+	  IF1(WITH_TIMEOUT_STAT, if (r->stat_timeout_seconds && (async_periodically_stat(r))){ nanos=MAX(ASYNC_SLEEP_USECONDS*1000L/50,1000*400);  success=true; sched_yield();});
 	  if (!(loop&15)){ /* less often */
 #define C(with,fn) IF1(with,if (fn(r)){success=true;});
-		C(WITH_TIMEOUT_READDIR,async_periodically_readdir);
-		C(WITH_TIMEOUT_OPENZIP,async_periodically_openzip);
-		C(WITH_TIMEOUT_OPENFILE,async_periodically_openfile);
+		C(WITH_TIMEOUT_READDIR, if(r->readdir_timeout_seconds)  async_periodically_readdir);
+		C(WITH_TIMEOUT_OPENZIP, if(r->openfile_timeout_seconds) async_periodically_openzip);
+		C(WITH_TIMEOUT_OPENFILE,if(r->openfile_timeout_seconds) async_periodically_openfile);
 #undef C
 	  }
 	}
-	if (r->remote){
-	  if (!success && !(loop&255) && ROOT_SUCCESS_SECONDS_AGO(r)>MAX(1,r->check_response_seconds/4)){
-		success=!statvfs(rootpath(r),&r->statvfs);
-		if (!success) log_verbose(RED_FAIL"statvfs(%s)",r->check_response_path);
+	if (r->probe_path_timeout){
+	  if (!success && !(loop&255) && ROOT_SUCCESS_SECONDS_AGO(r)>MAX(1,r->probe_path_response_ttl/4)){
+		const char *probe=r->probe_path?r->probe_path:rootpath(r);
+		success=!statvfs(probe,&r->statvfs);
+		if (!success) log_verbose(RED_FAIL"statvfs(%s)",probe);
 	  }
-	  if (!(loop&255)||success) root_update_time(r,success?PTHREAD_ASYNC:-PTHREAD_ASYNC);
+	  if (!(loop&255)||success) root_update_time(r,success?PTHREAD_ASYNC:-PTHREAD_ASYNC,0);
 	}
 	if (!(loop&0x1023)) log_infinity_loop(r,PTHREAD_ASYNC);
   }
@@ -411,7 +413,7 @@ static void *infloop_misc(void *arg){
   init_infloop(r,PTHREAD_MISC);
   for(int j=0;;j++){
 	log_infinity_loop(r,PTHREAD_MISC);
-	root_update_time(r,-PTHREAD_MISC);
+	root_update_time(r,-PTHREAD_MISC,0);
 	usleep(1000*1000);
 	LOCK_NCANCEL(mutex_fhandle,fhandle_destroy_those_that_are_marked());
 #if WITH_FILECONVERSION||WITH_PRELOADDISK
@@ -433,12 +435,10 @@ static void *infloop_misc(void *arg){
   }
 }
 
-
 static void root_loading_active(void *root){
   if (!root) return;
   root_t *r=(root_t*)root;
-  root_update_time(r,PTHREAD_PRELOAD);
-  //log_debug_now("r:%s",r?r->rootpath:NULL);
+  root_update_time(r,PTHREAD_PRELOAD,0);
 }
 
 /* Each remote root has its own  infloop_preloadfile thread. Loading file content into RAM asynchronously. */
@@ -468,7 +468,7 @@ static void *infloop_preloadfile(void *arg){
 		unlock(mutex_fhandle);
 	  }
 	  IF1(WITH_PRELOADRAM,  if (dm) preloadram_now(dm,r));
-	  IF1(WITH_PRELOADDISK, if (dl){ char dst[MAX_PATHLEN+1];   if (preloaddisk_writable_realpath(&dl->zpath,dst)) preloaddisk_now(dst,NULL,dl);});
+	  IF1(WITH_PRELOADDISK, if (dl){ char dst[MAX_PATHLEN+1];  if (preloaddisk_writable_realpath(&dl->zpath,dst)) preloaddisk_now(dst,NULL,dl);});
 	  {
 		lock(mutex_fhandle);
 		atomic_fetch_add(&d()->is_preloading,-1);
@@ -476,7 +476,7 @@ static void *infloop_preloadfile(void *arg){
 		unlock(mutex_fhandle);
 	  }
 	}/* if (d) */
-	root_update_time(r,-PTHREAD_PRELOAD);
+	root_update_time(r,-PTHREAD_PRELOAD,0);
 	usleep(500*1000);
   }
 #undef d
@@ -579,15 +579,15 @@ static bool wait_for_root_timeout(root_t *r){
   RLOOP(iTry,N){
 	const time_t delay=ROOT_SUCCESS_SECONDS_AGO(r);
 	//log_debug_now("delay: %ld ",delay);
-	if (delay>ROOT_RESPONSE_TIMEOUT_SECONDS) break;
-	if (delay<r->check_response_seconds){
+	if (delay>r->probe_path_timeout) break;
+	if (delay<r->probe_path_response_ttl){
 	  log_root_blocked(r,false);
 	  return true;
 	}
-	cg_sleep_ms(r->check_response_seconds/N,"");
+	cg_sleep_ms(r->probe_path_response_ttl/N,"");
 	bool log=iTry>N/2 && iTry%(N/10)==0;
 	IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE) log=true;
-	if (log) log_verbose("%s %d/%d\n",rootpath(r),iTry,N);
+	if (log) log_verbose("%s %d/%d   Settings: probe_path_response_ttl:%d probe_path_timeout:%d\n",rootpath(r),iTry,N, r->probe_path_response_ttl, r->probe_path_timeout);
   }
   r->log_count_delayed_periods++;
   r->log_count_delayed++;

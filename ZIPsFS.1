@@ -47,6 +47,7 @@ Changes can be applied without disrupting the file system.
 With a trailing slash, the folder name is not part of the virtual path,
 in accordance with the trailing slash semantics of many UNIX tools.
 More flexibility provides the property \f[V]\[at]path-prefix=...\f[R].
+Run \f[V]ZIPsFS -h\f[R] for a list of properties.
 .PP
 ZIPsFS includes specialized features like \f[B]automatic file
 conversions\f[R] and performance optimizations tailored for efficiently
@@ -140,9 +141,9 @@ commas.
 .IP
 .nf
 \f[C]
-less  \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
+less  \[ti]/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
 
-gunzip -c \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz
+gunzip -c \[ti]/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz
 \f[R]
 .fi
 .PP
@@ -155,13 +156,13 @@ It becomes exactly known after reading the file.
 .IP
 .nf
 \f[C]
-head \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/http,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
-head \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
+head \[ti]/test/ZIPsFS/mnt/zipsfs/n/http,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
+head \[ti]/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
 
 
-ls -l \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
+ls -l \[ti]/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
 
-head \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
+head \[ti]/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
 \f[R]
 .fi
 .PP
@@ -175,8 +176,8 @@ respectively.
 .IP
 .nf
 \f[C]
-head \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/http,,,ftp.gnu.org,gnu,binutils,binutils-2.23.1.tar   # Remote file is .tar.bz2
-head \[ti]/test/ZIPsFS/mnt/ZIPsFS/n/http,,,ftp.gnu.org,gnu,gawk,gawk-4.0.2.tar            # Remote file is .tar.xz
+head \[ti]/test/ZIPsFS/mnt/zipsfs/n/http,,,ftp.gnu.org,gnu,binutils,binutils-2.23.1.tar   # Remote file is .tar.bz2
+head \[ti]/test/ZIPsFS/mnt/zipsfs/n/http,,,ftp.gnu.org,gnu,gawk,gawk-4.0.2.tar            # Remote file is .tar.xz
 \f[R]
 .fi
 .PP
@@ -377,24 +378,28 @@ command line.
 .PP
 The last argument is the mount point which is an empty folder.
 .SS Special directory prefixes
-.IP \[bu] 2
-/ZIPsFS/p Rapid navigation and file name searching without time
+.PP
+Note: The directory name used to be /ZIPsFS/.
+This conflicted with MS-Windows and is therefore changed to lower case
+/zipsfs/.
+- /zipsfs/p Rapid navigation and file name searching without time
 consuming ZIP file expansion.
-.IP \[bu] 2
-/ZIPsFS/n Internet files.
+- /zipsfs/n Internet files.
 Take URL and replace colon and slashes by comma.
 See above tutorial.
-.IP \[bu] 2
-/ZIPsFS/lrz Remote and zipped files are prefetched before reading.
-For FragPipe, use raw files from here.
-.IP \[bu] 2
-/ZIPsFS/c Converted files like mgf and mzML from raw mass spectrometry
-files or tsv from parquet files.
-Note that the mzML files are not suitable for FragPipe.
-FragPipe is generating its own mzML variant.
-.IP \[bu] 2
-/ZIPsFS/1 Files of the first branch only.
+- /zipsfs/v Logging, to identify misbehaving software which should
+rather be used with preloading of remote or compressed files.
+- Excessive requests of file attributes - Multiple open/close - Backward
+seek - Upper/lower case conversion of file names - /zipsfs/l..
+Prefetched before reading.
+The letters following the l denote the condition (z) In zip Archive (c)
+In zip and compressed (r) Remote.
+For FragPipe, load raw files from lrz.
+- /zipsfs/c Show convert files along the original files.
+Example: - Raw mass spectrometry to mgf or mzML files or tsv - Parquet
+to tsv - /zipsfs/1 Files of the first branch only.
 This includes all files ever written or generated or modified.
+- /zipsfs/\[ti]1 Files except from first branch.
 .PP
 Details are found in the contained readme files.
 .SS Properties of upstream file trees
@@ -437,9 +442,10 @@ Same consequence as above.
 the first file tree.
 Useful for remote files.
 .IP \[bu] 2
-\f[V]preload-gz=1\f[R] Files are generated from a gz-compressed files.
+\f[V]preload=gz,bz2\f[R] Files are generated from a gz and
+bz2-compressed files.
 Useful for Windows software that cannot read gnu-zipped files.
-Also available bz2, lrz, Z and xz.
+Available: gz, bz2, lrz, Z and xz.
 Preload files
 .PP
 Non-linear file loading in a random-access manner is inefficient for
@@ -479,16 +485,17 @@ the following folders will be first copied to local disk:
 .IP
 .nf
 \f[C]
-<mount-point>/ZIPsFS/lr/
-<mount-point>/ZIPsFS/lrc/
-<mount-point>/ZIPsFS/lrz/
+<mount-point>/zipsfs/lr/
+<mount-point>/zipsfs/lrc/
+<mount-point>/zipsfs/lrz/
 \f[R]
 .fi
 .PP
 The Readme in these folders provide further information.
 Alternatively, the entire root-path can be marked for preloading with
 the property \f[V]\[at]preload\f[R].
-Decompression is enabled with properties like \f[V]\[at]preload-gz\f[R]
+Decompression is enabled with properties like \f[V]\[at]preload=1\f[R]
+of for specific compression suffixes like \f[V]\[at]preload=gz,xz\f[R]
 Project status
 .PP
 Author: Christoph Gille

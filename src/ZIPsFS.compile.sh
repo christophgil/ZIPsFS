@@ -14,7 +14,7 @@ SEARCH_INCLUDE_FILES='/usr/include/fuse3 /usr/local/include/fuse3  /usr/local/in
 #############
 ### Help  ###
 #############
-readonly ANSI_FG_GREEN=$'\e[32m' ANSI_FG_RED=$'\e[31m'  ANSI_RESET=$'\e[0m' ANSI_UNDERLINE=$'\e[4m'
+readonly ANSI_FG_GREEN=$'\e[32m' ANSI_FG_RED=$'\e[31m'  ANSI_RESET=$'\e[0m' ANSI_UNDERLINE=$'\e[4m' ANSI_MAGENTA=$'\e[45m'
 RUN_MAIN=1
 print_help(){
 		sed 's|^\.$||1'<<EOF
@@ -92,9 +92,7 @@ EOF
 #############################
 ### Command line options  ###
 #############################
-
 IS_CG=0; [[ $(hostname). == s-mcpb-ms0* && $USER == cgille ]] && IS_CG=1 && echo 'Is PC of developer'
-
 LIBFUSE=''
 LIBZIP=''
 WITH_SANITIZER=0
@@ -103,12 +101,10 @@ WITH_RPATH=0
 CCOMPILER=${CC:-gcc}; clang --version >/dev/null &&  CCOMPILER=clang
 OPT_PROFILER=''
 CC_OPTS='-D_FILE_OFFSET_BITS=64'
-
 if ((IS_CG)); then
 		export PATH=/usr/lib/llvm-13/bin:/usr/lib/llvm-14/bin/:$PATH
 		WITH_SANITIZER=1
 fi
-
 while getopts 'RhsgF:Z:' o; do
 		case $o in
 				R) WITH_RPATH=1;;
@@ -276,6 +272,7 @@ main(){
 
 				local g=$DIR/tmp/generated_ZIPsFS.inc
 				cat $cc | sed 's| *// cppcheck-suppress.*||1' | sed -n 's|^\(static .*)\) *{$|\1;|p' |grep -v -e NOT_TO_HEADER -e '\[[A-Z]' -e '\<IF1('  >$g
+				read -r -p "EEEEEEEEEEEnter $g"
 				if  ((WITH_PROFILER)); then
 						opts+=" ${D}WITH_PROFILER=1 "
 						{
@@ -299,8 +296,7 @@ EOF
 				echo "# This file has been created with $SRC"$'\n\n'$CCOMPILER $CC_OPTS  $NOWARN "$opts" $IPATHS -O0 -g  $sanitize  $DIR/ZIPsFS.c  $LIBFUSE $LIBZIP $RPATHS   $LPATHS $LL  -o $x
 		}|tee $c
 		chmod +x $c
-		ls -l $c
-
+		echo -n $ANSI_MAGENTA; stat "--printf=%n  %Y %'s\n"  $c;echo $ANSI_RESET
 		press_enter "proceed compilation"
 		. $c
 		more $c |grep -v '^#'

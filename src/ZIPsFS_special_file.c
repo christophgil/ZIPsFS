@@ -123,13 +123,7 @@ Deletion of files can be delayed by setting the <U>last-access-time</U> to the c
   C("</UL>\n");
 }
 
-static void sf_bat_starts_ps1(textbuffer_t *b, const int specialFileId){
-  C("CLS\n@powershell %~dp0\\");
-  C(SFILE_NAMES[specialFileId]);
-  //C("\n@PAUSE\n");
-}
-
-//C("CLS\npowershell %~dp0\\%~n0.ps1 %*\n@pause\n"); break;
+//static void sf_bat_starts_ps1(textbuffer_t *b, const int specialFileId){  C("CLS\n@powershell %~dp0\\");  C(SFILE_NAMES[specialFileId]);}
 
 #define SF_UPDATE() sf_update(b,depth);
 static void sf_update(textbuffer_t *b,const int depth){
@@ -163,7 +157,7 @@ static uint64_t special_file_file_content_to_fhandle(zpath_t *zpath,const int sp
 	textbuffer_t *b=textbuffer_new(COUNT_MALLOC_PRELOADRAM_TXTBUF);
 	cg_thread_assert_not_locked(mutex_fhandle);
 	if (ZPF(ZP_IS_PATHINFO)){
-	  find_realpath_any_root(0,zpath,NULL);
+	  find_realpath(0,zpath);
 	  char tmp[2*MAX_PATHLEN];
 	  SF_PRINTF("%s%s%s\n",RP(),EP_L()?"\t":"",EP());
 	}else{
@@ -197,7 +191,7 @@ static void special_file_content_to_file(const int id, const char *path){
   textbuffer_destroy(&b);
 }
 
-// /var/Users/cgille/tmp/ZIPsFS/mnt/ZIPsFS/n/_UPDATE_/ftp,,,ftp.expasy.org,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000000589,UP000000589_10090.fasta.html
+// /var/Users/cgille/tmp/ZIPsFS/mnt/zipsfs/n/_UPDATE_/ftp,,,ftp.expasy.org,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000000589,UP000000589_10090.fasta.html
 static void html_is_uptodate(fHandle_t *d,const yes_zero_no_t updateSuccess, zpath_t *zpath, const char *pathOrig,const struct stat *stOrig, const char *relPath){
   struct stat  *st1=&zpath->stat_rp;
   textbuffer_t *b=textbuffer_new(COUNT_MALLOC_PRELOADRAM_TXTBUF);
@@ -211,10 +205,10 @@ static void html_is_uptodate(fHandle_t *d,const yes_zero_no_t updateSuccess, zpa
 
   C("<TABLE  style=\"border: 1px solid black;border-collapse: collapse;\">\n<TR>"H("Path")H("Modified")H("Size")H("Status")"</TR>\n");
   char tmp[strlen(pathOrig)+RP_L()+4096];
-  SF_PRINTF( R("%'ld","","Original"),pathOrig,ST_MTIME(stOrig),stOrig->st_size);
+  SF_PRINTF( R("%'lld","","Original"),pathOrig,ST_MTIME(stOrig),(LLD)stOrig->st_size);
   const char *s_ne="Not exist", *s_utd="Up to date", *s_ufail="Update failed", *s_usuccess="Update succeeded", *s_uneed="Need_update";
-#define TROW_LOADED(s) SF_PRINTF(R("%'ld"," style=\"color:#%06x;\"","%s"), RP(),st1->st_mtime?ST_MTIME(st1):"",	\
-								 st1->st_size,\
+#define TROW_LOADED(s) SF_PRINTF(R("%'lld"," style=\"color:#%06x;\"","%s"), RP(),st1->st_mtime?ST_MTIME(st1):"",	\
+								 (LLD)st1->st_size,	\
 								 s==s_ne || s==s_ufail?0xFF: s==s_utd||s==s_usuccess?0xFF00: s==s_uneed?0xFF00FF: 0,\
 								 s);
 
@@ -238,7 +232,7 @@ static void html_is_uptodate(fHandle_t *d,const yes_zero_no_t updateSuccess, zpa
 
 
 
-// Testing: mnt/ZIPsFS/_UPDATE_PRELOADED_FILES_/txt/numbers.txt.htmL     mnt/ZIPsFS/_UPDATE_PRELOADED_FILES_/DB/ebi/databases/uniprot/current_release/knowledgebase/complete/docs/keywlist.xml.htmL
+// Testing: mnt/zipsfs/_UPDATE_PRELOADED_FILES_/txt/numbers.txt.htmL     mnt/zipsfs/_UPDATE_PRELOADED_FILES_/DB/ebi/databases/uniprot/current_release/knowledgebase/complete/docs/keywlist.xml.htmL
 //////////////////////////////////////////////////////
 /// Generate virtual files with immutable content. ///
 //////////////////////////////////////////////////////
@@ -258,7 +252,7 @@ static void special_file_content(textbuffer_t *b,const enum enum_special_files i
 	  C(c);
   }
 
-  static const char *begin_net_fetch=
+  static const char *common_begin_net_fetch=
 #include "tmp/include_net_fetch_common.ps1.c"
 
 
@@ -385,10 +379,10 @@ Also see ");    SF_FILE_REF(SFILE_NAMES[SFILE_README_PRELOADDISK_R]);
 </UL>\n");
 	SF_REQUIRES(WITH_PRELOADDISK,"WITH_PRELOADDISK");
 	sf_requires_rw(b);
-	C("<H2>Mark entire file branch</H2>\nAt the command line, root paths can be followed by the property "); SF_SYMBOL("@"ROOT_PROPERTY_PRELOAD); C(".\n\
+	C("<H2>Mark entire file branch</H2>\nAt the command line, root paths can be followed by the property "RP_PRELOAD".\n\
 This is useful for remote sites. Furthermore the properties the following properties can indicate to decompress files that have a compression suffix:\n");
 	SF_SYMBOL_B();
-	FOR(iCompress,COMPRESSION_NIL+1,COMPRESSION_NUM){ C(" &nbsp;  @"ROOT_PROPERTY_PRELOAD);C(cg_compression_file_ext(iCompress,NULL));}
+	FOR(iCompress,COMPRESSION_NIL+1,COMPRESSION_NUM){ C(" &nbsp;  @"RP_PRELOAD);C(cg_compression_file_ext(iCompress,NULL));}
 	SF_SYMBOL_E();
 	SF_BR();
 	SF_UPDATE();
@@ -406,20 +400,41 @@ This is useful for remote sites. Furthermore the properties the following proper
 #undef L
 	break;
   case SFILE_README_PLAIN:
-	C("This directory provides plain access to all files.\n\
-	  - not expanding ZIP files.\n\n\n\
-Useful for rapid navigation and searching.\n\n");
+	C("This directory provides plain access to all files.\n	  - not expanding ZIP files.\n\n\nUseful for rapid navigation and searching.\n\n");
 	break;
   case SFILE_README_FIRST_ROOT:
 	C("This directory contains only those files that reside in the first branch which is the writable branch.\n\
 It may be used to selectively process files that are generated or downloaded from remote locations.\n");
-	break;
+  case SFILE_README_LOGGING:{
+	C("File access is logged in file "); C(SFILE_REAL_PATHS[SFILE_LOG_FUNCTION_CALLS]);	C(".\n\
+The logs can be used to identify misbehaving software which should rather be used with preloading for remote or compressed files.\n\
+  - Excessive requests of file attributes\n\
+  - Multiple open/close\n\
+  - Backward seek\n\
+  - Upper/lower case conversion of file names\n\n\
+Run "); C(SFILE_NAMES[SFILE_LOGGING_COMMAND]);C(" to watch or view the logs.\n");
+  }break;
+  case SFILE_LOGGING_COMMAND:{
+	static const char *awk=
+#include "tmp/include_print_tsv.awk.c"
+	  shebang_bash(false,b);
+	C("f=");C(SFILE_REAL_PATHS[SFILE_LOG_FUNCTION_CALLS]);
+	C("\n[[ ! -f $f ]] && echo 'Not a file '$f && f=${0%/*}/");C(SFILE_NAMES[SFILE_LOG_FUNCTION_CALLS]);
+	C("\n""my_format(){\n awk '"); C(awk); C("'\n}\n\
+[[ -s $f ]] && case ${1:-} in\n	\
+-p) my_format <$f |less;;\n\
+-l) tail -f $f |my_format;;\n\
+*) nl $f;;\n\
+esac\n\
+ls -l -d $f\n\
+echo -e \"Options:\n   $0 -p  Display in pager\n   $0 -l  Continuous logging\"\n\
+");
+  }break;
   case SFILE_README_EXCLUDE_FIRST_ROOT:
 	C("This directory contains only those files that reside in NOT the first branch which is the writable branch.\n");
 	break;
   case SFILE_README_INTERNET_UPDATE:
-	C("<H1>Updating internet files</H1>\n");
-	C("blabla");
+	C("<H1>Updating internet files</H1>\nBy reading at least one byte, files will be downloaded again if older than the source in the internet.");
   case SFILE_README_INTERNET:
 	SF_HTML_HEADER();
 	C("<H1>Accessing files from the internet</H1>\n");
@@ -444,17 +459,19 @@ Before decompressing tranfer, the file size is estimated.");
 	break;
   case SFILE_NET_FETCH_BAT:
 	sf_begin_ps1(b);
-	sf_bat_starts_ps1(b,SFILE_NET_FETCH_PS);
+	C("CLS\n%~dpn0.ps1\n");
+
+	//	sf_bat_starts_ps1(b,SFILE_NET_FETCH_PS);
 	break;
   case SFILE_NET_FETCH_PS:{
-	C(begin_net_fetch);
+	C(common_begin_net_fetch);
 	static const char *s=
 #include "tmp/include_net_fetch.ps1.c"
 	  ;C(s);
   }	break;
   case SFILE_NET_FETCH_SH:{
 	shebang_bash(false,b);
-	C(ps1_to_sh(SFILE_NET_FETCH_SH,begin_net_fetch));
+	C(ps1_to_sh(SFILE_NET_FETCH_SH,common_begin_net_fetch));
 	static const char *c=
 #include "tmp/include_net_fetch.sh.c"
 	  C(c);
@@ -496,7 +513,8 @@ It should be an overestimation to avoid premature end-of-file.<BR>\n");
 	  C(s);
   }break;
   case SFILE_SET_ATIME_BAT:
-	sf_bat_starts_ps1(b,SFILE_SET_ATIME_PS);
+	//	sf_bat_starts_ps1(b,SFILE_SET_ATIME_PS);
+	C("CLS\n%~dpn0.ps1\n");
 	break;
   case SFILE_READ_BEGINNING_OF_FILES_SH:{
 	shebang_bash(false,b);

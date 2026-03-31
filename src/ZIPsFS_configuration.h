@@ -23,6 +23,7 @@
 #define WITH_EXTRA_ASSERT    0 // Optional assertion
 #define WITH_TESTING_REALLOC 0 // Smaller initial size, earlier realloc
 #define WITH_TESTING_UNBLOCK 0
+#define WITH_FOLLOW_SYMLINK  0 /* Or set  @follow-symlinks=0 per root.    Symlink dereference can be denied in config_allow_expand_symlink() */
  /******************************************************************************************************************************************************************/
  /* Avoid blocking        0 deactivated    1 activated        Applies  to rootpaths that starting with three slashs                                                */
  /* Activate this feature if  upstream file systems suffer from becoming blocked/unresonsive                                                                       */
@@ -133,8 +134,8 @@
 
 #define WITH_TESTING_TIMEOUTS 0
 #if WITH_TESTING_TIMEOUTS
-#define ROOT_RESPONSE_SECONDS 2
-#define ROOT_RESPONSE_TIMEOUT_SECONDS 10
+#define PROBE_PATH_RESPONSE_TTL_SECONDS 2
+#define PROBE_PATH_TIMEOUT_SECONDS 10
 #define STAT_TIMEOUT_SECONDS      1000
 #define READDIR_TIMEOUT_SECONDS  100
 #define OPENFILE_TIMEOUT_SECONDS 100
@@ -143,8 +144,8 @@
 #define NUM_PRELOADRAM_STORE_RETRY 1
 #define PRELOADFILE_TIMEOUT_SECONDS 2
 #else
-#define ROOT_RESPONSE_SECONDS 9   /* Roots which have responded within that time are used. */
-#define ROOT_RESPONSE_TIMEOUT_SECONDS 30     /* Otherwise wait until ROOT_RESPONSE_SECONDS is reached and give up waiting. */
+#define PROBE_PATH_RESPONSE_TTL_SECONDS   9   /* Root paths which have responded within that time are considered active. */
+#define PROBE_PATH_TIMEOUT_SECONDS       30   /* Give up waiting for this root path after this time. */
 #define STAT_TIMEOUT_SECONDS     30 // Give up waiting for stat() result
 #define READDIR_TIMEOUT_SECONDS  30 // Give up waiting for opendir()  and readdir()
 #define OPENFILE_TIMEOUT_SECONDS 30
@@ -189,7 +190,7 @@
 
 
 
-#define WITH_FILECONVERSION_HIDDEN 0  /* Hide the directory a in ZIPsFS to avoid recursive searches. However, it breaks export to Windows */
+#define WITH_FILECONVERSION_HIDDEN 0  /* Hide the directory c in ZIPsFS to avoid recursive searches. However, it breaks export to Windows */
 #if 0
 #warning "Going to deactivate all caches for testing"
 #undef WITH_DIRCACHE

@@ -33,7 +33,7 @@
 #endif //WITH_DEBUG_MALLOC
 
 enum enum_mstore_operation{_mstore_destroy,_mstore_usage,_mstore_clear,_mstore_contains,_mstore_blocks};
-struct mstore{
+typedef struct mstore{
   char _block_on_stack[_MSTORE_LEADING+_MSTORE_BLOCK_ON_STACK_CAPACITY];
   char **_data;
   char *_previous_sgmt;
@@ -49,11 +49,11 @@ struct mstore{
 #ifdef CG_THREAD_FIELDS
   CG_THREAD_FIELDS;
 #endif
-};
+} mstore_t;
 
 
 
-static void mstore_file(char path[PATH_MAX+1],const struct mstore *m,const int block);
+static void mstore_file(char path[PATH_MAX+1],const mstore_t *m,const int block);
 
 
 #endif

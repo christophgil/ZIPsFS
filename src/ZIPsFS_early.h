@@ -23,7 +23,7 @@
 #define M(time) _Static_assert(time>3,"");
 #endif //WITH_TESTING_TIMEOUTS
 
-M(ROOT_RESPONSE_SECONDS);
+M(PROBE_PATH_TIMEOUT_SECONDS);
 M(STAT_TIMEOUT_SECONDS);
 M(READDIR_TIMEOUT_SECONDS);
 M(OPENFILE_TIMEOUT_SECONDS);
@@ -44,17 +44,15 @@ M(PRELOADFILE_TIMEOUT_SECONDS);
 /* End WITH_TESTING_TIMEOUTS */
 
 /* assertions */
-_Static_assert(ROOT_RESPONSE_TIMEOUT_SECONDS>ROOT_RESPONSE_SECONDS,"");
-_Static_assert(ASYNC_SLEEP_USECONDS*4<1000*1000*ROOT_RESPONSE_SECONDS,"");
+_Static_assert(PROBE_PATH_TIMEOUT_SECONDS>PROBE_PATH_RESPONSE_TTL_SECONDS,"");
+_Static_assert(ASYNC_SLEEP_USECONDS*4<1000*1000*PROBE_PATH_RESPONSE_TTL_SECONDS,"");
 ///
 #undef ASSERT
 #if WITH_EXTRA_ASSERT
 // cppcheck-suppress-macro nullPointerRedundantCheck
 #define ASSERT(...) (assert(__VA_ARGS__))
-#define ASSERT_PRINT(...) ASSERT(__VA_ARGS__);log_verbose(ANSI_FG_GREEN"%s"ANSI_RESET,#__VA_ARGS__)
 #else
 #define ASSERT(...)
-#define ASSERT_PRINT(...)
 #endif
 ///
 /* Some settings depend on others */

@@ -84,8 +84,7 @@ typedef enum yes_zero_no { NO=-1,ZERO,YES} yes_zero_no_t;
 #define ST_MTIMESPEC st_mtim
 #endif
 #define CG_TIMESPEC_EQ(a,b) ((a).tv_sec==(b).tv_sec && (a).tv_nsec==(b).tv_nsec)
-#define CTIME(t) strtok(ctime(&(t)),"\n")
-#define ST_MTIME(st) strtok(ctime(&(st)->st_mtime),"\n")
+#define ST_MTIME(st) time_as_strg((st)->st_mtime)
 ////////////////////////////////////////
 #define FOR(var,from,to) for(int var=from;var<(to);var++)
 #define RLOOP(var,from) for(int var=from;--var>=0;)
@@ -224,7 +223,7 @@ M(MAX,long)
 #define LLD long long
 
 
-enum enum_validchars{VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHARS_NUM};
+enum enum_validchars{VALIDCHARS_DIGITS,VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHARS_NUM};
 
 
 
@@ -292,13 +291,12 @@ _Static_assert((COMPRESSION_NUM&COMPRESSION_MASK)==COMPRESSION_NUM,"COMPRESSION_
 /***********/
 /* Network */
 /***********/
-struct cg_httpheader{
+typedef struct cg_httpheader{
   time_t mtime;
   ssize_t size;
   bool has_content_location, is_404, is_header;
   int lines;
   int compress_sfx;
-};
-typedef struct cg_httpheader cg_httpheader_t;
+} cg_httpheader_t;
 static int cg_httpheader_read_fd(struct cg_httpheader *h,const int fd);
 #endif // _cg_utils_dot_h

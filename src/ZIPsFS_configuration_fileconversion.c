@@ -12,7 +12,7 @@ _Static_assert(WITH_FILECONVERSION,"");
 #define ENDS_IMG .ends_ic=".jpeg:.jpg:.png:.gif"
 #define IMG_SCALE_COMMON(op,out) ENDS_IMG,.info="Needs Imagemagick",.fsize_is_multiple_of_infile=true,.generated_file_inherits_infile_ext=true,.estimated_filesize=1,.exclude_patterns={".scale"},.cmd={"convert",PLACEHOLDER_INFILE,"-scale",op,out}
 #define INFO_TESSERACT .info="Requires  sudo apt-get install tesseract-ocr-eng"
-struct fileconversion_rule
+fileconversion_rule_t
 _scale25={.ext=".scale25%",IMG_SCALE_COMMON("%25","-"),.out=STDOUT_TO_MMAP},
   _scale50={.ext=".scale50%",IMG_SCALE_COMMON("%50",PLACEHOLDER_TMP_OUTFILE)},
   _opticalCharacterRecognition={INFO_TESSERACT, ENDS_IMG,.estimated_filesize=9999,.ext=".ocr.eng.txt",.out=STDOUT_TO_OUTFILE,.cmd={"tesseract",PLACEHOLDER_INFILE,"-","-l","eng"}},
@@ -32,7 +32,7 @@ _scale25={.ext=".scale25%",IMG_SCALE_COMMON("%25","-"),.out=STDOUT_TO_MMAP},
 
 /* --- Some test cases used for debugging. Create a test file 'test_fileconversion.txt' ... --- */
 #define x()  .ends=".txt",.patterns={"test_fileconversion"},.estimated_filesize=99
-struct fileconversion_rule
+fileconversion_rule_t
 _test_malloc_fail={    x(),.ext=".ls-fails.txt",     .out=STDOUT_TO_OUTFILE,.cmd={"ls","-l","not exist"},},  /* Fails with  Operation not permitted */
   _test_cmd_notexist={ x(),.ext=".cmd-not-exist.txt",.out=STDOUT_TO_MALLOC,.cmd={"not exist"},},            /* Fails with  Broken Pipe */
   _test_malloc={       x(),.ext=".malloc.txt",       .out=STDOUT_TO_MALLOC,.cmd={"echo","Hello"},},
@@ -43,7 +43,7 @@ _test_malloc_fail={    x(),.ext=".ls-fails.txt",     .out=STDOUT_TO_OUTFILE,.cmd
 
 
 /* --- Configurations for mass spectrometry rawfiles --- */
-struct fileconversion_rule
+fileconversion_rule_t
 //_wiff_strings={.ends=".wiff",.estimated_filesize=99999,.ext=".strings",.cmd={"bash","-c","tr -d '\\0' <"PLACEHOLDER_INFILE"|strings|grep '\\w\\w\\w\\w' # "PLACEHOLDER_TMP_OUTFILE" "PLACEHOLDER_TMP_OUTFILE}},
 _wiff_strings={.ends=".wiff",.estimated_filesize=99999,.ext=".strings",.cmd={"bash","-c","tr -d '\\0' <'"PLACEHOLDER_INFILE"'|strings|grep '\\w\\w\\w\\w'  ", NULL}, .out=STDOUT_TO_MALLOC,.security_check_filename=true},
 #define DOCKER_MSCONVERT_CMD(formatOpt) "docker","run","-v",PLACEHOLDER_INFILE_PARENT":/data","-v",PLACEHOLDER_OUTFILE_PARENT":/dst","-it","--rm","chambm/pwiz-skyline-i-agree-to-the-vendor-licenses","wine","msconvert",formatOpt,PLACEHOLDER_INFILE_NAME,"--outdir","/dst", "--outfile",PLACEHOLDER_TMP_OUTFILE_NAME
@@ -59,7 +59,7 @@ _wiff_strings={.ends=".wiff",.estimated_filesize=99999,.ext=".strings",.cmd={"ba
 ////////////////////////////////////////////////
 
 static struct fileconversion_rule **config_fileconversion_rules(void){
-  static struct fileconversion_rule* aa[]={
+  static fileconversion_rule_t* aa[]={
 	&_pdftotext,
 	&_test_mmap,
 	&_test_textbuf,

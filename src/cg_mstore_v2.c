@@ -1,6 +1,5 @@
 // cppcheck-suppress-file unusedFunction
 /////////////////////////////////////////
-/// xxxxCOMPILE_MAIN=ZIPsFS               ///
 /// Storage place for misc variables  ///
 /////////////////////////////////////////
 
@@ -43,7 +42,7 @@ static ht_hash_t hash_value_strg(const char* key){
   return !key?0:hash32(key,strlen(key));
 }
 /////////////////////////////////////////////////////////
-static void mstore_set_mutex(int mutex,struct mstore *x){
+static void mstore_set_mutex(int mutex,mstore_t *x){
   x->mutex=mutex;
 }
 static void _mstore_block_init_with_capacity(const char *d,const off_t capacity){
@@ -51,7 +50,7 @@ static void _mstore_block_init_with_capacity(const char *d,const off_t capacity)
   MSTORE_OFFSET_NEXT_FREE(d)=_MSTORE_LEADING;
   MSTORE_BLOCK_CAPACITY(d)=capacity;
 }
-static off_t _mstore_common(struct mstore *m,int opt,const void *pointer){
+static off_t _mstore_common(mstore_t *m,int opt,const void *pointer){
   if (!m) return 0;
   lock(m->mutex);
   //  CG_THREAD_OBJECT_ASSERT_LOCK(m);
@@ -90,7 +89,7 @@ static off_t _mstore_common(struct mstore *m,int opt,const void *pointer){
 
 
 
-static void mstore_report_memusage(FILE *file,struct mstore *m){
+static void mstore_report_memusage(FILE *file,mstore_t *m){
   if (!m){
 	fputs("(Name #id  B:#Blocks-used M:Mem(Bytes) B:Bytes-per-block  flags)",file);
   }else{
@@ -140,9 +139,9 @@ static const char *mstore_set_base_path(const char *f){
 /*******************************************************/
 #define mstore_init_file(m,name,size_and_opt) _mstore_init(m,name,size_and_opt|MSTORE_OPT_MMAP_WITH_FILE)
 #define mstore_init(m,name,size_and_opt) _mstore_init(m,name,size_and_opt)
-static struct mstore *_mstore_init(struct mstore *m,const char *name, const int size_and_opt){
+static mstore_t *_mstore_init(mstore_t *m,const char *name, const int size_and_opt){
   assert(m);
-  memset(m,0,sizeof(struct mstore));
+  memset(m,0,sizeof(mstore_t));
   m->name=name;
   static atomic_int count;
   m->iinstance=atomic_fetch_add(&count,1);
@@ -162,12 +161,12 @@ static struct mstore *_mstore_init(struct mstore *m,const char *name, const int 
 // Allocate memory of number of bytes //
 ////////////////////////////////////////
 
-static void mstore_file(char path[PATH_MAX+1],const struct mstore *m,const int block){
+static void mstore_file(char path[PATH_MAX+1],const mstore_t *m,const int block){
   char b[9]={'*',0};
   if (block>=0) sprintf(b,"%02d",block);
   snprintf(path,PATH_MAX-1,"%s/%03d_%s_%s.cache",mstore_base_path(),m->iinstance,m->name,b);
 }
-static int _mstore_openfile(struct mstore *m,const uint32_t block,const off_t adim){
+static int _mstore_openfile(mstore_t *m,const uint32_t block,const off_t adim){
   assert(m->name);
   char path[PATH_MAX+1];  mstore_file(path,m,block);
   /* Note, there might be several with same name. Unique file names by adding iinstance to the file name */
@@ -186,7 +185,7 @@ static int _mstore_openfile(struct mstore *m,const uint32_t block,const off_t ad
 
 
 
-static char *_mstore_block_try_allocate(struct mstore *m,char *block,const off_t bytes,const int align){
+static char *_mstore_block_try_allocate(mstore_t *m,char *block,const off_t bytes,const int align){
   if (!block) return NULL;
   //  char not_used=block[0];
   //off_t not_used_off=((off_t*)block)[0];
@@ -197,7 +196,7 @@ static char *_mstore_block_try_allocate(struct mstore *m,char *block,const off_t
   return block+begin;
 }
 
-static void _mstore_double_capacity(struct mstore *m){
+static void _mstore_double_capacity(mstore_t *m){
   assert(m);
   const uint32_t c=m->capacity;
   ASSERT((!m->_data) == (c==1));
@@ -205,7 +204,7 @@ static void _mstore_double_capacity(struct mstore *m){
   if (!m->_data) DIE("Calloc returns NULL");
 }
 
-static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align){
+static void *mstore_malloc(mstore_t *m,const off_t bytes, const int align){
   CG_THREAD_OBJECT_ASSERT_LOCK(m);  assert(align==1||align==2||align==4||align==8);
   char *dst=NULL;
   IF1(_WITH_MSTORE_PREVIOUS, if ((dst=_mstore_block_try_allocate(m,m->_previous_sgmt,bytes,align))) return);
@@ -238,14 +237,14 @@ static void *mstore_malloc(struct mstore *m,const off_t bytes, const int align){
   assert(MSTORE_BLOCK_CAPACITY(block)>=bytes);
   return dst;
 }
-static void mstore_destroy(struct mstore *m){
+static void mstore_destroy(mstore_t *m){
   _mstore_common(m,_mstore_destroy,NULL);
   cg_free(_MSTORE_COUNTER_MALLOC(m),m->_data);
 }
 //////////////////
 // Add a string //
 // ///////////////
-static const char *mstore_addstr(struct mstore *m, const char *str,off_t len_or_zero){
+static const char *mstore_addstr(mstore_t *m, const char *str,off_t len_or_zero){
   if (!str) return NULL;
   if (!*str) return "";
   const off_t len=len_or_zero?len_or_zero:strlen(str);
@@ -267,7 +266,7 @@ struct mytest{
 static void test_mstore1(int argc,char *argv[]){
   const char *dir="/home/cgille/tmp/test";
   //cg_recursive_mkdir(dir);
-  struct mstore m={0};
+  mstore_t m={0};
   mstore_init(&m,"test_mstore1",20|MSTORE_OPT_MALLOC);
   char *tt[99999];
   const int method=atoi(argv[1]);
@@ -302,7 +301,7 @@ static void test_mstore1(int argc,char *argv[]){
 }
 
 static void test_mstore2(int argc, char *argv[]){
-  struct mstore ms;
+  mstore_t ms;
   assert(argc==2);
   mstore_init(&ms,"test_mstore2",256|MSTORE_OPT_MALLOC);
   const int N=atoi(argv[1]);
@@ -324,7 +323,7 @@ static void test_mstore2(int argc, char *argv[]){
 }
 
 static void test_duplicate_name(void){
-  struct mstore m1,m2;
+  mstore_t m1,m2;
   mstore_init(&m1,"test",MSTORE_OPT_MMAP_WITH_FILE|10);
   mstore_init(&m2,"test",MSTORE_OPT_MMAP_WITH_FILE|10);
 }
@@ -332,7 +331,7 @@ int main(int argc,char *argv[]){
   if (0){
 	mstore_set_base_path("~/test/mstore_test");
 	printf("mstore_base_path %s\n",mstore_base_path());
-	struct mstore m={0};
+	mstore_t m={0};
 	mstore_init(&m,"test",MSTORE_OPT_MMAP_WITH_FILE|1024);
 	fprintf(stderr,"m->bytes_per_block: %lld\n",(LLD)m.bytes_per_block);
 	FOR(i,0,8){

@@ -1,5 +1,4 @@
 /* Compare https://raw.githubusercontent.com/Dexter9313/C-stacktrace/master/c-stacktrace.h by  Florian Cabot */
-/// xxxxxCOMPILE_MAIN=ZIPsFS                   ///
 // cppcheck-suppress-file unusedFunction
 
 #ifndef _cg_stacktrace_dot_c
@@ -62,13 +61,13 @@ static void cg_print_stacktrace_using_debugger(void){
   const int child_pid=fork();
   if (!child_pid){
 #ifdef __clang__
-    execl("/usr/bin/lldb", "lldb", "-p", pid_buf, "-b", "-o","bt","-o","quit" ,NULL);
+	execl("/usr/bin/lldb", "lldb", "-p", pid_buf, "-b", "-o","bt","-o","quit" ,NULL);
 #else
-    if (*path_of_this_executable()) execl("/usr/bin/gdb", "gdb", "--batch", "-f","-n", "-ex", "thread", "-ex", "bt",path_of_this_executable(),pid_buf,NULL);
+	if (*path_of_this_executable()) execl("/usr/bin/gdb", "gdb", "--batch", "-f","-n", "-ex", "thread", "-ex", "bt",path_of_this_executable(),pid_buf,NULL);
 #endif
-    exit(errno); /* If gdb failed to start */
+	exit(errno); /* If gdb failed to start */
   } else {
-    waitpid(child_pid,NULL,0);
+	waitpid(child_pid,NULL,0);
   }
 }
 #endif
@@ -78,12 +77,12 @@ static const char *this_executable(void){
   static char thisPrgRP[PATH_MAX+1]={0};
   if (!already){
 static char tmp[PATH_MAX+1];
-    if (!has_proc_fs()){
-      static int reported;
-      if (!reported++) log_error("For symbolizing the stack trace, please call the program %s with absolute path.\n", snull(_thisPrg));
-    }
-    sprintf(tmp,"/proc/%d/exe",getpid());
-    realpath(tmp,thisPrgRP);
+	if (!has_proc_fs()){
+	  static int reported;
+	  if (!reported++) log_error("For symbolizing the stack trace, please call the program %s with absolute path.\n", snull(_thisPrg));
+	}
+	sprintf(tmp,"/proc/%d/exe",getpid());
+	realpath(tmp,thisPrgRP);
   }
   already=true;
   return thisPrgRP;
@@ -151,7 +150,7 @@ static bool addr2line_no_shell(const char *addr,const int iLine){
   bool ok=false;
   if (!fp) return false;
   while(fgets(line,sizeof(line)-1,fp)){
-    if (addr2line_output(stckOut(),line,iLine)) ok=true;
+	if (addr2line_output(stckOut(),line,iLine)) ok=true;
   }
   IF1(WITH_POPEN_NOSHELL, if (pclose_noshell(&pclose_arg)) ok=0);
   IF0(WITH_POPEN_NOSHELL,fclose(fp));
@@ -166,26 +165,26 @@ static bool addr2line(const char *addr, int lineNb){ // cppcheck-suppress unused
   char addr2line_cmd[512]={0},line1[1035]={0}, line2[1035]={0};
   sprintf(addr2line_cmd,
 #if HAS_ADDR2LINE
-          /* "addr2line -f -e %.256s %p" */
-          "addr2line -p -f -e %s -a %s",
+		  /* "addr2line -f -e %.256s %p" */
+		  "addr2line -p -f -e %s -a %s",
 #elif HAS_ATOS
-          "atos -o %s  %s",
+		  "atos -o %s  %s",
 #endif
-          this_executable(),addr);
+		  this_executable(),addr);
   FILE *fp=popen(addr2line_cmd,"r");
   bool ok=fp!=NULL;
   while(ok && fgets(line1,sizeof(line1)-1,fp)){
-    if((ok=fgets(line2,sizeof(line2)-1,fp))){ //if we have a pair of lines
-      if((ok=(line2[0]!='?'))){ //if symbols are readable
-        char *eol=strchr(line1,'\r');
-        if (eol || (eol=strchr(line1,'\n'))) *eol=0;
-        /*        char *slash=strrchr(line2,'/');*/
+	if((ok=fgets(line2,sizeof(line2)-1,fp))){ //if we have a pair of lines
+	  if((ok=(line2[0]!='?'))){ //if symbols are readable
+		char *eol=strchr(line1,'\r');
+		if (eol || (eol=strchr(line1,'\n'))) *eol=0;
+		/*        char *slash=strrchr(line2,'/');*/
 
-        //        fprintf(stckOut(),"[%i] %p in %s at "ANSI_FG_BLUE"%s"ANSI_RESET,lineNb,addr,line1, slash?slash+1:line2);
-                fprintf(stckOut(),"[%i] %p in %s at "ANSI_FG_BLUE"%s"ANSI_RESET,lineNb,addr,line1, line2);
-        fflush(stckOut());
-      }
-    }
+		//        fprintf(stckOut(),"[%i] %p in %s at "ANSI_FG_BLUE"%s"ANSI_RESET,lineNb,addr,line1, slash?slash+1:line2);
+				fprintf(stckOut(),"[%i] %p in %s at "ANSI_FG_BLUE"%s"ANSI_RESET,lineNb,addr,line1, line2);
+		fflush(stckOut());
+	  }
+	}
   }
   if (fp) pclose(fp);
   return ok;
@@ -194,22 +193,22 @@ static bool addr2line(const char *addr, int lineNb){ // cppcheck-suppress unused
 
 // https://stackoverflow.com/questions/15129089/is-there-a-way-to-dump-stack-trace-with-line-number-from-a-linux-release-binary
 static void cg_print_stacktrace(int calledFromSigInt){
-  log_entered_function("%d",HAS_BACKTRACE);
+  {log_entered_function("%d",HAS_BACKTRACE);}
 #if HAS_BACKTRACE
   void* buffer[MAX_BACKTRACE_LINES];
   const int nptrs=backtrace(buffer,MAX_BACKTRACE_LINES);
   char **strings=backtrace_symbols(buffer,nptrs);
   if(!strings){
-    perror("backtrace_symbols");
-    EXIT(EXIT_FAILURE);
+	perror("backtrace_symbols");
+	EXIT(EXIT_FAILURE);
   }
   for(int i=calledFromSigInt?2:1; i<(nptrs-2); ++i){
-    char addr[80];
-    sprintf(addr,"%p",buffer[i]);
-    const char *open=strchr(strings[i],'('), *close=strchr(strings[i],')');
-    if ( !(open && close && addr2line_no_shell(addr, nptrs-2-i-1))){
-      fprintf(stckOut(), "! [%i] %s\n", nptrs-2-i-1, strings[i]);
-    }
+	char addr[80];
+	sprintf(addr,"%p",buffer[i]);
+	const char *open=strchr(strings[i],'('), *close=strchr(strings[i],')');
+	if ( !(open && close && addr2line_no_shell(addr, nptrs-2-i-1))){
+	  fprintf(stckOut(), "! [%i] %s\n", nptrs-2-i-1, strings[i]);
+	}
   }
   free_untracked(strings);
 #else
@@ -225,17 +224,17 @@ static void _cg_print_stacktrace_test2(void){
 static void cg_print_stacktrace_test(int what){
   switch(what){
   case 0:
-    log_msg("Going to sleep for 10s. You can press Ctrl-C to create SIGINT");
-    usleep(1000*1000*10);break;
+	log_msg("Going to sleep for 10s. You can press Ctrl-C to create SIGINT");
+	usleep(1000*1000*10);break;
   case 1:
-    log_msg("Going to print a stack trace. Press Enter to continue "); cg_getc_tty();
-    _cg_print_stacktrace_test2();
-    break;
+	log_msg("Going to print a stack trace. Press Enter to continue "); cg_getc_tty();
+	_cg_print_stacktrace_test2();
+	break;
   case 2:{
 #ifndef __cppcheck__
-    log_msg("Going to write to address 0. Press Enter to continue "); cg_getc_tty();
-    char *s=NULL;
-    strcpy(s,"Force nullPointer dereference");
+	log_msg("Going to write to address 0. Press Enter to continue "); cg_getc_tty();
+	char *s=NULL;
+	strcpy(s,"Force nullPointer dereference");
 #endif
   } break;
   default: log_error("Option -T requires numbers between 0 and 2");
@@ -274,7 +273,7 @@ static void my_signal_handler(int sig){
 
 
 static void init_sighandler(const char* main_argv_0, uint64_t signals,FILE *out){
-  log_entered_function("%s",main_argv_0);
+  {log_entered_function("%s",main_argv_0);}
   _stckOut=out;
   stat(_thisPrg=main_argv_0,&_thisPrgStat);
 
@@ -283,11 +282,11 @@ static void init_sighandler(const char* main_argv_0, uint64_t signals,FILE *out)
 #else
   if (signals==0) signals=(1L<<SIGABRT)|(1L<<SIGFPE)|(1L<<SIGILL)|(1L<<SIGINT)|(1L<<SIGSEGV)|(1L<<SIGTERM);
   for(int sig=64,already=0;--sig>=0;){
-    if ((1LU<<sig)&signals){
-      struct sigaction act={0};
-      act.sa_handler=&my_signal_handler;
-      sigaction(sig,&act,NULL);
-    }
+	if ((1LU<<sig)&signals){
+	  struct sigaction act={0};
+	  act.sa_handler=&my_signal_handler;
+	  sigaction(sig,&act,NULL);
+	}
   }
 #endif
 }
@@ -312,14 +311,14 @@ static void function_a(void){
 
 
 int main(int argc, char *argv[]){
-    assert(stckOut()!=NULL);
+	assert(stckOut()!=NULL);
 
   _thisPrg=argv[0];
   init_sighandler(argv[0],(1L<<SIGABRT)|(1L<<SIGFPE)|(1L<<SIGILL)|(1L<<SIGINT)|(1L<<SIGSEGV)|(1L<<SIGTERM),stderr);
 
 
   //  cg_print_stacktrace_test(1);
-    function_a();
+	function_a();
 
 }
 

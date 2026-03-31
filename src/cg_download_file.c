@@ -1,5 +1,4 @@
 //////////////////////////////////////////////////////////////////
-/// COMPILE_MAIN=ZIPsFS                                        ///
 /// Logging in  ZIPsFS                                         ///
 /// This file provides                                         ///
 ///   cg_copy_url_or_file() Needed by ZIPsFS_preloaddisk.c ///
@@ -68,10 +67,10 @@ static bool cg_cmd_curl(const int opt,const char *cmd[],const char *url){
   return true;
 }
 
-
+// cppcheck-suppress nullPointerRedundantCheck
 static bool cg_download_url(const int opt_and_compress, const char *url, const char *outfile, void (*progress)(void*), void *progress_para){
-  OPT_AND_COMPRESS();
-  log_entered_function("header:%d  url:%s outfile:'%s' iCompress=%d",(opt_and_compress&COPY_HEADER),url,outfile,iCompress);
+  OPT_AND_COMPRESS(); // rph
+  log_entered_function("header:%d  url:%s outfile:'%s' iCompress=%d",(opt_and_compress&COPY_HEADER),url,outfile,iCompress); // cppcheck-suppress [ctunullpointer,nullPointerRedundantCheck]
   const char *cmd[_CG_DOWNLOAD_URL_CMD]; if (!cg_cmd_curl(opt,cmd,url)) return false;
   TMP_FOR_FILE(tmp,outfile);
   int fdout=0;
@@ -276,8 +275,8 @@ static int _pipe_curl(const int opt_curl,const char *url, int pipefd[2], int *pi
   return pipefd[0];
 }
 #undef E
-#define CG_WAITPID(pid,src) _cg_waitpid(pid,src,__func__,__LINE__)
-static bool _cg_waitpid(const int pid,const char *src, const char *func, const int line){
+#define CG_WAITPID(pid,src) _viamacro_cg_waitpid(pid,src,__func__,__LINE__)
+static bool _viamacro_cg_waitpid(const int pid,const char *src, const char *func, const int line){
   int wstatus=0;
   waitpid(pid,&wstatus,0);
   const int e=WIFEXITED(wstatus)?WEXITSTATUS(wstatus):0;
@@ -341,8 +340,8 @@ static void sleep_exit(){
 
 
 
-#define cg_httpheader_print(msg,h,fo) _cg_httpheader_print(msg,h,fo, __func__,__LINE__)
-static void _cg_httpheader_print(const char *msg,const cg_httpheader_t *h, FILE *fo, const char *func,const int line){
+#define cg_httpheader_print(msg,h,fo) _viamacro_cg_httpheader_print(msg,h,fo, __func__,__LINE__)
+static void _viamacro_cg_httpheader_print(const char *msg,const cg_httpheader_t *h, FILE *fo, const char *func,const int line){
   if (!fo) fo=stderr;
   fprintf(fo,"%p{ lines:%d is_header:%s is_404:%s  size:%ld mtime:%ld }",h,h->lines,success_or_fail(h->is_header), yes_no(h->is_404), (long)h->size,(long)h->mtime);
 }
@@ -358,7 +357,7 @@ int main(int argc, char *argv[]){
 
   unlink(dst);
   const char *fsrc="/home/cgille/.ZIPsFS/DB/pride/DB/pride.URL";
-  const char *fdst="/home/_cache/cgille/ZIPsFS/modifications/ZIPsFS/.preloaded_by_root/DB/pride.URL";
+  const char *fdst="/home/_cache/cgille/ZIPsFS/modifications/zipsfs/.preloaded_by_root/DB/pride.URL";
 #define PRINT_URL_DST() fprintf(stderr,"%s -> %s\n",url,dst)
   switch(8){
   case 0:{

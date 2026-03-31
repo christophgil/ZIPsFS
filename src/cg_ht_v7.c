@@ -79,7 +79,7 @@ static ht_entry_t*  _ht_malloc_entries(const uint32_t n){
   if (!ee) DIE("cg_calloc failed n: %u\n",n);
   return ee;
 }
-static ht_t *_ht_init_with_keystore(ht_t *ht,const char *name,uint32_t flags_log2initalCapacity, struct mstore *m, uint32_t mstore_dim){
+static ht_t *_ht_init_with_keystore(ht_t *ht,const char *name,uint32_t flags_log2initalCapacity, mstore_t *m, uint32_t mstore_dim){
   if (!ht) return NULL;
   memset(ht,0,sizeof(ht_t)); // CPPCHECK-SUPPRESS ctunullpointerOutOfMemory
   if (m){
@@ -120,7 +120,7 @@ static void ht_destroy(ht_t *ht){
 	}
   }
   _ht_free_entries(ht);
-  struct mstore *m=ht->valuestore;
+  mstore_t *m=ht->valuestore;
   if (m){
 	ht->valuestore=NULL;
 	mstore_destroy(m);
@@ -444,7 +444,7 @@ static void test_internalize(int argc, const char *argv[]){
 static void test_intern_num(int argc, const char *argv[]){
   ht_t ht;
 #if 0
-  struct mstore m={0};  mstore_init(&m,4096);  ht_init_with_keystore(&ht,HT_FLAG_KEYS_ARE_STORED_EXTERN|2,&m);
+  mstore_t m={0};  mstore_init(&m,4096);  ht_init_with_keystore(&ht,HT_FLAG_KEYS_ARE_STORED_EXTERN|2,&m);
 #else
   ht_init_interner(&ht,"name",2,4096);
 #endif
@@ -511,7 +511,7 @@ static  void test_no_dups(int argc,const char *argv[]){
 static void test_mstore2(int argc, const char *argv[]){
   mstore_set_base_path("/home/cgille/tmp/test/mstore_mstore1");
   ht_t ht_int,ht;
-  struct mstore m;
+  mstore_t m;
   mstore_init(&m,"",1024*1024*1024);
   ht_init_with_keystore(&ht_int,HT_FLAG_KEYS_ARE_STORED_EXTERN|8,&m);
   ht_init(&ht,"test",16);

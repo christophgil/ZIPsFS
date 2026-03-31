@@ -15,7 +15,7 @@
 
 
 /****************************************************************************************************************/
-/* When downloading a file into /ZIPsFS/n from the internet,                                                    */
+/* When downloading a file into /zipsfs/n from the internet,                                                    */
 /* a hardlink may be created containing with a version in the name.                                             */
 /****************************************************************************************************************/
 static bool config_internet_hardlink_filename(char *lnk_name, char *additional_link_dir, const int max_l, const char *url,const time_t header_time){
@@ -81,9 +81,9 @@ static bool config_internet_must_not_delete(const char *filename, const int file
 // ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/reference_proteomes/Eukaryota/UP000005640/UP000005640_9606.fasta
 // ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/reference_proteomes/Eukaryota/UP000005640/UP000005640_9606.fasta
 //
-// mnt/ZIPsFS/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
-// mnt/ZIPsFS/n/ftp,,,ftp.expasy.org,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
-// mnt/ZIPsFS/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
+// mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
+// mnt/zipsfs/n/ftp,,,ftp.expasy.org,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
+// mnt/zipsfs/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
 
 int main(int argc,char *argv[]){
 #define A "knowledgebase/reference_proteomes/Eukaryota/UP000005640/UP000005640_9606.fasta"

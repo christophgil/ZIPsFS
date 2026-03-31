@@ -1,8 +1,8 @@
 #ifndef _cg_log_dot_h
 #define _cg_log_dot_h
 
-static void _warning(const char *fn,int line,const uint32_t channel,const char* path,const char *format,...);
-#define warning(...) _warning(__func__,__LINE__,__VA_ARGS__)
+static void _viamacro_warning(const char *fn,int line,const uint32_t channel,const char* path,const char *format,...);
+#define warning(...) _viamacro_warning(__func__,__LINE__,__VA_ARGS__)
 #define log_struct(st,field,format)   fprintf(stderr,"    " #field "=" #format "\n",st->field)
 
 #define WARN_FLAG_EXIT (1<<30)

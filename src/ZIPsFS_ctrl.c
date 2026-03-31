@@ -10,6 +10,9 @@ _Static_assert(WITH_PRELOADRAM,"");
 static char *ctrl_file_end(){
   static char s[222]={0};
   if (!*s){
+	#if 1
+	sprintf(s,"%llx",(LLD)hash64(_mnt,(LLD)strlen(_mnt)));
+	#else
 	struct timespec t;
 	timespec_get(&t,TIME_UTC);
 	srand(time(0));
@@ -18,6 +21,7 @@ static char *ctrl_file_end(){
 	int r2=rand();
 	srand(getpid());
 	sprintf(s,"%x%x%x%lx%llx",r1,r2,rand(),t.tv_nsec,(LLD)t.tv_sec);
+	#endif
   }
   return s;
 }
@@ -82,7 +86,7 @@ static bool trigger_files(const char *path,const int path_l){
 	}/*if(action)*/
   }
 
-  /* ls /home/cgille/tmp/ZIPsFS/mnt/test/hello.world.magicSfxSetAccessTime-78840 ; stat /home/_cache/cgille/ZIPsFS/modifications/test/hello.world */
+  /* ls /home/cgille/tmp/zipsfs/mnt/test/hello.world.magicSfxSetAccessTime-78840 ; stat /home/_cache/cgille/ZIPsFS/modifications/test/hello.world */
   char *hours=strstr(path,MAGIC_SFX_SET_ATIME);
   //  log_debug_now("'%s' MAGIC_SFX_SET_ATIME:"MAGIC_SFX_SET_ATIME"  hours: %s",path,hours);
   if (hours){

@@ -39,7 +39,7 @@ For(;;){
 				Write-Host $Path  -ForegroundColor White -BackgroundColor DarkGreen
 				Write-Host $XCV
 		}
-		$choice=read-host "`nIf you prefere forward slashes, type /. Or press ENTER to start over..."
+		$choice=read-host -Prompt "`nIf you prefere forward slashes, type /. Or press ENTER to start over..."
 		if ($choice.trim() -eq '/'){
 				$path=$path -replace '\\','/'
 				Write-Host $Path  -ForegroundColor White -BackgroundColor DarkGreen

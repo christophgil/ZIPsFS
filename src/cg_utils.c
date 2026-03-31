@@ -1,5 +1,4 @@
 /////////////////////////////////////////////////////////////////
-/// COMPILE_MAIN=ZIPsFS                                       ///
 /// Logging in  ZIPsFS                                        ///
 /////////////////////////////////////////////////////////////////
 
@@ -82,6 +81,7 @@ static void *calloc_untracked(const size_t nmemb,const size_t size){
   return m;
 }
 static char *strdup_untracked(const char *s){
+  if (!s) return NULL;
   char *m=strdup(s);
   if (!m){ fprintf(stderr,RED_ERROR" strdup()\n"); perror(""); exit(ENOMEM); }
   return m;
@@ -486,6 +486,33 @@ static int cg_strsplit(int opt_and_sep, const char *s, const int s_l, const char
 }
 
 
+static char **cg_split_string_multi(const char *delim, char *v, int len_capacity[2], char **ss){
+#define L (len_capacity[0])
+#define C (len_capacity[1])
+  if (!ss){
+	L=0;
+	if (!C) C=16;
+	ss=malloc(C*sizeof(char**));
+  }
+  for(const char *t;(t=strtok(v,delim));v=NULL){
+	if (C<=L+1) ss=realloc(ss,SIZE_POINTER*(C=16+2*C));
+	if (*t) ss[L++]=strdup(t);
+	ss[L]=NULL;
+  }
+  return ss;
+#undef C
+#undef L
+}
+static char **cg_split_string(const char *delim, const char *v0){
+  char *v=strdup_untracked(v0);
+  int len_capacity[2]={0};
+  char **ss=cg_split_string_multi(delim,v,len_capacity,NULL);
+  free_untracked(v);
+  return ss;
+}
+
+
+
 static int cg_str_join(char *tmp, const int soft_max, const int hard_max, const char **ss, const char *sep){
   bool overflow=false;
   char *t=tmp;
@@ -520,9 +547,14 @@ static int64_t currentTimeMillis(void){
   gettimeofday(&tv,NULL);
   return tv.tv_sec*1000+tv.tv_usec/1000;
 }
+static char *time_as_strg(time_t t){
+  char *s=ctime(&t), *nl=strchr(s,'\n');
+  if (nl) *nl=0;
+  return s;
+}
 
-#define cg_sleep_ms(...) _cg_sleep_ms(__VA_ARGS__,__func__,__LINE__)
-static void _cg_sleep_ms(const int millisec, const char *msg, const char *func,const int line){
+#define cg_sleep_ms(...) _viamacro_cg_sleep_ms(__VA_ARGS__,__func__,__LINE__)
+static void _viamacro_cg_sleep_ms(const int millisec, const char *msg, const char *func,const int line){
   if (millisec>0){
 	if (!msg||!*msg) log_verbose("%s:%d Going sleep %d ms ...",func,line,millisec);
 	else log_verbose("%s",msg);
@@ -559,8 +591,8 @@ static bool cg_path_equals_or_is_parent(const char *subpath,const int subpath_l,
 }
 
 
-static int cg_readlink_absolute(const bool resolve,const char *symlink_path, char absolute_target[PATH_MAX+1]){
-  char link_target[PATH_MAX+1], absolute_tmp[PATH_MAX+1];
+static int cg_readlink_absolute(const bool resolve,const char *symlink_path, char link_target[PATH_MAX+1], char absolute_target[PATH_MAX+1]){
+  char absolute_tmp[PATH_MAX+1];
   *link_target=*absolute_target=0;
   if (resolve && *symlink_path!='/'){
 	log_error("symlink_path is not absolute: '%s'",symlink_path);
@@ -591,11 +623,13 @@ static bool *cg_validchars(enum enum_validchars type){
   static bool ccc[VALIDCHARS_NUM][128];
   static bool initialized;
   if (!initialized){
-	if (type==VALIDCHARS_FILE||type==VALIDCHARS_PATH||type==VALIDCHARS_NOQUOTE){
+	if (type==VALIDCHARS_DIGITS || type==VALIDCHARS_FILE||type==VALIDCHARS_PATH||type==VALIDCHARS_NOQUOTE){
 	  RLOOP(t,VALIDCHARS_NUM){
 		bool *cc=ccc[t];
-		FOR(i,'A','Z'+1) cc[i|32]=cc[i]=true;
 		FOR(i,'0','9'+1) cc[i]=true;
+		if (t==VALIDCHARS_DIGITS) continue;
+		FOR(i,'A','Z'+1) cc[i|32]=cc[i]=true;
+
 		cc['=']=cc['+']=cc['-']=cc['_']=cc['$']=cc['@']=cc['.']=cc['~']=cc['%']=cc[',']=true;
 	  }
 	}
@@ -634,8 +668,8 @@ static int url_encode(char *dst, const int dst_l, const char *name){
   return i;
 }
 
-#define cg_path_for_fd(path,fd) _cg_path_for_fd(__func__,__LINE__,path,fd)
-static char * _cg_path_for_fd(const char *func, const int line, char *path, const int fd){
+#define cg_path_for_fd(path,fd) _viamacro_cg_path_for_fd(__func__,__LINE__,path,fd)
+static char * _viamacro_cg_path_for_fd(const char *func, const int line, char *path, const int fd){
   static char path0[PATH_MAX+1];
   if (!path) path=path0;
   *path=0;
@@ -836,8 +870,8 @@ static bool cg_stat_parent_and_file(const char *parent, const int parent_l, cons
   return !stat(rp,st);
 }
 
-#define cg_log_file_stat(...) _cg_log_file_stat(__func__,__VA_ARGS__)
-static void _cg_log_file_stat(const char *func,const char * name,const struct stat *s){
+#define cg_log_file_stat(...) _viamacro_cg_log_file_stat(__func__,__VA_ARGS__)
+static void _viamacro_cg_log_file_stat(const char *func,const char * name,const struct stat *s){
 
   const char *color=ANSI_FG_BLUE;
 #ifdef SHIFT_INODE_ROOT
@@ -1277,9 +1311,9 @@ static bool cg_log_waitpid_status(FILE *f,const unsigned int status,const char *
   return logged;
 }
 
-#define cg_log_waitpid(...) _cg_log_waitpid(__VA_ARGS__,__func__)
+#define cg_log_waitpid(...) _viamacro_cg_log_waitpid(__VA_ARGS__,__func__)
 //static int _cg_log_waitpid(const int pid, const int status, const char *err,const bool append, char const * const cmd[],char const * const env[], const char *func){
-static int _cg_log_waitpid(const int pid, const int status, const char *err,const bool append, const char  *cmd[], const char *env[], const char *func){
+static int _viamacro_cg_log_waitpid(const int pid, const int status, const char *err,const bool append, const char  *cmd[], const char *env[], const char *func){
   if (pid<0 || cg_log_waitpid_status(stderr,status,func)){
 	FILE *f=fopen(err,"a");
 	if (f){
@@ -1493,15 +1527,13 @@ int main(int argc, char *argv[]){
 	printf("cg_file_is_newer_than %d \n",cg_file_is_newer_than(argv[1],argv[2]));
 	break;
 
-  case 14:{
-	char target[PATH_MAX+1];
+  case 14:
 	FOR(i,1,argc){
-	  int res;
-	  res=cg_readlink_absolute(false,argv[i],target);
-	  printf("rel %s '%s' => '%s'\n",success_or_fail(res==0), argv[i],target);
-	  res=cg_readlink_absolute(true,argv[i],target);
-	  printf("abs %s '%s' => '%s'\n",success_or_fail(res==0), argv[i],target);
-	}
+	char target[PATH_MAX+1],absolute_target[PATH_MAX+1];
+	  FOR(do_resolve,0,2){
+		int res=cg_readlink_absolute(do_resolve,argv[i],target,absolute_target);
+		printf("do_resolve:%d %s '%s' => '%s'\n",do_resolve,success_or_fail(res==0), argv[i],absolute_target);
+	  }
 	break;
 
 

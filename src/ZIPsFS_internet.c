@@ -2,7 +2,7 @@
 /// COMPILE_MAIN=ZIPsFS          ///
 /// Dynamically downloaded files ///
 ////////////////////////////////////
-// cat mnt/ZIPsFS/n/gz/https,,,files.rcsb.org,download,1SBT.pdb
+// cat mnt/zipsfs/n/gz/https,,,files.rcsb.org,download,1SBT.pdb
 
 _Static_assert(WITH_INTERNET_DOWNLOAD,"");
 #define NET_SFX_HEADER ".HeaDeR.TXT"
@@ -112,7 +112,7 @@ static bool net_maybe_download_header(const int opt, cg_httpheader_t *h, char *u
 	  if (rph) net_filepath_header(rph,vp,vp_l,ext);
 	  strcpy(url_e,ext);
 	  if (!rph && cg_httpheader_load(h,url)) return true;
-	  if (asFileUnlessExists && cg_file_size(rph)>0 || cg_download_url(COPY_HEADER,url,rph,NULL,rph?NULL:h)){
+	  if (asFileUnlessExists && cg_file_size(rph)>0 || cg_download_url(COPY_HEADER,url,rph,NULL,rph?NULL:h)){// cppcheck-suppress nullPointerRedundantCheck
 		if (!cg_file_exists(rph)){
 		  warning(WARN_NET,rph,"File does not exist");
 		}else{
@@ -219,7 +219,7 @@ static void net_mk_hardlink(const bool overwrite,char *lnk, const char *url, con
 //curl -o t.txt  -I https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz
 /*
   m=~/tmp/ZIPsFS/mnt
-  n=$m/ZIPsFS/n
+  n=$m/zipsfs/n
   h=$n/https,,,ftp.uniprot.org,pub,databases,uniprot,README
   f=$n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
 */

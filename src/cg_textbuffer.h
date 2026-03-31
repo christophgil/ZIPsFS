@@ -3,7 +3,7 @@
 
 #define TEXTBUFFER_DIM_STACK 64
 
-struct textbuffer{
+typedef struct textbuffer{
   int malloc_id;
 #define TEXTBUFFER_ENOMEM    (1<<1)
 #define TEXTBUFFER_DESTROYED (1<<2)
@@ -27,8 +27,7 @@ struct textbuffer{
 
   off_t max_length;
   int read_bufsize;
-};
-typedef struct textbuffer textbuffer_t;
+} textbuffer_t;
 #define  textbuffer_first_segment(b)  b->_onstack_segment[0]
 
 enum enum_exec_on_file{EXECF_MOUNTPOINT_USING_DF,EXECF_MOUNTPOINT_USING_FINDMNT, EXECF_NUM};

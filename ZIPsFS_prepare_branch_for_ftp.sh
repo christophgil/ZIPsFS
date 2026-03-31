@@ -6,7 +6,7 @@ set -u
 This script prepares a branch ~/.ZIPsFS/DBcurlftpfs.
 Give  this in ZIPsFS  at the command line:
 
-   ZIPsFS  <root-path-1>   --preload $HOME/.ZIPsFS/DBcurlftpfs
+     ZIPsFS  <root-path-1>   --preload $HOME/.ZIPsFS/DBcurlftpfs
 
 EOF
 
@@ -31,13 +31,13 @@ go(){
 
     if ((DO_UMOUNT)); then
         set -x
-        fusermount -u $mnt
-            set +x
+        $DO_DRYRUN fusermount -u $mnt
+        set +x
         return
     fi
     if ((DO_UMOUNT_SUDO)); then
         set -x
-        sudo umount -f $mnt || sudo umount -l $mnt
+        $DO_DRYRUN sudo umount -f $mnt || $DO_DRYRUN sudo umount -l $mnt
         set +x
         return
     fi
@@ -48,36 +48,38 @@ go(){
     CLIPARAS+=" /$root "
     {
         cat  <<EOF
-# statfs() is used to check periodically whether remote paths are not frozen.
-# The statfs property takes two numbers and optionally a path:
-#   1.  How often check response with statvfs
-#   2.  Max waiting time until we say that folder is not responding
-#   3.  Optional the path to check. If not provided,  then the root-path is taken
-statfs=10 300 $root
-# The next line improves performance.
-path-prefix=/DB
-#
-preload
-preload-gz
+# statfs() is used to check periodically whether the remote path probe_path is not frozen.
+#   1.  probe_path
+#   2.  probe_path-timeout
+# probe_path=$root
+probe_path_response_ttl=4
+probe_path_timeout=44
+preload=1
+path_prefix=/db
+decompression=gz,bz2
 EOF
-        [[ -n $exclude ]] && echo "path-deny=$exclude"
+        [[ -n $exclude ]] && echo "path_deny=$exclude"
     } >$root.ZIPsFS.properties
     # We use /usr/bin/curl for copying. Here we also give a timeout.
     echo ftp://$url >$mnt.URL
     echo Going to test mountpoint $mnt >&2
     mountpoint $mnt >&2 && return
-    curlftpfs  $url  $mnt -o cache=yes,cache_timeout=999,noforget
+    set -x
+    curlftpfs  $url  $mnt -o cache=yes,cache_timeout=999,noforget,allow_other
+    set +x
 }
 
 
-readonly DBcurlftpfs=~/.ZIPsFS/DB
+readonly DBcurlftpfs=~/.ZIPsFS/db
 mkdir -p $DBcurlftpfs
 CLIPARAS=''
 
 DO_UMOUNT=0
 DO_UMOUNT_SUDO=0
-while getopts 'uU' o; do
+DO_DRYRUN=''
+while getopts 'nuU' o; do
     case $o in
+        n) DO_DRYRUN=':';;
         u) DO_UMOUNT=1;;
         U) DO_UMOUNT_SUDO=1;;
         *) echo "wrong option $o" >&2; exit 1 ;;
@@ -85,18 +87,20 @@ while getopts 'uU' o; do
 done
 shift $((OPTIND-1))
 
-
-#if false; then
+echo DO_DRYRUN=$DO_DRYRUN >&2
+if false; then
+    go ftp.ensembl.org/pub                             ensembl
+    go ftp.ncbi.nlm.nih.gov                            ncbi
+    go ftp.expasy.org                                 uniprot
+fi
 go massive-ftp.ucsd.edu                            massive
 go ftp.pride.ebi.ac.uk/pride/data/archive          pride
-go ftp.ensembl.org/pub                             ensembl
-go ftp.ncbi.nlm.nih.gov                            ncbi
 go ftp.uniprot.org                                 uniprot
-go ftp.expasy.org                                 uniprot
-## The folder /pub/ebi/databases/pdb/data/structures/all contains all PDB entries and reading this huge directory needs to be avoided.
-go ftp.ebi.ac.uk/pub                               ebi  '::/DB/ebi/databases/pdb/data/structures/all:/Note/that/you/can/exclude/several/paths:/colon/separates/paths::'
-go ftp.pdbj.org/pub                                pdbj '::/DB/pdbj/pdb/data/structures/all'
-#go localhost                                       localhost
+
+# ## The folder /pub/ebi/databases/pdb/data/structures/all contains all PDB entries and reading this huge directory needs to be avoided.
+go ftp.ebi.ac.uk/pub                               ebi  '::/db/ebi/databases/pdb/data/structures/all:/Note/that/you/can/exclude/several/paths:/colon/separates/paths::'
+go ftp.pdbj.org/pub                                pdbj '::/db/pdbj/pdb/data/structures/all'
+
 
 
 echo 'Add the following CLI parameter to the commandline of ZIPsFS:' >&2

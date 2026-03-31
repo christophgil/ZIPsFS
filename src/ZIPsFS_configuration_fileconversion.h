@@ -20,11 +20,11 @@ _Static_assert(WITH_FILECONVERSION,"");
 
 
 
-/* The user can extend struct fileconversion_rule with additional fields: */
+/* The user can extend fileconversion_rule_t with additional fields: */
 #define FILECONVERSION_RULE_CUSTOM_FIELDS  int this_is_my_field; int this_is_my_field_2
 
 
-/* The user can add additional flags for  struct fileconversion_rule -> flags */
+/* The user can add additional flags for  fileconversion_rule_t -> flags */
 #define CA_FLAG_MY_FLAG       (1<<1)
 #define CA_FLAG_MY_other_FLAG (1<<2)
 
