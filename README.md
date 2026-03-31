@@ -301,7 +301,7 @@ Details are found in the contained readme files.
 ## Properties of upstream file trees
 
 In the command line, root file paths  can be followed by expressions like @immutable=1 to set specific properties.
-Alternatively, properties can be written in a file ``<property-path>.ZIPsFS.properties``. This is demonstrated in   [ZIPsFS_prepare_branch_for_ftp.sh](ZIPsFS_prepare_branch_for_ftp.sh).
+Alternatively, properties can be written in a file ``<root-path>.ZIPsFS.properties``. This is demonstrated in   [ZIPsFS_prepare_branch_for_ftp.sh](ZIPsFS_prepare_branch_for_ftp.sh).
 
 For a  list of properties  run
 
