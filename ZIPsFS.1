@@ -410,42 +410,13 @@ Alternatively, properties can be written in a file
 \f[V]<property-path>.ZIPsFS.properties\f[R].
 This is demonstrated in ZIPsFS_prepare_branch_for_ftp.sh.
 .PP
-List (Incomplete) of root path properties:
-.IP \[bu] 2
-\f[V]path-prefix=dir/subdir/subsubdir\f[R] Files in this root are
-accessible with paths starting with /dir/subdir/subsubdir/.
-The last path component of the mount point can be set as path prefix
-simply by omitting the trailing slash.
-.IP \[bu] 2
-\f[V]one-file-system=1\f[R] Mount points or symbolic links expanded in
-ZIPsFS can lead outside this file system and may expose sensitive files.
-With this property, only files of the same file system will be shown.
-Nested mount points will be hidden.
-Consider this property when the ZIPsFS file system is exported.
-.IP \[bu] 2
-\f[V]follow-symlinks=1\f[R] Symlinks are expanded within ZIPsFS.
-Dangerous!
-Consider combining with \f[V]\[at]one-file-system=1\f[R].
-Expansion of symlinks with targets (realpath) outside the root path is
-controled by the configurable function
-\f[V]config_allow_expand_symlink(orig_path,expanded_path)\f[R].
-.IP \[bu] 2
-\f[V]immutable=1\f[R] In the respective file tree, no files are changed,
-deleted or created.
-This optimizes caching.
-Cached file attributs and listings will not expire.
-.IP \[bu] 2
-\f[V]worm=1\f[R] File tree is write-once-read-many.
-Same consequence as above.
-.IP \[bu] 2
-\f[V]preload=1\f[R] Before reading file content, files are downloaded to
-the first file tree.
-Useful for remote files.
-.IP \[bu] 2
-\f[V]preload=gz,bz2\f[R] Files are generated from a gz and
-bz2-compressed files.
-Useful for Windows software that cannot read gnu-zipped files.
-Available: gz, bz2, lrz, Z and xz.
+For a list of properties run
+.IP
+.nf
+\f[C]
+ZIPsFS -h
+\f[R]
+.fi
 Preload files
 .PP
 Non-linear file loading in a random-access manner is inefficient for

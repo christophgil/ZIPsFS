@@ -21,7 +21,7 @@ pip install grip
 # Example usage
 
 
-	ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse-options] mount-point
+    ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse-options] mount-point
 
 
 # Summary
@@ -54,67 +54,67 @@ ZIPsFS is best run in a **tmux** session.
 Without trailing slash, the folder name will be retained in the virtual path. This is the case for ``branch3``.
 Virtual file paths in that branch will start with *mount point*``/branch3/``.
 
-	b1=~/test/ZIPsFS/writable/
-	b2=~/test/ZIPsFS/branch1/
-	b3=~/test/ZIPsFS/branch2/
-	b4=~/test/ZIPsFS/branch3
+    b1=~/test/ZIPsFS/writable/
+    b2=~/test/ZIPsFS/branch1/
+    b3=~/test/ZIPsFS/branch2/
+    b4=~/test/ZIPsFS/branch3
 
-	mkdir -p $b1 $b2 $b3 $b4 ~/test/ZIPsFS/mnt
+    mkdir -p $b1 $b2 $b3 $b4 ~/test/ZIPsFS/mnt
 
-	for c in a b c d e f; do echo hello world $c >$b2/$c.txt; done
-	for ((i=0;i<10;i++)); do echo hello world $i >$b3/$i.txt; done
+    for c in a b c d e f; do echo hello world $c >$b2/$c.txt; done
+    for ((i=0;i<10;i++)); do echo hello world $i >$b3/$i.txt; done
 
-	zip --fifo $b2/zipfile1.zip <(date)  <(echo $RANDOM)
-	zip --fifo $b3/zipfile2.zip <(hostname)  <(ls /)
-	zip --fifo $b3/20250131_this_is_a_mass_spectrometry_folder.d.Zip   <(seq 10)
+    zip --fifo $b2/zipfile1.zip <(date)  <(echo $RANDOM)
+    zip --fifo $b3/zipfile2.zip <(hostname)  <(ls /)
+    zip --fifo $b3/20250131_this_is_a_mass_spectrometry_folder.d.Zip   <(seq 10)
 
 
 ### Start ZIPsFS
 In production, it is recommended to start ZIPsFS in *tmux*. For testing, just use your regular command line.
 
 
-	ZIPsFS   $b1 $b2 $b3 $b4  :  ~/test/ZIPsFS/mnt
+    ZIPsFS   $b1 $b2 $b3 $b4  :  ~/test/ZIPsFS/mnt
 
 ### Browse the virtual file tree
 
 Open a file browser or another terminal and  browse the files in
 
-	~/test/ZIPsFS/mnt/
+    ~/test/ZIPsFS/mnt/
 
 ### Create a file in the virtual tree
 The first file tree stores files. All others are read-only.
 
-	echo "Hello" > ~/test/ZIPsFS/mnt/my_file.txt
+    echo "Hello" > ~/test/ZIPsFS/mnt/my_file.txt
 
-	cat ~/test/ZIPsFS/mnt/my_file.txt
+    cat ~/test/ZIPsFS/mnt/my_file.txt
 
 To get the real storage place of the file, append ``@SOURCE.TXT``
 
-	cat ~/test/ZIPsFS/mnt/my_file.txt@SOURCE.TXT
+    cat ~/test/ZIPsFS/mnt/my_file.txt@SOURCE.TXT
 
 ### Access web resources as regular files (Not fully tested yet)
 Make sure the UNIX tool curl is installed.
 
-	curl --version
+    curl --version
 
 Note that "//:" and all slashes in the URL are replaced by commas.
 
-	less  ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
+    less  ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
 
-	gunzip -c ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz
+    gunzip -c ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz
 
 
 Even though the file is only available in compressed form on the server, you can directly access the decompressed file. Omit  the ``.gz`` extension.
 
 The decompressed file size is an estimate. It becomes exactly known after reading the file.
 
-	head ~/test/ZIPsFS/mnt/zipsfs/n/http,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
-	head ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
+    head ~/test/ZIPsFS/mnt/zipsfs/n/http,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
+    head ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
 
 
-	ls -l ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
+    ls -l ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
 
-	head ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
+    head ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
 
 From now on, the file size is known.
 
@@ -122,8 +122,8 @@ The gz compression is built-in using the zlib C library. The bz2, xz and lrz
 decompression work only if activated in the config (default) and if the respective backends are installed on the
 computer. The following are test examples of files remotely stored as bz2 and xz, respectively.
 
-	head ~/test/ZIPsFS/mnt/zipsfs/n/http,,,ftp.gnu.org,gnu,binutils,binutils-2.23.1.tar   # Remote file is .tar.bz2
-	head ~/test/ZIPsFS/mnt/zipsfs/n/http,,,ftp.gnu.org,gnu,gawk,gawk-4.0.2.tar            # Remote file is .tar.xz
+    head ~/test/ZIPsFS/mnt/zipsfs/n/http,,,ftp.gnu.org,gnu,binutils,binutils-2.23.1.tar   # Remote file is .tar.bz2
+    head ~/test/ZIPsFS/mnt/zipsfs/n/http,,,ftp.gnu.org,gnu,gawk,gawk-4.0.2.tar            # Remote file is .tar.xz
 
 
 Above method allows to access any remote file. The disadvantage over the method below is, that repositories are not browsable.
@@ -152,12 +152,12 @@ The script file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_
 
 Above command line to start ZIPsFS can extended to include this folder:
 
-	ZIPsFS   $b1 $b2 $b3 $b4  --preload ~/.ZIPsFS/DB  :  ~/test/ZIPsFS/mnt
+    ZIPsFS   $b1 $b2 $b3 $b4  --preload ~/.ZIPsFS/DB  :  ~/test/ZIPsFS/mnt
 
 Due to the option ``--preload``, files are mirrord to the first branch on the local file system for fast access.
 Lets try
 
-	ls ~/test/ZIPsFS/mnt/DBcurlftpfs
+    ls ~/test/ZIPsFS/mnt/DBcurlftpfs
 
 GZ compressed files are transparently de-compressed. Files with the ending ``.gz`` also  appear in the file listing without gz suffix.
 Initially, they have an estimated file size. After reading the virtual file, the exact length of the
@@ -193,10 +193,10 @@ With an empty string as the first source,  the ZIPsFS file system read-only and 
 The physical file path, i.e., the actual storage location of a file, can be retrieved from a
 file formed by appending ``@SOURCE.TXT`` to the filename.
 For example, to determine the real location of:
-	``~/test/ZIPsFS/mnt/1.txt``
+    ``~/test/ZIPsFS/mnt/1.txt``
 Run the following command:
 
-	cat ~/test/ZIPsFS/mnt/1.txt@SOURCE.TXT
+    cat ~/test/ZIPsFS/mnt/1.txt@SOURCE.TXT
 
 If a remote upstream file system stops responding, the current file access is blocked (Unless the options ``WITH_ASYNC_READDIR`` ... are activated).
 After some time, unresponsive upstream file trees will be skipped to prevent that file accesses get blocked.
@@ -210,17 +210,17 @@ The default configuration includes a few exceptions tailored to specific use cas
   - For ZIP files whose names end with *.d.Zip*, the virtual folder will  end with *.d*.
 
   - Flat file list: For  Sciex instruments, each mass spectrometry record  is stored in a set of files which are not organized in
-	sub-folders. For example the record ``20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01``  stored in ``20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff2.Zip`` may consist of the following files
+    sub-folders. For example the record ``20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01``  stored in ``20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff2.Zip`` may consist of the following files
 
-	 - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.timeseries.data
-	 - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff
-	 - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff2
-	 - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff.scan
+     - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.timeseries.data
+     - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff
+     - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff2
+     - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff.scan
 
-	These are contained with those of other entries in the file listing.
-	To get the full list of files,  all ZIP files need to be inspected.
-	This is time consuming and performed in the background. Consequently, the file listing will be incomplete when requested for the first time.
-	Only after some seconds, the file listing will be presented properly.
+    These are contained with those of other entries in the file listing.
+    To get the full list of files,  all ZIP files need to be inspected.
+    This is time consuming and performed in the background. Consequently, the file listing will be incomplete when requested for the first time.
+    Only after some seconds, the file listing will be presented properly.
 
 
 
@@ -284,14 +284,14 @@ Note: The directory name  used to be /ZIPsFS/. This conflicted with MS-Windows a
   - <mount-point>/zipsfs/p   Rapid navigation and file name searching without time consuming ZIP file expansion.
   - <mount-point>/zipsfs/n   Internet files. Take URL and replace colon and slashes by comma. See above tutorial.
   - <mount-point>/zipsfs/v   Logging, to identify misbehaving software which should rather be used with preloading of remote or compressed files.
-	   - Excessive requests of file attributes
-	   - Multiple open/close
-	   - Backward seek
-	   - Upper/lower case conversion of file names
+       - Excessive requests of file attributes
+       - Multiple open/close
+       - Backward seek
+       - Upper/lower case conversion of file names
  - <mount-point>/zipsfs/l..  Prefetched before reading. The letters following the l denote the condition (z) In zip Archive (c) In zip and compressed   (r) Remote. For FragPipe, load raw files from  lrz.
  - <mount-point>/zipsfs/c   Show convert files along the original files. Example:
-		- Raw mass spectrometry to mgf or mzML files or tsv
-		- Parquet to tsv
+        - Raw mass spectrometry to mgf or mzML files or tsv
+        - Parquet to tsv
  - <mount-point>/zipsfs/1   Files of the first branch only. This includes all files ever written or generated or modified.
  - <mount-point>/zipsfs/~1   Files except from first branch.
 
@@ -303,21 +303,9 @@ Details are found in the contained readme files.
 In the command line, root file paths  can be followed by expressions like @immutable=1 to set specific properties.
 Alternatively, properties can be written in a file ``<property-path>.ZIPsFS.properties``. This is demonstrated in   [ZIPsFS_prepare_branch_for_ftp.sh](ZIPsFS_prepare_branch_for_ftp.sh).
 
-List (Incomplete) of root path properties:
+For a  list of properties  run
 
-- ``path-prefix=dir/subdir/subsubdir``  Files in this root are accessible  with paths starting with  <mount-point>/dir/subdir/subsubdir/. The last path component of the mount point can be set as path prefix simply by omitting the trailing slash.
-- ``one-file-system=1``   Mount points or  symbolic links expanded in ZIPsFS can lead outside this file system and may expose sensitive files.
-   With this  property, only files of the same file system will be shown. Nested mount points will be hidden.  Consider this
-  property when the ZIPsFS file system is exported.
-- ``follow-symlinks=1`` Symlinks are expanded within ZIPsFS. Dangerous! Consider combining with
-  ``@one-file-system=1``. Expansion of symlinks with targets (realpath) outside the root path is controled by the configurable function
-  ``config_allow_expand_symlink(orig_path,expanded_path)``.
-
-- ``immutable=1``    In the respective file tree, no files are changed, deleted or created. This optimizes caching. Cached file attributs and listings will not expire.
-- ``worm=1``         File tree is write-once-read-many. Same consequence as above.
-- ``preload=1``      Before reading file content,  files are downloaded to the first file tree. Useful for remote files.
-- ``preload=gz,bz2`` Files are generated from a gz and bz2-compressed files. Useful for Windows software that cannot read gnu-zipped files.  Available: gz, bz2, lrz, Z and xz.
-
+    ZIPsFS -h
 
 <details><summary>Preload files</summary>
 
@@ -349,9 +337,9 @@ opened and closed multiple times during computation such that the large files wo
 All remote (r) or compressed (c) or zippded (z) files
 accessed through the following folders will be first copied to local disk:
 
-	<mount-point>/zipsfs/lr/
-	<mount-point>/zipsfs/lrc/
-	<mount-point>/zipsfs/lrz/
+    <mount-point>/zipsfs/lr/
+    <mount-point>/zipsfs/lrc/
+    <mount-point>/zipsfs/lrz/
 
 The Readme in these folders provide further information.
 Alternatively, the entire root-path can be marked for preloading with the property ``@preload``.
