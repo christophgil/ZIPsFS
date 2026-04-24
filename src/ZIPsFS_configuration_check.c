@@ -16,8 +16,8 @@
 #define WITH_PTHREAD_LOCK 1 /*  Should be true. Only for testing if suspect deadlock set to 0 */
 
 #define CHECK_DEBUG_OFF()\
-  T(DEBUG_DIRCACHE_COMPARE_CACHED,== 0);\
-  T(DEBUG_TRACK_FALSE_GETATTR_ERRORS,== 0);\
+  T(WITH_DEBUG_DIRCACHE_COMPARE_CACHED,== 0);\
+  T(WITH_DEBUG_TRACK_FALSE_GETATTR_ERRORS,== 0);\
   T(WITH_EXTRA_ASSERT,== 0);\
   T(WITH_ASSERT_LOCK,== 0);\
   T(WITH_TESTING_TIMEOUTS,== 0);\
@@ -39,8 +39,8 @@
 #define CHECK_CACHES_ON()\
   T(WITH_DIRCACHE,== 1);\
   T(WITH_PRELOADRAM,== 1);\
-  T(WITH_ZIPINLINE_CACHE,== 1);\
-  T(WITH_STAT_CACHE,== 1);\
+  T(WITH_ZIPFLATCACHE,== 1);\
+  T(WITH_STATCACHE,== 1);\
   T(WITH_TRANSIENT_ZIPENTRY_CACHES,== 1)
 
 static bool check_configuration1(){
@@ -49,7 +49,7 @@ static bool check_configuration1(){
   CHECK_CACHES_ON();
   CHECK_TIMEOUT_ON_OFF(0);
   T(WITH_EVICT_FROM_PAGECACHE,== 1);
-  T(WITH_ZIPINLINE,== 1);
+  T(WITH_ZIPFLAT,== 1);
   T(WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,== 0);
   T(WITH_ZIPENTRY_PLACEHOLDER,== 1);
   T(WITH_FILECONVERSION,== 1);
@@ -58,7 +58,7 @@ static bool check_configuration1(){
   T(WITH_POPEN_NOSHELL,== 0);
   T(READDIR_TIMEOUT_SECONDS,> 9);
   T(WITH_ZIPENTRY_PLACEHOLDER,== 1);
-  T(DEBUG_THROTTLE_DOWNLOAD,==0);
+  T(WITH_DEBUG_THROTTLE_DOWNLOAD,==0);
   return warn;
 }
 #if !(defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0)
@@ -68,39 +68,39 @@ static bool check_configuration(const char *mnt){
   cg_str_replace(0,m,0,".charite.de",0,"",0);
   cg_str_replace(0,m,0,"//",2,"/",1);
   {
-	const char *M="/s-mcpb-ms03/union/.mountpoints/is/";
-	if (!strncmp(m,M,strlen(M))){
-	  log_verbose("Recognized mount-point %s",M);
-	  T(WITH_FILECONVERSION,== 0);
-	  T(WITH_ZIPINLINE,== 1);
-	}
+    const char *M="/s-mcpb-ms03/union/.mountpoints/is/";
+    if (!strncmp(m,M,strlen(M))){
+      log_verbose("Recognized mount-point %s",M);
+      T(WITH_FILECONVERSION,== 0);
+      T(WITH_ZIPFLAT,== 1);
+    }
   }
   free_untracked(m);
   if (!HAS_BACKTRACE){
-	fprintf(stderr,"Warning: No stack-traces can be written in case of a program error.\n");
-	warn=true;
+    fprintf(stderr,"Warning: No stack-traces can be written in case of a program error.\n");
+    warn=true;
   }else if (!HAS_ADDR2LINE && !HAS_ATOS){
-	fprintf(stderr,"For better stack-traces (debugging) it is recommended to install "ANSI_FG_BLUE IF01(IS_APPLE,"addr2line (package binutils)","atos")ANSI_RESET".\n");
-	warn=true;
+    fprintf(stderr,"For better stack-traces (debugging) it is recommended to install "ANSI_FG_BLUE IF01(IS_APPLE,"addr2line (package binutils)","atos")ANSI_RESET".\n");
+    warn=true;
   }
 #if WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
   if (DIRECTORY_CACHE_SIZE*NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE<64*1024*1024){
-	log_msg(RED_WARNING"Small file attribute and directory cache of only %d\n",NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE*NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE/1024);
-	warn=true;
+    log_msg(RED_WARNING"Small file attribute and directory cache of only %d\n",NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE*NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE/1024);
+    warn=true;
   }
 #endif
 
   if (MAX_NUM_OPEN_FILES<8000){ fprintf(stderr,RED_WARNING"Consider to increase MAX_NUM_OPEN_FILES\n\n"); warn=true;}
 
   if (_writable_path_l){
-	#define EXPLAIN_WRITABLE "The first upstream root is writable.'nIf an empty string is given as first root, it will not be possible to store files in the virtual file system.\n"
-	if (_root_writable->remote){
-	  fprintf(stderr,"%sThe leading double slash indicates a remote path which is probably not intended\n",EXPLAIN_WRITABLE);
-	  warn=true;
-	}
+    #define EXPLAIN_WRITABLE "The first upstream root is writable.'nIf an empty string is given as first root, it will not be possible to store files in the virtual file system.\n"
+    if (_root_writable->remote){
+      fprintf(stderr,"%sThe leading double slash indicates a remote path which is probably not intended\n",EXPLAIN_WRITABLE);
+      warn=true;
+    }
   }else{
-	warn=true;
-	fprintf(stderr,"The first root-path is an empty string.\n%s\n",EXPLAIN_WRITABLE);
+    warn=true;
+    fprintf(stderr,"The first root-path is an empty string.\n%s\n",EXPLAIN_WRITABLE);
   }
   IF1(WITH_FILECONVERSION,if (!cg_is_member_of_group("docker")){ log_warn(HINT_GRP_DOCKER); warn=true;});
   return warn;

@@ -4,10 +4,10 @@
 /// This file can be customized by the user               ///
 /////////////////////////////////////////////////////////////
 _Static_assert(WITH_CCODE,"");
-#define FSIZE_FROM_HASHTABLE(st,vp,vp_l,default)  if (0>=(st->st_size=fsize_from_hashtable((st->st_ino=inode_from_virtualpath(vp,vp_l))))) st->st_size=default
-#define FSIZE_TO_HASHTABLE(bb,vp,vp_l)  fsize_to_hashtable(vp,vp_l, bb[0]?textbuffer_length(bb[0]):0)
-#define ZIPSFS_C_IS_DIR_A (1<<0)
-#define ZIPSFS_C_MMAP     (1<<1)
+#define FSIZE_FROM_HASHTABLE(vp,vp_l, default_size)  size_or_size(fsize_from_hashtable(vp,vp_l), default_size)
+#define FSIZE_TO_HASHTABLE(bb,vp,vp_l)               fsize_to_hashtable(vp,vp_l, bb[0]?textbuffer_length(bb[0]):0)
+enum {ZIPSFS_C_IS_DIR_A=1<<0,ZIPSFS_C_MMAP=1<<1};
+
 typedef textbuffer_t** c_read_handle_t;
 
 

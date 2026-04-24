@@ -4,7 +4,7 @@
 /// This file can be customized by the user               ///
 /////////////////////////////////////////////////////////////
 // See ZIPsFS_c.c  WITH_CCODE
-#define ZIPSFS_C_MAX_NUM 10 /* Maximum number of synthetic file definitions */
+enum {ZIPSFS_C_MAX_NUM=10}; /* Maximum number of synthetic file definitions */
 #define CONFIG_C_EXAMPLE_DIR "example_generated_file"
 #define CONFIG_C_EXAMPLE     "example_generated_file.txt"
 #define CONFIG_C_EXAMPLE_DIR_L (sizeof(CONFIG_C_EXAMPLE_DIR)-1)
@@ -21,7 +21,7 @@ static bool config_c_getattr(const int flags, const char *vp, const int vp_l, st
     return true;
   }
   if (CONFIG_C_IS_EXAMPLE(vp,vp_l)){
-    FSIZE_FROM_HASHTABLE(st,vp,vp_l, 999);
+    st->st_size=FSIZE_FROM_HASHTABLE(vp,vp_l,99);
     st->st_mtime=time(NULL);
     return true;
   }
@@ -85,6 +85,7 @@ static bool config_c_read(c_read_handle_t handle,const int flags,const char *vp,
     M(handle,_config_c_to_mmap(m,m_l),m_l);
     M(handle,_config_c_to_mmap(m,m_l),0);
     C(handle,"\n",1);
+
     FSIZE_TO_HASHTABLE(handle,vp,vp_l);
     return true;
   }

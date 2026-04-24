@@ -11,10 +11,10 @@
 static char *path_of_this_executable(void){
   static char* _p;
   if (!_p){
-	char p[512];
-	*p=0;
-	if (has_proc_fs()) p[readlink("/proc/self/exe",p, 511)]=0;
-	_p=strdup_untracked(p);
+    char p[512];
+    *p=0;
+    if (has_proc_fs()) p[readlink("/proc/self/exe",p, 511)]=0;
+    _p=strdup_untracked(p);
   }
   return _p;
 }
@@ -64,8 +64,8 @@ static bool file_starts_year_ends_dot_d(const char *p){
 #define report_failure_for_tdf(...) _viamacro_report_failure_for_tdf(__func__,__LINE__,__VA_ARGS__)
 static bool _viamacro_report_failure_for_tdf(const char *mthd, int line, const char *path){
   if (tdf_or_tdf_bin(path)){
-	log_error("%s  %s:%d path=%s",__func__,mthd,line,path);
-	return true;
+    log_error("%s  %s:%d path=%s",__func__,mthd,line,path);
+    return true;
   }
   return false;
 }
@@ -77,30 +77,30 @@ static bool _viamacro_report_failure_for_tdf(const char *mthd, int line, const c
 static void assert_dir(const char *p, const struct stat *st){
   if (!st) return;
   if(!S_ISDIR(st->st_mode)){
-	log_error("assert_dir  stat S_ISDIR %s",p);
-	cg_print_stacktrace(0);
+    log_error("assert_dir  stat S_ISDIR %s",p);
+    cg_print_stacktrace(0);
   }
   const bool r_ok=cg_access_from_stat(st,R_OK);
   const bool x_ok=cg_access_from_stat(st,X_OK);
   if(!r_ok||!x_ok){
-	log_error("access_from_stat %s r=%s x=%s ",p,yes_no(r_ok),yes_no(x_ok));
-	cg_log_file_stat("",st);
+    log_error("access_from_stat %s r=%s x=%s ",p,yes_no(r_ok),yes_no(x_ok));
+    cg_log_file_stat("",st);
   }
 }
 static void assert_r_ok(const char *p, const struct stat *st){
   if(!cg_access_from_stat(st,R_OK)){
-	log_error("assert_r_ok  %s  ",p);
-	cg_log_file_stat("",st);
-	cg_print_stacktrace(0);
+    log_error("assert_r_ok  %s  ",p);
+    cg_log_file_stat(p,st);
+    cg_print_stacktrace(0);
   }
 }
 
 
 static void cg_print_stat(struct stat *st,FILE *f){
   if (!st){
-	fputs(" struct stat is NULL. ",f);
+    fputs(" struct stat is NULL. ",f);
   }else{
-	fprintf(f," struct stat = ino:%llu size:%'llu mtime:%s ",(LLU)st->st_ino,(LLU)st->st_size,ST_MTIME(st)); cg_print_file_mode(st->st_mode,f);
+    fprintf(f," struct stat = ino:%llu size:%'llu mtime:%s ",(LLU)st->st_ino,(LLU)st->st_size,ST_MTIME(st)); cg_print_file_mode(st->st_mode,f);
   }
 }
 
@@ -130,9 +130,9 @@ static void _log_count_e(enum enum_functions f,const char *path){
   pthread_mutex_unlock(mutex+mutex_log_count);
 
   if (ms>1000 && (f==xmp_getattr_ || f==xmp_access_ || f==xmp_open_ || f==xmp_readdir_)){
-	log(ANSI_FG_RED" %s"ANSI_FG_GRAY"%d"ANSI_FG_RED",'%s'%d<< "ANSI_RESET,function_name(f),ms,snull(path),functions_count[f]);
+    log(ANSI_FG_RED" %s"ANSI_FG_GRAY"%d"ANSI_FG_RED",'%s'%d<< "ANSI_RESET,function_name(f),ms,snull(path),functions_count[f]);
   }else{
-	log(" %s"ANSI_FG_GRAY"%d"ANSI_RESET",%d<< ",function_name(f),ms,functions_count[f]);
+    log(" %s"ANSI_FG_GRAY"%d"ANSI_RESET",%d<< ",function_name(f),ms,functions_count[f]);
   }
 }
 #else

@@ -32,7 +32,7 @@
 #define WITH_GNU 0
 #endif
 ////////////////////////////////////////
-#if  __clang__
+#if  defined(__clang__) && __clang__
 #  define IS_CLANG 1
 #else
 #  define IS_CLANG 0
@@ -73,7 +73,7 @@
 /// Stat ///
 ////////////
 /* According to POSIX2008,  st_atim, st_mtim and st_ctim of the "stat" structure must be in the sys/stat.h when the _POSIX_C_SOURCE macro is defined as 200809L. */
-typedef enum yes_zero_no { NO=-1,ZERO,YES} yes_zero_no_t;
+typedef enum { NO=-1,ZERO,YES} yes_zero_no_t;
 
 
 #define YES_ZERO_NO_S(ok) (ok==YES?"NO":ok==ZERO?"ZERO":ok==YES?"YES":"?")
@@ -92,8 +92,9 @@ typedef enum yes_zero_no { NO=-1,ZERO,YES} yes_zero_no_t;
 
 #define ERROR_MSG_NO_PROC_FS "No /proc file system on this computer\n"
 
-
-#define MAX_PATHLEN 511
+enum{
+  ULIMIT_S=8192,  /* Stacksize [kB]  Output of  ulimit -s  The maximum stack size currently  8192 KB on Linux. Check with ulimit -s*/
+  MAX_PATHLEN=511};
 _Static_assert(MAX_PATHLEN<=PATH_MAX,"");
 #define DEBUG_NOW 1
 #define CONCAT(a, b) CONCAT_INNER(a, b)
@@ -144,15 +145,13 @@ _Static_assert(MAX_PATHLEN<=PATH_MAX,"");
 
 
 #define M(op,typ) static MAYBE_INLINE typ op##_##typ(typ a,typ b){ return op(a,b);}
-/* We avoid GNU statement expressions and __auto_type  */
+/* We avoid GNU statement expressions and __auto_type  __typeof__(a) __a = (a);  */
 M(MIN,int)
 M(MIN,long)
 M(MAX,int)
 M(MAX,long)
 #undef M
 
-
-#define CODE_NOT_NEEDED 0
 //static void cg_print_stacktrace(int calledFromSigInt);
 
 //#define DIE(format,...)   do{ fprintf(stderr,format,__VA_ARGS__);fprintf(stderr,ANSI_RED" (in %s at %s:%i)"ANSI_RESET"\n",__func__,__FILE_NAME__,__LINE__);if (*format=='!') perror("");  exit(EXIT_FAILURE); }while(0)
@@ -194,7 +193,6 @@ M(MAX,long)
 
 
 #define DIE_DEBUG_NOW(...)    DIE(__VA_ARGS__)
-#define ULIMIT_S  8192  /* Stacksize [kB]  Output of  ulimit -s  The maximum stack size currently  8192 KB on Linux. Check with ulimit -s*/
 #define success_or_fail(b)    ((b)?GREEN_SUCCESS:RED_FAIL)
 
 // ---
@@ -238,8 +236,8 @@ enum enum_validchars{VALIDCHARS_DIGITS,VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHAR
 
 #define LASTCHAR(x) x[sizeof(x)-2]
 #define STRLEN(ending) ((int)sizeof(ending)-1)
-#define ENDSWITH(s,s_l,ending)  (((s_l)>=STRLEN(ending)) && s[(s_l)-1]==LASTCHAR(ending) && (!memcmp(s+(s_l)-STRLEN(ending),ending,STRLEN(ending))))
-#define ENDSWITHI(s,s_l,ending) (((s_l)>=STRLEN(ending)) && (s[(s_l)-1]|32)==(32|LASTCHAR(ending)) && (!strcasecmp(s+(s_l)-STRLEN(ending),ending)))
+#define ENDSWITH(s,s_l,ending)  (((s_l)>=STRLEN(ending)) && (s)[(s_l)-1]==LASTCHAR(ending) && (!memcmp((s)+(s_l)-STRLEN(ending),ending,STRLEN(ending))))
+#define ENDSWITHI(s,s_l,ending) (((s_l)>=STRLEN(ending)) && ((s)[(s_l)-1]|32)==(32|LASTCHAR(ending)) && (!strcasecmp((s)+(s_l)-STRLEN(ending),ending)))
 
 
 
@@ -267,36 +265,39 @@ enum enum_validchars{VALIDCHARS_DIGITS,VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHAR
 
 
 typedef uint32_t ht_hash_t;
-#define ENDSWITH_FLAG_IC (1<<1)
-#define ENDSWITH_FLAG_PRECEED_SLASH (1<<2)
+enum {ENDSWITH_FLAG_IC=1<<1,ENDSWITH_FLAG_PRECEED_SLASH=1<<2};
 
 
 
-#define MMAP_FD -1   // FreeBSD MAP_ANONYMOUS requires -1 rather than 0
+
+enum { MMAP_FD=-1};   // FreeBSD MAP_ANONYMOUS requires -1 rather than 0
 
 #define WITH_POPEN_NOSHELL 0
+enum { COMPRESSION_MASK=7, COMPRESSION_EXT_MAX_LEN=7, COMPRESS_EXT_MAXLEN=13};
+#define XMACRO_COMPRESSION() X(gz,)\
+    X(bz2,{C("bzip2");C("-dc");S()})\
+    X(xz, {C("xz");C("-dc");S()})\
+    X(lrz,{C("lrzip");C("-df");C("-o");C("-");S()})\
+    X(Z,  {C("uncompress");C("-c");S()})
+#define X(x,d) _Static_assert(sizeof(#x)<COMPRESSION_EXT_MAX_LEN,"");
+    XMACRO_COMPRESSION();
+#undef X
 
-enum enum_compression_types{COMPRESSION_NIL,COMPRESSION_GZ,COMPRESSION_BZ2,COMPRESSION_LRZ,COMPRESSION_XZ,COMPRESSION_Z,COMPRESSION_NUM};
+#define X(x,d) COMPRESSION_##x,
+enum {COMPRESSION_NIL,XMACRO_COMPRESSION() COMPRESSION_NUM};
+#undef X
 
-
-
-#define COMPRESSION_MASK     7
 _Static_assert((COMPRESSION_NUM&COMPRESSION_MASK)==COMPRESSION_NUM,"COMPRESSION_MASK");
-#define COMPRESSION_EXT_MAX_LEN 7
 
-
-
-#define XMACRO_COMPRESSION()      X(gz,GZ)X(bz2,BZ2)X(lrz,LRZ)X(xz,XZ)X(Z,Z)
 
 /***********/
 /* Network */
 /***********/
-typedef struct cg_httpheader{
+typedef struct{
   time_t mtime;
   ssize_t size;
   bool has_content_location, is_404, is_header;
-  int lines;
-  int compress_sfx;
+  int lines, compress_sfx;
 } cg_httpheader_t;
-static int cg_httpheader_read_fd(struct cg_httpheader *h,const int fd);
+static int cg_httpheader_read_fd(cg_httpheader_t *h,const int fd);
 #endif // _cg_utils_dot_h

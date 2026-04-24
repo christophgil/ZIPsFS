@@ -112,13 +112,13 @@ MODI=~/tmp/ZIPsFS/testing/modifications
 REMOTE1=~/tmp/ZIPsFS/testing/remote1
 TMPDIR=~/tmp/ZIPsFS/tmp
 mkdir -p $MODI $REMOTE1 $TMPDIR
-WITH_FTP_DIRS=0
+WITH_FTP_DIRS=1
 STORE=''
 VERBOSE=''
 while getopts 'vdfsm:' o; do
     case $o in
         m) MNT=$OPTARG;;
-        f) WITH_FTP_DIRS=1;;
+        f) WITH_FTP_DIRS=0;;
         s) STORE=//s-mcpb-ms03.charite.de/fulnas1/1; ls -l -d $STORE || STORE='';;
         d) rm -v -r "/home/_cache/$USER/ZIPsFS/modifications";;
         v) VERBOSE=-v;;

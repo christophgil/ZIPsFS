@@ -60,9 +60,9 @@ static const int config_virtual_dirpath_to_zipfile(const char *b, const char *e,
 ///
 /// See: config_skip_zipfile_show_zipentries_instead()
 ////////////////////////////////////////////////////
-#if WITH_ZIPINLINE
+#if WITH_ZIPFLAT
 #include "ZIPsFS_configuration_zipfile.c"
-#endif //WITH_ZIPINLINE
+#endif //WITH_ZIPFLAT
 
  /************************************************************************************************/
  /* When a cached struct stat is found the the cache, is it still valid and how many seconds?    */
@@ -71,32 +71,32 @@ static const int config_virtual_dirpath_to_zipfile(const char *b, const char *e,
  /************************************************************************************************/
 
 
-#if WITH_STAT_CACHE
+#if WITH_STATCACHE
 #define IS_STAT_READONLY(st) !(st->st_mode&(S_IWUSR|S_IWGRP|S_IWOTH))
-static long config_file_attribute_cache_TTL(const int flags, const char *path,const int path_l, const struct stat *st_or_null, const long default_cache_TTL){
+static long config_file_attribute_cache_TTL(const int flags, const char *rootpath, const char *vpath,const int vpath_l, const struct stat *st_or_null, const long default_cache_TTL){
   /* Available Flags:
-     (flags&STAT_CACHE_ROOT_IS_WRITABLE)
-     (flags&STAT_CACHE_ROOT_IS_REMOTE)
-     (flags&STAT_CACHE_ROOT_IS_PRELOADING)
-     (flags&STAT_CACHE_ROOT_WITH_TIMEOUT)
-     (flags&STAT_CACHE_IS_PFXPLAIN))
-     (flags&STAT_CACHE_ROOT_IS_WORM))
-     (flags&STAT_CACHE_ROOT_IS_IMMUTABLE))
+     (flags&STATCACHE_ROOT_IS_WRITABLE)
+     (flags&STATCACHE_ROOT_IS_REMOTE)
+     (flags&STATCACHE_ROOT_IS_PRELOADING)
+     (flags&STATCACHE_ROOT_WITH_TIMEOUT)
+     (flags&STATCACHE_IS_PFXPLAIN))
+     (flags&STATCACHE_ROOT_IS_WORM))
+     (flags&STATCACHE_ROOT_IS_IMMUTABLE))
   */
 
-  if (flags&STAT_CACHE_IS_PFXPLAIN){  /* .../zipsfs/1/... */
+  if (flags&STATCACHE_IS_PFXPLAIN){  /* .../zipsfs/1/... */
     /* Navigation through <mountpoint>/zipsfs/p/ */
-    //log_debug_now("STAT_CACHE_FILE_IS_READONLY: %d",(flags&STAT_CACHE_FILE_IS_READONLY));
-    //log_debug_now("path:%s %p %d %d",path,  st_or_null, !!(flags&STAT_CACHE_ROOT_IS_WORM),st_or_null && IS_STAT_READONLY(st_or_null));
-    if ((flags&(STAT_CACHE_ROOT_IS_WORM|STAT_CACHE_ROOT_IS_IMMUTABLE)) &&  (!st_or_null || IS_STAT_READONLY(st_or_null))) return UINT32_MAX;
+    //log_debug_now("STATCACHE_FILE_IS_READONLY: %d",(flags&STATCACHE_FILE_IS_READONLY));
+    //log_debug_now("vpath:%s %p %d %d",vpath,  st_or_null, !!(flags&STATCACHE_ROOT_IS_WORM),st_or_null && IS_STAT_READONLY(st_or_null));
+    if ((flags&(STATCACHE_ROOT_IS_WORM|STATCACHE_ROOT_IS_IMMUTABLE)) &&  (!st_or_null || IS_STAT_READONLY(st_or_null))) return UINT32_MAX;
   }
 
   return default_cache_TTL?default_cache_TTL: /* Root specific max age of file attributes seconds. */
-    (flags&STAT_CACHE_ROOT_WITH_TIMEOUT)?600:  /* Root path is starting with  Triple slash */
-    (flags&STAT_CACHE_ROOT_IS_REMOTE)?300:     /* Root path is starting with  double slash */
+    (flags&STATCACHE_ROOT_WITH_TIMEOUT)?600:  /* Root path is starting with  Triple slash */
+    (flags&STATCACHE_ROOT_IS_REMOTE)?300:     /* Root path is starting with  double slash */
     0;
 }
-#endif //WITH_STAT_CACHE
+#endif //WITH_STATCACHE
 
  /*****************************************************/
  /* A ZIP file is shown as a folder.                  */
@@ -119,7 +119,7 @@ static bool config_zipfilename_to_virtual_dirname(char *dirname,const char *zipf
   }
   return false;
 }
-#if WITH_ZIPINLINE
+#if WITH_ZIPFLAT
 static bool config_skip_zipfile_show_zipentries_instead(const char *zipfile,const int zipfile_l){
   if(zipfile_l>20 && _isZip(zipfile+zipfile_l-4)){
     static int WITHOUT_PARENT_LEN[10];
@@ -133,7 +133,7 @@ static bool config_skip_zipfile_show_zipentries_instead(const char *zipfile,cons
   }
   return false;
 }
-#endif //WITH_ZIPINLINE
+#endif //WITH_ZIPFLAT
 
 /////////////////////////////////////////////////////////////////////////////////
 /// With the bruker dll, two non existing files are requested extremely often. //
@@ -162,9 +162,11 @@ static off_t config_advise_preload_file_ram(const int flags,const char *virtualp
   const char *e=virtualpath+vp_l;
   if (vp_l>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e') return -1; /* The exe files hold the icon for File Explorer */
   if (flags&ADVISE_CACHE_BY_POLICY) return filesize;
+  //  if (ENDSWITH(virtualpath,vp_l,".raw")  || ENDSWITH(virtualpath,vp_l,".rawIdx")  || ENDSWITH(virtualpath,vp_l,".wiff")) return filesize;
   off_t need=filesize;
   bool cache=((flags&ADVISE_CACHE_IS_COMPRESSEDZIPENTRY)&&(flags&ADVISE_CACHE_IS_SEEK_BW))
     || ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin");
+
   //	|| ENDSWITH(virtualpath,vp_l,".raw") && STARTSWITH(cg_strrchr_null(virtualpath,'/'),"/20")
     /*  Thermo raw files: Not applicable to FragPipe because raw file opened and closed multiple times. */
 
@@ -200,7 +202,7 @@ static bool config_advise_transient_cache_for_zipentries(const char *path, const
 ////////////////////////////////////////////////////////////
 /// Certain files may be hidden in file listings         ///
 ////////////////////////////////////////////////////////////
-static bool config_do_not_list_file(const char *parent, const char *filename,const int filename_l){
+static bool config_do_not_list_file(const char *parent,const char *filename,const int filename_l){
 
 #define C(x) ENDSWITH(filename,filename_l,#x)
   return filename_l>12 && C(.md5) && (C(.Zip.md5) || C(.wiff.md5) || C(.wiff.scan.md5) || C(.raw.md5) || C(.rawIdx.md5));
@@ -223,8 +225,9 @@ static bool config_not_overwrite(const char *path,const int path_l){
 ////////////////////////////////////////////////////////////
 #if WITH_DIRCACHE
 static bool config_advise_cache_directory_listing(const int flags,const char *path,const int path_l,const struct timespec mtime){
-  if (!(flags&ADVISE_DIRCACHE_IS_DIRPLAIN)) return false;
-  if ((flags&ADVISE_DIRCACHE_IS_ZIP))  return true;
+  //log_debug_now("mtime.tv_sec=%ld  ADVISE_DIRCACHE_IS_DIRPLAIN=%d  ADVISE_DIRCACHE_IS_ZIP:%d  ADVISE_DIRCACHE_IS_REMOTE:%d",
+  // mtime.tv_sec, flags&ADVISE_DIRCACHE_IS_DIRPLAIN,  flags&ADVISE_DIRCACHE_IS_ZIP, flags&ADVISE_DIRCACHE_IS_REMOTE);
+  if ((flags&ADVISE_DIRCACHE_IS_ZIP)) return true;
   if (flags&ADVISE_DIRCACHE_IS_REMOTE){
     struct timeval tv={0};
     gettimeofday(&tv,NULL);
@@ -242,14 +245,14 @@ static const int _FILE_EXT_FROM=__COUNTER__;
 static char *config_some_file_path_extensions(const char *path, int path_l, int *return_index){
 #define C(a) if (ENDSWITH(path,path_l,#a)){ *return_index=__COUNTER__-_FILE_EXT_FROM; return #a;}
   switch(path[path_l-1]){
-  case 'a': C(.timeseries.data);break;
-  case 'd': C(.d);break;
-  case 'f': C(.wiff);C(.tdf);C(desktop.inf);C(Desktop.inf);break;
-  case 'l': C(.tdf-journal); C(.tdf-wal);break;
-  case 'n': C(.wiff.scan);C(.tdf_bin);break;
-  case 't': C(.txt);break;
-  case 'w': C(.raw);break;
-  case 'x': C(.rawIdx);break;
+  case 'a': C(.timeseries.data)break;
+  case 'd': C(.d)break;
+  case 'f': C(.wiff)C(.tdf)C(desktop.inf)C(Desktop.inf)break;
+  case 'l': C(.tdf-journal) C(.tdf-wal)break;
+  case 'n': C(.wiff.scan)C(.tdf_bin)break;
+  case 't': C(.txt)break;
+  case 'w': C(.raw)break;
+  case 'x': C(.rawIdx)break;
   }
 #undef C
   return NULL;
@@ -296,6 +299,7 @@ static void config_exclude_files(const char *path, const int path_l, const int n
             for(int j=num_files; --j>=0;){
               if (files[j] && (!strcmp("analysis.tdf-wal",files[j])||!strcmp("analysis.tdf-shm",files[j]))){
                 files[j]=NULL;
+                //                ".ciopfs"
               }
             }
           }
@@ -338,10 +342,10 @@ static bool config_has_sufficient_storage_space(const char *realpath, const long
 #if WITH_INTERNET_DOWNLOAD
 static int config_internet_try_compressed(const char *vp,const int vp_l){
   return
-    //(1<<COMPRESSION_XZ)|
-    //(1<<COMPRESSION_LRZ)|
-    (1<<COMPRESSION_BZ2)|
-    (1<<COMPRESSION_GZ);
+    //(1<<COMPRESSION_xz)|
+    //(1<<COMPRESSION_lrz)|
+    (1<<COMPRESSION_bz2)|
+    (1<<COMPRESSION_gz);
 }
 #endif //WITH_INTERNET_DOWNLOAD
 

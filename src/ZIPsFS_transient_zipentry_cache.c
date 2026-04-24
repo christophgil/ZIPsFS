@@ -1,14 +1,14 @@
- /*********************************************************************************************************************************/
- /* COMPILE_MAIN=ZIPsFS                                                                                                           */
- /* Temporary cache for file attributs (struct stat).                                                                             */
- /* MOTIVATION:                                                                                                                   */
- /*     We are using software which is sending lots of requests to the FS.                                                        */
- /*     At the same time a large zip entry  is accessed.                                                                          */
- /*     The goal is to reduce calls to stat_direct()                                                                              */
- /* DESIGN:                                                                                                                       */
- /*     The fHandle_t of that file carries a hash map which acts as a cache.                                                      */
- /*     The cache lives as long as the fHandle_t instance                                                                         */
- /*********************************************************************************************************************************/
+/*********************************************************************************************************************************/
+/* COMPILE_MAIN=ZIPsFS                                                                                                           */
+/* Temporary cache for file attributs (struct stat).                                                                             */
+/* MOTIVATION:                                                                                                                   */
+/*     We are using software which is sending lots of requests to the FS.                                                        */
+/*     At the same time a large zip entry  is accessed.                                                                          */
+/*     The goal is to reduce calls to stat_direct()                                                                              */
+/* DESIGN:                                                                                                                       */
+/*     The fHandle_t of that file carries a hash map which acts as a cache.                                                      */
+/*     The cache lives as long as the fHandle_t instance                                                                         */
+/*********************************************************************************************************************************/
 
 _Static_assert(WITH_TRANSIENT_ZIPENTRY_CACHES,"");
 #define FHANDLE_BOTH_SHARE_TRANSIENT_CACHE(d1,d2) (d1->zpath.virtualpath_without_entry_hash==d2->zpath.virtualpath_without_entry_hash && !strcmp(D_VP0(d1),D_VP0(d2)))
@@ -22,14 +22,20 @@ static bool zpath_has_inode(zpath_t *zpath){
 }
 
 static ht_t* transient_cache_make_ht(fHandle_t *d){
+#define ht ht_transient_cache
   ht_t *ht=d->ht_transient_cache;
   if (!ht){
-    ht_set_mutex(mutex_fhandle,ht_init(ht=d->ht_transient_cache=cg_calloc(COUNT_FHANDLE_TRANSIENT_CACHE,1,sizeof(ht_t)),"transient_cache",HT_FLAG_NUMKEY|5));
+    ht=d->ht_transient_cache=cg_calloc(COUNT_FHANDLE_TRANSIENT_CACHE,1,sizeof(ht_t));
+    HT_INIT(ht,HT_FLAG_NUMKEY|5);
+    ht_set_mutex(mutex_fhandle,ht);
+    ht_set_id(HT_MALLOC_transient_cache,ht);
     assert(0==(ht->flags&HT_FLAG_KEYS_ARE_STORED_EXTERN));
     ht->ht_counter_malloc=COUNT_HT_MALLOC_TRANSIENT_CACHE;
     ht->key_malloc_id=COUNT_MALLOC_KEY_TRANSIENT_CACHE;
-    ht_set_id(HT_MALLOC_transient_cache,ht);
-    mstore_set_mutex(mutex_fhandle,mstore_init(ht->valuestore=calloc_untracked(1,sizeof(mstore_t)),NULL,(sizeof(zpath_t)*16)|MSTORE_OPT_MALLOC));
+
+    mstore_t *transient_cache_values=ht->valuestore=calloc_untracked(1,sizeof(mstore_t));
+    MSTORE_INIT(transient_cache_values,(sizeof(zpath_t)*16)|MSTORE_OPT_MALLOC);
+    mstore_set_mutex(mutex_fhandle,ht->valuestore);
     //const ht_hash_t hash=d->zpath.virtualpath_without_entry_hash;
     ht->valuestore->mstore_counter_mmap=COUNT_MSTORE_MMAP_TRANSIENT_CACHE_VALUES;
     foreach_fhandle(ie,e){
@@ -37,6 +43,7 @@ static ht_t* transient_cache_make_ht(fHandle_t *d){
     }
   }
   return ht;
+#undef ht
 }
 /* Get/create a zpath_t object for a given virtual path.
    The hash table is stored in  fHandle_t.
@@ -59,8 +66,8 @@ static zpath_t *transient_cache_get_or_create_zpath(const bool create,const bool
     }
     const int vp_l=D_VP_L(d);
     if (!vp_l || !(d->zpath.flags&ZP_TRY_ZIP) || !zpath_has_inode(&d->zpath) ) continue;
-        const char *vp=D_VP(d);
-        const int path_without_entry_path_l=vp_l-D_EP_L(d)-1;
+    const char *vp=D_VP(d);
+    const int path_without_entry_path_l=vp_l-D_EP_L(d)-1;
     const bool maybe_same_zip=path_without_entry_path_l && cg_path_equals_or_is_parent(vp,path_without_entry_path_l,virtualpath,virtualpath_l);
     if (must_be_same_zip && !maybe_same_zip) continue;
     /* maybe_same_zip: path_without_entry_path is part of virtualpath indicating that virtualpath is likely to be in the same ZIP file. */
@@ -93,6 +100,7 @@ static zpath_t *transient_cache_get_or_create_zpath(const bool create,const bool
 }
 
 static yes_zero_no_t transient_cache_find_realpath(zpath_t *zpath){
+  //_log_flags|=(1<<LOG_TRANSIENT_ZIPENTRY_CACHE);
   //log_entered_function("vp: %s opt: %d ",VP(),(opt&FINDRP_NOT_TRANSIENT_CACHE));
   if (zpath->flags&ZP_TRANSIENT_CACHE_ONCE) return ZERO;
   zpath->flags|=ZP_TRANSIENT_CACHE_ONCE;
@@ -104,14 +112,14 @@ static yes_zero_no_t transient_cache_find_realpath(zpath_t *zpath){
   if (!(f&ZP_DOES_NOT_EXIST) && zpath_has_inode(&cached)){
     assert(cached.virtualpath && !strcmp(ZP_VP(&cached),vp));
     *zpath=cached;
-    IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(ANSI_FG_GREEN"%s %d r:%s"ANSI_RESET,vp,vp_l,rootpath(zpath->root));
+    IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(GREEN_SUCCESS"%s %d r:%s"ANSI_RESET,vp,vp_l,rootpath(zpath->root));
     return YES;
   }
   if (f&ZP_DOES_NOT_EXIST){
     IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(ANSI_FG_RED"%s"ANSI_RESET,vp);
     return NO;
   }
-  //log_debug_now("%s %d"RED_FAIL" cached:'%s'  inode: %d",vp,vp_l,ZP_VP(&cached),zpath_has_inode(&cached));
+  IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose("%s %d"RED_FAIL" cached:'%s'  inode: %d",vp,vp_l,ZP_VP(&cached),zpath_has_inode(&cached));
   return ZERO;
 }
 

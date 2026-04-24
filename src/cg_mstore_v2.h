@@ -12,12 +12,12 @@
 #define SIZEOF_OFF_T sizeof(off_t)
 #define _MSTORE_LEADING (SIZEOF_OFF_T*2)
 #define NEXT_MULTIPLE(x,word) ((x+(word-1))&~(word-1))   /* NEXT_MULTIPLE(13,4) -> 16      Word is a power of two */
-#define _MSTORE_MASK_SIZE (MSTORE_OPT_MMAP_WITH_FILE-1) // Must be lowest
 
 #define MSTORE_OFFSET_NEXT_FREE(d) ((off_t*)d)[0]
 #define MSTORE_BLOCK_CAPACITY(d) ((off_t*)d)[1]
 #define mstore_usage(m)           _mstore_common(m,_mstore_usage,NULL)
-#define mstore_count_blocks(m)  _mstore_common(m,_mstore_blocks,NULL)
+#define mstore_sum_size(m)        _mstore_common(m,_mstore_sum_size,NULL)
+#define mstore_count_blocks(m)    _mstore_common(m,_mstore_blocks,NULL)
 #define mstore_clear(m)           _mstore_common(m,_mstore_clear,NULL)
 #define mstore_add(m,src,bytes,align)  memcpy(mstore_malloc(m,bytes,align),src,bytes)
 #define mstore_contains(m,pointer)  (0!=_mstore_common(m,_mstore_contains,pointer))
@@ -32,8 +32,10 @@
 //#define _MSTORE_MMAP_ID(m) 0
 #endif //WITH_DEBUG_MALLOC
 
-enum enum_mstore_operation{_mstore_destroy,_mstore_usage,_mstore_clear,_mstore_contains,_mstore_blocks};
-typedef struct mstore{
+enum enum_mstore_operation{_mstore_destroy,_mstore_usage,_mstore_sum_size,_mstore_clear,_mstore_contains,_mstore_blocks};
+
+#define _MSTORE_MASK_SIZE (MSTORE_OPT_MMAP_WITH_FILE-1) // Must be lowest
+typedef struct{
   char _block_on_stack[_MSTORE_LEADING+_MSTORE_BLOCK_ON_STACK_CAPACITY];
   char **_data;
   char *_previous_sgmt;
@@ -42,18 +44,19 @@ typedef struct mstore{
   int mutex;
   int iinstance, mstore_counter_mmap;
   off_t bytes_per_block;
-  uint32_t opt;
-  #define MSTORE_OPT_MALLOC (1U<<30)
-#define MSTORE_OPT_MMAP_WITH_FILE (1U<<29)  /* Default is anonymous MMAP */
+  enum {MSTORE_OPT_MALLOC=1<<30,MSTORE_OPT_MMAP_WITH_FILE=1<<29} opt;  /* Default is anonymous MMAP */
   uint32_t capacity;
 #ifdef CG_THREAD_FIELDS
   CG_THREAD_FIELDS;
 #endif
 } mstore_t;
-
-
+static mstore_t *_mstore_last_initialized;
+static const mstore_t empty_mstore;
+#define MSTORE_SET_MUTEX(mutex)  mstore_set_mutex(mutex,_mstore_last_initialized)
 
 static void mstore_file(char path[PATH_MAX+1],const mstore_t *m,const int block);
+
+
 
 
 #endif

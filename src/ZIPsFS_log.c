@@ -8,16 +8,16 @@
 #define P(txt) fputs(txt,file)
 
 static void _rootdata_counter_inc(counter_rootdata_t *c, enum enum_counter_rootdata f){
-  if (c->counts[f]<UINT32_MAX) atomic_fetch_add(c->counts+f,1);
+  if (c&&c->counts[f]<UINT32_MAX) atomic_fetch_add(c->counts+f,1);
 }
 static void fhandle_counter_inc( fHandle_t* d, enum enum_counter_rootdata f){
   if (!d->filetypedata) d->filetypedata=filetypedata_for_ext(D_VP(d),d->zpath.root);
   _rootdata_counter_inc(d->filetypedata,f);
 
 }
-static void rootdata_counter_inc(const char *path, enum enum_counter_rootdata f, root_t* r){
-  _rootdata_counter_inc(filetypedata_for_ext(path,r),f);
-}
+/* static void rootdata_counter_inc(const char *path, enum enum_counter_rootdata f, root_t* r){ */
+/*   _rootdata_counter_inc(filetypedata_for_ext(path,r),f); */
+/* } */
 
 /****************************/
 /* Print roots html or text */
@@ -45,11 +45,7 @@ static void table_draw_horizontal(FILE *file, const int type, const int nColumn,
 #undef U
 static void log_print_roots(FILE *file){ /* n==0 for UNIX console with UTF8 else for HTML with unicode */
 
-#define C(title,format,...) posOld=pos;	\
-  pos+=r?S(format,__VA_ARGS__):S("%s",title);\
-  spaces=width[col]-pos+posOld;	\
-  if (print){ memset(line+pos,' ',spaces); pos+=spaces; pos+=S(" %s ",colsep);} else width[col]=MAX_int(width[col],pos-posOld);	\
-  col++
+#define C(title,format,...)  pos+=(colw=r?S(format,__VA_ARGS__):S("%s",title));if (print) pos+=S(" %*s%s ",width[col]-colw,"",colsep); else width[col]=MAX(width[col],colw);col++;
 #define S(...) snprintf(line+pos,sizeof(line)-pos,__VA_ARGS__)
   int width[33]={0};
   char line[1024], colsep[9];
@@ -61,7 +57,7 @@ static void log_print_roots(FILE *file){ /* n==0 for UNIX console with UTF8 else
       char tmp[MAX_PATHLEN+1];
       root_t *r=ir<0?NULL:_root+ir;
       if (!r && !html) P(ANSI_BOLD);
-      int posOld=0,col=0,spaces, pos=cg_unicode(line,BD_HEAVY_VERTICAL,html);
+      int colw,col=0, pos=cg_unicode(line,BD_HEAVY_VERTICAL,html);
       line[pos++]=' ';
       C("No","%2d",1+rootindex(r));
       C("Path","%s",r->rootpath);
@@ -69,13 +65,13 @@ static void log_print_roots(FILE *file){ /* n==0 for UNIX console with UTF8 else
       if (r){
         char *e=tmp;
 #define A(cond,s) if (r->cond) e=stpcpy(stpcpy(e,s)," ")
-        A(remote,"R");A(writable,"W");A(blocked,"B");A(decompress_mask,"L");A(noatime,"noatime");A(follow_symlinks,"S"); A(one_file_system,"1");A(worm,"WORM");
+        A(remote,"R");A(has_timeout,"T");A(writable,"W");A(blocked,"B");A(decompress_mask,"L");A(noatime,"noatime");A(follow_symlinks,"S"); A(one_file_system,"1");A(worm,"WORM");
         A(immutable,"C");
         FOR(ic,1,COMPRESSION_NUM) A(decompress_mask&(1<<ic),cg_compression_file_ext(ic,NULL));
 #undef A
       }
       C("Features","%s",tmp);
-      C(RP_PATH_PREFIX,"%s",r->path_prefix);
+      C(ROOT_PROPERTY[ROOT_PROPERTY_path_prefix],"%s",r->path_prefix);
       if (r){ if (r->rootpath_mountpoint) sprintf(tmp,"(%d) %s",1+r->seq_fsid,r->rootpath_mountpoint); else sprintf(tmp,"(%d) %16lx",1+r->seq_fsid,r->f_fsid);}
       C("Filesystem","%s",tmp);
       C("Free [GB]","%'9ld",((r->statvfs.f_frsize*r->statvfs.f_bfree)>>30));
@@ -94,9 +90,9 @@ static void log_print_roots(FILE *file){ /* n==0 for UNIX console with UTF8 else
     }
   }
   if (!html) P(ANSI_FG_GRAY);
-  P("\
-Explain table:\n\
-               "RP_PATH_PREFIX"  This adds to the beginning of all virtual files.\n\
+  P("If box-drawing chars are wrong then try 'export LANG=en_US'  or tmux 'tmux set-environment LANG en_US'\nExplain table:\n");
+  P(ROOT_PROPERTY[ROOT_PROPERTY_path_prefix]);
+  P("  This adds to the beginning of all virtual files.\n\
                Also the last path component of the root-path is used as the prefix unless a trailing slash is given.\n\
                This is consistent with the trailing slash semantics of UNIX tools like rsync, scp and cp.\n\n\
 Feature flags: W=Writable (First path)   R=Remote (Path starts with two slashes)  L=Preload files (option --preload)   1=one file system (no cross devices)  S=follow symlinks\n\
@@ -138,8 +134,8 @@ static void __viamacro_log_zpath(const char *fn,const int line,const char *msg, 
 }
 #define log_zpath(...) __viamacro_log_zpath(__func__,__LINE__,__VA_ARGS__) /*TO_HEADER*/
 
-#define FHANDLE_ALREADY_LOGGED_VIA_ZIP (1<<0)
-#define FHANDLE_ALREADY_LOGGED_FAILED_DIFF (1<<1)
+enum {FHANDLE_ALREADY_LOGGED_VIA_ZIP=1<<0,FHANDLE_ALREADY_LOGGED_FAILED_DIFF=1<<1};
+
 static bool fhandle_not_yet_logged(unsigned int flag,fHandle_t *d){
   if (d->already_logged&flag) return false;
   d->already_logged|=flag;
@@ -166,8 +162,7 @@ Options and arguments before the colon are interpreted by ZIPsFS.  Those after t
       -q quiet, no debug messages to stdout\n\
          Without the option -f (foreground) all logs are suppressed anyway.\n\n\
       -c  ");
-  //  for(char **s=WHEN_PRELOADRAM_S;*s;s++){if (s!=WHEN_PRELOADRAM_S) putchar('|');puts_stderr(*s);}
-  IF1(WITH_PRELOADRAM,for(int i=0;WHEN_PRELOADRAM_S[i];i++){ if (i) putc('|',stderr);puts_stderr(WHEN_PRELOADRAM_S[i]);});
+  IF1(WITH_PRELOADRAM,FOR(i,0,enum_when_preloadram_zip_N){ if (i) putc('|',stderr);puts_stderr(enum_when_preloadram_zip_S[i]);});
   puts_stderr("    When to read zip entries into RAM\n\
          seek: When the data is not read continuously\n\
          rule: According to rules based on the file name encoded in configuration.h\n\
@@ -206,11 +201,11 @@ static void log_flags_update(){
               "# The log messages go exclusively to stderr.\n"
               "# Changes take immediate effect\n#\n"
               "# BITS:\n#\n");
-      FOR(i,1,LOG_FLAG_LENGTH) fprintf(f,"%s=%d\n",LOG_FLAG_S[i],i);
+      FOR(i,1,enum_log_flags_N) fprintf(f,"%s=%d\n",enum_log_flags_S[i],i);
       fprintf(f,"activate_log(){\n  local flags=0 f\n  for f in $*; do ((flags|=(1<<f))); done\n  echo $flags |tee "p"\n}\n"
               "#\n# To source this script,  run\n#\n#    source "r
               "\n#\n# Usage example:\n#\n"
-              "#     activate_log $%s $%s \n",LOG_FLAG_S[LOG_FUSE_METHODS_ENTER],LOG_FLAG_S[LOG_FUSE_METHODS_EXIT]);
+              "#     activate_log $%s $%s \n",enum_log_flags_S[LOG_FUSE_METHODS_ENTER],enum_log_flags_S[LOG_FUSE_METHODS_EXIT]);
       fclose(f);
     }
   }
@@ -238,23 +233,15 @@ static void log_flags_update(){
 /**********************/
 /* logs per file type */
 /**********************/
-static void init_count_getattr(void){
-  static bool initialized;
-  if (!initialized){
-    initialized=true;
-    ht_set_mutex(mutex_fhandle,ht_init_with_keystore(&ht_count_by_ext,11,&mstore_persistent)); ht_set_id(HT_MALLOC_ht_count_by_ext,&ht_count_by_ext);
-  }
-}
 static void inc_count_by_ext(const char *path,enum enum_count_getattr field){
   lock(mutex_fhandle);
-  init_count_getattr();
-  if (path && ht_count_by_ext.length<1024){
+  if (path && _ht_count_by_ext.length<1024){
     const char *ext=strrchr(path+cg_last_slash(path)+1,'.');
     if (!ext || !*ext) ext="-No extension-";
-    ht_entry_t *e=ht_sget_entry(&ht_count_by_ext,ext,true);
+    ht_entry_t *e=ht_get_entry(&_ht_count_by_ext,ext,strlen(ext),0,true);
     assert(e!=NULL);assert(e->key!=NULL);
     int *counts=e->value;
-    if (!counts) e->value=counts=mstore_malloc(&mstore_persistent,sizeof(int)*enum_count_getattr_length,8);
+    if (!counts) e->value=counts=mstore_malloc(&_mstore_persistent,sizeof(int)*enum_count_getattr_length,8);
     if (counts) counts[field]++;
   }
   unlock(mutex_fhandle);
@@ -271,39 +258,36 @@ static const char *fileExtensionForPath(const char *path,const int len){
   return NULL;
 }
 static root_t root_dummy;
-static counter_rootdata_t *filetypedata_for_ext(const char *path,root_t *r){
+static counter_rootdata_t *filetypedata_for_ext(const char *vp,root_t *r){
+  if (!r) return NULL;
+  //if (DEBUG_NOW==DEBUG_NOW) return &r->filetypedata_dummy;
+  //log_entered_function("vp:'%s' r=%p",vp,r);
   ASSERT_LOCKED_FHANDLE();
-  assert(!r || r>=_root);
-  if (!r) r=&root_dummy;
   if(!r->filetypedata_initialized){
     assert(FILETYPEDATA_FREQUENT_NUM>_FILE_EXT_TO-_FILE_EXT_FROM);
-    init_count_getattr();
     r->filetypedata_initialized=true;
-    ht_set_mutex(mutex_fhandle,ht_init_with_keystore(&r->ht_filetypedata,10,&mstore_persistent)); ht_set_id(HT_MALLOC_file_ext,&r->ht_filetypedata);
-    ht_sset(&r->ht_filetypedata, r->filetypedata_all.ext=".*",&r->filetypedata_all);
-    ht_sset(&r->ht_filetypedata, r->filetypedata_dummy.ext="*",&r->filetypedata_dummy);
+    ht_sset(&r->ht_filetypedata, (r->filetypedata_all.ext=".*"), &r->filetypedata_all);
+    ht_sset(&r->ht_filetypedata, (r->filetypedata_dummy.ext="*"),&r->filetypedata_dummy);
   }
-  const int len=cg_strlen(path);
+  const int vp_l=cg_strlen(vp);
   counter_rootdata_t *d=NULL;
   const char *ext;
-  if (len){
+  if (vp_l){
     static int return_i;
-    if ((ext=(char*)config_some_file_path_extensions(path,len,&return_i))){
+    if ((ext=(char*)config_some_file_path_extensions(vp,vp_l,&return_i))){
       d=r->filetypedata_frequent+return_i;
-      if (!d->ext) ht_sset(&r->ht_filetypedata, d->ext=ext,d);
+      if (!d->ext) ht_sset(&r->ht_filetypedata,d->ext=ext,d);
     }
-    if(!d && (ext=(char*)fileExtensionForPath(path,len))){
+    if(!d && (ext=(char*)fileExtensionForPath(vp,vp_l))){
       static int i;
-      ht_entry_t *e=ht_sget_entry(&r->ht_filetypedata,ext, i<FILETYPEDATA_NUM);
-      if (!(d=e->value) && i<FILETYPEDATA_NUM  && (d=e->value=r->filetypedata+i++)){
-        d->ext=e->key=ht_sinternalize(&ht_intern_fileext,ext);
-      }
+      ht_entry_t *e=ht_get_entry(&r->ht_filetypedata,ext, strlen(ext),0,i<FILETYPEDATA_NUM);
+      if (e && !(d=e->value) && (d=e->value=r->filetypedata+i++)) d->ext=e->key;
     }
   }
   return d?d:&r->filetypedata_dummy;
 }
 #undef P
-
+// ht_sget_entry
 
 
 ////////////////////////////////////////////////////////////
@@ -343,7 +327,7 @@ static int log_fuse_function_fd(){
   return fd>2?fd:0;
 }
 static void log_fuse_function(const char *func, const virtualpath_t *vipa,int num){
-  IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER) log_exited_function("%s res:%d",vipa->vp,num);
+  IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER)log_exited_function("%s res:%d",vipa->vp,num);
   if (vipa->dir!=DIR_LOGGED  || vipa->special_file_id || !vipa->vp_l) return;
 
   if (*func=='_') func++;

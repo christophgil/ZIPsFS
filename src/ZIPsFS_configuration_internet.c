@@ -11,7 +11,7 @@
 #include "cg_download_file.c"
 #define warning(...)
 #endif
-#define INTERNET_VERSION_MAX 33
+enum { INTERNET_VERSION_MAX=33};
 
 
 /****************************************************************************************************************/
@@ -29,30 +29,30 @@ static bool config_internet_hardlink_filename(char *lnk_name, char *additional_l
   char *shorter=strstr(url,R);  if (shorter) shorter+=sizeof(R)-1;
 #undef R
   if (shorter && isFasta){
-	char relnotes[url_l+16];strcpy(relnotes,url); strcpy(relnotes+(shorter-url),"relnotes.txt");
-	log_verbose("Going to open '%s' ...",relnotes);
-	const int nread=cg_load_url(txt, sizeof(txt)-1,relnotes);
+    char relnotes[url_l+16];strcpy(relnotes,url); strcpy(relnotes+(shorter-url),"relnotes.txt");
+    log_verbose("Going to open '%s' ...",relnotes);
+    const int nread=cg_load_url(txt, sizeof(txt)-1,relnotes);
 #define S "UniProt Release "
-	const char *s=nread<=0?NULL:strstr(txt,S);
-	if (s){
-	  s+=sizeof(S)-1;
+    const char *s=nread<=0?NULL:strstr(txt,S);
+    if (s){
+      s+=sizeof(S)-1;
 #undef S
-	  while(*s && isspace(*s)) s++;
-	  while(d<lnk_name+INTERNET_VERSION_MAX && *s && !isspace(*s)) *d++=*s++;
-	}
+      while(*s && isspace(*s)) s++;
+      while(d<lnk_name+INTERNET_VERSION_MAX && *s && !isspace(*s)) *d++=*s++;
+    }
   }
   if (d==lnk_name){
-	time_t t=header_time;
-	d+=strftime(d,33,"%Y%m%d",gmtime(&t));
+    time_t t=header_time;
+    d+=strftime(d,33,"%Y%m%d",gmtime(&t));
   }
   *d++='_';
   const char *s=shorter?shorter:url;
   if (d+strlen(s)>lnk_name+max_l){
-	warning(WARN_NET,url,"Exceeding max path-length for hard link.");
-	*lnk_name=0;
+    warning(WARN_NET,url,"Exceeding max path-length for hard link.");
+    *lnk_name=0;
   }else{
-	for(;*s;s++,d++) *d=*s=='/'||*s==':'?',':*s;
-	*d=0;
+    for(;*s;s++,d++) *d=*s=='/'||*s==':'?',':*s;
+    *d=0;
   }
   strcpy(additional_link_dir,"/home/x/MS/Keep");
   log_exited_function("lnk_name: '%s'\n",lnk_name);
@@ -68,9 +68,9 @@ static bool config_internet_hardlink_filename(char *lnk_name, char *additional_l
 static bool config_internet_must_not_delete(const char *filename, const int filename_l){
   const char *e=filename+filename_l;
   const bool ret=
-	isdigit(*filename) &&
-	(!strcmp(e-6,".fasta") || !strcmp(e-9,".fasta.gz")) &&
-	strstr(filename,",reference_proteomes,");
+    isdigit(*filename) &&
+    (!strcmp(e-6,".fasta") || !strcmp(e-9,".fasta.gz")) &&
+    strstr(filename,",reference_proteomes,");
   log_exited_function("filename: '%s' %d  ",filename,ret);
   return ret;
 }
@@ -89,18 +89,18 @@ int main(int argc,char *argv[]){
 #define A "knowledgebase/reference_proteomes/Eukaryota/UP000005640/UP000005640_9606.fasta"
   char hardlink[PATH_MAX+1];
   char *uu[]={
-	  "https://ftp.uniprot.org/pub/databases/uniprot/current_release/"A,
-	  "ftp://ftp.expasy.org/databases/uniprot/CURRENT_RELEASE/"A,
-	  "ftp://ftp.expasy.org/databases/uniprot/current_release/"A,
-	  "ftp://ftp.expasy.org/databases/uniprot/current_release/"A".gz",
-	  "ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/"A,
-	  "ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/"A,
-	  "ftp://localhost/hello.txt",
-	NULL};
+      "https://ftp.uniprot.org/pub/databases/uniprot/current_release/"A,
+      "ftp://ftp.expasy.org/databases/uniprot/CURRENT_RELEASE/"A,
+      "ftp://ftp.expasy.org/databases/uniprot/current_release/"A,
+      "ftp://ftp.expasy.org/databases/uniprot/current_release/"A".gz",
+      "ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/"A,
+      "ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/"A,
+      "ftp://localhost/hello.txt",
+    NULL};
 #undef A
   for(char **u=(char**)uu; u&&*u; u++){
-	config_internet_hardlink_filename(hardlink,PATH_MAX,*u,time(NULL));
-	printf("\n"ANSI_INVERSE"%s"ANSI_RESET"  ->\n   %s  %s\n\n",*u,hardlink,*hardlink?GREEN_SUCCESS:RED_FAIL);
+    config_internet_hardlink_filename(hardlink,PATH_MAX,*u,time(NULL));
+    printf("\n"ANSI_INVERSE"%s"ANSI_RESET"  ->\n   %s  %s\n\n",*u,hardlink,*hardlink?GREEN_SUCCESS:RED_FAIL);
   }
   return 0;
 }

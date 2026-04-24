@@ -18,7 +18,8 @@ go1(){
         ### Make files
         -m) local f=$REMOTE1/$vp
             [[ ! -s $f ]] && $c -c $RP >$f
-            ls -l $f;;
+            ls -l $f
+            ;;
         ### Delete files
         -d) set -x
             rm -v $p 2>/dev/null
@@ -43,6 +44,8 @@ go(){
 
 main(){
     go -m
+    ls -l -d $REMOTE1/*
+    read -t 5 -r -p 'Made test files: Press Enter'
 
     [[ ! -s $RP ]] && mkdir -p ${RP%/*} && seq 1000 >$RP
     WITH_REMOVE=0

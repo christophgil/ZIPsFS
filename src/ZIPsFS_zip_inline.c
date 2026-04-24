@@ -1,126 +1,155 @@
-/////////////////////////////////////////////////////////////////
-/// COMPILE_MAIN=ZIPsFS                                       ///
-/// ZIP-entries flat not int directory                        ///
-/////////////////////////////////////////////////////////////////
-_Static_assert(WITH_ZIPINLINE,"");
+/*******************************************************************************/
+/* COMPILE_MAIN=ZIPsFS                                                         */
+/* ZIP-entries flat in the parent directory  directory                         */
+/* In contrast to show the zip file as a folder with suffix .Content           */
+/*******************************************************************************/
 
 
-static bool find_realpath_try_inline(zpath_t *zpath, const char *vp, root_t *r){
-  zpath->entry_path=zpath_newstr(zpath);
-  if (!zpath_strcat(zpath,vp+cg_last_slash(vp)+1)) return false;
-  EP_L()=zpath_commit(zpath);
+_Static_assert(WITH_ZIPFLAT,"");
+
+
+
+/************************************************************/
+/* PARAMETER:                                               */
+/* zpath: With VP which has been set.                       */
+/*        The RP will be set on success.                    */
+/* rule:  The caller will let rule run from 0 to ... until  */
+/* RETURN:                                                  */
+/* NO:No match but there are more rules to be tested.       */
+/* ZERO: No match. No more rules                            */
+/* YES: Match                                               */
+/************************************************************/
+static yes_zero_no_t find_realpath_try_zipflat_rule(zpath_t *zpath, root_t *r, const int rule){
+  char *append=NULL;
+  const int len=config_containing_zipfile_of_virtual_file(rule,VP(),VP_L(),&append);
+  if (len<0) return ZERO;
+  zpath_reset_keep_VP(zpath);
+  ZPATH_NEWSTR(virtualpath_without_entry);
+  if (!ZPATH_STRCAT_N(VP(),len) || !ZPATH_STRCAT(append)) return ZERO;
+  ZPATH_COMMIT_HASH(virtualpath_without_entry);
+  ZPATH_NEWSTR(entry_path);
+  if (!ZPATH_STRCAT(VP()+cg_last_slash(VP())+1)) return ZERO;
+  //EP_L()=zpath_commit(zpath);
+  ZPATH_COMMIT(entry_path);
   const bool ok=test_realpath(0,ZP_TRY_ZIP|ZP_RESET_IF_NEXISTS,zpath,r);
-  IF_LOG_FLAG(LOG_ZIP_INLINE) if (cg_is_regular_file(RP()))log_exited_function("rp: %s vp: %s ep: %s ok: %s",RP(),vp,EP(),yes_no(ok));
-  return ok;
+  IF_LOG_FLAG(LOG_ZIPFLAT) if (cg_is_regular_file(RP()))log_exited_function("rp: %s vp: %s ep: %s ok: %s",RP(),VP(),EP(),yes_no(ok));
+  return ok?YES:NO;
 }
-static yes_zero_no_t find_realpath_try_inline_rules(zpath_t *zpath,char *append, root_t *r){
-  const char *vp=VP();
-  const int vp_l=VP_L();
-  for(int rule=0;;rule++){ /* ZIP-entries inlined. ZIP-file itself not shown in listing. Occurs for Sciex mass-spec */
-	const int len=config_containing_zipfile_of_virtual_file(rule,vp,vp_l,&append);
-	if (!len) break;
-	zpath_reset_keep_VP(zpath);
-	zpath->virtualpath_without_entry=zpath_newstr(zpath);
-	if (!zpath_strncat(zpath,vp,len) || !zpath_strcat(zpath,append)) return NO;
-	ZPATH_COMMIT_HASH(zpath,virtualpath_without_entry);
-	const bool ok=find_realpath_try_inline(zpath,vp,r);
-	if (ok) return YES;
+
+
+
+static yes_zero_no_t find_realpath_try_zipflat_rules(zpath_t *zpath, root_t *r){
+  //log_entered_function(" VP:%s  root:%s",VP(),rootpath(r));
+  yes_zero_no_t ret=ZERO;
+  FOR(rule,0,99){ /* ZIP-entries inlined. ZIP-file itself not shown in listing. Occurs for Sciex mass-spec */
+    const yes_zero_no_t ok=find_realpath_try_zipflat_rule(zpath,r,rule);
+    if (ok==ZERO) break;
+    if (ok==YES){ ret=YES;break;}
+    if (zpath->flags&ZP_OVERFLOW){ ret=NO;break;}
   }
-  return ZERO;
+  return ret;
 }
 
 
-
-
-
-static bool readdir_inline_from_cache(const int opt, const zpath_t *zpath, const char *u, void *buf, fuse_fill_dir_t filler,ht_t *no_dups){
+/*****************************************************************************/
+/* Asynchronous reading to avoid long responds time when reading directories */
+/* Initially folders .Zip.Content are shown.                                 */
+/* With the time these folders get replaced by the inlined zipentries.       */
+/*****************************************************************************/
+static bool readdir_zipflat_from_cache(const int opt, const zpath_t *zpath_parentdir, const char *zipfilename, void *buf, fuse_fill_dir_t filler,ht_t *no_dups){
   directory_t dir={0};
-  zpath_t *zp2=directory_init_zpath(&dir,NULL);
-  if (!zpath_strcat(zp2,RP()) || !zpath_strcat(zp2,"/") || !zpath_strcat(zp2,u)) return false;
-  zp2->realpath_l=zpath_commit(zp2);
-  zp2->root=zpath->root;
-
-
-  LOCK_N(mutex_dircache, const bool ok=dircache_directory_from_cache(&dir));
+  directory_init_zpath(&dir,NULL);
+  zpath_init_vp(&dir.dir_zpath,ZP_VP(zpath_parentdir),zpath_parentdir->virtualpath_l, zipfilename);
+  bool ok=test_realpath(0,0,&dir.dir_zpath,zpath_parentdir->root);
+  if (ok){ LOCK(mutex_dircache,  ok=dircache_directory_from_cache(&dir));}
   if (!ok){
-	directory_to_queue(&dir);
+    directory_to_queue(&dir);
   }else{
-	struct stat st;
-	FOR(j,0,dir.core.files_l){/* Embedded zip file */
-	  const char *n2=dir.core.fname[j];
-	  if (n2 && !strchr(n2,'/')){
-		stat_init(&st,(Nth0(dir.core.fflags,j)&DIRENT_ISDIR)?-1:Nth0(dir.core.fsize,j),&zpath->stat_rp);
-		//st.st_ino=make_inode(zpath->stat_rp.st_ino,zpath->root,Nth(dir.core.finode,j,j),RP());
-		st.st_ino=zpath_make_inode(zpath,Nth(dir.core.finode,j,j));
-		char n[MAX_PATHLEN+1];
-		const int n_l=zipentry_placeholder_expand(n,n2,u,NULL);
-		if (config_containing_zipfile_of_virtual_file(0,n,n_l,NULL)) filler_add(opt,filler,buf,n,n_l,ZPATH_FILLDIR_SFX(zpath),&st,no_dups);
-	  }
-	}
-	directory_destroy(&dir);
+    struct stat st;
+    FOR(j,0,dir.core.files_l){/* Embedded zip file */
+      const char *n2=dir.core.fname[j];
+      if (n2 && !strchr(n2,'/')){
+        stat_init(&st,(Nth0(dir.core.fflags,j)&DIRENT_ISDIR)?-1:Nth0(dir.core.fsize,j),&zpath_parentdir->stat_rp);
+        //st.st_ino=make_inode(zpath_parentdir->stat_rp.st_ino,zpath_parentdir->root,Nth(dir.core.finode,j,j),RP());
+        st.st_ino=zpath_make_inode(zpath_parentdir,Nth(dir.core.finode,j,j));
+        char n[MAX_PATHLEN+1];
+        const int n_l=zipentry_placeholder_expand(n,n2,zipfilename,NULL);
+        if (config_containing_zipfile_of_virtual_file(0,n,n_l,NULL)>=0) filler_add(opt,filler,buf,n,n_l,ZPATH_FILLDIR_SFX(zpath_parentdir),&st,no_dups);
+      }
+    }
+    directory_destroy(&dir);
   }
   return ok;
 }
-
-
-
-#if WITH_ZIPINLINE_CACHE
-static const char *zinline_cache_vpath_to_zippath(const char *vp,const int vp_l){
-  cg_thread_assert_locked(mutex_dircache);
-  const char *zip=ht_numkey_get(&ht_zinline_cache_vpath_to_zippath,hash32(vp,vp_l),vp_l);
-  //static int count; if (zip && !count++)log_debug_now("%s vp: %s zip: %s",success_or_fail(zip),vp,zip);
-  if (!zip) return NULL;
-  /* validation because we rely on hash only */
-  const char *vp_name=vp+cg_last_slash(vp)+1;
-  const int len=config_containing_zipfile_of_virtual_file(0,vp_name,strlen(vp_name),NULL);
-  return strncmp(vp_name,zip+cg_last_slash(zip)+1,len)?NULL:zip;
-}
-static yes_zero_no_t zipinline_find_realpath(zpath_t *zpath,const long which_roots){
-  const char *vp=VP();
-  const int vp_l=VP_L();
-  if (!vp_l) return 0;
-  foreach_root(r) if (which_roots&(1<<rootindex(r))){
-	//log_entered_function("%s  root:%s",VP(), rootpath(r));
-	char zip[MAX_PATHLEN+1]; *zip=0;
-	LOCK(mutex_dircache,const char *z=zinline_cache_vpath_to_zippath(vp,vp_l); if (z) strcpy(zip,z));
-
-	//log_debug_now("%s  root:%s zip:'%s'",VP(), rootpath(r),zip);
-
-	if (*zip && !strncmp(zip,r->rootpath,r->rootpath_l) && zip[r->rootpath_l]=='/'  && wait_for_root_timeout(r)){
-	  zpath_reset_keep_VP(zpath);
-	  zpath->virtualpath_without_entry=zpath_newstr(zpath);
-	  if (!zpath_strcat(zpath,zip+r->rootpath_l)) return NO;
-	  ZPATH_COMMIT_HASH(zpath,virtualpath_without_entry);
-	  //log_entered_function("%s  root:%s   find_realpath_try_inline:%d",VP(), rootpath(r),find_realpath_try_inline(zpath,vp,r));
-	  if (find_realpath_try_inline(zpath,vp,r)) return YES;
-	}
+#if WITH_ZIPFLATCACHE
+/********************************************************/
+/* Example for match ext=".wiff" and ext_rp=".wiff.Zip" */
+/********************************************************/
+static int _what_rule_matches_zipfile_name(const char *ext, const char *ext_rp, const int ext_rp_l){
+  const int ext_l=strlen(ext);
+  char *append;
+  FOR(rule,0,99){
+    const int len=config_containing_zipfile_of_virtual_file(rule,ext,ext_l,&append);
+    if (len<0) break;
+    const int append_l=strlen(append);
+    if (len+append_l!=ext_rp_l ||
+        len && strncmp(ext,ext_rp,len) ||  /* Usually len is 0 */
+        strncmp(ext_rp+ext_rp_l-append_l,append,append_l)) continue;
+    //log_debug_now("rule:%d  ext:%s ext_rp:%s   len:%d append:%s",rule,ext,ext_rp,len,append);
+    return rule;
   }
-  return ZERO;
+  return -1;
 }
-static void to_cache_vpath_to_zippath(directory_t *dir){
-  if (!DIR_VP_L(dir) || dir->cached_vp_to_zip++) return;
+/**********************************************************************************/
+/* Given a virtual path - what could be the containtaining Zip file?              */
+/* Usually several possibilities (rule number) of Zip files to be probed.         */
+/* The goal is to reduce calls to lstat() for possible Zip files.                 */
+/* We are storing the (rule + one) in a hashmap                                   */
+/* The key is formed from hash code of the virtual path. We accept key collision. */
+/**********************************************************************************/
+static void zipflatcache_store_allentries_of_dir(directory_t *dir){
+  if (dir->cached_vp_to_zip++) return; /* Only once */
   const zpath_t *zpath=&dir->dir_zpath;
-  cg_thread_assert_locked(mutex_dircache);
-  if (DIR_IS_ZIP(dir) && config_skip_zipfile_show_zipentries_instead(RP(),RP_L())){
-	struct directory_core *dc=&dir->core;
-	static char u[PATH_MAX+1], vp[PATH_MAX+1];
-	const int vp0_l=VP_L()-EP_L(); /* Virtual length without Zipentry */
-	//log_debug_now("VP: %s %d EP: %s %d   vp0_l: %d    ",VP(),VP_L(), EP(),EP_L(),  vp0_l);
-	ASSERT(vp0_l>0);
-	memcpy(vp,VP(),vp0_l); /* Virtual path without zipentry is common prefix */
-	RLOOP(i,dc->files_l){
-	  const char *n=dc->fname[i];
-	  if (!n || strchr(n,'/')) continue; /* Only ZIP entries in root directory */
-	  const int u_l=zipentry_placeholder_expand(u,n,RP(),dir);
-	  const int vp_l=vp0_l+u_l;
-	  memcpy(vp+vp0_l,u,u_l);  vp[vp_l]=0;
-	  //log_debug_now(ANSI_FG_MAGENTA"u=%s   vp: %s"ANSI_RESET,u,vp);
-	  ht_numkey_set(&ht_zinline_cache_vpath_to_zippath,hash32(vp,vp_l),vp_l,RP());
-	} /* Note: We are not storing vp. We rely on its hash value and accept collisions. */
+  if (VP_L() && zpath->root && DIR_IS_TRY_ZIP() && config_skip_zipfile_show_zipentries_instead(RP(),RP_L())){
+    cg_thread_assert_locked(mutex_dircache);
+    const char *ext_rp=strchr(RP()+cg_last_slash(RP())+1,'.'); /* For example ".wiff.Zip" */
+    if (!ext_rp) return;
+    const int ext_rp_l=strlen(ext_rp);
+    //log_debug_now(" RP:%s dot:%s",RP(),rp_ext);
+    static char u[PATH_MAX+1], vp[PATH_MAX+1];
+    const int vp0_l=VP_L()-EP_L(); /* Virtual length without Zipentry */
+    //log_debug_now("VP: %s %d EP: %s %d   vp0_l: %d    ",VP(),VP_L(), EP(),EP_L(),  vp0_l);
+    ASSERT(vp0_l>0);
+    memcpy(vp,VP(),vp0_l); /* Virtual path without zipentry is common prefix */
+    RLOOP(i,dir->core.files_l){
+      const char *n=dir->core.fname[i];
+      if (!n || *n!=PLACEHOLDER_NAME || strchr(n,'/')) continue; /* Only ZIP entries in root directory */
+      const long rule=_what_rule_matches_zipfile_name(n+1,ext_rp,ext_rp_l);
+      if (rule<0) continue;
+      const int u_l=zipentry_placeholder_expand(u,n,RP(),dir), vp_l=vp0_l+u_l;
+      memcpy(vp+vp0_l,u,u_l);  vp[vp_l]=0;
+      //log_debug_now(ANSI_FG_MAGENTA"u=%s   vp: %s rule:%ld"ANSI_RESET,u,vp,rule);
+      ht_numkey_set(&zpath->root->ht_zipflatcache_vpath_to_rule,hash32(vp,vp_l),vp_l,(const void*)(rule+1));
+    } /* Note: We are not storing vp. We rely on its hash value and accept collisions. */
   }
 }
 
-static void zipinline_cache_drop_vp(const char *vp, const int vp_l){
-  ht_numkey_set(&ht_zinline_cache_vpath_to_zippath,hash32(vp,vp_l),vp_l,NULL);
+/**********************************************************************************/
+/* We retrieve the rule number from the hashmap and probe the resulting zip path. */
+/**********************************************************************************/
+static bool zipflatcache_find_realpath(zpath_t *zpath,const long which_roots){
+  if (!VP_L() || config_containing_zipfile_of_virtual_file(0,VP(),VP_L(),NULL)<0) return false;
+  foreach_root(r){
+    if (!(which_roots&(1<<rootindex(r)))) continue;
+    LOCK_N(mutex_dircache,const long rule=((long)ht_numkey_get(&r->ht_zipflatcache_vpath_to_rule,hash32(VP(),VP_L()),VP_L()))-1);
+    //if (rule>=0 && find_realpath_try_zipflat_rule(zpath,r,rule)==YES)log_debug_now(GREEN_SUCCESS"%s rule:%ld",VP(),rule);
+    if (rule>=0 && find_realpath_try_zipflat_rule(zpath,r,rule)==YES) return true;
+  }
+  return false;
 }
-#endif //WITH_ZIPINLINE_CACHE
+
+
+static void zipflatcache_drop(zpath_t *zpath){
+  if (zpath->root) ht_numkey_set(&zpath->root->ht_zipflatcache_vpath_to_rule,hash32(VP(),VP_L()),VP_L(),NULL);
+}
+#endif //WITH_ZIPFLATCACHE

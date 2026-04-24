@@ -17,27 +17,26 @@
 #include "cg_exec_pipe.c"
 
 #define E(msg) perror(__FILE__":"STRINGIZE(__LINE__)" "msg);
-#define COPY_FLAGS_BEGIN         (1<<14)
-#define COPY_HEADER              (1<<14)
-#define COPY_USE_DOT_URL_FILE    (1<<15)
-#define COPY_ADD_STDERR          (1<<16)
-_Static_assert(!(COMPRESSION_MASK&COPY_FLAGS_BEGIN),"COMPRESSION_MASK");
 
-#define _CG_DOWNLOAD_URL_CMD 16
+enum {COPY_HEADER=1<<14,COPY_USE_DOT_URL_FILE=1<<15,COPY_ADD_STDERR=1<<16};
+#define _COPY_FLAGS_BEGIN (COPY_HEADER)
+_Static_assert(!(COMPRESSION_MASK&_COPY_FLAGS_BEGIN),"COMPRESSION_MASK");
+
+enum {_CG_DOWNLOAD_URL_CMD=16};
 static long cg_read_fd(const int in, const int out,void (*progress)(void*), void *progress_para){
   errno=0;
   char buf[16*1024];
   int n;
   long count=0;
   for (int i=0; (n=read(in,buf,sizeof(buf)-1))>0; i++){
-	if (progress) progress(progress_para);
-	cg_fd_write(out,buf,n);
-	count+=n;
-	if (DEBUG_THROTTLE_DOWNLOAD){
-	  //if (!(i%16))
-	  fputc('l',stderr);
-	  usleep(10*1000);
-	}
+    if (progress) progress(progress_para);
+    cg_fd_write(out,buf,n);
+    count+=n;
+    if (WITH_DEBUG_THROTTLE_DOWNLOAD){
+      //if (!(i%16))
+      fputc('l',stderr);
+      usleep(10*1000);
+    }
   }
   close(in);
   return n<0?-1:count;
@@ -78,25 +77,25 @@ static bool cg_download_url(const int opt_and_compress, const char *url, const c
   bool ok=true;
 
   if (iCompress){
-	const char *decomp[DECOMPRESS_CMD_MAX+1]={0};
-	if (iCompress!=COMPRESSION_GZ) cg_cmd_decompress(iCompress,decomp,NULL);
-	ok=cg_exec_pipe(cmd,NULL,
-					*decomp?decomp:_PSEUDO_CMD_ZLIB,
-					// style: Condition '*decomp' is always false [knownConditionTrueFalse]
-					fdout,progress,progress_para);
-	if (!ok) log_warn("cg_exec_pipe %s",cmd[0]);
+    const char *decomp[DECOMPRESS_CMD_MAX+1]={0};
+    if (iCompress!=COMPRESSION_gz) cg_cmd_decompress(iCompress,decomp,NULL);
+    log_debug_now("cmd0=%s",decomp[0]);
+    ok=cg_exec_pipe(cmd,NULL,
+                    *decomp?decomp:_PSEUDO_CMD_ZLIB,
+                    // style: Condition '*decomp' is always false [knownConditionTrueFalse]
+                    fdout,progress,progress_para);
+    if (!ok) log_warn("cg_exec_pipe %s",cmd[0]);
   }else{
-	ok=cg_fork_exec(cmd,NULL,0,fdout,0);
+    ok=cg_fork_exec(cmd,NULL,0,fdout,0);
   }
   if (!outfile) return ok;
   close(fdout);
   if (!ok){
-	log_errno("curl  decompress: '%s'",cg_compression_file_ext(iCompress,NULL));
-	unlink(tmp);
-	return false;
+    log_errno("curl  decompress: '%s'",cg_compression_file_ext(iCompress,NULL));
+    unlink(tmp);
+    return false;
   }
   ok=cg_rename_tmp_outfile(tmp,outfile);
-  //log_exited_function("outfile: %s  %s",outfile,success_or_fail(ok));
   return ok;
 }
 
@@ -132,16 +131,16 @@ static bool cg_url_by_dot_url_file(char url[PATH_MAX+1], const char *root_or_nul
   const int tmp_l=stpcpy(stpcpy(tmp,root_or_null?root_or_null:""),vp)-tmp;
   tmp[tmp_l]=0;
   for(int i=tmp_l+1; --i>=root_l;){
-	if (i!=tmp_l && tmp[i]!='/') continue;
-	stpcpy(tmp+i,".URL");
-	int url_l=cg_read_file_into_buffer(url,MAX_PATHLEN,tmp);
-	while(url_l>0 && isspace(url[url_l-1])) url_l--;
-	if (url_l>0){
-	  url[url_l]=0;
-	  if (url_l+vp_l-i+root_l>PATH_MAX){ log_error("URL exceeds "STRINGIZE(PATH_MAX)" characters: %s",tmp);continue;}
-	  stpcpy(url+url_l,vp+i-root_l);
-	  return true;
-	}
+    if (i!=tmp_l && tmp[i]!='/') continue;
+    stpcpy(tmp+i,".URL");
+    int url_l=cg_read_file_into_buffer(url,MAX_PATHLEN,tmp);
+    while(url_l>0 && isspace(url[url_l-1])) url_l--;
+    if (url_l>0){
+      url[url_l]=0;
+      if (url_l+vp_l-i+root_l>PATH_MAX){ log_error("URL exceeds "STRINGIZE(PATH_MAX)" characters: %s",tmp);continue;}
+      stpcpy(url+url_l,vp+i-root_l);
+      return true;
+    }
   }
   return false;
 }
@@ -150,16 +149,16 @@ static bool cg_url_by_dot_url_file(char url[PATH_MAX+1], const char *root_or_nul
 static bool cg_url_associated_with_path(char url[PATH_MAX+1], const char *path){
   *url=0;
   if (cg_isURL(path)){
-	strcpy(url,path);
-	return true;
+    strcpy(url,path);
+    return true;
   }
   if (cg_url_by_dot_url_file(url,NULL,path)) return true;
   { // AVFS
-	const char *found=strstr(path,"/#ftp:");
-	if (found){
-	  strcpy(url,strchr(found,':')+1);
-	  return true;
-	}
+    const char *found=strstr(path,"/#ftp:");
+    if (found){
+      strcpy(url,strchr(found,':')+1);
+      return true;
+    }
   }
   return false;
 }
@@ -176,9 +175,9 @@ static bool cg_copy_url_or_file(const int iCompress,const char *src_path_without
   char src[PATH_MAX+1];
   if (!realpath(src_path,src)){ log_errno("%s",src_path); return false;}
   {
-	char url[PATH_MAX+1];
-	cg_url_associated_with_path(url,src);
-	if (*url) return cg_download_url(iCompress,url,dst,progress,progress_para);
+    char url[PATH_MAX+1];
+    cg_url_associated_with_path(url,src);
+    if (*url) return cg_download_url(iCompress,url,dst,progress,progress_para);
   }
   errno=0;
   TMP_FOR_FILE(tmp,dst);
@@ -186,14 +185,15 @@ static bool cg_copy_url_or_file(const int iCompress,const char *src_path_without
   if (out<3){ log_errno("open(%s)",tmp); return false;}
   const char *cmd[DECOMPRESS_CMD_MAX+1];
   bool ok=cg_cmd_decompress(iCompress,cmd,src);
+  log_debug_now("cmd0=%s ok=%i",cmd[0],ok);
   if (ok){
-	ok=cg_fork_exec(cmd,NULL,0,out,0);
+    ok=cg_fork_exec(cmd,NULL,0,out,0);
   }else{
-	const int in=open(src,O_RDONLY);
-	if (in<3){ log_errno("open(%s)",tmp); return false;}
-	ok=(iCompress==COMPRESSION_GZ?
-		cg_read_gzip(in,out,progress,progress_para):
-		cg_read_fd(  in,out,progress,progress_para))>0;
+    const int in=open(src,O_RDONLY);
+    if (in<3){ log_errno("open(%s)",tmp); return false;}
+    ok=(iCompress==COMPRESSION_gz?
+        cg_read_gzip(in,out,progress,progress_para):
+        cg_read_fd(  in,out,progress,progress_para))>0;
   }
   if (!ok) {unlink(tmp);return false;}
   return cg_rename_tmp_outfile(tmp,dst);
@@ -226,11 +226,11 @@ static void cg_httpheader_parse_line(cg_httpheader_t *h,const char *line){
   // cppcheck-suppress-macro unreadVariable
 #define F(P,code) I(P) {h->is_header=true;const int l=sizeof(P)-1;{code;}}
   I("HTTP"){
-	const char *spc=strchr(line,' ');
-	if (spc){
-	  const int code=atoi(spc+1);
-	  if (code==404) h->is_404=true;
-	}
+    const char *spc=strchr(line,' ');
+    if (spc){
+      const int code=atoi(spc+1);
+      if (code==404) h->is_404=true;
+    }
   }
   F("Last-Modified:",h->mtime=cg_httpheader_parse_date(line+l));
   F("Content-Length:",h->size=atol(line+l));
@@ -244,14 +244,14 @@ static void cg_httpheader_parse_line(cg_httpheader_t *h,const char *line){
 static int cg_httpheader_read_fd(cg_httpheader_t *h,const int fd){
   FILE *f=fdopen(fd,"r");
   if (!f){
-	log_errno("fdopen(%d)",fd);
-	close(fd);
-	return errno?errno:-1;
+    log_errno("fdopen(%d)",fd);
+    close(fd);
+    return errno?errno:-1;
   }
   char *line=NULL;
   size_t line_l=0;
   for(ssize_t n; (n=getline(&line,&line_l,f))!=-1; ){
-	cg_httpheader_parse_line(h,line);
+    cg_httpheader_parse_line(h,line);
   }
   fclose(f);
   return 0;
@@ -267,9 +267,9 @@ static int _pipe_curl(const int opt_curl,const char *url, int pipefd[2], int *pi
 *pid=fork();
   if (*pid<0){ E("fork()"); return false;}
   if (!*pid){
-	close(pipefd[0]);
-	int ev=cg_exec(cmd,NULL,0,pipefd[1],0);
-	exit(ev);
+    close(pipefd[0]);
+    int ev=cg_exec(cmd,NULL,0,pipefd[1],0);
+    exit(ev);
   }
   close(pipefd[1]);
   return pipefd[0];
@@ -298,13 +298,13 @@ static int cg_load_url(char *txt, const int txt_capacity,const char *url){
   bool ok=true;
   int nread=0;
   if (pipefd[0]<=0){
-	log_errno("fd<=0  url:'%s'",url);
-	ok=false;
+    log_errno("fd<=0  url:'%s'",url);
+    ok=false;
   }else{
-	for(int n; txt_capacity>nread && (n=read(pipefd[0],txt+nread,txt_capacity-nread))>0;){
-	  nread+=n;
-	}
-	close(pipefd[0]);
+    for(int n; txt_capacity>nread && (n=read(pipefd[0],txt+nread,txt_capacity-nread))>0;){
+      nread+=n;
+    }
+    close(pipefd[0]);
   }
   txt[nread]=0;
   return CG_WAITPID(pid,url) && ok?nread:-1;
@@ -361,61 +361,61 @@ int main(int argc, char *argv[]){
 #define PRINT_URL_DST() fprintf(stderr,"%s -> %s\n",url,dst)
   switch(8){
   case 0:{
-	bool ok=cg_copy_url_or_file(0,fsrc,fdst,NULL,NULL);
-	log_msg("cg_copy_url_or_file(%d,%s,%s)  ok:%d",0,fsrc,fdst,ok);
+    bool ok=cg_copy_url_or_file(0,fsrc,fdst,NULL,NULL);
+    log_msg("cg_copy_url_or_file(%d,%s,%s)  ok:%d",0,fsrc,fdst,ok);
   }
-	break;
+    break;
   case 1:
-	cg_copy_url_or_file(0,argv[1],"/dev/stdout",NULL,NULL);
-	sleep_exit();
-	break;
+    cg_copy_url_or_file(0,argv[1],"/dev/stdout",NULL,NULL);
+    sleep_exit();
+    break;
   case 2:{
-	cg_httpheader_t h={0};
-	cg_httpheader_load(&h,url);
-	fprintf(stderr,"url:%s\n",url);
-	cg_httpheader_print("",&h,stderr);
-	fprintf(stderr,"\n");
+    cg_httpheader_t h={0};
+    cg_httpheader_load(&h,url);
+    fprintf(stderr,"url:%s\n",url);
+    cg_httpheader_print("",&h,stderr);
+    fprintf(stderr,"\n");
   }
-	break;
+    break;
   case 3:{
-	cg_httpheader_t h={0};
-	cg_httpheader_from_file(&h,argv[1]);
-	fprintf(stderr,"file:%s\n",argv[1]);
-	cg_httpheader_print("",&h,stderr);
-	fprintf(stderr,"\n");
+    cg_httpheader_t h={0};
+    cg_httpheader_from_file(&h,argv[1]);
+    fprintf(stderr,"file:%s\n",argv[1]);
+    cg_httpheader_print("",&h,stderr);
+    fprintf(stderr,"\n");
   }
-	break;
+    break;
   case 4:{
-	int in=open(filegz,O_RDONLY);
-	if (in==-1){ perror(urlgz); return 1;}
-	cg_read_gzip(in,STDOUT_FILENO,NULL,NULL);
-	sleep_exit();
+    int in=open(filegz,O_RDONLY);
+    if (in==-1){ perror(urlgz); return 1;}
+    cg_read_gzip(in,STDOUT_FILENO,NULL,NULL);
+    sleep_exit();
   }
-	break;
+    break;
   case 5:{
-	char url[PATH_MAX+1];
-	cg_url_by_dot_url_file(url,argv[1],argv[2]);
-	printf(" url:'%s'\n",url);
+    char url[PATH_MAX+1];
+    cg_url_by_dot_url_file(url,argv[1],argv[2]);
+    printf(" url:'%s'\n",url);
   }
-	break;
+    break;
   case 6:
-	FOR(i,1,argc) printf("%'ld ->%'ld ",atol(argv[i]), closest_with_identical_digits(atol(argv[i])));
-	break;
+    FOR(i,1,argc) printf("%'ld ->%'ld ",atol(argv[i]), closest_with_identical_digits(atol(argv[i])));
+    break;
   case 7:
-	printf("curl: %d \n",is_installed_curl());
-	break;
+    printf("curl: %d \n",is_installed_curl());
+    break;
   case 8:{
-	int ret=0;
-	PRINT_URL_DST();
-	ret=cg_download_url(COPY_HEADER*000|COMPRESSION_BZ2,urlbz2,dst,NULL,NULL);
-	log_exited_function(ANSI_FG_RED"ret: %d"ANSI_RESET,ret);
+    int ret=0;
+    PRINT_URL_DST();
+    ret=cg_download_url(COPY_HEADER*000|COMPRESSION_bz2,urlbz2,dst,NULL,NULL);
+    log_exited_function(ANSI_FG_RED"ret: %d"ANSI_RESET,ret);
   }
-	break;
+    break;
   case 9:{
-	char txt[999];
-	const int nread=cg_load_url(txt, sizeof(txt)-1,"ftp://ftp.expasy.org/databases/uniprot/current_release/relnotes.txt");
-	log_msg("read: %d",nread);
-	if (read>0) write(STDOUT_FILENO,txt,nread);
+    char txt[999];
+    const int nread=cg_load_url(txt, sizeof(txt)-1,"ftp://ftp.expasy.org/databases/uniprot/current_release/relnotes.txt");
+    log_msg("read: %d",nread);
+    if (read>0) write(STDOUT_FILENO,txt,nread);
   }
   }
 

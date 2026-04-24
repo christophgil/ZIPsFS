@@ -7,23 +7,20 @@ _Static_assert(WITH_FILECONVERSION,"");
 
 
 
-#define FOREACH_FILECONVERSION_RULE(i,ac)  fileconversion_rule_t *ac; for(int i=0;(ac=config_fileconversion_rules()[i]);i++)\
-																			 if (_writable_path_l || (ac->out==STDOUT_TO_MMAP||ac->out==STDOUT_TO_MMAP))
-//#define FOREACH_FILECONVERSION_RULE(ac)  for(const fileconversion_rule_t *ac=*config_fileconversion_rules(); ac&&ac->_idx; ac++)
+#define FOREACH_FILECONVERSION_RULE(i,ac)  struct fileconversion_rule *ac; for(int i=0;(ac=config_fileconversion_rules()[i]);i++)\
+                                                                             if (_writable_path_l || (ac->out==STDOUT_TO_MMAP||ac->out==STDOUT_TO_MMAP))
+//#define FOREACH_FILECONVERSION_RULE(ac)  for(const struct fileconversion_rule *ac=*config_fileconversion_rules(); ac&&ac->_idx; ac++)
 #define fileconversion_filecontent_append_nodestroy(ff,s,s_l)  _fileconversion_filecontent_append(TXTBUFSGMT_NO_FREE,ff,s,s_l)
 #define fileconversion_filecontent_append(ff,s,s_l)  _fileconversion_filecontent_append(0,ff,s,s_l)
 #define fileconversion_filecontent_append_munmap(ff,s,s_l)  _fileconversion_filecontent_append(TXTBUFSGMT_MUNMAP,ff,s,s_l)
 
-
-
-
 enum enum_fileconversion_capture_output{STDOUT_DROP,              /* Ignore standard output stream of the external app */
-							 STDOUT_TO_OUTFILE,        /* Save the standard output stream of the external app in the output file */
-							 STDOUT_TO_MALLOC,         /* Temporarily keep the standard output stream of the external app in the RAM until the file pointer is closed. */
-							 STDOUT_TO_MMAP,           /* Same.  STDOUT_TO_MALLOC uses the application heap which has a limited size. Use STDOUT_TO_MALLOC for larger outputs. */
-							 STDOUT_MERGE_WITH_STDERR};/* Both  output streams of the external app go to the outputfile-dot-log  file. */
+                                        STDOUT_TO_OUTFILE,        /* Save the standard output stream of the external app in the output file */
+                                        STDOUT_TO_MALLOC,         /* Temporarily keep the standard output stream of the external app in the RAM until the file pointer is closed. */
+                                        STDOUT_TO_MMAP,           /* Same.  STDOUT_TO_MALLOC uses the application heap which has a limited size. Use STDOUT_TO_MALLOC for larger outputs. */
+                                        STDOUT_MERGE_WITH_STDERR};/* Both  output streams of the external app go to the outputfile-dot-log  file. */
 
-typedef struct fileconversion_rule{
+struct fileconversion_rule{
   FILECONVERSION_RULE_CUSTOM_FIELDS;
   /* internal start fields start with underscore */
   int _seqnum;                            /* 0, 1, 2, 3 ... */
@@ -44,7 +41,7 @@ typedef struct fileconversion_rule{
   bool no_redirect;                   /* Do not redirect the stdout / stderr. Was required for one Windows executable under wine. The process freezes when stdout st redirected. */
   const char *patterns[FILECONVERSION_FILENAME_PATTERNS], *exclude_patterns[FILECONVERSION_FILENAME_PATTERNS];
   /* Filter files with literal strings (No regex!). At least one of  patterns[0], [1], [2], must match.
-	 Each string can contain several patterns separated by colon ":" which must all match (logical AND).*/
+     Each string can contain several patterns separated by colon ":" which must all match (logical AND).*/
   const char *ends;                   /* Any ending must match. Omitted if processed in config_fileconversion_run().  */
   const char *ends_ic;                /* Same, ignore case. */
   const char *ext;                    /* Extension of generated file.  The extension is appended at the input file to form the out-file. */
@@ -52,15 +49,16 @@ typedef struct fileconversion_rule{
   const char **env;                   /* Environment. Optional NULL terminated string array like .env={MY_PATH="/local/app/lib",NULL}. See execle(). */
   const char *cmd[FILECONVERSION_ARGV+1];      /* Command line parameters. */
   bool fsize_not_remember;                  /* The file size is normally saved in a hashmap and reused. */
-  bool fsize_is_multiple_of_infile;         /* Guessed file size is    fileconversion_rule_t.estimated_filesize  multiplied with file size of input file */
+  bool fsize_is_multiple_of_infile;         /* Guessed file size is    struct fileconversion_rule.estimated_filesize  multiplied with file size of input file */
   bool ignore_errfile;                      /* Ignore outputfile.fail.txt  from previous failure and do not return EPIPE. Instead try computation again. */
   bool generated_file_hasnot_infile_ext;    /* Strip file ext from the infile and append the ext for the output file. */
   bool generated_file_inherits_infile_ext;  /* Strip file ext from the infile and append the ext for the output file. */
   bool security_check_filename;             /* Prevent code injection by funny file names */
-} fileconversion_rule_t;
+};
+
 
 struct fileconversion_files{
-  const fileconversion_rule_t *rule;
+  const struct fileconversion_rule *rule;
   char virtualpath[MAX_PATHLEN+1];
   int virtualpath_l;
   char vinfiles[FILECONVERSION_MAX_INFILES+1][MAX_PATHLEN+1];
@@ -73,8 +71,7 @@ struct fileconversion_files{
   char log[MAX_PATHLEN+1];
   char fail[MAX_PATHLEN+1];
   textbuffer_t *fc_txtbuf;
-	enum enum_fileconversion_capture_output out;   /* Like fileconversion_rule.out.  Corrected for low memory */
-
+  enum enum_fileconversion_capture_output out;   /* Like fileconversion_rule.out.  Corrected for low memory */
 };
 
 

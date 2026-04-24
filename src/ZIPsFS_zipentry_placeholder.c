@@ -10,7 +10,7 @@ static const char *zipentry_placeholder_insert(char *s,const char *u, directory_
   if (dir->has_file_containing_placeholder) return u;
   const int ulen=cg_strlen(u);
   if (!ulen || ulen>MAX_PATHLEN) return u;
-  const char *rp=DIR_RP(dir);
+  const char *rp=DIR_RP();
   ASSERT(!strchr(u,PLACEHOLDER_NAME));
   const char *replacement=rp+cg_last_slash(rp)+1, *dot=cg_strchrnul(replacement,'.');
     const int replacement_l=dot-replacement;
