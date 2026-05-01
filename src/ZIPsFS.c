@@ -1197,7 +1197,8 @@ static void fhandle_destroy_now(fHandle_t *d){
   if (!is_preloadram_shared_with_other(d) &&          /* Another fHandle_t could take care of struct preloadram instance later */
       !preloadram_try_destroy(d)) return;             /* struct preloadram is NULL or has been destroyed */
 #endif //WITH_PRELOADRAM
-  IF1(WITH_FILECONVERSION,const int fd=d->fd_real; d->fd_real=0;if (fd) close(fd));
+  IF1(WITH_FILECONVERSION, const int fd=d->fd_real; d->fd_real=0;if (fd) close(fd));
+
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,transient_cache_destroy(d));
   fhandle_zip_fclose(d);
   my_zip_close(d->zip_archive,D_RP(d));
@@ -1665,6 +1666,13 @@ static int xmp_rmdir(const char *vpath){
 /* Upon  1st invocation of  xmp_read(), the fHandle_t object is subjected to function fhandle_prepare_in_fuse_read_or_write().  */
 /* This is when the file content is generated and stored in RAM or on disk                                       */
 /***************************************************************************************************************/
+static bool is_serialized(zpath_t *zpath){
+  return zpath->root && (zpath->dir==DIR_SERIALIZED ||
+                         (DEBUG_NOW==DEBUG_NOW  && ENDSWITH(VP(),VP_L(),".raw") &&
+                          strstr(_mnt,"ms03.charite.de/union/test/")
+                          //strstr(_mnt,"cgille/tmp/")
+                          ));
+}
 static int open_for_reading(const virtualpath_t *vipa, struct fuse_file_info *fi){
   const int id=vipa->special_file_id;
   uint64_t fh=0;
@@ -1680,7 +1688,7 @@ static int open_for_reading(const virtualpath_t *vipa, struct fuse_file_info *fi
     int ff=IF1(WITH_CCODE, config_c_open(C_FLAGS_FROM_ZPATH(zpath),VP(),VP_L())?FHANDLE_PREPARE_ONCE_IN_RW|FHANDLE_IS_CCODE:)0;
     IF1(WITH_INTERNET_DOWNLOAD,  if (!ff && vipa->dir==DIR_INTERNET_UPDATE) ff=FHANDLE_PREPARE_ONCE_IN_RW);
     if (!ff && find_realpath(FILLDIR_FROM_OPEN,zpath)  IF1(WITH_FILECONVERSION,&&!fileconversion_remove_if_not_uptodate(zpath))){
-      if (zpath->dir==DIR_SERIALIZED) ff=FHANDLE_PREPARE_ONCE_IN_RW;
+      if (is_serialized(zpath)) ff=FHANDLE_PREPARE_ONCE_IN_RW;
       IF1(WITH_PRELOADDISK,      if (!ff && (is_preloaddisk_zpath(zpath) || vipa->dir==DIR_PRELOADED_UPDATE || path_with_compress_sfx_exists(zpath))) ff=FHANDLE_PREPARE_ONCE_IN_RW);
       IF1(WITH_PRELOADRAM,       if (preloadram_advise(zpath,0)) ff=FHANDLE_WITH_PRELOADRAM);
     }else{
@@ -2044,7 +2052,7 @@ static off_t fhandle_read_zip(char *buf, const off_t size, const off_t offset,fH
 /* Called on first invocation of xmp_write() or xmp_read() for fHandle_t object */
 /* Maybe generate file content                                                  */
 /********************************************************************************/
-#define D_HAS_TB() IF01(WITH_PRELOADRAM,false,(d->preloadram && d->preloadram->txtbuf))
+#define D_HAS_TB() (IF01(WITH_PRELOADRAM,false,d->preloadram && d->preloadram->txtbuf))
 static void fhandle_prepare_in_fuse_read_or_write(fHandle_t *d,const int open_flags){
   if (!(d->flags&FHANDLE_PREPARE_ONCE_IN_RW)) return;
   zpath_t *zpath=&d->zpath;
@@ -2053,7 +2061,7 @@ static void fhandle_prepare_in_fuse_read_or_write(fHandle_t *d,const int open_fl
   IF1(WITH_PRELOADDISK, if (d->zpath.dir==DIR_PRELOADED_UPDATE) preloaddisk_uptodate_or_update(d));
   IF1(WITH_CCODE, c_file_content_to_fhandle(d));
   IF1(WITH_FILECONVERSION, if (open_flags==O_RDONLY && (d->flags&FHANDLE_IS_FILECONVERSION)) fileconversion_run(d));
-  bool do_open=!ZPF(ZP_IS_ZIP) && !D_HAS_TB();
+  bool do_open=!ZPF(ZP_IS_ZIP) && !D_HAS_TB() && !(d->flags&FHANDLE_WITH_PRELOADRAM);
   {
     int Done=0;
     if (D_HAS_TB()){                                                                                     Done=1; d->flags|=FHANDLE_PRELOADRAM_COMPLETE;}
@@ -2065,6 +2073,8 @@ static void fhandle_prepare_in_fuse_read_or_write(fHandle_t *d,const int open_fl
           if (!Done && is_preloaddisk_zpath(&d->zpath)){ Done=1;  do_open=false; d->errorno=preloaddisk(d);});
     }
   }
+
+  //log_debug_now("d: %s  FHANDLE_WITH_PRELOADRAM:%d   do_open:%d",D_VP(d),d->flags&FHANDLE_WITH_PRELOADRAM,do_open);
   if (do_open){
     if (!RP_L() || !zpath_stat(0,zpath)){
       if (!d->errorno) d->errorno=ENOENT;
@@ -2095,23 +2105,25 @@ static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const s
   if (d){
     ASSERT(d->is_busy>=0);
     fhandle_prepare_in_fuse_read_or_write(d,O_RDONLY);
+    //DIE_DEBUG_NOW("VP:%s    %p   fd_real:%d ",vipa->vp, d, d->fd_real);
     if (d->errorno) return d->errorno;
     if (d->fd_real) goto d_has_fd;
-    if (d->zpath.dir==DIR_SERIALIZED && D_ROOT(d)){
+    if (is_serialized(&d->zpath) && D_ROOT(d)){
       root_t *r=D_ROOT(d);
       while (true){
-          LOCK_N(mutex_serialized_fileaccess, if (!r->serialized_fileaccess_fd) r->serialized_fileaccess_fd=fd; const bool ok=(r->serialized_fileaccess_fd==fd));
-          if (ok) break;
-          log_verbose("Waiting for mutex_serialized_fileaccess: %s  fd=%d  serialized_fd=%d",vipa->vp, fd,r->serialized_fileaccess_fd);
-          usleep(1E6);
-        }
+        LOCK_N(mutex_serialized_fileaccess, if (!r->serialized_fileaccess_fd) r->serialized_fileaccess_fd=fd; const bool ok=(r->serialized_fileaccess_fd==fd));
+        if (ok) break;
+        log_verbose("Waiting for mutex_serialized_fileaccess: %s  fd=%d  serialized_fd=%d",vipa->vp, fd,r->serialized_fileaccess_fd);
+        usleep(1E6);
+      }
     }
 #if WITH_PRELOADRAM
     /* Improve performance: Avoid overhead of preloadram_wait() if FHANDLE_PRELOADRAM_COMPLETE */
     if (d->flags&FHANDLE_PRELOADRAM_COMPLETE){
       LOCK(mutex_fhandle, nread=preloadram_read(buf,d,offset,offset+size));
     };
-    if (d->flags&FHANDLE_WITH_PRELOADRAM)  nread=preloadram_wait_and_read(buf,size,offset,d);
+    //DIE_DEBUG_NOW("VP:%s    DIR_PREFETCH_RAM:  %d", D_VP(d), (d->flags&FHANDLE_WITH_PRELOADRAM));
+    if (d->flags&FHANDLE_WITH_PRELOADRAM) nread=preloadram_wait_and_read(buf,size,offset,d);
 #endif //WITH_PRELOADRAM
     if (nread<0 && (d->zpath.flags&ZP_IS_ZIP)){
       pthread_mutex_lock(&d->mutex_read); /* Why lock: Comming here same/different fHandle_t instances and various pthread_self() */

@@ -54,8 +54,15 @@ static bool statForVirtualpathAndRootpath(struct stat *st, const char *vp, const
 
 static bool preloadram_advise(zpath_t *zpath, const int additional_flags){
   cg_thread_assert_not_locked(mutex_fhandle);
+  if (zpath->dir==DIR_PREFETCH_RAM){
+    B=zpath->stat_rp.st_size;
+    return true;
+  }
   if (!zpath->root || _preloadram_policy==PRELOADRAM_NEVER)  return false;
-  if (ZPF(ZP_IS_ZIP) && _preloadram_policy==PRELOADRAM_ALWAYS) return true;
+  if (ZPF(ZP_IS_ZIP) /* && _preloadram_policy==PRELOADRAM_ALWAYS */){  // DEBUG_NOW
+         B=zpath->stat_vp.st_size;
+    return true;
+  }
    B=config_advise_preload_file_ram(additional_flags|
                                                     (ZPF(ZP_IS_COMPRESSEDZIPENTRY)?ADVISE_CACHE_IS_COMPRESSEDZIPENTRY:0)|
                                                     (ZPF(ZP_TRY_ZIP)?ADVISE_CACHE_IS_ZIPENTRY:0)|

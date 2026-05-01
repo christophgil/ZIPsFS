@@ -399,13 +399,14 @@ Also see ");    SF_FILE_REF(SFILE_NAMES[SFILE_README_PRELOADDISK_R]);
 #undef D
 #undef L
     break;
-  /* case SFILE_README_SERIALIZED: */
-  /*   C("Only one thread can read a fille from an upstream source at a time."); */
-  /*   // Serialized File Access, */
-  /*   break; */
-  /* case SFILE_README_PREFETCH_RAM: */
-  /*   C("All files will be loaded into RAM. "); */
-  /*   break; */
+   case SFILE_README_SERIALIZED:
+     C("Simultaneous reading of many files from harddisks may be inefficient\nand puts strain on hardware due to extensive head movements.\n\
+For files read from this location, only one thread can read  per root/upstream source at a time.\n\
+Serialized file access may be more efficient. Cave dead-locks!");
+     break;
+   case SFILE_README_PREFETCH_RAM:
+     C("All files from this folder or subfolders  will be prefetched into RAM. This may facilitate none-sequential reading files from several threads and from varying positions.");
+     break;
   case SFILE_README_PLAIN:
     C("This directory provides plain access to all files.\n	  - not expanding ZIP files.\n\n\nUseful for rapid navigation and searching.\n\n");
     break;
