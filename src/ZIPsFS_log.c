@@ -11,7 +11,7 @@ static void _rootdata_counter_inc(counter_rootdata_t *c, enum enum_counter_rootd
   if (c&&c->counts[f]<UINT32_MAX) atomic_fetch_add(c->counts+f,1);
 }
 static void fhandle_counter_inc( fHandle_t* d, enum enum_counter_rootdata f){
-  if (!d->filetypedata) d->filetypedata=filetypedata_for_ext(D_VP(d),d->zpath.root);
+  if (!d->filetypedata) d->filetypedata=filetypedata_for_ext(D_VP(d),D_ROOT(d));
   _rootdata_counter_inc(d->filetypedata,f);
 
 }

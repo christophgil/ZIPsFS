@@ -399,6 +399,13 @@ Also see ");    SF_FILE_REF(SFILE_NAMES[SFILE_README_PRELOADDISK_R]);
 #undef D
 #undef L
     break;
+  /* case SFILE_README_SERIALIZED: */
+  /*   C("Only one thread can read a fille from an upstream source at a time."); */
+  /*   // Serialized File Access, */
+  /*   break; */
+  /* case SFILE_README_PREFETCH_RAM: */
+  /*   C("All files will be loaded into RAM. "); */
+  /*   break; */
   case SFILE_README_PLAIN:
     C("This directory provides plain access to all files.\n	  - not expanding ZIP files.\n\n\nUseful for rapid navigation and searching.\n\n");
     break;

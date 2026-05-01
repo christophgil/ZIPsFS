@@ -517,7 +517,7 @@ static void *infloop_PTHREAD_PRELOAD(void *arg){
 #if WITH_TIMEOUT_PRELOADFILE && WITH_PRELOADRAM
 static bool preloadfile_time_exceeded(const char *func, const fHandle_t *d,const int counter){
   lock(mutex_fhandle);
-  root_t *r=d->zpath.root;
+  root_t *r=D_ROOT(d);
   assert(r!=NULL);
   time_t t=time(NULL)-ROOT_WHEN_ITERATED(r,PTHREAD_PRELOAD);
   unlock(mutex_fhandle);

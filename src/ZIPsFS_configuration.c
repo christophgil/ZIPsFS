@@ -159,6 +159,7 @@ static bool config_not_report_stat_error(const char *path,const int path_l){
 ///   > 0: Cache is advised and requires n bytes         ///
 ////////////////////////////////////////////////////////////
 static off_t config_advise_preload_file_ram(const int flags,const char *virtualpath, const int vp_l, const char *realpath,const int rp_l,const char *rootpath,const off_t filesize){
+  //  log_entered_function("virtualpath %s",virtualpath);
   const char *e=virtualpath+vp_l;
   if (vp_l>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e') return -1; /* The exe files hold the icon for File Explorer */
   if (flags&ADVISE_CACHE_BY_POLICY) return filesize;

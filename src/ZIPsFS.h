@@ -81,6 +81,7 @@ enum{
 #define DIR_EXCLUDE_FIRST_ROOT  DIR_ZIPsFS"/~1"
 
 
+
 #define DIR_PRELOADDISK_R        DIR_ZIPsFS"/lr"
 #define DIR_PRELOADDISK_RC       DIR_ZIPsFS"/lrc"
 #define DIR_PRELOADDISK_RZ       DIR_ZIPsFS"/lrz"
@@ -94,6 +95,11 @@ enum{
 #define DIR_INTERNET_UPDATE_L       (sizeof(DIR_INTERNET_UPDATE)-1)
 
 #define DIR_PLAIN                    DIR_ZIPsFS"/p"
+
+#define DIR_PREFETCH_RAM             DIR_ZIPsFS"/m"
+#define DIR_SERIALIZED               DIR_ZIPsFS"/s"
+
+
 
 #define DIR_INTERNET_GZ_L            (DIR_INTERNET_L+3)
 
@@ -156,6 +162,8 @@ enum enum_counter_rootdata{
   X("README_logging.txt",                DIR_LOGGED,            SFILE_README_LOGGING)\
   X("README_ZIPsFS_without_1st_root.txt",DIR_EXCLUDE_FIRST_ROOT,SFILE_README_EXCLUDE_FIRST_ROOT)\
   X("README_ZIPsFS_plain.txt",           DIR_PLAIN,             SFILE_README_PLAIN)\
+  X("README_ZIPsFS_serialized_file_access.txt",      DIR_SERIALIZED,        SFILE_README_SERIALIZED)\
+  X("README_ZIPsFS_prefetch_RAM.txt",    DIR_PREFETCH_RAM,      SFILE_README_PREFETCH_RAM)\
   X("README_ZIPsFS_net.html",            DIR_INTERNET,          SFILE_README_INTERNET)\
   X("_NET_FETCH_.ps1",                   DIR_INTERNET,          SFILE_NET_FETCH_PS)\
   X("_NET_FETCH_.command",               DIR_INTERNET,          SFILE_NET_FETCH_SH)\
@@ -207,8 +215,9 @@ const int SFILE_NAMES_L[]={0, XMACRO() 0};
     C(WARN_SEEK)C(WARN_ZIP)C(WARN_GETATTR)C(WARN_STAT)C(WARN_FHANDLE)C(WARN_DIRCACHE) C(WARN_PRELOADFILE) C(WARN_PRELOADRAM) C(WARN_PRELOADDISK)C(WARN_FORMAT)C(WARN_DEBUG)C(WARN_CHARS)\
     C(WARN_RETRY)C(WARN_FILECONVERSION)C(WARN_C)C(WARN_NET));\
   X(enum_root_thread,C(PTHREAD_NIL)C(PTHREAD_ASYNC)C(PTHREAD_PRELOAD)C(PTHREAD_DIRCACHE)C(PTHREAD_MISC));\
-  X(enum_mutex, C(mutex_nil)C(mutex_start_thread)C(mutex_fhandle)C(mutex_async)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_fileconversion_init)C(mutex_dircache_queue)\
-    C(mutex_log_count)C(mutex_crc)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)C(mutex_roots)C(mutex_log));\
+  X(enum_mutex,C(mutex_nil)C(mutex_start_thread)C(mutex_fhandle)C(mutex_async)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_fileconversion_init)C(mutex_dircache_queue)\
+       C(mutex_log_count)C(mutex_crc)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)\
+       C(mutex_roots)C(mutex_log)C(mutex_serialized_fileaccess));\
   X(enum_log_flags,C(LOG_DEACTIVATE_ALL)C(LOG_FUSE_METHODS_ENTER)C(LOG_FUSE_METHODS_EXIT)C(LOG_ZIP)C(LOG_ZIPFLAT)C(LOG_EVICT_FROM_CACHE)C(LOG_PRELOADRAM)C(LOG_REALPATH)C(LOG_FILECONVERSION)C(LOG_READ_BLOCK)\
     C(LOG_TRANSIENT_ZIPENTRY_CACHE)C(LOG_STAT)C(LOG_OPEN)C(LOG_OPENDIR)\
     C(LOG_INFINITY_LOOP_RESPONSE)C(LOG_INFINITY_LOOP_STAT)C(LOG_INFINITY_LOOP_PRELOADRAM)C(LOG_INFINITY_LOOP_DIRCACHE)C(LOG_INFINITY_LOOP_MISC));\
@@ -380,6 +389,7 @@ typedef struct{
   int probe_path_timeout,probe_path_response_ttl;
   int stat_timeout_seconds,readdir_timeout_seconds,openfile_timeout_seconds;
   const char **path_deny, **path_allow, **preload_extensions;
+  int serialized_fileaccess_fd;
 } root_t;
 
 ////////////////
@@ -477,27 +487,27 @@ typedef struct{
 
 #define ZPATH_ROOT_WRITABLE() (zpath->root && 0!=(zpath->root->writable))
 
-#define EP() (zpath->strgs+zpath->entry_path)
-#define EP_L() zpath->entry_path_l
-#define VP_L() zpath->virtualpath_l
 #define ZP_RP(zpath) ((zpath)->strgs+(zpath)->realpath)
-#define RP()         ((zpath)->strgs+(zpath)->realpath)
 #define ZP_VP(zpath) ((zpath)->strgs+(zpath)->virtualpath)
-#define VP()         ((zpath)->strgs+(zpath)->virtualpath)
-#define VP_HASH() zpath->virtualpath_hash
-
-#define RP_L() (zpath->realpath_l)
-#define VP0() (zpath->strgs+zpath->virtualpath_without_entry)
-#define VP0_L() zpath->virtualpath_without_entry_l
-#define D_VP(d) (d->zpath.strgs+d->zpath.virtualpath)
-#define D_VP0(d) (d->zpath.strgs+d->zpath.virtualpath_without_entry)
-#define D_VP0(d) (d->zpath.strgs+d->zpath.virtualpath_without_entry)
-#define D_VP_HASH(d) d->zpath.virtualpath_hash
-#define D_EP(d) (d->zpath.strgs+d->zpath.entry_path)
-#define D_EP_L(d) d->zpath.entry_path_l
-#define D_VP_L(d) d->zpath.virtualpath_l
-#define D_RP(d) (d->zpath.strgs+d->zpath.realpath)
-#define D_RP_L(d) (d->zpath.realpath_l)
+#define EP()         (zpath->strgs+zpath->entry_path)
+#define EP_L()       (zpath->entry_path_l)
+#define VP_L()       (zpath->virtualpath_l)
+#define RP()         (zpath->strgs+(zpath)->realpath)
+#define VP()         (zpath->strgs+(zpath)->virtualpath)
+#define VP_HASH()    (zpath->virtualpath_hash)
+#define RP_L()       (zpath->realpath_l)
+#define VP0()        (zpath->strgs+zpath->virtualpath_without_entry)
+#define VP0_L()      (zpath->virtualpath_without_entry_l)
+#define D_ROOT(d)    ((d)->zpath.root)
+#define D_VP(d)      ((d)->zpath.strgs+d->zpath.virtualpath)
+#define D_VP0(d)     ((d)->zpath.strgs+d->zpath.virtualpath_without_entry)
+#define D_VP0(d)     ((d)->zpath.strgs+d->zpath.virtualpath_without_entry)
+#define D_VP_HASH(d) ((d)->zpath.virtualpath_hash)
+#define D_EP(d)      ((d)->zpath.strgs+d->zpath.entry_path)
+#define D_EP_L(d)    ((d)->zpath.entry_path_l)
+#define D_VP_L(d)    ((d)->zpath.virtualpath_l)
+#define D_RP(d)      ((d)->zpath.strgs+d->zpath.realpath)
+#define D_RP_L(d)    ((d)->zpath.realpath_l)
 #define NEW_ZIPPATH(vipa)  zpath_t __zp={0},*zpath=&__zp;zpath_init(zpath,vipa)
 #define FIND_REALPATH(virtpath)    NEW_ZIPPATH(virtpath);  found=find_realpath(0,zpath);
 #define FIND_REALPATH_NOT_EXPAND_SYMLINK(virtpath)    NEW_ZIPPATH(virtpath); zpath->flags|=ZP_NOT_EXPAND_SYMLINKS;  found=find_realpath(0,zpath);
@@ -631,7 +641,7 @@ struct preloadram{
 #endif // WITH_PRELOADRAM
 
 
-#define  PRELOADFILE_ROOT_UPDATE_TIME(d,r,success)   if (d || r) root_update_time(r?r:d->zpath.root,success?PTHREAD_PRELOAD:-PTHREAD_PRELOAD,0)
+#define  PRELOADFILE_ROOT_UPDATE_TIME(d,r,success)   if (d || r) root_update_time(r?r:D_ROOT(d),success?PTHREAD_PRELOAD:-PTHREAD_PRELOAD,0)
 
 ////////////////////
 /// Directories  ///

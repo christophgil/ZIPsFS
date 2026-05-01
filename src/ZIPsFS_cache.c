@@ -66,7 +66,7 @@ static void dircache_directory_to_cache(directory_t *dir){
   cg_thread_assert_locked(mutex_dircache);
   if (DEBUG_NOW!=DEBUG_NOW){
     //if (DIR_VP_L()!=DIR_VP0_L() || strcmp(DIR_VP0(),DIR_VP())) log_entered_function("VP:'%s' %d VP0:'%s' %d",DIR_VP(),DIR_VP_L(),DIR_VP0(),DIR_VP0_L());
-    if (tdf_or_tdf_bin(DIR_VP0())) DIE_DEBUG_NOW("VP:'%s' %d VP0:'%s' %d",DIR_VP(),DIR_VP_L(),DIR_VP0(),DIR_VP0_L());
+    //if (tdf_or_tdf_bin(DIR_VP0())) DIE_DEBUG_NOW("VP:'%s' %d VP0:'%s' %d",DIR_VP(),DIR_VP_L(),DIR_VP0(),DIR_VP0_L());
 
   }
   //debug_assert_crc32_not_null(dir);

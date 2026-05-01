@@ -1134,7 +1134,7 @@ static void fhandle_init(fHandle_t *d, const zpath_t *zpath){
   pthread_mutex_init(&d->mutex_read,NULL);
   d->zpath=*zpath;
   d->zpath.flags|=ZP_IS_IN_FHANDLE;
-  d->filetypedata=filetypedata_for_ext(VP(),d->zpath.root);
+  d->filetypedata=filetypedata_for_ext(VP(),D_ROOT(d));
   d->flags|=FHANDLE_ACTIVE; /* Important; This must be the last assignment */
 }
 static fHandle_t* _fhandle_create_locked(const int flags,const uint64_t fh, const zpath_t *zpath){
@@ -1680,8 +1680,9 @@ static int open_for_reading(const virtualpath_t *vipa, struct fuse_file_info *fi
     int ff=IF1(WITH_CCODE, config_c_open(C_FLAGS_FROM_ZPATH(zpath),VP(),VP_L())?FHANDLE_PREPARE_ONCE_IN_RW|FHANDLE_IS_CCODE:)0;
     IF1(WITH_INTERNET_DOWNLOAD,  if (!ff && vipa->dir==DIR_INTERNET_UPDATE) ff=FHANDLE_PREPARE_ONCE_IN_RW);
     if (!ff && find_realpath(FILLDIR_FROM_OPEN,zpath)  IF1(WITH_FILECONVERSION,&&!fileconversion_remove_if_not_uptodate(zpath))){
+      if (zpath->dir==DIR_SERIALIZED) ff=FHANDLE_PREPARE_ONCE_IN_RW;
       IF1(WITH_PRELOADDISK,      if (!ff && (is_preloaddisk_zpath(zpath) || vipa->dir==DIR_PRELOADED_UPDATE || path_with_compress_sfx_exists(zpath))) ff=FHANDLE_PREPARE_ONCE_IN_RW);
-      IF1(WITH_PRELOADRAM,       if (!ff && _preloadram_policy!=PRELOADRAM_NEVER && (ZPF(ZP_IS_ZIP) || preloadram_advise(zpath,0))) ff=FHANDLE_WITH_PRELOADRAM);
+      IF1(WITH_PRELOADRAM,       if (preloadram_advise(zpath,0)) ff=FHANDLE_WITH_PRELOADRAM);
     }else{
       IF1(WITH_INTERNET_DOWNLOAD,if (!ff && net_is_internetfile(VP(),VP_L())) ff=FHANDLE_PREPARE_ONCE_IN_RW);
       IF1(WITH_FILECONVERSION,   if (!ff && fileconversion_check_infiles_exist(vipa)){ LOCK(mutex_fhandle, fileconversion_set_rp(zpath,vipa)); ff=FHANDLE_PREPARE_ONCE_IN_RW|FHANDLE_IS_FILECONVERSION;});
@@ -1708,7 +1709,6 @@ static int xmp_open(const char *vpath, struct fuse_file_info *fi){
 }
 static int _xmp_open(const virtualpath_t *vipa, struct fuse_file_info *fi){
   int res=0;
-
   if (vipa->special_file_id==SFILE_INFO){
     if (fi->flags&O_WRONLY) return -EPERM;
     const char *rp=print_info_file();
@@ -2097,7 +2097,15 @@ static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const s
     fhandle_prepare_in_fuse_read_or_write(d,O_RDONLY);
     if (d->errorno) return d->errorno;
     if (d->fd_real) goto d_has_fd;
-
+    if (d->zpath.dir==DIR_SERIALIZED && D_ROOT(d)){
+      root_t *r=D_ROOT(d);
+      while (true){
+          LOCK_N(mutex_serialized_fileaccess, if (!r->serialized_fileaccess_fd) r->serialized_fileaccess_fd=fd; const bool ok=(r->serialized_fileaccess_fd==fd));
+          if (ok) break;
+          log_verbose("Waiting for mutex_serialized_fileaccess: %s  fd=%d  serialized_fd=%d",vipa->vp, fd,r->serialized_fileaccess_fd);
+          usleep(1E6);
+        }
+    }
 #if WITH_PRELOADRAM
     /* Improve performance: Avoid overhead of preloadram_wait() if FHANDLE_PRELOADRAM_COMPLETE */
     if (d->flags&FHANDLE_PRELOADRAM_COMPLETE){
@@ -2119,7 +2127,6 @@ static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const s
       if (offset!=d->offset_expected) d->count_backward_seek++;
       d->offset_expected+=nread;
     }
-
   }
  d_has_fd: /* Normal reading from file descriptor  d->fd_real or fi->fh */
   if (nread<0){
@@ -2139,22 +2146,24 @@ static int xmp_release(const char *vpath, struct fuse_file_info *fi){ // cppchec
   ASSERT(fi!=NULL);
   FUSE_PREAMBLE(vpath);
   int count_backward_seek=0;
-  const uint64_t fh=fi->fh;
-  if (fh>=FD_ZIP_MIN){
+  const uint64_t fd=fi->fh;
+  if (fd>=FD_ZIP_MIN){
     lock(mutex_fhandle);
-    fHandle_t *d=fhandle_get(&vipa,fh);
+    fHandle_t *d=fhandle_get(&vipa,fd);
     if (d){
       count_backward_seek=d->count_backward_seek;
+      root_t *r=D_ROOT(d);
+      LOCK(mutex_serialized_fileaccess, if (r && r->serialized_fileaccess_fd==fd) r->serialized_fileaccess_fd=0);
       fhandle_destroy(d);
     }
     unlock(mutex_fhandle);
-  }else if (fh>2){
-    maybe_evict_from_filecache(fh,vipa.vp,vipa.vp_l,NULL,0);
-    if ((er=close(fh))){
-      warning(WARN_OPEN|WARN_FLAG_ERRNO,vpath,"close(fh: %llu)",fh);
-      cg_print_path_for_fd(fh);
+  }else if (fd>2){
+    maybe_evict_from_filecache(fd,vipa.vp,vipa.vp_l,NULL,0);
+    if ((er=close(fd))){
+      warning(WARN_OPEN|WARN_FLAG_ERRNO,vpath,"close(fd: %llu)",fd);
+      cg_print_path_for_fd(fd);
     }
-    count_backward_seek=fh<COUNT_BACKWARD_SEEK?_count_backward_seek[fh]:0;
+    count_backward_seek=fd<COUNT_BACKWARD_SEEK?_count_backward_seek[fd]:0;
   }
   log_fuse_function(__func__,&vipa,count_backward_seek);
   return -er;
@@ -2404,4 +2413,4 @@ int main(const int argc,const char *argv[]){
 //  fileconversion-fsize
 //  _ht_fsize
 // fileconversion_rule_t fileconversion_rule
-// WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
+// WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT  preloadram_now
