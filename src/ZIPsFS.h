@@ -217,7 +217,7 @@ const int SFILE_NAMES_L[]={0, XMACRO() 0};
   X(enum_root_thread,C(PTHREAD_NIL)C(PTHREAD_ASYNC)C(PTHREAD_PRELOAD)C(PTHREAD_DIRCACHE)C(PTHREAD_MISC));\
   X(enum_mutex,C(mutex_nil)C(mutex_start_thread)C(mutex_fhandle)C(mutex_async)C(mutex_mutex_count)C(mutex_mstore_init)C(mutex_fileconversion_init)C(mutex_dircache_queue)\
        C(mutex_log_count)C(mutex_crc)C(mutex_memUsage)C(mutex_dircache)C(mutex_idx)C(mutex_validchars)C(mutex_special_file)C(mutex_validcharsdir)C(mutex_textbuffer_usage)\
-       C(mutex_roots)C(mutex_log)C(mutex_serialized_fileaccess));\
+       C(mutex_roots)C(mutex_log));\
   X(enum_log_flags,C(LOG_DEACTIVATE_ALL)C(LOG_FUSE_METHODS_ENTER)C(LOG_FUSE_METHODS_EXIT)C(LOG_ZIP)C(LOG_ZIPFLAT)C(LOG_EVICT_FROM_CACHE)C(LOG_PRELOADRAM)C(LOG_REALPATH)C(LOG_FILECONVERSION)C(LOG_READ_BLOCK)\
     C(LOG_TRANSIENT_ZIPENTRY_CACHE)C(LOG_STAT)C(LOG_OPEN)C(LOG_OPENDIR)\
     C(LOG_INFINITY_LOOP_RESPONSE)C(LOG_INFINITY_LOOP_STAT)C(LOG_INFINITY_LOOP_PRELOADRAM)C(LOG_INFINITY_LOOP_DIRCACHE)C(LOG_INFINITY_LOOP_MISC));\
@@ -280,7 +280,8 @@ typedef struct{
 
 struct fileconversion_files;
 // ---
-#define XMACRO_DIRECTORY_ARRAYS_WITHOUT_FNAME()    X(fsize,off_t); X(fmtime,uint64_t);X(fcrc,uint32_t);X(fflags,uint8_t);X(finode,uint64_t);
+//X(fcrc,uint32_t);
+#define XMACRO_DIRECTORY_ARRAYS_WITHOUT_FNAME()    X(fsize,off_t); X(fmtime,uint64_t);X(fflags,uint8_t);X(finode,uint64_t);
 #define XMACRO_DIRECTORY_ARRAYS()                  X(fname,char *); XMACRO_DIRECTORY_ARRAYS_WITHOUT_FNAME();
 #define X(field,type) type *field;
 typedef struct{
@@ -389,7 +390,7 @@ typedef struct{
   int probe_path_timeout,probe_path_response_ttl;
   int stat_timeout_seconds,readdir_timeout_seconds,openfile_timeout_seconds;
   const char **path_deny, **path_allow, **preload_extensions;
-  int serialized_fileaccess_fd;
+  atomic_int serialized_fileaccess;
 } root_t;
 
 ////////////////
@@ -424,7 +425,19 @@ typedef struct{
   int zipfile_l, zipfile_cutr;
   uint32_t is_decompressed;
   IF1(WITH_PRELOADRAM,off_t preloadram_need_bytes);
-  enum {ZP_NOT_EXPAND_SYMLINKS=1<<12,ZP_IS_PATHINFO=1<<14,ZP_IS_IN_FHANDLE=1<<18,_ZP_KEEP_NOT_RESET=1<<20,ZP_DOES_NOT_EXIST=1<<21,ZP_IS_ZIP=1<<22,ZP_IS_COMPRESSEDZIPENTRY=1<<23,ZP_FROM_TRANSIENT_CACHE=1<<24,ZP_OVERFLOW=1<<25,ZP_CHECKED_EXISTENCE_COMPRESSED=1<<26,ZP_TRANSIENT_CACHE_ONCE=1<<27,ZP_RESET_IF_NEXISTS=1<<28,ZP_TRY_ZIP=1<<29,
+  enum {ZP_NOT_EXPAND_SYMLINKS=1<<12,
+        ZP_IS_PATHINFO=1<<14,
+        ZP_IS_IN_FHANDLE=1<<18,
+        _ZP_KEEP_NOT_RESET=1<<20,
+        ZP_DOES_NOT_EXIST=1<<21,
+        ZP_IS_COMPRESSEDZIPENTRY=1<<22,
+        ZP_FROM_TRANSIENT_CACHE=1<<23,
+        ZP_OVERFLOW=1<<24,                       /* The fixed size string buffer of zpath_t was too small. Path too long */
+        ZP_CHECKED_EXISTENCE_COMPRESSED=1<<25,   /* Check only once*/
+        ZP_TRANSIENT_CACHE_ONCE=1<<26,
+        ZP_RESET_IF_NEXISTS=1<<27,
+        ZP_IS_ZIP=1<<28,                         /* Indicates a ZIP entry after realpath found */
+        ZP_TRY_ZIP=1<<29,                        /* Instructs   test_realpath() to consider Zip */
         ZP_TRY_FILECONVERSION=1<<30} flags;
 #define ZPF(f) (zpath->flags&(f))
 }  zpath_t;
@@ -443,7 +456,7 @@ typedef struct{
 
 typedef struct{
   zip_file_t *zf;
-  struct zip *za;
+  zip_t *za;
   zpath_t azf_zpath;
 } async_zipfile_t;
 static const async_zipfile_t async_zipfile_empty;
@@ -464,6 +477,7 @@ typedef struct{
 
 #define DIR_ROOT()    ((dir)->dir_zpath.root)
 #define DIR_IS_TRY_ZIP() (((dir)->dir_zpath.flags&(ZP_TRY_ZIP|ZP_IS_ZIP))!=0)
+#define DIR_IS_ZIP() (((dir)->dir_zpath.flags&ZP_IS_ZIP)!=0)
 #define X(field,type) type _stack_##field[DIRECTORY_DIM_STACK];
   XMACRO_DIRECTORY_ARRAYS();
 #undef X
@@ -555,14 +569,14 @@ static virtualpath_t empty_virtualpath;
 
 typedef struct{
   uint64_t fhandle_fh;
-  int fd_real, count_backward_seek;
+  int fd_real, count_backward_seek, count_calls_read;
   off_t offset_expected;
-  struct zip *zip_archive;
+  zip_t *zip_archive;
   zip_file_t *zip_file;
   zpath_t zpath;
   volatile time_t accesstime;
   volatile int errorno;
-  enum {FHANDLE_ACTIVE=1<<0,FHANDLE_DESTROY_LATER=1<<1,FHANDLE_PREPARE_ONCE_IN_RW=1<<2,FHANDLE_SEEK_FW_FAIL=1<<3,FHANDLE_SEEK_BW_FAIL=1<<4,FHANDLE_WITH_TRANSIENT_ZIPENTRY_CACHES=1<<5,FHANDLE_IS_FILECONVERSION=1<<6,FHANDLE_WITH_PRELOADRAM=1<<8,FHANDLE_WAITED_FREE_RAM=1<<9,FHANDLE_PRELOADRAM_COMPLETE=1<<10,FHANDLE_SPECIAL_FILE=1<<11,FHANDLE_IS_CCODE=1<<12,FHANDLE_PRELOADFILE_QUEUE=1<<13,FHANDLE_PRELOADFILE_RUN=1<<14} flags;
+  enum {FHANDLE_ACTIVE=1<<0,FHANDLE_DESTROY_LATER=1<<1,FHANDLE_PREPARE_ONCE_IN_RW=1<<2,FHANDLE_SEEK_FW_FAIL=1<<3,FHANDLE_SEEK_BW_FAIL=1<<4,FHANDLE_WITH_TRANSIENT_ZIPENTRY_CACHES=1<<5,FHANDLE_IS_FILECONVERSION=1<<6,FHANDLE_WITH_PRELOADRAM=1<<8,FHANDLE_WAITED_FREE_RAM=1<<9,FHANDLE_PRELOADRAM_COMPLETE=1<<10,FHANDLE_SPECIAL_FILE=1<<11,FHANDLE_IS_CCODE=1<<12,FHANDLE_PRELOADFILE_QUEUE=1<<13,FHANDLE_PRELOADFILE_RUN=1<<14,FHANDLE_IS_MUTEX_INITIALIZED=1<<15,FHANDLE_SERIALIZED=1<<16} flags;
   uint8_t already_logged;
   volatile int64_t offset,n_read;
   volatile atomic_int is_busy; /* Increases when entering xmp_read. If greater 0 then the instance must not be destroyed. */
@@ -572,7 +586,7 @@ typedef struct{
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,ht_t *ht_transient_cache);
   IF1(WITH_PRELOADRAM, struct preloadram * volatile preloadram);
   atomic_int volatile is_preloading;
-  IF1(WITH_FILECONVERSION, enum {FILECONVERSION_UNINITILIZED,FILECONVERSION_SUCCESS,FILECONVERSION_FAIL} fileconversion_state);
+  IF1(WITH_FILECONVERSION, enum{FILECONVERSION_UNINITILIZED,FILECONVERSION_SUCCESS,FILECONVERSION_FAIL} fileconversion_state);
 }  fHandle_t;
 static const fHandle_t FHANDLE_EMPTY;
 
@@ -670,3 +684,11 @@ struct preloadram{
 */
 
 enum {CACHE_TAKES_PRECEDENCE_TTL=600};
+
+
+#define warning_zip_f(path,zf,txt) _viamacro_warning_zipf(__func__,__LINE__, path,NULL,zf,txt)
+#define warning_zip_a(path,za,txt) _viamacro_warning_zipf(__func__,__LINE__, path,za,NULL,txt)
+
+
+//#define WITH_DEBUG_NO_SERIALIZED 0
+#define WITH_DEBUG_ALL_ZIP_PRELOADRAM 1 // PRELOADRAM_ALWAYS

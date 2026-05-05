@@ -138,7 +138,7 @@ static void *infloop_PTHREAD_DIRCACHE(void *arg){
       log_verbose("Should not happen r:'%s'  RP:'%s'  VP:'%s'",rootpath(r),RP(),VP());
     }else{
       ASSERT(zpath->stat_rp.st_ino);
-      //log_debug_now(GREEN_SUCCESS"find_realpath_for_root %s %s  ZP_TRY_ZIP=%d zipfile_l=%d",vipa.vp,RP(),(zpath->flags&ZP_TRY_ZIP),zpath->zipfile_l);
+      //log_debug_now(GREEN_SUCCESS"find_realpath_for_root %s %s  ZP_IS_ZIP=%d zipfile_l=%d",vipa.vp,RP(),(zpath->flags&ZP_IS_ZIP),zpath->zipfile_l);
       zpath->flags|=ZP_IS_ZIP;
       directory_t dir={0};
       directory_init_zpath(&dir,zpath);
@@ -150,10 +150,14 @@ static void *infloop_PTHREAD_DIRCACHE(void *arg){
   }
 }
 #endif //WITH_DIRCACHE
-static void async_zipfile_init(async_zipfile_t *zip,const zpath_t *zpath){
+static void async_zipfile_init(async_zipfile_t *zip, fHandle_t *d){
   *zip=async_zipfile_empty;
-  zip->azf_zpath=*zpath;
+  zip->azf_zpath=d->zpath;
+  zip->za=d->zip_archive;
 }
+
+
+
 static void openzip_now(async_zipfile_t *zip){
   if (!zip) return;
   zpath_t *zpath=&zip->azf_zpath;

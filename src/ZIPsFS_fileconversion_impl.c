@@ -193,7 +193,7 @@ static int _fileconversion_realinfiles(struct fileconversion_files *ff,const str
       NEW_ZIPPATH(&vipa);
       //if (find_realpath(0,zpath,NULL) || (zpath_init(zpath,vin+DIR_FILECONVERSION_L),find_realpath(0,zpath,NULL))){
       if (!find_realpath(0,zpath)) return 0; //goto end;
-      //if ((ZPF(ZP_TRY_ZIP))) strcpy(stpcpy(ff->rinfiles[i],_mnt) ,VP());     /* TODO entry size */
+      //if ((ZPF(ZP_IS_ZIP))) strcpy(stpcpy(ff->rinfiles[i],_mnt) ,VP());     /* TODO entry size */
       //      else strcpy(ff->rinfiles[i],RP());                                                                       /* TODO recursion? */
       strcpy(stpcpy(ff->rinfiles[i],_mnt),VP());
       ff->infiles_size_sum+=(ff->infiles_stat[i]=zpath->stat_vp).st_size;

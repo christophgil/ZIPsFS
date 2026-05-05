@@ -260,8 +260,6 @@ static const char *fileExtensionForPath(const char *path,const int len){
 static root_t root_dummy;
 static counter_rootdata_t *filetypedata_for_ext(const char *vp,root_t *r){
   if (!r) return NULL;
-  //if (DEBUG_NOW==DEBUG_NOW) return &r->filetypedata_dummy;
-  //log_entered_function("vp:'%s' r=%p",vp,r);
   ASSERT_LOCKED_FHANDLE();
   if(!r->filetypedata_initialized){
     assert(FILETYPEDATA_FREQUENT_NUM>_FILE_EXT_TO-_FILE_EXT_FROM);
@@ -329,7 +327,6 @@ static int log_fuse_function_fd(){
 static void log_fuse_function(const char *func, const virtualpath_t *vipa,int num){
   IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER)log_exited_function("%s res:%d",vipa->vp,num);
   if (vipa->dir!=DIR_LOGGED  || vipa->special_file_id || !vipa->vp_l) return;
-
   if (*func=='_') func++;
   if (memcmp(func,"xmp_",4)) func+=4;
   if (*func=='_') func++;

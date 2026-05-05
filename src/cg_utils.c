@@ -1021,8 +1021,8 @@ static int cg_getc_tty(void){
 }
 
 /* write() may be write only part of the data */
-static bool cg_fd_write(const int fd,const char *t,const off_t size0){
-  for(off_t size=size0; size>0;){
+static bool cg_fd_write(const int fd,const char *t,const off_t t_l){
+  for(off_t size=t_l; size>0;){
     off_t n=write(fd,t,size);
     if (n<0) return false;
     t+=n;
@@ -1030,6 +1030,22 @@ static bool cg_fd_write(const int fd,const char *t,const off_t size0){
   }
   return true;
 }
+
+
+static int cg_fd_read(const int fd, char *buf,const off_t buf_l,  const off_t offset){
+  //  ssize_t pread(int fd, void buf[], size_t count,off_t offset);
+  off_t todo=buf_l,sum=0;
+  while(todo>0){
+    const off_t n=pread(fd,buf,todo,offset+sum);
+    //log_debug_now("todo: %'ld n: %'ld",todo,n);
+    if (n<0) return errno?-errno:-1;
+    if (!n) break;
+    sum+=n;
+    todo-=n;
+  }
+  return sum;
+}
+
 
 static bool cg_fd_write_str(const int fd,const char *t){
   return t && cg_fd_write(fd,t,strlen(t));

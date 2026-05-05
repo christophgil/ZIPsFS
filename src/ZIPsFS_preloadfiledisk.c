@@ -23,7 +23,7 @@ static bool preloaddisk_writable_realpath(const zpath_t *zpath, char dst[MAX_PAT
 static bool _preloaddisk_now(const char *dst,zpath_t *zpath,fHandle_t *d){
   //log_entered_function("RP:%s  %'lld bytes  dst: %s   %'lld bytes   decomp:%s",RP(),(LLD)cg_file_size(RP()), dst,(LLD)cg_file_size(dst),cg_compression_file_ext(zpath->is_decompressed,NULL));
   bool ok=false;
-  if (ZPF(ZP_TRY_ZIP)){
+  if (ZPF(ZP_IS_ZIP)){ // USED_TO_BE_ZP_TRY_ZIP
     zip_t *za=NULL;
     zip_file_t *zip=(za=my_zip_open(RP()))?my_zip_fopen(za,EP(),ZIP_RDONLY,RP()):NULL;
     if (zip){

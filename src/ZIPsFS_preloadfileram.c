@@ -25,6 +25,7 @@ static bool preloadram_set_policy(const char *a){
     if ((ok=!strcasecmp(s,a))) _preloadram_policy=i;
   }
   if (!ok){ log_error("Wrong option -c %s\n",a); ZIPsFS_usage(); }
+  if (WITH_DEBUG_ALL_ZIP_PRELOADRAM) _preloadram_policy=PRELOADRAM_ALWAYS;
   return ok;
 }
 ///////////////////////////////
@@ -59,14 +60,11 @@ static bool preloadram_advise(zpath_t *zpath, const int additional_flags){
     return true;
   }
   if (!zpath->root || _preloadram_policy==PRELOADRAM_NEVER)  return false;
-  if (ZPF(ZP_IS_ZIP) /* && _preloadram_policy==PRELOADRAM_ALWAYS */){  // DEBUG_NOW
-         B=zpath->stat_vp.st_size;
-    return true;
-  }
-   B=config_advise_preload_file_ram(additional_flags|
+  if (ZPF(ZP_IS_ZIP)  && _preloadram_policy==PRELOADRAM_ALWAYS){          B=zpath->stat_vp.st_size;    return true;  }
+  B=config_advise_preload_file_ram(additional_flags|
                                                     (ZPF(ZP_IS_COMPRESSEDZIPENTRY)?ADVISE_CACHE_IS_COMPRESSEDZIPENTRY:0)|
-                                                    (ZPF(ZP_TRY_ZIP)?ADVISE_CACHE_IS_ZIPENTRY:0)|
-                                                    ((_preloadram_policy==PRELOADRAM_COMPRESSED&&ZPF(ZP_IS_COMPRESSEDZIPENTRY) || ZPF(ZP_TRY_ZIP)&&_preloadram_policy==PRELOADRAM_ALWAYS)?ADVISE_CACHE_BY_POLICY:0),
+                                   (ZPF(ZP_IS_ZIP)?ADVISE_CACHE_IS_ZIPENTRY:0)|
+                                                    ((_preloadram_policy==PRELOADRAM_COMPRESSED&&ZPF(ZP_IS_COMPRESSEDZIPENTRY) || ZPF(ZP_IS_ZIP)&&_preloadram_policy==PRELOADRAM_ALWAYS)?ADVISE_CACHE_BY_POLICY:0),
                                     VP(),VP_L(),RP(),RP_L(),rootpath(zpath->root),zpath->stat_vp.st_size);
 
    //log_debug_now("vp:%s  B=%ld  ZP_IS_COMPRESSEDZIPENTRY:%d  ",VP(),B,ZPF(ZP_IS_COMPRESSEDZIPENTRY));
@@ -204,11 +202,10 @@ static off_t preloadram_read(char *buf,const fHandle_t *d,const off_t from,off_t
 /* Invoked from xmp_read, where fHandle_t *d=fhandle_get(path,fd) */
 static off_t preloadram_wait_and_read(char *buf, const off_t size, const off_t offset,fHandle_t *d){
   //log_entered_function("%s ",D_VP(d));
-  if (!(d->flags&FHANDLE_WAITED_FREE_RAM)){ d->flags|=FHANDLE_WAITED_FREE_RAM; preloadram_wait_for_free_mem(&d->zpath); }
-
-  root_start_thread(D_ROOT(d),PTHREAD_PRELOAD,false);
+  if (!(d->flags&FHANDLE_WAITED_FREE_RAM)){ d->flags|=FHANDLE_WAITED_FREE_RAM; preloadram_wait_for_free_mem(&d->zpath);}
   const bool ok=preloadram_wait(d,offset+size);
   LOCK_N(mutex_fhandle,const off_t preloadram_l=is_preloadram(d,NULL)? d->preloadram->preloadram_l: -1); /* Otherwise md5sum fails with EPERM */
+  //log_debug_now("%s preloadram_l: %ld  offset: %ld  ok:%s",D_VP(d),preloadram_l,offset,success_or_fail(ok));
   if (preloadram_l<0 || !ok) return -1;
   if (offset==preloadram_l) return 0;
   if (preloadram_l){
@@ -246,17 +243,22 @@ static bool preloadram_store_try(fHandle_t *d, async_zipfile_t *zip, root_t *r){
   char rp[PATH_MAX];
   LOCK(mutex_fhandle,  if ((ok=contin=is_preloadram(d,r))) strcpy(rp,ZP_RP(&d->preloadram->m_zpath)));
   if (!ok) return false;
-  const int fd=ZPF(ZP_TRY_ZIP)?0:open(rp,O_RDONLY);
-  if (ZPF(ZP_TRY_ZIP)) openzip_now(zip);
-  if (!zip->zf && fd<=0){ warning(WARN_PRELOADRAM|WARN_FLAG_ERRNO|WARN_FLAG_ERROR,rp,"Failed %s() d=%p",ZPF(ZP_TRY_ZIP)?"zip_open":"open",d); return false; }
+  const int fd=ZPF(ZP_IS_ZIP)?0:open(rp,O_RDONLY); // USED_TO_BE_ZP_TRY_ZIP
+  if (ZPF(ZP_IS_ZIP)) openzip_now(zip); // USED_TO_BE_ZP_TRY_ZIP
+  if (!zip->zf && fd<=0){ warning(WARN_PRELOADRAM|WARN_FLAG_ERRNO|WARN_FLAG_ERROR,rp,"Failed %s() d=%p",ZPF(ZP_IS_ZIP)?"zip_open":"open",d); return false; }
   const off_t st_size=zpath->stat_vp.st_size;
   off_t already=0;
   LOCK(mutex_fhandle,if ((ok=contin=is_preloadram(d,r))) PRELOADFILE_ROOT_UPDATE_TIME(d,r,true));
   char *buf=cg_malloc(COUNT_PRELOADRAM_MALLOC,PRELOADRAM_READ_BYTES_NUM);
   for(;st_size>already;){
     const off_t n_max=MIN_long(PRELOADRAM_READ_BYTES_NUM,st_size-already);
-    const off_t n=zip->zf?my_zip_fread(zip->zf,buf,n_max):read(fd,buf,n_max);
-    if (n<=0){ ok=false; warning(WARN_PRELOADRAM,rp,"n<0  d=%p  read=%'zu st_size=%'ld",d,already,st_size); break;}
+    const off_t n=zip->zf?my_zip_fread(zip->zf,buf,n_max,D_RP(d)):read(fd,buf,n_max);
+    if (!n) break;
+    if (n<0){
+      ok=false;
+      warning(WARN_PRELOADRAM,rp,"n<0  d=%p  read=%'zu st_size=%'ld",d,already,st_size);
+      break;
+    }
     { /* copy bytes */
       lock(mutex_fhandle);
       char *dst=NULL;
@@ -279,7 +281,7 @@ static bool preloadram_store_try(fHandle_t *d, async_zipfile_t *zip, root_t *r){
   const char *msg=NULL;
   if (already!=st_size){ /* Not Completely read */
     if (contin) msg=RED_WARNING" already!=st_size";
-  }else if (ZPF(ZP_TRY_ZIP)){
+  }else if (ZPF(ZP_IS_ZIP)){ // USED_TO_BE_ZP_TRY_ZIP
     LOCK(mutex_fhandle, ok=fhandle_check_crc32(d));
     fhandle_counter_inc(d,ok?ZIP_READ_CACHE_CRC32_SUCCESS:ZIP_READ_CACHE_CRC32_FAIL);
     msg=ok?GREEN_SUCCESS" crc32 OK":RED_WARNING" already==st_size  crc32 wrong";
@@ -299,11 +301,14 @@ static void preloadram_now(fHandle_t *d, root_t *r){
   FOR(retry,0,MAX(1,NUM_PRELOADRAM_STORE_RETRY)){
     async_zipfile_t zip;
     bool ok,contin;
-    LOCK(mutex_fhandle, if ((ok=contin=is_preloadram(d,r))) async_zipfile_init(&zip,&d->preloadram->m_zpath));
+    LOCK(mutex_fhandle, ok=contin=is_preloadram(d,r); if (ok) async_zipfile_init(&zip,d));
     if (!ok) break;
     if (retry){ log_verbose("Going to sleep 1s and retry  %s ...",VP()); usleep(1000*1000);} // cppcheck-suppress knownConditionTrueFalse
     const int64_t start=currentTimeMillis();
-    if ((ok=preloadram_store_try(d,&zip,r))){
+    log_debug_now("Going preloadram_store_try");
+    ok=preloadram_store_try(d,&zip,r);
+    log_debug_now("Going preloadram_store_try ok:%s",success_or_fail(ok));
+    if (ok){
       lock(mutex_fhandle);
       if ((contin=is_preloadram(d,r))){
         d->preloadram->preloadram_took_mseconds=currentTimeMillis()-start;
@@ -346,13 +351,12 @@ static textbuffer_t *fhandle_set_text_or_free(fHandle_t *d,textbuffer_t *b){
     return b;
 }
 
-
-
 ///////////////
 /// Timeout ///
 ///////////////
 /* If preloadram_async() has not been run before, start it.  Wait for completion of min_fill. */
 static bool preloadram_wait(fHandle_t *d, const off_t min_fill){
+  root_start_thread(D_ROOT(d),PTHREAD_PRELOAD,false);
   cg_thread_assert_not_locked(mutex_fhandle);
   assert(d->is_busy>0);
   if (!D_ROOT(d)) return d->preloadram && textbuffer_length(d->preloadram->txtbuf);

@@ -65,7 +65,7 @@ static zpath_t *transient_cache_get_or_create_zpath(const bool create,const bool
       if (!d->ht_transient_cache) continue;
     }
     const int vp_l=D_VP_L(d);
-    if (!vp_l || !(d->zpath.flags&ZP_TRY_ZIP) || !zpath_has_inode(&d->zpath) ) continue;
+    if (!vp_l || !(d->zpath.flags&ZP_IS_ZIP) || !zpath_has_inode(&d->zpath) ) continue; // USED_TO_BE_ZP_TRY_ZIP
     const char *vp=D_VP(d);
     const int path_without_entry_path_l=vp_l-D_EP_L(d)-1;
     const bool maybe_same_zip=path_without_entry_path_l && cg_path_equals_or_is_parent(vp,path_without_entry_path_l,virtualpath,virtualpath_l);
@@ -155,7 +155,7 @@ static void transient_cache_destroy(fHandle_t *d){
 }
 
 static void transient_cache_activate(fHandle_t *d){
-  if ((d->zpath.flags&ZP_TRY_ZIP) && config_advise_transient_cache_for_zipentries(D_VP(d),D_VP_L(d))){
+  if ((d->zpath.flags&ZP_IS_ZIP) && config_advise_transient_cache_for_zipentries(D_VP(d),D_VP_L(d))){ // USED_TO_BE_ZP_TRY_ZIP
     d->flags|=FHANDLE_WITH_TRANSIENT_ZIPENTRY_CACHES;
     foreach_fhandle(ie,e){
       if (d!=e && FHANDLE_BOTH_SHARE_TRANSIENT_CACHE(d,e) && NULL!=(d->ht_transient_cache=e->ht_transient_cache)) break;

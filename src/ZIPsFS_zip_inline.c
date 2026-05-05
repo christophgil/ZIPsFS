@@ -110,7 +110,7 @@ static int _what_rule_matches_zipfile_name(const char *ext, const char *ext_rp, 
 static void zipflatcache_store_allentries_of_dir(directory_t *dir){
   if (dir->cached_vp_to_zip++) return; /* Only once */
   const zpath_t *zpath=&dir->dir_zpath;
-  if (VP_L() && zpath->root && DIR_IS_TRY_ZIP() && config_skip_zipfile_show_zipentries_instead(RP(),RP_L())){
+  if (VP_L() && zpath->root && DIR_IS_ZIP() && config_skip_zipfile_show_zipentries_instead(RP(),RP_L())){ // USED_TO_BE DIR_IS_TRY_ZIP
     cg_thread_assert_locked(mutex_dircache);
     const char *ext_rp=strchr(RP()+cg_last_slash(RP())+1,'.'); /* For example ".wiff.Zip" */
     if (!ext_rp) return;

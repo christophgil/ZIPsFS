@@ -80,8 +80,7 @@ enum{ASYNC_SLEEP_USECONDS=5000};    /* Sleep microseconds after checking again. 
 
 
 
-enum{RETRY_ZIP_FREAD=2};
-// Repeat zip_fread on failure
+//enum{RETRY_ZIP_FREAD=1}; /* If >1 then repeat zip_fread on failure */
 
 
 
