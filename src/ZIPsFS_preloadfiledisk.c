@@ -34,7 +34,7 @@ static bool _preloaddisk_now(const char *dst,zpath_t *zpath,fHandle_t *d){
       const int fo=open(tmp,O_WRONLY|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR);
       if (fo){
         char buf[1<<20];
-        for(int n; (n=zip_fread(zip,buf,1<<20))>0;){
+        for(int n; (n=my_zip_fread(zip,buf,1<<20,RP()))>0;){
           PRELOADFILE_ROOT_UPDATE_TIME(d,NULL,true);
           if (write(fo,buf,n)>0) ok=true;
           PRELOADFILE_ROOT_UPDATE_TIME(d,NULL,true);
@@ -50,8 +50,8 @@ static bool _preloaddisk_now(const char *dst,zpath_t *zpath,fHandle_t *d){
         warning(WARN_PRELOADDISK|WARN_FLAG_ERROR|WARN_FLAG_ERRNO,dst,"rename");
       }
     }
-    if (zip) zip_fclose(zip);
-    if (za) zip_close(za);
+    my_zip_fclose(zip,RP());
+    my_zip_close(za,RP());
     cg_vmtouch_e(RP());
   }else{
     ok=cg_copy_url_or_file(zpath->is_decompressed,RP(),dst,&root_loading_active,(void*)zpath->root);

@@ -114,7 +114,7 @@ static int _fhandle_n=0,_mnt_l=0, _debug_is_readdir;
 static rlim_t _rlimit_vmemory=0;
 enum {COUNT_BACKWARD_SEEK=1024};
 static int _count_backward_seek[COUNT_BACKWARD_SEEK];
-IF1(WITH_PRELOADRAM,static enum enum_when_preloadram_zip _preloadram_policy=IF01(WITH_DEBUG_ALL_ZIP_PRELOADRAM,PRELOADRAM_RULE,PRELOADRAM_ALWAYS));
+IF1(WITH_PRELOADRAM,static enum enum_when_preloadram_zip _preloadram_policy=PRELOADRAM_RULE);
 static ht_t *ht_set_id(const int id,ht_t *ht){
 #if WITH_DEBUG_MALLOC
   if (!ht) return NULL;
@@ -430,6 +430,10 @@ static void root_property_read_all(root_t *r,const char **annotations, const int
 /* END Parse root properties */
 /*****************************/
 #define my_zip_fread(...) _viamacro_my_zip_fread(__VA_ARGS__,__func__,__LINE__)
+#define fhandle_zip_fread(...) _viamacro_fhandle_zip_fread(__VA_ARGS__,__func__,__LINE__)
+
+
+
 // ---
 #include "ZIPsFS_configuration.c"
 #include "ZIPsFS_debug.c"
@@ -997,11 +1001,12 @@ static void zpath_zip_stat(zpath_t *zpath){
   zip_stat_init(&st);
   if (zip_stat(za, EP(),0,&st)){
     warning_zip_a(RP(),za," zip_stat( %s )");
-    return;
+  }else{
+    zpath->stat_vp.st_size=st.size;
+    zpath->stat_vp.st_mtime=st.mtime;
+    zpath->zipcrc32=st.crc;
   }
-  zpath->stat_vp.st_size=st.size;
-  zpath->stat_vp.st_mtime=st.mtime;
-  zpath->zipcrc32=st.crc;
+  my_zip_close(za,RP());
 }
 
 
@@ -1226,8 +1231,13 @@ static void fhandle_destroy_now(fHandle_t *d){
   IF1(WITH_FILECONVERSION, const int fd=d->fd_real; d->fd_real=0;if (fd) close(fd));
 
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,transient_cache_destroy(d));
-  fhandle_zip_fclose(d);
-  my_zip_close(d->zip_archive,D_RP(d));
+
+  if (d->zip_archive){
+    if (d->flags&FHANDLE_IS_MUTEX_INITIALIZED) pthread_mutex_lock(&d->mutex_read);
+    fhandle_zip_fclose(d);
+    my_zip_close(d->zip_archive,D_RP(d));
+    if (d->flags&FHANDLE_IS_MUTEX_INITIALIZED) pthread_mutex_unlock(&d->mutex_read);
+  }
   if (d->flags&FHANDLE_IS_MUTEX_INITIALIZED)  pthread_mutex_destroy(&d->mutex_read);
   IF1(WITH_FILECONVERSION, fc_maybe_reset_atime_in_future(d));
   IF1(WITH_EVICT_FROM_PAGECACHE,if (!fhandle_find_identical(d)) maybe_evict_from_filecache(0,D_RP(d),D_RP_L(d),D_EP(d),D_EP_L(d)));
@@ -1694,7 +1704,7 @@ static int xmp_rmdir(const char *vpath){
 /* Upon  1st invocation of  xmp_read(), the fHandle_t object is subjected to function fhandle_prepare_in_fuse_read_or_write().  */
 /* This is when the file content is generated and stored in RAM or on disk                                       */
 /***************************************************************************************************************/
-//static bool is_zpath_serialized(zpath_t *zpath){ return IF01(WITH_DEBUG_NO_SERIALIZED,zpath->root && zpath->dir==DIR_SERIALIZED,false); }
+
 static int open_for_reading(const virtualpath_t *vipa, struct fuse_file_info *fi){
   const int id=vipa->special_file_id;
   uint64_t fh=0;
@@ -1921,6 +1931,7 @@ static int xmp_rename(const char *old_path, const char *neu_path IF1(WITH_FUSE_3
 static int my_zip_fclose(zip_file_t *zf,const char *path){
   if (!zf) return 0;
   const int ret=zip_fclose(zf);
+  //log_entered_function("zf=%p path=%s ret=%d  %s",zf,path,ret,success_or_fail(ret==0));
   if (ret){
     warning_zip_f(path,zf,"Failed zip_fclose");
   }else{
@@ -1931,6 +1942,7 @@ static int my_zip_fclose(zip_file_t *zf,const char *path){
 static int my_zip_close(zip_t *za,const char *path){
   if (!za) return 0;
   int ret=zip_close(za);
+  //log_entered_function("za=%p path=%s ret=%d  %s",za,path,ret,success_or_fail(ret==0));
   if (ret){
     warning_zip_a(path,za,"Failed zip_close");
   }else{
@@ -1950,6 +1962,7 @@ static zip_t *my_zip_open(const char *rp){
     RLOOP(iTry,2){
       int err=0;
       za=zip_open(rp,ZIP_RDONLY,&err);
+      //log_entered_function("za=%p path=%s  %s",za,rp,success_or_fail(za!=NULL));
       inc_count_by_ext(rp,za?COUNTER_ZIPOPEN_SUCCESS:COUNTER_ZIPOPEN_FAIL);
       if (za){
         COUNTER1_INC(COUNT_ZIP_OPEN);
@@ -1965,6 +1978,7 @@ static zip_t *my_zip_open(const char *rp){
 static zip_file_t *my_zip_fopen(zip_t *za, const char *entry, const zip_flags_t flags, const char *path){
   if (!za) return NULL;
   zip_file_t *zf=zip_fopen(za,entry,flags);
+  //log_entered_function("zf=%p path=%s  %s",zf,path,success_or_fail(zf!=NULL));
   if (zf){
     COUNTER1_INC(COUNT_ZIP_FOPEN);
   }else{
@@ -1979,19 +1993,20 @@ static off_t _viamacro_my_zip_fread(zip_file_t *zf, void *buf, zip_uint64_t nbyt
   if (nbytes<=0 || !zf) return 0;
   ASSERT(buf);
   //log_entered_function("Going to read zip_fread %s   nbytes:%ld",rp,nbytes);
-  off_t n=zip_fread(zf,buf,nbytes);
+  // char buf_fake[nbytes]; buf=buf_fake; // DEBUG_NOW Es liegt nicht am puffer
+  //log_debug_now("Going to zip_fread: %p buf  %ld    Caller %s:%d",zf,nbytes,func,line);
+  const off_t n=zip_fread(zf,buf,nbytes);
   //log_exited_function("Done %s zip_fread  nbytes:%ld n:%ld",rp,nbytes,n);
   if (n<0) { fprintf(stderr,"%s:%d   ",func,line); warning_zip_f(rp,zf," %s:%d rrrrrrrrrrrrrrrrrrrrrrrrrrr  zip_fread()");}
   return n;
 }
 /* If successful, the number of bytes actually read is returned. When zip_fread() is called after reaching the end of the file, 0 is returned. In case of error, -1 is returned. */
-static off_t fhandle_zip_fread(fHandle_t *d, void *buf,  const zip_uint64_t nbytes){
-  //log_entered_function("%s %s  nbytes:%ld",D_RP(d),D_VP(d),nbytes);
+static off_t _viamacro_fhandle_zip_fread(fHandle_t *d, void *buf,  const zip_uint64_t nbytes,const char *func,const int line){
+  //log_entered_function("%s %s  nbytes:%ld Caller %s:%d",D_RP(d),D_VP(d),nbytes,func,line);
   IF1(WITH_EXTRA_ASSERT, LOCK(mutex_fhandle,  assert(fhandle_currently_reading_writing(d))));
   off_t todo=nbytes,sum=0;
   while(todo>0){
     const off_t n=my_zip_fread(d->zip_file,buf+sum,todo,D_RP(d));
-    //log_debug_now("n=%ld",n);
     if (n<0) return n;
     if (!n) break;
     sum+=n;
@@ -2008,6 +2023,7 @@ static bool fhandle_zip_open(fHandle_t *d,const char *msg){
     d->zip_fread_position=0;
     d->zip_file=zip.zf;
     d->zip_archive=zip.za;
+    //log_debug_now("d->zip_file: %p",d->zip_file);
   }
   return d->zip_file!=NULL;
 }
@@ -2019,6 +2035,7 @@ static void fhandle_zip_fclose(fHandle_t *d){
   if (z){
     zip_file_error_clear(z);
     my_zip_fclose(z,D_RP(d));
+
   }
 }
 
@@ -2030,25 +2047,30 @@ static bool fhandle_zip_fseek(fHandle_t *d, const off_t offset, const char *errm
   const bool backward=offset<P;
   //IF_LOG_FLAG(LOG_ZIP);
   //log_entered_function("%p %s offset: %'lld  ftell: %'lld   backward: %s  thread: %lu"ANSI_RESET,d, D_VP(d),(LLD)offset,(LLD)P, backward?ANSI_FG_RED"Yes":ANSI_FG_GREEN"No",pthread_self());
+
   const int fwbw=backward?FHANDLE_SEEK_BW_FAIL:FHANDLE_SEEK_FW_FAIL;
 #if VERSION_AT_LEAST(LIBZIP_VERSION_MAJOR,LIBZIP_VERSION_MINOR,1,9)
   if (!(d->flags&fwbw) && zip_file_is_seekable(d->zip_file)!=1) d->flags|=(FHANDLE_SEEK_BW_FAIL|FHANDLE_SEEK_FW_FAIL);
 #endif
   /*  zip_file_is_seekable() was added in libzip 1.9.0.   /usr/include/zip.h */
   if (!(d->flags&fwbw) && !zip_fseek(d->zip_file,offset,SEEK_SET)){
+    //log_debug_now(GREEN_SUCCESS "fseek backward:%d",backward);
     d->zip_fread_position=offset;
     return true;
   }else{
     zip_strerror(d->zip_archive);
+    //log_debug_now(RED_FAIL "fseek backward:%d",backward);
   }
   d->flags|=fwbw;
+
   if (backward) return false;
-  enum{buf_l=4096};
+  enum{buf_l=1<<20};
   char buf[buf_l]; /* Read to the respective position */
   while(offset>P){
+    //log_debug_now("offset: %'ld  P: %'ld",offset,P);
     const off_t read=fhandle_zip_fread(d,buf,MIN(buf_l,offset-P));
     if (read<0){ warning(WARN_SEEK,D_VP(d),"fhandle_zip_fread returns <0   offset-P=%ld ",offset-P);return false;}
-    if (read==0){warning(WARN_SEEK,D_VP(d),"fhandle_zip_fread returns  0    offset-P=%ld ",offset-P);return false;}
+    if (read==0){warning(WARN_SEEK,D_VP(d),"fhandle_zip_fread returns  0    offset-P=%ld ",offset-P);}
     if (!read) break;
   }
   //log_exited_function("%p %s offset: %'lld  ftell: %'lld   backward: %s"ANSI_RESET,d, D_VP(d),(LLD)offset,(LLD)P, backward?ANSI_FG_RED"Yes":ANSI_FG_GREEN"No");
@@ -2063,23 +2085,24 @@ static off_t fhandle_read_zip(char *buf, const off_t size, const off_t offset,fH
   cg_thread_assert_not_locked(mutex_fhandle);
   if (!fhandle_zip_open(d,__func__)){  warning(WARN_READ|WARN_FLAG_ONCE_PER_PATH,D_VP(d),"xmp_read_fhandle_zip fhandle_zip_open returned -1"); return -1;}
   IF1(WITH_PRELOADRAM,if(d->flags&FHANDLE_WITH_PRELOADRAM) warning(WARN_PRELOADRAM|WARN_FLAG_ERROR|WARN_FLAG_ONCE_PER_PATH,D_RP(d),"tdf or tdf_bin should be preloadram"));
-  fhandle_zip_fseek(d,offset,"");
-  if (offset<P){ /* Worst case=seek backward - need reopen zip file */
-    warning(WARN_SEEK,D_VP(d),ANSI_MAGENTA"Going to reopen zip"ANSI_RESET);
+
+  if (!fhandle_zip_fseek(d,offset,"")){ /* Worst case=seek backward - need reopen zip file */
 #if WITH_PRELOADRAM
     if (DEBUG_NOW!=DEBUG_NOW)
-      if (_preloadram_policy!=PRELOADRAM_NEVER){ /* Worst case=seek backward - consider using cache */
-        fhandle_zip_fclose(d);   if (!fhandle_zip_open(d,"try_ram")) return -1;
-        log_verbose(ANSI_MAGENTA"Rescue Seek-bwd->RAM"ANSI_RESET);
-        COUNTER1_INC(COUNT_READZIP_PRELOADRAM_BECAUSE_SEEK_BWD);
-        const int nread=preloadram_wait_and_read(buf,size,offset,d);
-        if (nread>0){ d->flags|=FHANDLE_WITH_PRELOADRAM;return nread;}
-        fhandle_counter_inc(d,ZIP_READ_CACHE_FAIL);
-      }
+    if (_preloadram_policy!=PRELOADRAM_NEVER){
+      fhandle_zip_fclose(d);   //if (!fhandle_zip_open(d,"try_ram")) return -1;
+      log_verbose(ANSI_MAGENTA"Rescue Seek-bwd->RAM"ANSI_RESET);
+      COUNTER1_INC(COUNT_READZIP_PRELOADRAM_BECAUSE_SEEK_BWD);
+      const int nread=preloadram_wait_and_read(buf,size,offset,d);
+      if (nread>0){ d->flags|=FHANDLE_WITH_PRELOADRAM;return nread;}
+      fhandle_counter_inc(d,ZIP_READ_CACHE_FAIL);
+    }
 #endif //WITH_PRELOADRAM
+    warning(WARN_SEEK,D_VP(d),ANSI_MAGENTA"Going to reopen zip offest=%'ld"ANSI_RESET,offset);
     fhandle_zip_fclose(d);    if (!fhandle_zip_open(d,"REWIND")) return -1;
     //log_debug_now(ANSI_MAGENTA"oooooooooooooooooooooooooooo %s"ANSI_RESET,D_RP(d));
     if (!fhandle_zip_fseek(d,offset,"REWIND")) return -1;
+    assert(offset==P);
   }else if (offset>P){
     //warning(WARN_SEEK,D_VP(d),ANSI_RED"should not happen offset=%'ld > P=%'ld    "ANSI_RESET,offset,P);
     return -1;
@@ -2136,18 +2159,19 @@ static int xmp_read(const char *vpath, char *buf, const size_t size, const off_t
   FUSE_PREAMBLE_Q(vpath);
   static off_t  debug_pos;
   root_t *r=NULL;
-  LOCK_N(mutex_fhandle, fHandle_t *d=fhandle_get(&vipa,fi->fh);r=D_ROOT(d);IF(d){ d->accesstime=time(NULL); fhandle_busy_start(d);});
+  LOCK_N(mutex_fhandle, fHandle_t *d=fhandle_get(&vipa,fi->fh);IF(d){r=D_ROOT(d); d->accesstime=time(NULL); fhandle_busy_start(d);});
   if (d && r && (d->flags&FHANDLE_SERIALIZED)){ /*Anti congestion */
     if (!d->count_calls_read++){
-      RLOOP(wait,100){
+      FOR(wait,1,333){
         const int count=atomic_load(&r->serialized_fileaccess);
         if (count<=0) break;
         log_verbose("mutex_serialized_fileaccess: %s  count=%d",vpath,r->serialized_fileaccess);
-        usleep(2E6*count);
+        usleep(2E6*wait);
       }
     }
     atomic_fetch_add(&r->serialized_fileaccess,1);
   }
+  fputc('|',stderr);
   const int bytes=_xmp_read(&vipa,d,buf,size,offset,fi->fh);
   IF(d){
     LOCK(mutex_fhandle,fhandle_busy_end(d));
@@ -2168,18 +2192,23 @@ static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const s
     if (d->flags&FHANDLE_PRELOADRAM_COMPLETE){  LOCK(mutex_fhandle, nread=preloadram_read(buf,d,offset,offset+size)); }
     if (d->flags&FHANDLE_WITH_PRELOADRAM && (nread=preloadram_wait_and_read(buf,size,offset,d))<0) log_verbose(RED_WARNING" %s preloadram_wait_and_read returned %ld",D_VP(d),nread);
 #endif //WITH_PRELOADRAM
-    if (nread<0 && (d->zpath.flags&ZP_IS_ZIP)) nread=fhandle_read_zip(buf,size,offset,d);
-    LOCK(mutex_fhandle, if (nread>0) d->n_read+=nread);
+    if (nread<0 && (d->zpath.flags&ZP_IS_ZIP)){
+      fhandle_init_mutex(d);
+      pthread_mutex_lock(&d->mutex_read); /* Why lock: Comming here same/different fHandle_t instances and various pthread_self() */
+      nread=fhandle_read_zip(buf,size,offset,d);
+      pthread_mutex_unlock(&d->mutex_read);
+    }
     if (nread<0 && !config_not_report_stat_error(vipa->vp,vipa->vp_l)){
       LOCK_N(mutex_fhandle, const char *status=IF01(WITH_PRELOADRAM,"NA",enum_preloadram_status_S[preloadram_get_status(d)]));
       warning(WARN_READ|WARN_FLAG_ONCE_PER_PATH,d?D_RP(d):vipa->vp,"nread %lld  offset:%ld  size:%lld    n_read=%llu  status:%s",(LLD)nread,offset,(LLD)size,d->n_read,status);
+    }else if(nread>0){
+      LOCK(mutex_fhandle,d->n_read+=nread);
+      if (offset<d->offset_expected) d->count_backward_seek++;
+      d->offset_expected+=nread;
     }
-    if(nread>0){  if (offset<d->offset_expected) d->count_backward_seek++;   d->offset_expected+=nread;}
     if ((d->zpath.flags&ZP_IS_ZIP)){
       return nread>=0?nread:errno?-errno:-1;
     }
-
-
   }/* if (d)*/
  d_has_fd: /* Normal reading from file descriptor  d->fd_real or fi->fh */
   if (nread<0){
@@ -2472,7 +2501,8 @@ int main(const int argc,const char *argv[]){
 // ZP_IS_ZIP ZP_TRY_ZIP  DIR_IS_TRY_ZIP   DIR_IS_ZIP  FHANDLE_WITH_PRELOADRAM WAS
 //  _viamacro_my_zip_fread
 // crc32   mnt/Z2/Data/30-0017/20241023_Z2_KTT_001_30-0017_CoreFacility-TissueSamplePrep_01.wiff mnt/PRO1/Maintenance/202601/20260106_PRO1_ANZW_000_MA_BSA25fmol-18.d/analysis.tdf | grep -e 'b67bf8ae\|034b27cc\|'
-// fhandle_zip_ftell() fhandle_zip_fseek()       zip_strerror(za); _viamacro_my_zip_fread warning_zip
+// fhandle_zip_ftell() fhandle_zip_fseek()  fhandle_zip_fread()     zip_strerror(za); _viamacro_my_zip_fread warning_zip
 // #define fhandle_zip_ftell(d) d->zip_fread_position  fhandle_zip_open
 //   zip_stat    zip_t
 // crc32 mnt/Z2/Data/30-0039/20250531_Z2_KTT_001_30-0039_Benchmarking4Vadim_pepcal1.wiff
+// cg_print_stacktrace

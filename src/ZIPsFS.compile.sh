@@ -9,7 +9,8 @@ set -u
 ### Please customize ###
 ########################
 LL="-lpthread -lm -lzip -lz "
-SEARCH_SO_FILES='/usr/local/lib/x86_64-linux-gnu /usr/pkg/lib /usr/local/lib /opt/local/lib /usr/lib /opt/ooce/lib/amd64 /lib'
+
+SEARCH_SO_FILES='/usr/local/lib/x86_64-linux-gnu /usr/pkg/lib /usr/local/lib /opt/local/lib /usr/lib /opt/ooce/lib/amd64 '
 SEARCH_INCLUDE_FILES='/usr/include/fuse3 /usr/local/include/fuse3  /usr/local/include /opt/local/include /usr/pkg/include /local/libfuse-master/include /opt/ooce/include /opt/ooce/libzip/include /usr/include/fuse/'
 #############
 ### Help  ###
@@ -214,11 +215,9 @@ print_linker_option_execinfo(){
 }
 find_bugs(){
         local cc=$(find $DIR -name '*.c')
-
         grep -n  '^ *[a-z].*) *LOCK_N(' $cc && echo 'Error: LOCK_N(...) requires curly braces' && exit 1
         local hh=$(find $DIR -name '*.h')
         grep -F -w -e 'strchrnul' -e 'group_member' -e 'strcasestr' -e 'memmem'  $cc $hh && echo 'Not supported on all platforms' && exit 1
-
 }
 ######################
 ### main function  ###
@@ -305,7 +304,9 @@ export ASAN_OPTIONS='${ASAN_OPTIONS:-}'
 which $CCOMPILER
 set -x
 EOF
-echo $CCOMPILER $CC_OPTS  $NOWARN "$opts" $IPATHS -O0 -g  $sanitize  $DIR/ZIPsFS.c  $LIBFUSE $LIBZIP $RPATHS   $LPATHS $LL  -o $x
+
+
+echo  $CCOMPILER   $CC_OPTS  $NOWARN "$opts" $IPATHS -O0 -g  $sanitize  $DIR/ZIPsFS.c $LIBFUSE $LIBZIP $RPATHS   $LPATHS $LL  -o $x
         }|tee $c
         chmod +x $c
         echo -n $ANSI_MAGENTA;

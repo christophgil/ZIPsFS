@@ -1,6 +1,6 @@
 /* Compare https://raw.githubusercontent.com/Dexter9313/C-stacktrace/master/c-stacktrace.h by  Florian Cabot */
 // cppcheck-suppress-file unusedFunction
-
+// Todo dladdr()
 #ifndef _cg_stacktrace_dot_c
 #define _cg_stacktrace_dot_c
 
@@ -141,11 +141,11 @@ static bool addr2line_no_shell(const char *addr,const int iLine){
 #endif
   aa[0]=a0;
 #undef A
-  char cmd_flat[999];
-  *cmd_flat=0;
+  char cmd_flat[999]={0};
   FOREACH_CSTRING(s,aa){ strcat(cmd_flat,*s); strcat(cmd_flat," ");}
   IF1(WITH_POPEN_NOSHELL,struct popen_noshell_pass_to_pclose pclose_arg={0});
   //  FILE *fp=IF1(WITH_POPEN_NOSHELL,popen_noshell("addr2line",(const char * const*)aa,"r",&pclose_arg,0))  IF0(WITH_POPEN_NOSHELL,popen(cmd_flat,"r"));
+  // log_debug_now("cmd_flat=%s",cmd_flat);
   FILE *fp=IF01(WITH_POPEN_NOSHELL,popen(cmd_flat,"r"),{ popen_noshell("addr2line",(const char * const*)aa,"r",&pclose_arg,0)});
   bool ok=false;
   if (!fp) return false;

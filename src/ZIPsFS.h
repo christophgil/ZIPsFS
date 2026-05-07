@@ -690,5 +690,6 @@ enum {CACHE_TAKES_PRECEDENCE_TTL=600};
 #define warning_zip_a(path,za,txt) _viamacro_warning_zipf(__func__,__LINE__, path,za,NULL,txt)
 
 
-//#define WITH_DEBUG_NO_SERIALIZED 0
-#define WITH_DEBUG_ALL_ZIP_PRELOADRAM 1 // PRELOADRAM_ALWAYS
+
+#define WITH_DEBUG_ALL_ZIP_PRELOADRAM 0 // PRELOADRAM_ALWAYS
+#define WITH_DEBUG_NO_ZIP_FSEEK 0
