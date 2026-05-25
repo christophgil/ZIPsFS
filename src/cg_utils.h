@@ -12,6 +12,8 @@
 #define IF01(zeroorone,codezero,...) IF0(zeroorone,codezero) IF1(zeroorone,__VA_ARGS__)
 
 
+
+
 #ifndef _cg_utils_dot_h
 #define _cg_utils_dot_h
 #include <inttypes.h>
@@ -25,6 +27,8 @@
 #else
 #define IS_CHECKING_CODE 0
 #endif
+#define DETECT_RESOURCE_LEAK_B(x) IF1(IS_CHECKING_CODE, FILE *x=fopen("mutex","r"))
+#define DETECT_RESOURCE_LEAK_E(x) IF1(IS_CHECKING_CODE, if (x)fclose(x))
 ////////////////////////////////////////
 #ifdef __USE_GNU
 #define WITH_GNU 1
@@ -170,7 +174,7 @@ M(MAX,long)
 #define FREE_NULL_MALLOC_ID(b) cg_free_null(b?b->malloc_id:0,b)
 
 
-#define PRINT_PFX_FUNC_MSG(pfx1,pfx2,sfx,...)  fprintf(stderr,pfx1"%lld %s():%i "pfx2,(LLD)(time(NULL)-_whenStarted),__func__,__LINE__),fprintf(stderr,__VA_ARGS__),puts_stderr(sfx)
+#define PRINT_PFX_FUNC_MSG(pfx1,pfx2,sfx,...)  fprintf(stderr,pfx1"%lld %s():%i "pfx2,LLD(time(NULL)-_whenStarted),__func__,__LINE__),fprintf(stderr,__VA_ARGS__),puts_stderr(sfx)
 
 #define log_entered_function(...)     PRINT_PFX_FUNC_MSG(ANSI_INVERSE" > > > "ANSI_RESET," ","\n",__VA_ARGS__)
 #define log_exited_function(...)      PRINT_PFX_FUNC_MSG(ANSI_INVERSE" < < < "ANSI_RESET," ","\n",__VA_ARGS__)
@@ -217,8 +221,8 @@ M(MAX,long)
 //////////////////////////
 ///  Printf format     ///
 //////////////////////////
-#define LLU unsigned long long
-#define LLD long long
+#define LLU(x) ((unsigned long long)(x))
+#define LLD(x) ((long long)(x))
 
 
 enum enum_validchars{VALIDCHARS_DIGITS,VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHARS_NUM};
@@ -238,9 +242,6 @@ enum enum_validchars{VALIDCHARS_DIGITS,VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHAR
 #define STRLEN(ending) ((int)sizeof(ending)-1)
 #define ENDSWITH(s,s_l,ending)  (((s_l)>=STRLEN(ending)) && (s)[(s_l)-1]==LASTCHAR(ending) && (!memcmp((s)+(s_l)-STRLEN(ending),ending,STRLEN(ending))))
 #define ENDSWITHI(s,s_l,ending) (((s_l)>=STRLEN(ending)) && ((s)[(s_l)-1]|32)==(32|LASTCHAR(ending)) && (!strcasecmp((s)+(s_l)-STRLEN(ending),ending)))
-
-
-
 
 
 #define STARTSWITH(s,pfx) (!strncmp(s,pfx,STRLEN(pfx)))

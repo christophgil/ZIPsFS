@@ -143,7 +143,7 @@ static int textbuffer_add_segment(const uint8_t flags,textbuffer_t *b, const cha
   }
   return 0;
  enomem:
-  log_error("enomem size: %'lld",(LLD)size);
+  log_error("enomem size: %'lld",LLD(size));
 #define C(f) cg_free_null(COUNT_TXTBUF_SEGMENT_MALLOC,b->f)
   C(_segment);
   C(_segment_e);
@@ -304,7 +304,7 @@ static bool textbuffer_write_file(const textbuffer_t *b,const char *path,const i
 }
 
 static int textbuffer_differs_from_filecontent_fd(const textbuffer_t *b,const int fd, const char *path){
-  //log_entered_function("path:'%s'  len:%lld",path,(LLD)textbuffer_length(b));
+  //log_entered_function("path:'%s'  len:%lld",path,LLD(textbuffer_length(b)));
   char buf[4096];
   int n;
   long pos=0;
@@ -380,7 +380,7 @@ static void test_ps_pid(const int pid){
   textbuffer_t b={0};
   textbuffer_reset(&b);
   textbuffer_from_exec_output(0,&b,cmd,NULL,NULL);
-  fprintf(stderr," Read %lld bytes \n",(LLD)textbuffer_length(&b));
+  fprintf(stderr," Read %lld bytes \n",LLD(textbuffer_length(&b)));
   textbuffer_write_fd(&b,STDOUT_FILENO);
   textbuffer_destroy(&b);
 }

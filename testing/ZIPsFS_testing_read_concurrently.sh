@@ -45,12 +45,17 @@ EOF
         echo zipfile_entry=$zipfile_entry
         [[ -z $zipfile_entry ]] && read -r -p "Can not read $f@SOURCE.TXT  "
         z=${zipfile_entry%$'\t'*}
-        e=${zipfile_entry#*$'\t'}
-        echo "$f"
-        # echo "zipfile $z  entry $e" ; read -r -p EEEEEEEEEEEEEE
-        ! ls -f -l $z && return
-        local crc=$(crc32_zip_entry "$z"  "$e")
-        echo  "$z    $ANSI_FG_MAGENTA$e    $ANSI_FG_BLUE$crc$ANSI_RESET"
+        if [[ $z != $zipfile_entry  ]]; then
+            e=${zipfile_entry#*$'\t'}
+            echo "$f"
+            echo "zipfile $z  entry $e" ; #read -r -p EEEEEEEEEEEEEE
+            ! ls -f -l $z && return
+            local crc=$(crc32_zip_entry "$z"  "$e")
+            echo  "$z    $ANSI_FG_MAGENTA$e    $ANSI_FG_BLUE$crc$ANSI_RESET"
+        else
+            crc=$(rhash --printf=%C --crc32 $z)
+            echo "Not a zip entry: $z  $ANSI_FG_BLUE$crc$ANSI_RESET"
+        fi
         map_crc[$f]="${crc^^}"
     done
     echo map_crc="${map_crc[*]}"
@@ -58,11 +63,12 @@ EOF
     for ((pass=0;1;pass++)); do
         for f in "$@"; do
             echo
-            local cmd="rhash --printf=%C --crc32 $f"
-            local m j m2
+            local cmd="rhash --printf=%C+%s --crc32 $f"
+            local m j m2 len
             ! m=$($cmd) && exit
             m=${m%%?BAD*}
             m=${m^^}
+            m=${m%%+*}
             local crc_zip="${map_crc[$f]}"
             echo -e "$cmd\t$m"
             ls -d -l $f
@@ -72,13 +78,19 @@ EOF
                 (  m2=$($cmd) || read -r -p "Error";
                    ((IS_VERBOSE)) && echo "Done"
                    m2=${m2%%?BAD*}
+                   len=${m2##*+}
+                   m2=${m2%%+*}
+
                    m2=${m2^^}
                    local color=$'\e[32m'
                    [[ $m2 != "$m" ]] && color=$'\e[33m' && echo "$cmd"
-                   echo -e "${color}pass=$pass ${color}is=$m2 ${color} should=$m"$'\e[0m';
+                   echo -e "${color}pass=$pass ${color}is=$m2 ${color} should=$m"$'\e[0m'"  bytes read=$len";
                    if [[ $m != "$m2" ]]; then
                        crc32 $f
-                       read -r -p "Error"
+#                       rhash --printf='%C' --crc32 $f
+#                       cat $f | rhash --printf='%C' --crc32 -
+
+                       read -r -p "Error "
                        echo
                        kill $(ps -s $$ -o pid=)
                        kill -9 $$

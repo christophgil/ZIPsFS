@@ -20,8 +20,8 @@ static bool async_wait(const char *path, const time_t t,root_t *r,const int A){
   ASSERT(TO);
   for(int j=1; G==ASYNC_JOB_PICKED; j++){
     usleep(128);
-    if (DEBUG_NOW==DEBUG_NOW) fputc('w',stderr);
     if (j&2047) continue;
+    fputc('w',stderr);
     const time_t diff=time(NULL)-t;
     if (diff>TO) break;
     if (diff-lastLog>4){ lastLog=diff*3/2; log_verbose("%s path: %s %d s",enum_async_S[A],path,(int)diff);}
@@ -114,7 +114,6 @@ static void *infloop_PTHREAD_DIRCACHE(void *arg){
   root_t *r=arg;
   init_infloop(r,PTHREAD_PRELOAD);
   while(true){
-    bool success=false;
     virtualpath_t vipa={0};
     {
       char buf[MAX_PATHLEN+1];
@@ -143,18 +142,12 @@ static void *infloop_PTHREAD_DIRCACHE(void *arg){
       directory_t dir={0};
       directory_init_zpath(&dir,zpath);
       dir.async_never=dir.always_to_cache=true;
-      if (readdir_from_zip(&dir))  success=true;
-      //log_debug_now(GREEN_SUCCESS"readdir_from_zip %s %s",vipa.vp, success_or_fail(success));
+      readdir_from_zip(&dir);
       directory_destroy(&dir);
     }
   }
 }
 #endif //WITH_DIRCACHE
-static void async_zipfile_init(async_zipfile_t *zip, fHandle_t *d){
-  *zip=async_zipfile_empty;
-  zip->azf_zpath=d->zpath;
-  zip->za=d->zip_archive;
-}
 
 
 
@@ -166,13 +159,6 @@ static void openzip_now(async_zipfile_t *zip){
   assert(!zip->zf);
   zip->zf=my_zip_fopen(zip->za,EP(),ZIP_RDONLY,RP());
   LOCK(mutex_fhandle,_rootdata_counter_inc(filetypedata_for_ext(VP(),zpath->root),zip->za?ZIP_OPEN_SUCCESS:ZIP_OPEN_FAIL));
-}
-static void closezip_now(async_zipfile_t *z){
-  if (!z) return;
-  LOCK_N(mutex_async,  zip_file_t *zf=z->zf; z->zf=NULL;  struct zip *za=z->za; z->za=NULL);
-  const zpath_t *zpath=&z->azf_zpath;
-  my_zip_fclose(zf,RP());
-  my_zip_close(za,RP());
 }
 /* ================================================================================ */
 #define A ASYNC_STAT
@@ -199,7 +185,7 @@ static bool async_stat(const int opt_filldir_findrp, zpath_t *zpath){
   if ((opt_filldir_findrp&FINDRP_CACHE_ONLY)) return false;
   IF1(WITH_TIMEOUT_STAT, if (!r||!r->stat_timeout_seconds))  return zpath_stat_direct(opt_filldir_findrp,zpath,0);
 #if WITH_TIMEOUT_STAT
-  log_debug_now(ANSI_RED"Going async_stat %s"ANSI_RESET,RP());
+  //log_debug_now(ANSI_RED"Going async_stat %s"ANSI_RESET,RP());
   ASSERT(RP_L());
   L();
   WAIT_UNTIL_PICKED(r->async_stat_path=zpath);
@@ -250,6 +236,13 @@ static int async_openfile(zpath_t *zpath,const int flags){
 /* ================================================================================ */
 #define A ASYNC_OPENZIP
 #if WITH_TIMEOUT_OPENZIP
+static void closezip_now(async_zipfile_t *z){
+  if (!z) return;
+  LOCK_N(mutex_async,  zip_file_t *zf=z->zf; z->zf=NULL;  struct zip *za=z->za; z->za=NULL);
+  const zpath_t *zpath=&z->azf_zpath;
+  my_zip_fclose(zf,RP());
+  my_zip_close(za,RP());
+}
 static inline bool async_periodically_openzip(root_t *r){
   async_zipfile_t zip;
   //log_debug_now("%s",rootpath(r));
@@ -386,19 +379,9 @@ static void root_update_time(root_t *r, int thread,time_t now){
 }
 
 
-static void _log_ap(const char *start, const char *func,root_t *r, time_t when){
-  if (r->remote)  fprintf(stderr,"%s %s %s \n",start,func,rootpath(r));
-}
-
-//#define ASYNC_PERIODCIALLY(func,r) (when=time(0), _log_ap(">>>",#func,r,when),ok=func(r),_log_ap("<<<",#func,r,when),ok)
-//#define ASYNC_PERIODCIALLY(func,r) func(r)
-
-
 static void *infloop_PTHREAD_ASYNC(void *arg){
   root_t *r=arg;
   assert(r!=NULL);
-  time_t when;
-  bool ok;
   init_infloop(r,PTHREAD_ASYNC);
   long nanos=(ASYNC_SLEEP_USECONDS*1000); /* The shorter the higher the responsiveness, but increased CPU usage */
   for(int loop=0; ;loop++){

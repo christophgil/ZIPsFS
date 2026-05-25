@@ -11,7 +11,7 @@ static char *ctrl_file_end(){
   static char s[222]={0};
   if (!*s){
     #if 1
-    sprintf(s,"%llx",(LLD)hash64(_mnt,(LLD)strlen(_mnt)));
+    sprintf(s,"%llx",LLD(hash64(_mnt,strlen(_mnt))));
     #else
     struct timespec t;
     timespec_get(&t,TIME_UTC);
@@ -20,7 +20,7 @@ static char *ctrl_file_end(){
     srand(t.tv_nsec);
     int r2=rand();
     srand(getpid());
-    sprintf(s,"%x%x%x%lx%llx",r1,r2,rand(),t.tv_nsec,(LLD)t.tv_sec);
+    sprintf(s,"%x%x%x%lx%llx",r1,r2,rand(),t.tv_nsec,LLD(t.tv_sec));
     #endif
   }
   return s;

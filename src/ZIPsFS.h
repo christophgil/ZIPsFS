@@ -97,6 +97,8 @@ enum{
 #define DIR_PLAIN                    DIR_ZIPsFS"/p"
 
 #define DIR_PREFETCH_RAM             DIR_ZIPsFS"/m"
+#define DIR_NEVER_PREFETCH_RAM       DIR_ZIPsFS"/~m"
+
 #define DIR_SERIALIZED               DIR_ZIPsFS"/s"
 
 
@@ -145,35 +147,39 @@ enum enum_counter_rootdata{
 #define SFILE_HAS_REALPATH(id)	 (id<=SFILE_INFO)
 #define SFILE_IS_IN_RAM(id)      (id>SFILE_INFO)
 #define XMACRO()\
-  X("warnings.log",                      DIR_ZIPsFS,            SFILE_LOG_WARNINGS)\
-  X("errors.log",                        DIR_ZIPsFS,            SFILE_LOG_ERRORS)\
-  X("_FUNCTION_CALLS.log",               DIR_LOGGED,            SFILE_LOG_FUNCTION_CALLS)\
-  X("ZIPsFS_CTRL.sh",                    NULL,                  SFILE_DEBUG_CTRL)\
-  X("file_system_info.html",             DIR_ZIPsFS,            SFILE_INFO)\
-  X("Clear_cache.command",				 DIR_ZIPsFS,            SFILE_CLEAR_CACHE)\
-  X("Set_file_access_time.command",		 DIR_ZIPsFS,            SFILE_SET_ATIME_SH)\
-  X("Set_file_access_time.ps1",			 DIR_ZIPsFS,            SFILE_SET_ATIME_PS)\
-  X("Set_file_access_time.bat",			 DIR_ZIPsFS,            SFILE_SET_ATIME_BAT)\
-  X("Read_beginning_of_files.bat",       DIR_ZIPsFS,            SFILE_READ_BEGINNING_OF_FILES_BAT)\
-  X("Read_beginning_of_files.command",   DIR_ZIPsFS,            SFILE_READ_BEGINNING_OF_FILES_SH)\
-  X("README_ZIPsFS.html",                DIR_ZIPsFS,            SFILE_README)\
-  X("README_ZIPsFS_1st_root.txt",        DIR_FIRST_ROOT,        SFILE_README_FIRST_ROOT)\
-  X("_logging.command",                  DIR_LOGGED,            SFILE_LOGGING_COMMAND)\
-  X("README_logging.txt",                DIR_LOGGED,            SFILE_README_LOGGING)\
-  X("README_ZIPsFS_without_1st_root.txt",DIR_EXCLUDE_FIRST_ROOT,SFILE_README_EXCLUDE_FIRST_ROOT)\
-  X("README_ZIPsFS_plain.txt",           DIR_PLAIN,             SFILE_README_PLAIN)\
-  X("README_ZIPsFS_serialized_file_access.txt",      DIR_SERIALIZED,        SFILE_README_SERIALIZED)\
-  X("README_ZIPsFS_prefetch_RAM.txt",    DIR_PREFETCH_RAM,      SFILE_README_PREFETCH_RAM)\
-  X("README_ZIPsFS_net.html",            DIR_INTERNET,          SFILE_README_INTERNET)\
-  X("_NET_FETCH_.ps1",                   DIR_INTERNET,          SFILE_NET_FETCH_PS)\
-  X("_NET_FETCH_.command",               DIR_INTERNET,          SFILE_NET_FETCH_SH)\
-  X("_NET_FETCH_.bat",                   DIR_INTERNET,          SFILE_NET_FETCH_BAT)\
-  X("README_ZIPsFS_Update_net.html",     DIR_INTERNET_UPDATE,   SFILE_README_INTERNET_UPDATE)\
-  X("README_ZIPsFS_fileconversion.html", DIR_FILECONVERSION,    SFILE_README_FILECONVERSION)\
-  X("README_ZIPsFS_preload.html",        DIR_PRELOADDISK_R,     SFILE_README_PRELOADDISK_R)\
-  X("README_ZIPsFS_preload.html",        DIR_PRELOADDISK_RC,    SFILE_README_PRELOADDISK_RC)\
-  X("README_ZIPsFS_preload.html",        DIR_PRELOADDISK_RZ,    SFILE_README_PRELOADDISK_RZ)\
-  X("README_ZIPsFS_preload.html",        DIR_PRELOADED_UPDATE,  SFILE_README_PRELOADDISK_UPDATE)
+  X("warnings.log",                               DIR_ZIPsFS,            SFILE_LOG_WARNINGS)\
+  X("errors.log",                                 DIR_ZIPsFS,            SFILE_LOG_ERRORS)\
+  X("_FUNCTION_CALLS.log",                        DIR_LOGGED,            SFILE_LOG_FUNCTION_CALLS)\
+  X("ZIPsFS_CTRL.sh",                             NULL,                  SFILE_DEBUG_CTRL)\
+  X("file_system_info.html",                      DIR_ZIPsFS,            SFILE_INFO)\
+  X("Clear_cache.command",                        DIR_ZIPsFS,            SFILE_CLEAR_CACHE)\
+  X("Set_file_access_time.command",               DIR_ZIPsFS,            SFILE_SET_ATIME_SH)\
+  X("Set_file_access_time.ps1",                   DIR_ZIPsFS,            SFILE_SET_ATIME_PS)\
+  X("Set_file_access_time.bat",                   DIR_ZIPsFS,            SFILE_SET_ATIME_BAT)\
+  X("Read_beginning_of_files.bat",                DIR_ZIPsFS,            SFILE_READ_BEGINNING_OF_FILES_BAT)\
+  X("Read_beginning_of_files.command",            DIR_ZIPsFS,            SFILE_READ_BEGINNING_OF_FILES_SH)\
+  X("README_ZIPsFS.html",                         DIR_ZIPsFS,            SFILE_README)\
+  X("README_ZIPsFS_1st_root.txt",                 DIR_FIRST_ROOT,        SFILE_README_FIRST_ROOT)\
+  X("_logging.command",                           DIR_LOGGED,            SFILE_LOGGING_COMMAND)\
+  X("README_logging.txt",                         DIR_LOGGED,            SFILE_README_LOGGING)\
+  X("README_ZIPsFS_without_1st_root.txt",         DIR_EXCLUDE_FIRST_ROOT,SFILE_README_EXCLUDE_FIRST_ROOT)\
+  X("README_ZIPsFS_plain.txt",                    DIR_PLAIN,             SFILE_README_PLAIN)\
+  X("README_ZIPsFS_serialized_file_access.txt",   DIR_SERIALIZED,        SFILE_README_SERIALIZED)\
+  X("README_ZIPsFS_prefetch_RAM.txt",             DIR_PREFETCH_RAM,      SFILE_README_PREFETCH_RAM)\
+    X("README_ZIPsFS_never_prefetch_RAM.txt",     DIR_NEVER_PREFETCH_RAM,SFILE_README_NEVER_PREFETCH_RAM)\
+  X("README_ZIPsFS_net.html",                     DIR_INTERNET,          SFILE_README_INTERNET)\
+  X("_NET_FETCH_.ps1",                            DIR_INTERNET,          SFILE_NET_FETCH_PS)\
+  X("_NET_FETCH_.command",                        DIR_INTERNET,          SFILE_NET_FETCH_SH)\
+  X("_NET_FETCH_.bat",                            DIR_INTERNET,          SFILE_NET_FETCH_BAT)\
+  X("README_ZIPsFS_Update_net.html",              DIR_INTERNET_UPDATE,   SFILE_README_INTERNET_UPDATE)\
+  X("README_ZIPsFS_fileconversion.html",          DIR_FILECONVERSION,    SFILE_README_FILECONVERSION)\
+  X("README_ZIPsFS_preload.html",                 DIR_PRELOADDISK_R,     SFILE_README_PRELOADDISK_R)\
+  X("README_ZIPsFS_preload.html",                 DIR_PRELOADDISK_RC,    SFILE_README_PRELOADDISK_RC)\
+  X("README_ZIPsFS_preload.html",                 DIR_PRELOADDISK_RZ,    SFILE_README_PRELOADDISK_RZ)\
+  X("README_ZIPsFS_preload.html",                 DIR_PRELOADED_UPDATE,  SFILE_README_PRELOADDISK_UPDATE)
+
+
+
 #define X(name,parent,id) id,
 enum enum_special_files{SFILE_NIL,XMACRO() SFILE_NUM};
 #undef X
@@ -569,29 +575,42 @@ static virtualpath_t empty_virtualpath;
 
 typedef struct{
   uint64_t fhandle_fh;
-  int fd_real, count_backward_seek, count_calls_read;
+  int fd_real, count_backward_seek;
   off_t offset_expected;
   zip_t *zip_archive;
   zip_file_t *zip_file;
   zpath_t zpath;
   volatile time_t accesstime;
   volatile int errorno;
-  enum {FHANDLE_ACTIVE=1<<0,FHANDLE_DESTROY_LATER=1<<1,FHANDLE_PREPARE_ONCE_IN_RW=1<<2,FHANDLE_SEEK_FW_FAIL=1<<3,FHANDLE_SEEK_BW_FAIL=1<<4,FHANDLE_WITH_TRANSIENT_ZIPENTRY_CACHES=1<<5,FHANDLE_IS_FILECONVERSION=1<<6,FHANDLE_WITH_PRELOADRAM=1<<8,FHANDLE_WAITED_FREE_RAM=1<<9,FHANDLE_PRELOADRAM_COMPLETE=1<<10,FHANDLE_SPECIAL_FILE=1<<11,FHANDLE_IS_CCODE=1<<12,FHANDLE_PRELOADFILE_QUEUE=1<<13,FHANDLE_PRELOADFILE_RUN=1<<14,FHANDLE_IS_MUTEX_INITIALIZED=1<<15,FHANDLE_SERIALIZED=1<<16} flags;
+  enum {FHANDLE_ACTIVE=1<<0,FHANDLE_DESTROY_LATER=1<<1,FHANDLE_PREPARE_ONCE_IN_RW=1<<2,FHANDLE_SEEK_FW_FAIL=1<<3,FHANDLE_SEEK_BW_FAIL=1<<4,FHANDLE_WITH_TRANSIENT_ZIPENTRY_CACHES=1<<5,FHANDLE_IS_FILECONVERSION=1<<6,FHANDLE_WITH_PRELOADRAM=1<<8,FHANDLE_PRELOADRAM_COMPLETE=1<<10,FHANDLE_SPECIAL_FILE=1<<11,FHANDLE_IS_CCODE=1<<12,FHANDLE_PRELOADFILE_QUEUE=1<<13,FHANDLE_PRELOADFILE_RUN=1<<14,FHANDLE_IS_MUTEX_INITIALIZED_0=1<<15,FHANDLE_IS_MUTEX_INITIALIZED_1=1<<16,FHANDLE_SERIALIZED=1<<17} flags;
+  //  FHANDLE_WAITED_FREE_RAM=1<<9,
   uint8_t already_logged;
   volatile int64_t offset,n_read;
   volatile atomic_int is_busy; /* Increases when entering xmp_read. If greater 0 then the instance must not be destroyed. */
-  pthread_mutex_t mutex_read; /* Costs 40 Bytes */
+  pthread_mutex_t mutex[2]; /* Costs 40 Bytes */
   counter_rootdata_t *filetypedata;
   off_t zip_fread_position;
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,ht_t *ht_transient_cache);
-  IF1(WITH_PRELOADRAM, struct preloadram * volatile preloadram);
-  atomic_int volatile is_preloading;
+  IF1(WITH_PRELOADRAM, struct preloadram * volatile preloadram; int how_often_bwdseek);
+  atomic_int volatile is_preloading, count_calls_read, serialized_incremented;
   IF1(WITH_FILECONVERSION, enum{FILECONVERSION_UNINITILIZED,FILECONVERSION_SUCCESS,FILECONVERSION_FAIL} fileconversion_state);
+  time_t serialized_when_read;
 }  fHandle_t;
 static const fHandle_t FHANDLE_EMPTY;
 
+#define fhandle_mutex_flag(id) (id?FHANDLE_IS_MUTEX_INITIALIZED_0:FHANDLE_IS_MUTEX_INITIALIZED_1)
+#define fhandle_mutex_initialized(id,d) (d->flags&fhandle_mutex_flag(id))
 
 
+
+
+#define fhandle_lock(d) _fhandle_lock(0,d);            DETECT_RESOURCE_LEAK_B(_cppcheck_rsc_leak_fhandle_lock0)
+#define fhandle_unlock(d) _fhandle_unlock(0,d);        DETECT_RESOURCE_LEAK_E(_cppcheck_rsc_leak_fhandle_lock0)
+
+#define fhandle_zip_lock(d) _fhandle_lock(1,d);        DETECT_RESOURCE_LEAK_B(_cppcheck_rsc_leak_fhandle_lock1)
+#define fhandle_zip_unlock(d) _fhandle_unlock(1,d);    DETECT_RESOURCE_LEAK_E(_cppcheck_rsc_leak_fhandle_lock1)
+
+// lock
 // cppcheck     -suppress-macro nullPointerRedundantCheck
 
 #define REQUIRES_1(x) "Requires "#x"=1. Is "STRINGIZE(x)"."

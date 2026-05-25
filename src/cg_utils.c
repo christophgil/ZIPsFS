@@ -72,12 +72,12 @@ static time_t _whenStarted;
 
 static void *malloc_untracked(const size_t size){
   void *m=malloc(size);
-  if (!m){ fprintf(stderr,RED_ERROR" malloc(%'lld)\n",(LLD)size); perror(""); exit(ENOMEM); }
+  if (!m){ fprintf(stderr,RED_ERROR" malloc(%'lld)\n",LLD(size)); perror(""); exit(ENOMEM); }
   return m;
 }
 static void *calloc_untracked(const size_t nmemb,const size_t size){
   void *m=calloc(nmemb,size);
-  if (!m){ fprintf(stderr,RED_ERROR" calloc(%'lld,%'lld)\n",(LLD)nmemb,(LLD)size); perror(""); exit(ENOMEM); }
+  if (!m){ fprintf(stderr,RED_ERROR" calloc(%'lld,%'lld)\n",LLD(nmemb),LLD(size)); perror(""); exit(ENOMEM); }
   return m;
 }
 static char *strdup_untracked(const char *s){
@@ -897,7 +897,7 @@ static void _viamacro_cg_log_file_stat(const char *srcfile,const int line,const 
 #endif
   fprintf(stderr,"%s:%d '%s' stat: %s",srcfile,line,name,s?" ":"NULL");
   if (s){
-    fprintf(stderr,"size=%lld lm:%s blksize=%lld blocks=%lld links=%u inode=%s%llu"ANSI_RESET" dir=%s uid=%u gid=%u ",(LLD)s->st_size,ST_MTIME(s),(LLD)s->st_blksize,(LLD)s->st_blocks,  (uint32_t) s->st_nlink,color,(LLU)s->st_ino,  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
+    fprintf(stderr,"size=%lld lm:%s blksize=%lld blocks=%lld links=%u inode=%s%llu"ANSI_RESET" dir=%s uid=%u gid=%u ",LLD(s->st_size),ST_MTIME(s),LLD(s->st_blksize),LLD(s->st_blocks),  (uint32_t) s->st_nlink,color,LLU(s->st_ino),  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
     cg_print_file_mode(s->st_mode,stderr);
   }
   fputc('\n',stderr);

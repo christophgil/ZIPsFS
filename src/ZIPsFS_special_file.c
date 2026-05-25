@@ -205,10 +205,10 @@ static void html_is_uptodate(fHandle_t *d,const yes_zero_no_t updateSuccess, zpa
 
   C("<TABLE  style=\"border: 1px solid black;border-collapse: collapse;\">\n<TR>"H("Path")H("Modified")H("Size")H("Status")"</TR>\n");
   char tmp[strlen(pathOrig)+RP_L()+4096];
-  SF_PRINTF( R("%'lld","","Original"),pathOrig,ST_MTIME(stOrig),(LLD)stOrig->st_size);
+  SF_PRINTF( R("%'lld","","Original"),pathOrig,ST_MTIME(stOrig),LLD(stOrig->st_size));
   const char *s_ne="Not exist", *s_utd="Up to date", *s_ufail="Update failed", *s_usuccess="Update succeeded", *s_uneed="Need_update";
 #define TROW_LOADED(s) SF_PRINTF(R("%'lld"," style=\"color:#%06x;\"","%s"), RP(),st1->st_mtime?ST_MTIME(st1):"",	\
-                                 (LLD)st1->st_size,	\
+                                 LLD(st1->st_size),\
                                  s==s_ne || s==s_ufail?0xFF: s==s_utd||s==s_usuccess?0xFF00: s==s_uneed?0xFF00FF: 0,\
                                  s);
 
@@ -401,12 +401,32 @@ Also see ");    SF_FILE_REF(SFILE_NAMES[SFILE_README_PRELOADDISK_R]);
     break;
    case SFILE_README_SERIALIZED:
      C("Simultaneous reading of many files from harddisks may be inefficient\nand puts strain on hardware due to extensive head movements.\n\
-For files read from this location, only one thread can read  per root/upstream source at a time.\n\
-Serialized file access may be more efficient. Cave dead-locks!");
+For files read from this location, typically one thread can read  per root/upstream source at a time.\n\
+Serialized file access may be more efficient. Cave dead-locks!\n\
+Alternatively you can lock in client.\n\
+T h i s   i s  n o t  y e t  fully tested.\n\n\
+LIMITATION:\n\
+Not working if two or more files need to be read in parallel\n\n\
+ALTERNATIVE CLIENT SIDE LOCK IN UNIX:\nConsider flock\n\n\
+ALTERNATIVE CLIENT SIDE LOCK IN POWERSHELL:\n\
+function unlock_copy(){\n$script:lock_copy.Close()\nRemove-Item -Verbose $script:lockPath_copy ## -ErrorAction SilentlyContinue\n}\n\
+function lock_copy(){\n\
+    $script:lockPath_copy='//SERVER/PATH/copy.lock'\n\
+    $script:lock_copy=$NULL\n\
+    while (-not $script:lock_copy){\n\
+        try{\n\
+            $script:lock_copy = [System.IO.File]::Open($script:lockPath_copy,[System.IO.FileMode]::OpenOrCreate,[System.IO.FileAccess]::ReadWrite,[System.IO.FileShare]::None)\n\
+            Write-Host 'Lock  acquired'\n\
+        }catch{\nWrite-Host 'Waiting for lock ...'\nStart-Sleep -Seconds 4\n}\n\
+    }\n\
+}\n");
      break;
    case SFILE_README_PREFETCH_RAM:
-     C("All files from this folder or subfolders  will be prefetched into RAM. This may facilitate none-sequential reading files from several threads and from varying positions.");
+     C("All files from this folder or subfolders  will be prefetched into RAM.\nThis may facilitate non-sequential reading files from several threads and from varying positions.\n");
      break;
+  case SFILE_README_NEVER_PREFETCH_RAM:
+    C("Files from this folder or subfolders will never be prefetched into RAM even if they should according to rules.\n");
+    break;
   case SFILE_README_PLAIN:
     C("This directory provides plain access to all files.\n	  - not expanding ZIP files.\n\n\nUseful for rapid navigation and searching.\n\n");
     break;

@@ -207,10 +207,10 @@ static const void *ht_intern(ht_t *ht,const void *bytes,const off_t bytes_l,ht_h
 _Static_assert(0xFFFFffff==UINT32_MAX,"");
 static const char* _store_key(ht_t *ht,const char *key,ht_keylen_hash_t keylen_hash){
   if (ht->key_interner){
-    const int m=ht->key_interner->mutex;
-    if (m && m!=ht->mutex) lock(m);
+
+    IF0(IS_CHECKING_CODE,const int m=ht->key_interner->mutex;if (m && m!=ht->mutex)) lock(m);
     key=ht_intern(ht->key_interner,key,keylen_hash>>HT_KEYLEN_SHIFT,keylen_hash&UINT32_MAX,HT_MEMALIGN_FOR_STRG);
-    if (m && m!=ht->mutex) unlock(m);
+    IF0(IS_CHECKING_CODE,if (m && m!=ht->mutex)) unlock(m);
     return key;
   }
   if ((ht->flags&HT_FLAG_KEYS_ARE_STORED_EXTERN)) return key;
@@ -361,7 +361,7 @@ static void ht_report_memusage(FILE *file,const ht_t *ht,const bool html){
     mstore_report_memusage(file,NULL);
     FOR(i,0,i_mstore) mstore_report_memusage(file,(mstore_t*)mstores[i]);
   }else{
-    fprintf(file,"%36s %'10u %'12lld B ", snull(ht->name),ht->length,(LLD)(ht->capacity*sizeof(ht_entry_t)));
+    fprintf(file,"%36s %'10u %'12lld B ", snull(ht->name),ht->length,LLD(ht->capacity*sizeof(ht_entry_t)));
     char s[99];*s=0;
     if (ht->keystore){
       mstore_name_dash_id(s,ht->keystore);
@@ -564,7 +564,7 @@ static void test_mstore2(int argc, const char *argv[]){
         if (is_square_number(iLine)) printf(" %d ",iLine);
       }else{
         const char *from_cache=ht_sget(&ht,line);
-        if (is_square_number(iLine))  printf("(%4d) Line: %s  Length: %lld   hash: %s from_cache: %s \n",iLine, line,(LLD)n,value,from_cache);
+        if (is_square_number(iLine))  printf("(%4d) Line: %s  Length: %lld   hash: %s from_cache: %s \n",iLine,line,LLD(n),value,from_cache);
         assert(!strcmp(value,from_cache));
       }
     }

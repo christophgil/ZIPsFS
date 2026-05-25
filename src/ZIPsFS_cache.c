@@ -64,11 +64,10 @@ static void debug_assert_crc32_not_null(const directory_t *dir){
 #if WITH_DIRCACHE
 static void dircache_directory_to_cache(directory_t *dir){
   cg_thread_assert_locked(mutex_dircache);
-  if (DEBUG_NOW!=DEBUG_NOW){
+  //if (DEBUG_NOW!=DEBUG_NOW){
     //if (DIR_VP_L()!=DIR_VP0_L() || strcmp(DIR_VP0(),DIR_VP())) log_entered_function("VP:'%s' %d VP0:'%s' %d",DIR_VP(),DIR_VP_L(),DIR_VP0(),DIR_VP0_L());
     //if (tdf_or_tdf_bin(DIR_VP0())) DIE_DEBUG_NOW("VP:'%s' %d VP0:'%s' %d",DIR_VP(),DIR_VP_L(),DIR_VP0(),DIR_VP0_L());
-
-  }
+  //}
   //debug_assert_crc32_not_null(dir);
   root_t *r=DIR_ROOT();
   IF1(WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,dircache_clear_if_reached_limit(false,0xFFFF,r,NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE));

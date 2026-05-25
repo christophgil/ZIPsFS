@@ -22,7 +22,7 @@ static void _viamacro_fhandleWithPreloadramPrint(const char *func,int line,const
     if (D_VP_HASH(d)==h){
       const struct preloadram *m=d->preloadram;
       if (m && (m->txtbuf||m->preloadram_status) && !strcmp(path,D_VP(d))){
-        log_msg("%s:%d fhandleWithPreloadramPrint: %d %s  preloadram_status: %s preloadram_l: %lld\n",func,line,id,path,enum_preloadram_status_S[m->preloadram_status],(LLD)m->preloadram_l);
+        log_msg("%s:%d fhandleWithPreloadramPrint: %d %s  preloadram_status: %s preloadram_l: %lld\n",func,line,id,path,enum_preloadram_status_S[m->preloadram_status],LLD(m->preloadram_l));
       }
     }
   }
@@ -94,7 +94,7 @@ static void _viamacro_assert_validchars_direntries(const directory_t *dir,const 
 /*       log_msg("d->fname: %p directory_is_stack: %d   \n",d->fname, d->fname==dir->_stack_fname); */
 /*       RLOOP(i,d->files_l){ */
 /*         const char *s=d->fname[i]; */
-/*         log_msg(" (%d) %p '%s'  size: %'lld\n",i,s,snull(s),(LLD)(!d->fsize?-1:d->fsize[i])); */
+/*         log_msg(" (%d) %p '%s'  size: %'lld\n",i,s,snull(s),LLD(!d->fsize?-1:d->fsize[i])); */
 /*       } */
 /*     } */
 /*   } */
@@ -135,7 +135,7 @@ static void _viamacro_directory_print(const char *func,const int line,const dire
           const bool invalid=len!=url_encode(encoded,PATH_MAX,n);
       //        fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'zu\t%s\t%u\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), Nth0(d->fsize,i),encoded,hash_value_strg(n));
       fprintf(stderr,"%s:%d ",func,line);
-      fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'lld\t%s\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), (LLD)Nth0(d->fsize,i),encoded);
+      fprintf(stderr,"%s (%d)\t%"PRIu64"\t%'lld\t%s\n"ANSI_RESET,invalid?ANSI_FG_RED:"",i,Nth0(d->finode,i), LLD(Nth0(d->fsize,i)),encoded);
     }
   }
 }
@@ -170,7 +170,7 @@ static bool debug_fhandle(const fHandle_t *d){
 static void debug_fhandle_listall(void){
   log_msg(ANSI_INVERSE"%s"ANSI_RESET"\n",__func__);
   foreach_fhandle(id,d){
-    log_msg("d %p  '%s' fh: %llu\n",d,D_VP(d),(LLU)d->fhandle_fh);
+    log_msg("d %p  '%s' fh: %llu\n",d,D_VP(d),LLU(d->fhandle_fh));
   }
 }
 

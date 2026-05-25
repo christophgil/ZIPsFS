@@ -101,11 +101,11 @@ static void mstore_report_memusage(FILE *file, mstore_t *m){
     fprintf(file,"%30s %20s %20s %20s\n", "Name", "Sum size", "Memory usage", "# mmap-files");
   }else{
     char buf[99]; mstore_name_dash_id(buf,m);
-    fprintf(file,"%30s %'18lld B %'18lld B",buf,(LLD)mstore_sum_size(m),(LLD)mstore_usage(m));
+    fprintf(file,"%30s %'18lld B %'18lld B",buf,LLD(mstore_sum_size(m)),LLD(mstore_usage(m)));
     const char *s;
     switch(m->opt&(MSTORE_OPT_MMAP_WITH_FILE|MSTORE_OPT_MALLOC)){
     case MSTORE_OPT_MALLOC: s="(malloc)";  break;
-    case MSTORE_OPT_MMAP_WITH_FILE:  sprintf(buf,"%lld",(LLD)mstore_count_blocks(m)); s=buf; break;
+    case MSTORE_OPT_MMAP_WITH_FILE:  sprintf(buf,"%lld",LLD(mstore_count_blocks(m))); s=buf; break;
     case 0: s="(anonymous mmap)"; break;
     };
     fprintf(file,"%20s\n",s);
@@ -234,12 +234,12 @@ static void *mstore_malloc(mstore_t *m,const off_t bytes, const int align){
   }else{
     const int fd=(m->opt&MSTORE_OPT_MMAP_WITH_FILE)?_mstore_openfile(m,ib,blockCapacity+_MSTORE_LEADING):0;
     if (MAP_FAILED==(block=cg_mmap(_MSTORE_COUNTER_MMAP(m),blockCapacity+_MSTORE_LEADING,fd))) block=NULL;
-    if (!block) DIE("Allocation failed   %lld  fd: %d",(LLD)(blockCapacity+_MSTORE_LEADING),fd);
+    if (!block) DIE("Allocation failed   %lld  fd: %d",LLD(blockCapacity+_MSTORE_LEADING),fd);
   }
   _mstore_block_init_with_capacity(block,blockCapacity);
   m->_data[ib]=block;
   if (!(dst=_mstore_block_try_allocate(m,block,bytes,align))){
-    DIE("dst is NULL.  block: %p bytes: %lld align: %d  ib: %d",block, (LLD)bytes,align, ib);
+    DIE("dst is NULL.  block: %p bytes: %lld align: %d  ib: %d",block, LLD(bytes),align, ib);
   }
   assert(MSTORE_BLOCK_CAPACITY(block)>=bytes);
   return dst;
@@ -340,7 +340,7 @@ int main(int argc,char *argv[]){
     printf("mstore_base_path %s\n",mstore_base_path());
     mstore_t m={0};
     MSTORE_INIT(&m,MSTORE_OPT_MMAP_WITH_FILE|1024);
-    fprintf(stderr,"m->bytes_per_block: %lld\n",(LLD)m.bytes_per_block);
+    fprintf(stderr,"m->bytes_per_block: %lld\n",LLD(m.bytes_per_block));
     FOR(i,0,8){
       char *s=mstore_malloc(&m,1024,4);
       fprintf(stderr,"%d) s: %p\n",i,s);

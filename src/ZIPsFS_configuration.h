@@ -22,9 +22,14 @@ enum{
 #define WITH_DEBUG_THROTTLE_DOWNLOAD 0
 #define WITH_ASSERT_LOCK     0 // Optional assertion
 #define WITH_EXTRA_ASSERT    0 // Optional assertion
+#define WITH_INEFFICIENT_ZIP_READING 0 // Without fi->direct_io=1
 #define WITH_TESTING_REALLOC 0 // Smaller initial size, earlier realloc
 #define WITH_TESTING_UNBLOCK 0
-#define WITH_FOLLOW_SYMLINK  0 /* Or set  @follow-symlinks=0 per root.    Symlink dereference can be denied in config_allow_expand_symlink() */
+
+/********************************/
+/* symbolic links i.e. symlinks */
+/********************************/
+#define WITH_FOLLOW_SYMLINK  1 /* Or set  @follow-symlinks=0 per root.    Symlink dereference can be denied in config_allow_expand_symlink() */
 
 /*******************************************************************************************************************************************************************/
 /* Avoid blocking        0 deactivated    1 activated                                                                                                              */

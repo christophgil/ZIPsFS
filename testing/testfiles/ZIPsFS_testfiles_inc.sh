@@ -47,13 +47,16 @@ test_checksum(){
 
 
 test_pattern(){
-    local  pattern="$1"  vp="$2"
-    echo  "'$pattern' in $ANSI_FG_BLUE$vp$ANSI_RESET   ... "
-    [[ $vp == *SOURCE.TXT ]] && strings $vp
-    local result="${ANSI_FG_RED}FAILED"
-    strings "$vp" | grep "$pattern" && result="${ANSI_FG_GREEN}OK"
-    echo "$result$ANSI_RESET"
-    test_is_in_listing $vp
+    local  rp="$1"
+    shift
+    for pattern in "$@"; do
+        echo  "grep -m 1 '$pattern'  $ANSI_FG_BLUE$rp$ANSI_RESET"
+        [[ $rp == *SOURCE.TXT ]] && strings $rp
+        local result="${ANSI_FG_RED}FAILED"
+        grep -a -m 1 "$pattern" "$rp" && result="${ANSI_FG_GREEN}OK"
+        echo "$result$ANSI_RESET"
+        test_is_in_listing $rp
+    done
 }
 
 test_zip_entry(){
@@ -81,7 +84,7 @@ test_zip_entry(){
 print_src(){
     echo; head -v  "$1@SOURCE.TXT"; echo
     local pattern="${2:-}"
-    [[ -n $pattern ]] &&  test_pattern $pattern        "$p@SOURCE.TXT"
+    [[ -n $pattern ]] &&  test_pattern "$p@SOURCE.TXT"  $pattern
 }
 
 prompt_error(){
@@ -93,7 +96,7 @@ prompt_error(){
 ask_remove_converted(){
     read -r -p "Remove $MODI/zipsfs/c? [Y/n] "
     if [[ -z $REPLY || ${REPLY,,} == *y*  ]]; then
-        rm -v -r "$MODI/zipsfs/c";
+        rm -v -r "$MODI/zipsfs/c/test_fileconvert";
         sleep 1
     fi
 }
@@ -102,7 +105,7 @@ ask_remove_converted(){
 assure_mountpoint_db(){
     local m=~/.ZIPsFS/db/$1
     mountpoint $m && ls -d $MNT/zipsfs/~1/db  && return 0
-    echo "${ANSI_FG_RED}Error:${ANSI_RESET}   ZIPsFS_testfiles_start_ZIPsFS.sh needs to be run with option -f to mount the databases"
+    echo "${ANSI_FG_RED}Error:${ANSI_RESET}   ZIPsFS_testfiles_start_ZIPsFS.sh needs to be run without option -f to mount the databases"
     return 1
 }
 

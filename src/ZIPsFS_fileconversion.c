@@ -57,7 +57,7 @@ static void fileconversion_run(fHandle_t *d){
     cg_recursive_mk_parentdir(ff.log);
     ff.grealpath=rp;
     const int slash=cg_last_slash(rp);
-    snprintf(stpncpy(ff.tmpout,rp,slash+1),MAX_PATHLEN,"fileconversion_tmp_%d_%llu_%s",getpid(),(LLU)currentTimeMillis(),rp+slash+1);
+    snprintf(stpncpy(ff.tmpout,rp,slash+1),MAX_PATHLEN,"fileconversion_tmp_%d_%llu_%s",getpid(),LLU(currentTimeMillis()),rp+slash+1);
   }
   if (fileconversion_realinfiles(&ff)<=0){
     d->fileconversion_state=FILECONVERSION_FAIL;
@@ -76,7 +76,7 @@ static void fileconversion_run(fHandle_t *d){
       warning(WARN_FILECONVERSION|WARN_FLAG_ERRNO,ff.tmpout," size=%ld ino: %ld",st.st_size, st.st_ino);
       d->fileconversion_state=FILECONVERSION_FAIL;
     }else{/* tmpout success */
-      IF_LOG_FLAG(LOG_FILECONVERSION) log_verbose("Size: %lld ino: %llu, Going to rename(%s,%s)\n",(LLD)st.st_size,(LLU)st.st_ino,ff.tmpout,rp);
+      IF_LOG_FLAG(LOG_FILECONVERSION) log_verbose("Size: %lld ino: %llu, Going to rename(%s,%s)\n",LLD(st.st_size),LLU(st.st_ino),ff.tmpout,rp);
       fileconversion_mv_tmp_to_rp(ff.tmpout,rp);
       zpath_stat(0,&d->zpath);
       ASSERT(_root_writable==d->zpath.root);
@@ -230,7 +230,7 @@ static void fileconversion_set_rp(zpath_t *zpath,const virtualpath_t  *vipa){
 
 
 static bool fileconversion_getattr(struct stat *stbuf,const zpath_t *zpath,const virtualpath_t *vipa){
-  if (vipa->dir!=DIR_FILECONVERSION) return false; // DEBUG_NOW
+  if (vipa->dir!=DIR_FILECONVERSION) return false;
   const long size=fileconversion_estimate_filesize(vipa->vp,vipa->vp_l,0);
   if (size<=0) return false;
   stat_init(stbuf,size,&zpath->stat_rp);

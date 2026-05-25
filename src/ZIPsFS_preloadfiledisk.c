@@ -21,7 +21,7 @@ static bool preloaddisk_writable_realpath(const zpath_t *zpath, char dst[MAX_PAT
   return true;
 }
 static bool _preloaddisk_now(const char *dst,zpath_t *zpath,fHandle_t *d){
-  //log_entered_function("RP:%s  %'lld bytes  dst: %s   %'lld bytes   decomp:%s",RP(),(LLD)cg_file_size(RP()), dst,(LLD)cg_file_size(dst),cg_compression_file_ext(zpath->is_decompressed,NULL));
+  //log_entered_function("RP:%s  %'lld bytes  dst: %s   %'lld bytes   decomp:%s",RP(),LLD(cg_file_size(RP())), dst,LLD(cg_file_size(dst)),cg_compression_file_ext(zpath->is_decompressed,NULL));
   bool ok=false;
   if (ZPF(ZP_IS_ZIP)){ // USED_TO_BE_ZP_TRY_ZIP
     zip_t *za=NULL;
@@ -44,7 +44,7 @@ static bool _preloaddisk_now(const char *dst,zpath_t *zpath,fHandle_t *d){
         warning(WARN_PRELOADDISK|WARN_FLAG_ERROR|WARN_FLAG_ERRNO,tmp,"open()");
       }
       if (!ok){
-        warning(WARN_PRELOADDISK|WARN_FLAG_ERROR|WARN_FLAG_ERRNO,RP(),"Read error -> %s %lld bytes ",tmp,(LLD)cg_file_size(tmp));
+        warning(WARN_PRELOADDISK|WARN_FLAG_ERROR|WARN_FLAG_ERRNO,RP(),"Read error -> %s %lld bytes ",tmp,LLD(cg_file_size(tmp)));
         unlink(tmp);
       }else if (!(ok=cg_rename_tmp_outfile(tmp,dst))){
         warning(WARN_PRELOADDISK|WARN_FLAG_ERROR|WARN_FLAG_ERRNO,dst,"rename");

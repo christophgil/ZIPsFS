@@ -53,8 +53,8 @@ static void fc_wait_concurrent(const struct fileconversion_rule *ac, const int i
   }
 }
 
-#define fc_wait_concurrent_begin(ac)  fc_wait_concurrent(ac, 1)   IF1(IS_CHECKING_CODE,;FILE *_wait_concurrent=fopen("abc","r"))
-#define fc_wait_concurrent_end(ac)    fc_wait_concurrent(ac,-1)   IF1(IS_CHECKING_CODE,,close(_wait_concurrent))
+#define fc_wait_concurrent_begin(ac)  fc_wait_concurrent(ac, 1);   DETECT_RESOURCE_LEAK_B(_wait_concurrent)
+#define fc_wait_concurrent_end(ac)    fc_wait_concurrent(ac,-1);   DETECT_RESOURCE_LEAK_E(_wait_concurrent)
 //////////////////////////////////////////////////////////////////////
 /// This is run once when ZIPsFS is started.                       ///
 //////////////////////////////////////////////////////////////////////
@@ -262,7 +262,7 @@ static int fc_run(struct fileconversion_files *ff){
       if (isOUTF && !stat(ff->grealpath,&st_out) && CG_STAT_B_BEFORE_A(st_fail,st_out)  || ff->rinfiles[0] && CG_STAT_B_BEFORE_A(st_fail,ff->infiles_stat[0])) return EPIPE;
     }
   }
-  IF_LOG_FLAG(LOG_FILECONVERSION) log_verbose("ff->rinfiles[0]: %s size: %lld  ac->out:%d ff->out:%d",snull(ff->rinfiles[0]), (LLD)ff->infiles_stat[0].st_size,ac->out,ff->out);
+  IF_LOG_FLAG(LOG_FILECONVERSION) log_verbose("ff->rinfiles[0]: %s size: %lld  ac->out:%d ff->out:%d",snull(ff->rinfiles[0]), LLD(ff->infiles_stat[0].st_size),ac->out,ff->out);
   cg_unlink(ff->log);
   cg_unlink(ff->fail);
   fc_wait_concurrent_begin(ac);

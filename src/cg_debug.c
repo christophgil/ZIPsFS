@@ -100,7 +100,7 @@ static void cg_print_stat(struct stat *st,FILE *f){
   if (!st){
     fputs(" struct stat is NULL. ",f);
   }else{
-    fprintf(f," struct stat = ino:%llu size:%'llu mtime:%s ",(LLU)st->st_ino,(LLU)st->st_size,ST_MTIME(st)); cg_print_file_mode(st->st_mode,f);
+    fprintf(f," struct stat = ino:%llu size:%'llu mtime:%s ",LLU(st->st_ino),LLU(st->st_size),ST_MTIME(st)); cg_print_file_mode(st->st_mode,f);
   }
 }
 

@@ -322,9 +322,9 @@ static void print_maps(FILE *file){
           RLOOP(isHeader,(!headerDone++?2:1)){
             if (isHeader) P("<TABLE border=\"1\">\n<THEAD>\n");
             P("<TR>\n");
-            R(true,"Addr&gt;&gt;12", "Address divided by 4096", "%08llx",(LLU)(begin>>12));
+            R(true,"Addr&gt;&gt;12", "Address divided by 4096", "%08llx",LLU(begin>>12));
             R(true,"Name",           "Name of map",             "%s",mapname);
-            R(true,"kB",             "Size of map (kB)",        "%'lld",(LLD)(size>>10));
+            R(true,"kB",             "Size of map (kB)",        "%'lld",LLD(size>>10));
             //repeat_chars_info(file,'-',MIN_int(L,(int)(3*log(size))));
             END_HR();
           }
@@ -356,7 +356,7 @@ static void info_print_memory(FILE *file){
 #if ! defined(HAS_RLIMIT) || HAS_RLIMIT
     struct rlimit rl={0}; getrlimit(RLIMIT_AS,&rl);
     const bool rlset=rl.rlim_cur!=-1;
-    if(rlset) F(" / rlimit %lld MB<BR>\n",(LLD)(rl.rlim_cur>>20));
+    if(rlset) F(" / rlimit %lld MB<BR>\n",LLD(rl.rlim_cur>>20));
 #endif
   }
 #if IS_LINUX
@@ -366,7 +366,7 @@ static void info_print_memory(FILE *file){
 #else
 #define MALLINFO() mallinfo()
 #endif
-  F("uordblks: %'lld bytes\n",(LLD)MALLINFO().uordblks);
+  F("uordblks: %'lld bytes\n",LLD(MALLINFO().uordblks));
 #endif // IS_LINUX
   if (has_proc_fs()){
     int val; print_proc_status(file,"VmRSS:|VmHWM:|VmSize:|VmPeak:",&val);
@@ -375,7 +375,7 @@ static void info_print_memory(FILE *file){
   {
     struct rlimit rl={0};
     getrlimit(RLIMIT_AS,&rl);
-    if (rl.rlim_cur!=-1) F("Rlim soft: %llx MB   hard: %llx MB\n",(LLD)(rl.rlim_cur>>20),(LLD)(rl.rlim_max>>20));
+    if (rl.rlim_cur!=-1) F("Rlim soft: %llx MB   hard: %llx MB\n",LLD(rl.rlim_cur>>20),LLD(rl.rlim_max>>20));
   }
 #endif
 }
@@ -392,17 +392,17 @@ static void print_fhandle(FILE *file,const char *title){
     if (isHeader) P("<THEAD>\n");
     P("<TR>\n");
     R(true,"Path","","%s",!d?"Null":D_VP(d));
-    R(true,"Last-access","How many s ago","%'lld s",!d?0:(LLD)(d->accesstime?(t0-d->accesstime):-1));
+    R(true,"Last-access","How many s ago","%'lld s",!d?0:LLD(d->accesstime?(t0-d->accesstime):-1));
 #if WITH_PRELOADRAM
     const struct preloadram *m=d?d->preloadram:NULL;
     const textbuffer_t *tb=m?m->txtbuf:NULL; // cppcheck-suppress unreadVariable
     R(tb!=NULL,"Cache-ID",        "",                                                     "%05x",!m?0:m->id);
-    R(tb!=NULL,"Cache-read-kB",   "Number of KB already read into cache",                 "%'lld",!m?0:(LLD)K(m->preloadram_already));
-    R(tb!=NULL,"Entry-kB",        "Total size of file content",                           "%'lld",!m?0:(LLD)K(m->preloadram_l));
-    R(tb!=NULL,"Millisec",        "How long did it take to read file content into cache.","%'lld",!m?0:(LLD)m->preloadram_took_mseconds);
+    R(tb!=NULL,"Cache-read-kB",   "Number of KB already read into cache",                 "%'lld",!m?0:LLD(K(m->preloadram_already)));
+    R(tb!=NULL,"Entry-kB",        "Total size of file content",                           "%'lld",!m?0:LLD(K(m->preloadram_l)));
+    R(tb!=NULL,"Millisec",        "How long did it take to read file content into cache.","%'lld",!m?0:LLD(m->preloadram_took_mseconds));
 #endif //WITH_PRELOADRAM
-    const bool locked=d && pthread_mutex_trylock(&d->mutex_read);
-    if (d && !locked) pthread_mutex_unlock(&d->mutex_read);
+    const bool locked=d && fhandle_mutex_initialized(0,d) && pthread_mutex_trylock(&d->mutex[0]);
+    if (d && !locked) pthread_mutex_unlock(&d->mutex[0]);
     const char *status_descr="<UL><LI>(D)elete indicates that it is marked for closing</LI>"
       "<LI>(K)eep indicates that it can currently not be closed.</li>"
       "<LI>(L)ocked: Cannot be released. Two reasons:"
@@ -512,7 +512,7 @@ static void fhandle_log_cache(const fHandle_t *d){
   if (!d){ log_char('\n');return;}
   ASSERT_LOCKED_FHANDLE();
   const struct preloadram *m=d->preloadram;
-  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %lld/%lld   hasc: %s\n",d,D_VP(d),yes_no(m && m->txtbuf),!m?0:enum_preloadram_status_S[m->preloadram_status],(LLD)(!m?-1:m->preloadram_already),(LLD)(!m?-1:m->preloadram_l),yes_no(m && m->preloadram_l>0));
+  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %lld/%lld   hasc: %s\n",d,D_VP(d),yes_no(m && m->txtbuf),!m?0:enum_preloadram_status_S[m->preloadram_status],LLD(!m?-1:m->preloadram_already),LLD(!m?-1:m->preloadram_l),yes_no(m && m->preloadram_l>0));
 }
 #endif //0
 #undef R

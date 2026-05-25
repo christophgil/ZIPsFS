@@ -145,7 +145,7 @@ static bool addr2line_no_shell(const char *addr,const int iLine){
   FOREACH_CSTRING(s,aa){ strcat(cmd_flat,*s); strcat(cmd_flat," ");}
   IF1(WITH_POPEN_NOSHELL,struct popen_noshell_pass_to_pclose pclose_arg={0});
   //  FILE *fp=IF1(WITH_POPEN_NOSHELL,popen_noshell("addr2line",(const char * const*)aa,"r",&pclose_arg,0))  IF0(WITH_POPEN_NOSHELL,popen(cmd_flat,"r"));
-  // log_debug_now("cmd_flat=%s",cmd_flat);
+  //log_debug_now("cmd_flat=%s",cmd_flat);
   FILE *fp=IF01(WITH_POPEN_NOSHELL,popen(cmd_flat,"r"),{ popen_noshell("addr2line",(const char * const*)aa,"r",&pclose_arg,0)});
   bool ok=false;
   if (!fp) return false;
