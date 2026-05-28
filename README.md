@@ -201,6 +201,7 @@ Run the following command:
 If a remote upstream file system stops responding, the current file access is blocked (Unless the options ``WITH_ASYNC_READDIR`` ... are activated).
 After some time, unresponsive upstream file trees will be skipped to prevent that file accesses get blocked.
 
+
 ## ZIPsFS expands ZIP file entries
 
 By default, ZIP files are displayed as folders with the suffix ``.Content``.
@@ -222,6 +223,9 @@ The default configuration includes a few exceptions tailored to specific use cas
     This is time consuming and performed in the background. Consequently, the file listing will be incomplete when requested for the first time.
     Only after some seconds, the file listing will be presented properly.
 
+A major advantage of using ZIP archives for storing files is that
+Zip files contain a record of the CRC32 checksum of each zip entry. This can be used for integrity checks to detect data decay or problems with data transfer.
+This checksum can be obtained from ZIPsFS by appending ``@ARCHIVECRC32.TXT`` to a file path.
 
 
 ## ZIPsFS Options
@@ -265,6 +269,8 @@ File content larger than this will not be cached. When memory usage is high, cac
  Execution in background (Not recommended). We recommend running ZIPsFS in foreground in *tmux*.
 
 
+Irrespectively of these settings, if files are fetched from the prefices ``/zipsfs/m/`` and ``/zipsfs/~m/``,
+ZIP entries will allways or never be cached in RAM, respectively.
 
 ## FUSE Options
 
@@ -280,7 +286,8 @@ The last argument is the mount point which is an empty folder.
 
 
 ## Special directory prefixes
-Note: The directory name  used to be /ZIPsFS/. This conflicted with MS-Windows and is therefore changed to lower case  /zipsfs/.
+Note: The original mixed case directory prefix  caused problems for  MS-Windows clients.
+The directory prefix is now  ``/zipsfs/``.
   - <mount-point>/zipsfs/p   Rapid navigation and file name searching without time consuming ZIP file expansion.
   - <mount-point>/zipsfs/n   Internet files. Take URL and replace colon and slashes by comma. See above tutorial.
   - <mount-point>/zipsfs/v   Logging, to identify misbehaving software which should rather be used with preloading of remote or compressed files.

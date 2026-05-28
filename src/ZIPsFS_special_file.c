@@ -150,19 +150,24 @@ static off_t special_file_size(const int i){
   return _special_file_size[i];
 }
 
+
+
+static int special_file_print_pathinfo( zpath_t *zpath,textbuffer_t *b_or_null){
+  if (!ZPF(ZP_IS_PATHINFO|ZP_IS_ARCHIVECRC32)) return -1;
+  if (!zpath->stat_rp.st_ino && !find_realpath(0,zpath)) return -1;
+  const int tmp_l=ZPF(ZP_IS_ARCHIVECRC32)?9:RP_L()+EP_L()+2;
+  char tmp[tmp_l];
+  const int l=ZPF(ZP_IS_ARCHIVECRC32)?     snprintf(tmp,tmp_l,"%8x",zpath->zipcrc32):    snprintf(tmp,tmp_l,"%s%s%s\n",RP(),EP_L()?"\t":"",EP());
+  if (l>0 && b_or_null) textbuffer_add_segment(TXTBUFSGMT_DUP,b_or_null,tmp,0);
+  return l;
+}
 static uint64_t special_file_file_content_to_fhandle(zpath_t *zpath,const int special_file_id){
   uint64_t fh=0;
-  if (special_file_id || ZPF(ZP_IS_PATHINFO)){
+  if (special_file_id || ZPF(ZP_IS_PATHINFO|ZP_IS_ARCHIVECRC32)){
     fHandle_t *d=fhandle_create(FHANDLE_SPECIAL_FILE,&fh,zpath);
     textbuffer_t *b=textbuffer_new(COUNT_MALLOC_PRELOADRAM_TXTBUF);
     cg_thread_assert_not_locked(mutex_fhandle);
-    if (ZPF(ZP_IS_PATHINFO)){
-      find_realpath(0,zpath);
-      char tmp[2*MAX_PATHLEN];
-      SF_PRINTF("%s%s%s\n",RP(),EP_L()?"\t":"",EP());
-    }else{
-      special_file_content(b,special_file_id);
-    }
+    if (ZPF(ZP_IS_ARCHIVECRC32|ZP_IS_PATHINFO)) special_file_print_pathinfo(zpath,b); else special_file_content(b,special_file_id);
     {
       lock(mutex_fhandle);
       if (!fhandle_set_text(d,b)){

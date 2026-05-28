@@ -295,6 +295,13 @@ Consequently, the file listing will be incomplete when requested for the
 first time.
 Only after some seconds, the file listing will be presented properly.
 .RE
+.PP
+A major advantage of using ZIP archives for storing files is that Zip
+files contain a record of the CRC32 checksum of each zip entry.
+This can be used for integrity checks to detect data decay or problems
+with data transfer.
+This checksum can be obtained from ZIPsFS by appending
+\f[V]\[at]ARCHIVECRC32.TXT\f[R] to a file path.
 .SS ZIPsFS Options
 .PP
 \f[B]-h\f[R]
@@ -367,6 +374,10 @@ this value.
 .PP
 \f[B]-b\f[R] Execution in background (Not recommended).
 We recommend running ZIPsFS in foreground in \f[I]tmux\f[R].
+.PP
+Irrespectively of these settings, if files are fetched from the prefices
+\f[V]/zipsfs/m/\f[R] and \f[V]/zipsfs/\[ti]m/\f[R], ZIP entries will
+allways or never be cached in RAM, respectively.
 .SS FUSE Options
 .PP
 Options for the FUSE system come after the \f[B]colon\f[R] in the
@@ -379,9 +390,9 @@ command line.
 The last argument is the mount point which is an empty folder.
 .SS Special directory prefixes
 .PP
-Note: The directory name used to be /ZIPsFS/.
-This conflicted with MS-Windows and is therefore changed to lower case
-/zipsfs/.
+Note: The original mixed case directory prefix caused problems for
+MS-Windows clients.
+The directory prefix is now \f[V]/zipsfs/\f[R].
 - /zipsfs/p Rapid navigation and file name searching without time
 consuming ZIP file expansion.
 - /zipsfs/n Internet files.

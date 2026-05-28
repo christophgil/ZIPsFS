@@ -13,6 +13,7 @@
 // #define ewlog(x) cg_endsWith(0,x,cg_strlen(x),".log",4)
 
 #define VFILE_SFX_INFO "@SOURCE.TXT"
+#define VFILE_SFX_ZIPCRC32 "@ARCHIVECRC32.TXT"
 #define FEHLER(zpath) ASSERT(!strstr(ZP_VP(zpath),"home"))
 #define HOMEPAGE "https://github.com/christophgil/ZIPsFS"
 #define _GNU_SOURCE
@@ -1530,12 +1531,17 @@ static void init_special_files(){
     }
   }
 }
+
+
+
 static bool special_file_set_stat(struct stat *st, const virtualpath_t *vipa){
   const int id=vipa->special_file_id;
   bool ok=false;
-  if ((vipa->flags&ZP_IS_PATHINFO)){
-    stat_init(st,PATH_MAX,NULL);
-    ok=true;
+  if ((vipa->flags&(ZP_IS_PATHINFO|ZP_IS_ARCHIVECRC32))){
+    bool found;FIND_REALPATH(vipa);
+    const int l=special_file_print_pathinfo(zpath,NULL);
+    if (l>=0) stat_init(st,l,NULL);
+    ok=l>=0;
   }else if (SFILE_IS_IN_RAM(id)){
     stat_init(st,IF01(WITH_PRELOADRAM,0,special_file_size(id)),NULL);
     time(&st->st_mtime);
@@ -1597,10 +1603,8 @@ static int virtualpath_init(virtualpath_t *vipa, const char *vpath, char *buf){
   }else if (vipa->dir==DIR_PRELOADED_UPDATE){
     S();
   }
-  if (ENDSWITH(vipa->vp,vipa->vp_l,VFILE_SFX_INFO)){
-    B(vipa->vp_l-(sizeof(VFILE_SFX_INFO)-1));
-    vipa->flags|=ZP_IS_PATHINFO;
-  }
+  if (ENDSWITH(vipa->vp,vipa->vp_l,VFILE_SFX_INFO))    {  B(vipa->vp_l-(sizeof(VFILE_SFX_INFO)-1));        vipa->flags|=ZP_IS_PATHINFO;  }
+  if (ENDSWITH(vipa->vp,vipa->vp_l,VFILE_SFX_ZIPCRC32)){  B(vipa->vp_l-(sizeof(VFILE_SFX_ZIPCRC32)-1));    vipa->flags|=ZP_IS_ARCHIVECRC32;  }
   if (cg_strcasestr(vpath,"$NOCSC$")){ /* Windows no-client-side-cache */
     B(vipa->vp_l);
     cg_str_replace(0,buf,0, "$NOCSC$",7,"",0);

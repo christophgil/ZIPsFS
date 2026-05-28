@@ -433,6 +433,7 @@ typedef struct{
   IF1(WITH_PRELOADRAM,off_t preloadram_need_bytes);
   enum {ZP_NOT_EXPAND_SYMLINKS=1<<12,
         ZP_IS_PATHINFO=1<<14,
+        ZP_IS_ARCHIVECRC32=1<<15,
         ZP_IS_IN_FHANDLE=1<<18,
         _ZP_KEEP_NOT_RESET=1<<20,
         ZP_DOES_NOT_EXIST=1<<21,
