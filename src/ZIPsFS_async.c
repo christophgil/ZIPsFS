@@ -424,6 +424,9 @@ static void *_cleanup_files_runnable(void *arg){
   return NULL;
 }
 #endif //WITH_FILECONVERSION||WITH_PRELOADDISK
+
+
+#define  FHANDLE_DESTROY_LATER_ALL() fhandle_get(NULL,0)
 static void *infloop_PTHREAD_MISC(void *arg){
   root_t *r=arg;
   init_infloop(r,PTHREAD_MISC);
@@ -431,7 +434,7 @@ static void *infloop_PTHREAD_MISC(void *arg){
     log_infinity_loop(r,PTHREAD_MISC);
     root_update_time(r,-PTHREAD_MISC,0);
     usleep(1000*1000);
-    LOCK_NCANCEL(mutex_fhandle,fhandle_destroy_those_that_are_marked());
+    LOCK_NCANCEL(mutex_fhandle, FHANDLE_DESTROY_LATER_ALL());
 #if WITH_FILECONVERSION||WITH_PRELOADDISK
     if (_writable_path_l && (j&0xFff)==256){
       static pthread_t t;
@@ -465,6 +468,9 @@ static void *infloop_PTHREAD_PRELOAD(void *arg){
   root_t *r=arg;
   init_infloop(r,PTHREAD_PRELOAD);
   /* pthread_cleanup_push(infloop_preloadfile_start,r); Does not work because pthread_cancel not working when root blocked. */
+
+
+  ASSERT(atomic_load(&r->test1)==0);  atomic_fetch_add(&r->test1,1);
   for(int i=0;;i++){
     fHandle_t *dm=NULL,*dl=NULL; // cppcheck-suppress constVariablePointer
 #define d() (dl?dl:dm)
@@ -480,7 +486,7 @@ static void *infloop_PTHREAD_PRELOAD(void *arg){
       //log_debug_now("d: %s",D_VP(d()));
       {
         lock(mutex_fhandle);
-        atomic_fetch_add(&d()->is_preloading,1); /* Prevents destruction */
+        //atomic_fetch_add(&d()->is_preloading,1); /* Prevents destruction */
         IF1(WITH_PRELOADRAM,  if (dm && preloadram_queued!=preloadram_get_status(dm))  dm=NULL;   preloadram_set_status(dm,preloadram_reading));
         IF1(WITH_PRELOADDISK, if (dl && !(dl->flags&FHANDLE_PRELOADFILE_QUEUE))  dl=NULL; if (dl) { dl->flags|=FHANDLE_PRELOADFILE_RUN; dl->flags&=~FHANDLE_PRELOADFILE_QUEUE;});
         unlock(mutex_fhandle);
@@ -490,7 +496,7 @@ static void *infloop_PTHREAD_PRELOAD(void *arg){
       IF1(WITH_PRELOADDISK, fHandle_preloadfile_now(dl));
       {
         lock(mutex_fhandle);
-        atomic_fetch_add(&d()->is_preloading,-1);
+        //        atomic_fetch_add(&d()->is_preloading,-1);
         IF1(WITH_PRELOADRAM,  preloadram_set_status(dm,preloadram_done));
         unlock(mutex_fhandle);
       }

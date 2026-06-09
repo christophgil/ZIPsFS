@@ -258,7 +258,7 @@ static void textbuffer_reset(textbuffer_t *b){
 }
 static char *textbuffer_first_segment_with_min_capacity(const int flags,textbuffer_t *b, off_t min_size){
   assert(b!=NULL);
-  if (b->n>0 && _TXTBFFR_E(b,0)<min_size) textbuffer_reset(b);
+  if (b->n>0 && _TXTBFFR_E(b,0)<min_size) { textbuffer_reset(b); } // Should not happen
   if (!b->n) textbuffer_malloc(flags,b,min_size);
   return _TXTBFFR_S(b,0);
 }

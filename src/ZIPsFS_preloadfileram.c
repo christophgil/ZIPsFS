@@ -65,8 +65,6 @@ static bool preloadram_advise(zpath_t *zpath, const int additional_flags){
                                    (ZPF(ZP_IS_ZIP)?ADVISE_CACHE_IS_ZIPENTRY:0)|
                                    ((_preloadram_policy==PRELOADRAM_COMPRESSED&&ZPF(ZP_IS_COMPRESSEDZIPENTRY) || ZPF(ZP_IS_ZIP)&&_preloadram_policy==PRELOADRAM_ALWAYS)?ADVISE_CACHE_BY_POLICY:0),
                                    VP(),VP_L(),RP(),RP_L(),rootpath(zpath->root),zpath->stat_vp.st_size);
-
-  //log_debug_now("vp:%s  B=%ld  ZP_IS_COMPRESSEDZIPENTRY:%d  ",VP(),B,ZPF(ZP_IS_COMPRESSEDZIPENTRY));
   if (B<=0) return false;
   if (B>_preloadram_bytes_limit){
     warning(WARN_PRELOADRAM|WARN_FLAG_ONCE,VP(),"%'lld>%'lld. Consider set byte limit for RAM cache with  "ANSI_FG_BLUE"-l <gigabytes>G"ANSI_RESET,LLD(B),LLD(_preloadram_bytes_limit));
@@ -75,7 +73,7 @@ static bool preloadram_advise(zpath_t *zpath, const int additional_flags){
   return true;
 }
 
-  /* Each pass less strict */
+/* Each pass less strict */
 static bool preloadram_is_free_ram(const char *func,fHandle_t *d, const float laxity){
   LOCK_N(mutex_fhandle, const bool ok=d->preloadram && d->preloadram->txtbuf);
   if (ok) return true;
@@ -105,7 +103,7 @@ static off_t preloadram_wait_and_read(char *buf, const off_t size, const off_t o
     if (num>0 || preloadram_l>=offset) return num;
 
   }
-   warning(WARN_PRELOADRAM|WARN_FLAG_FAIL,VP(),"return -1");
+  warning(WARN_PRELOADRAM|WARN_FLAG_FAIL,VP(),"return -1");
   return -1;
 }
 #undef B
@@ -132,11 +130,11 @@ static void preloadram_set_status(fHandle_t *d,enum enum_preloadram_status statu
 static struct preloadram *preloadram_new(fHandle_t *d){
   ASSERT_LOCKED_FHANDLE();
   if (!d->preloadram){
+    //log_entered_function(ANSI_FG_GREEN"'%s' d: %p "ANSI_YELLOW"%ld"ANSI_RESET" thread: %lx"ANSI_RESET, D_VP(d),d,d->fhandle_fh,pthread_self());
     static int id;
     (d->preloadram=cg_calloc(COUNT_PRELOADRAM_MALLOC,1,sizeof(struct preloadram)))->id=++id;
     d->preloadram->preloadram_l=d->zpath.stat_vp.st_size;
     d->preloadram->m_zpath=d->zpath;
-
     foreach_fhandle(ie,e){
       if (fhandle_virtualpath_equals(d,e)){
         ASSERT(d->flags&FHANDLE_SPECIAL_FILE || !e->preloadram);
@@ -151,7 +149,7 @@ static bool preloadram_try_destroy(fHandle_t *d){
   struct preloadram *m=d->preloadram;
   if (m){
     if (is_preloadram_shared_with_other(d)) return false;
-    //log_entered_function("'%s'", D_VP(d));
+    //log_entered_function(ANSI_FG_RED"'%s' d: %p "ANSI_YELLOW"%ld"ANSI_RESET" thread: %lx"ANSI_RESET, D_VP(d),d,d->fhandle_fh,pthread_self());
     textbuffer_destroy(m->txtbuf);
     FREE_NULL_MALLOC_ID(m->txtbuf);
     cg_free_null(COUNT_PRELOADRAM_MALLOC,d->preloadram);
@@ -227,14 +225,16 @@ static off_t preloadram_read(char *buf,const fHandle_t *d,const off_t from,off_t
 ////////////////////////////////////////////////////////////
 static bool fhandle_check_crc32(fHandle_t *d){
   ASSERT_LOCKED_FHANDLE();
-  if (!is_preloadram(d,NULL) || !d->preloadram->txtbuf->n) return false;
+  if (!is_preloadram(d,NULL) || !d->preloadram->txtbuf->n){
+    return false;
+  }
   const off_t st_size=d->zpath.stat_vp.st_size;
   const uint32_t crc=cg_crc32(textbuffer_first_segment(d->preloadram->txtbuf),st_size,0,_mutex+mutex_crc);
   if (d->zpath.zipcrc32!=crc){
     warning(WARN_PRELOADRAM|WARN_FLAG_ERROR,D_VP(d),"crc32-mismatch!  ZIP: %x != computed: %x size=%zu already: %zu  rp=%s",d->zpath.zipcrc32,crc,st_size,d->preloadram->preloadram_already,D_RP(d));
     return false;
   }
-  //log_verbose(GREEN_SUCCESS"crc32  %x  size=%zu already: %zu  rp=%s",crc,st_size,d->preloadram->preloadram_already,D_RP(d));
+  //log_verbose(GREEN_SUCCESS"crc32  %x  size=%zu already: %zu  rp=%s",crc,st_size,d->preloadram->preloadram_already,D_VP(d));
   return true;
 }
 //////////////////////////////////////////////////////////////////////////////////////
@@ -243,14 +243,15 @@ static bool fhandle_check_crc32(fHandle_t *d){
 /// 2. the fHandle_t instance is not used.                                           ///
 /// 2. No other fHandle_t process is using the struct preloadram instance              ///
 //////////////////////////////////////////////////////////////////////////////////////
-#define RAM_NEW_ZIP 1  // Fro debugging DEBUG_NOW
-
-static bool preloadram_store_try(fHandle_t *d, root_t *r){
+static bool preloadram_now(fHandle_t *d, root_t *r){
   zpath_t *zpath=&d->zpath;
   //static int count;log_entered_function("%s  #%d",VP(),++count);
   char rp[PATH_MAX];
   LOCK_N(mutex_fhandle,  bool ok=is_preloadram(d,r);  if(ok) strcpy(rp,ZP_RP(&d->preloadram->m_zpath)));
   if (!ok) return false;
+  log_entered_function("%s  textbuffer_memusage  head: %'lld d: %p "ANSI_YELLOW"%ld"ANSI_RESET" thread: %ld",VP(),LLD(ramUsageForFilecontent()),d,d->fhandle_fh,pthread_self());
+  cg_thread_assert_not_locked(mutex_fhandle);
+  const int64_t start=currentTimeMillis();
   const int fd=ZPF(ZP_IS_ZIP)?0:open(rp,O_RDONLY); // USED_TO_BE_ZP_TRY_ZIP
   zip_file_t *zf=NULL;
   zip_t *za=NULL;
@@ -258,7 +259,7 @@ static bool preloadram_store_try(fHandle_t *d, root_t *r){
     zf=my_zip_fopen( (za=my_zip_open(rp)),EP(),ZIP_RDONLY,rp);
     if (!zf){ my_zip_fclose(zf,RP()); return false;}
   }
-  if (!zf && fd<=0){ warning(WARN_PRELOADRAM|WARN_FLAG_ERRNO|WARN_FLAG_ERROR,rp,"Failed %s() d=%p",ZPF(ZP_IS_ZIP)?"zip_open":"open",d); return false; }
+  if (!zf && fd<=0){ warning(WARN_PRELOADRAM|WARN_FLAG_ERRNO|WARN_FLAG_ERROR,rp,"Failed %s() d: %p",ZPF(ZP_IS_ZIP)?"zip_open":"open",d); return false; }
   const off_t st_size=zpath->stat_vp.st_size;
   off_t already=0;
   LOCK(mutex_fhandle,if ((ok=is_preloadram(d,r))) PRELOADFILE_ROOT_UPDATE_TIME(d,r,true));
@@ -268,18 +269,19 @@ static bool preloadram_store_try(fHandle_t *d, root_t *r){
     for(;st_size>already;){
       const off_t n_max=MIN_long(PRELOADRAM_READ_BYTES_NUM,st_size-already), n=zf?my_zip_fread(zf,buf,n_max,D_RP(d)):read(fd,buf,n_max);
       if (!n) break;
-      if (n<0){ok=false;warning(WARN_PRELOADRAM,rp,"n<0  d=%p  read=%'zu st_size=%'ld",d,already,st_size);break;}
+      if (n<0){ok=false;warning(WARN_PRELOADRAM,rp,"n<0  d: %p  read=%'zu st_size=%'ld",d,already,st_size);break;}
       { /* copy bytes */
         lock(mutex_fhandle);
         char *dst=NULL;
         ok=is_preloadram(d,r);
-        more=ok && !preloadram_can_break(d); //DEBUG_NOW
-        if (!ok){ log_verbose("ok=%d  is_preloadram:%d  preloadram_can_break:%d already=%ld  thread:%ld", ok,is_preloadram(d,r), preloadram_can_break(d),  already, pthread_self());}
+        more=ok && !preloadram_can_break(d);
+        //if (!ok)log_debug_now(RED_FAIL"ok=%d  is_preloadram:%d  preloadram_can_break:%d already=%'ld  thread: %lx", ok,is_preloadram(d,r), preloadram_can_break(d),  already, pthread_self());
         if (ok && d->preloadram && d->preloadram->txtbuf){
           dst=textbuffer_first_segment_with_min_capacity(st_size>THRESHOLD_MALLOC_MMAP?TXTBUFSGMT_MUNMAP:0,d->preloadram->txtbuf,st_size);
           if ((ok=(dst!=NULL))){
+            //log_debug_now("already: %'ld n:%'ld  Plus: %'ld  st_size: %'ld d: %p "ANSI_YELLOW"%ld"ANSI_RESET"   thread: %lx",already,n,already+n,st_size,d,d->fhandle_fh, pthread_self());
+            //debug_print_all_d_with_preloadram(d);
             ASSERT(already+n<=st_size);
-            //ASSERT(n<=PRELOADRAM_READ_BYTES_NUM);                     ASSERT(fhandle_currently_reading_writing(d));
             memcpy(dst+already,buf,n);
             if ((already+=n)>d->preloadram->preloadram_already) d->preloadram->preloadram_already=already;
             PRELOADFILE_ROOT_UPDATE_TIME(d,r,true);
@@ -291,16 +293,24 @@ static bool preloadram_store_try(fHandle_t *d, root_t *r){
     }/*for already*/
   }
   cg_free(COUNT_PRELOADRAM_MALLOC,buf);
+  //ASSERT(is_preloadram(d,r));
   const char *msg=NULL;
-  if (already!=st_size){ /* Not Completely read */
-    if (more) msg=RED_WARNING" already!=st_size";
-  }else if (ZPF(ZP_IS_ZIP)){ // USED_TO_BE_ZP_TRY_ZIP
-    LOCK(mutex_fhandle, ok=fhandle_check_crc32(d));
-    fhandle_counter_inc(d,ok?ZIP_READ_CACHE_CRC32_SUCCESS:ZIP_READ_CACHE_CRC32_FAIL);
-    msg=ok?GREEN_SUCCESS" crc32 OK":RED_WARNING" already==st_size  crc32 wrong";
+  {
+    lock(mutex_fhandle);
+    if (is_preloadram(d,r)){
+      if (already!=st_size){ /* Not Completely read */
+        if (more) msg=RED_WARNING" already!=st_size";
+      }else if (ZPF(ZP_IS_ZIP)){ // USED_TO_BE_ZP_TRY_ZIP
+        LOCK(mutex_fhandle, ok=fhandle_check_crc32(d));
+        fhandle_counter_inc(d,ok?ZIP_READ_CACHE_CRC32_SUCCESS:ZIP_READ_CACHE_CRC32_FAIL);
+        msg=ok?GREEN_SUCCESS" crc32 OK":RED_WARNING" already==st_size  crc32 wrong";
+        if (ok) d->preloadram->preloadram_took_mseconds=currentTimeMillis()-start;
+      }
 
+    }
+    unlock(mutex_fhandle);
   }
-  if (msg && (LOG_FLAG_P(LOG_PRELOADRAM)||!ok)) log_exited_function("%s  %s  st_size: %lld\n",rp,msg,LLD(st_size));
+  if (msg && (LOG_FLAG_P(LOG_PRELOADRAM)||!ok))log_exited_function("%s  %s  st_size: %'lld\n",rp,msg,LLD(st_size));
   if (fd) close(fd);
   my_zip_fclose(zf,rp);
   my_zip_close(za,__func__);
@@ -310,35 +320,6 @@ static bool preloadram_store_try(fHandle_t *d, root_t *r){
 
 
 
-//////////////////////////////////////////////////////////////////////
-/// Try NUM_PRELOADRAM_STORE_RETRY times to run preloadram_store_try() ///
-//////////////////////////////////////////////////////////////////////
-static void preloadram_now(fHandle_t *d, root_t *r){
-  cg_thread_assert_not_locked(mutex_fhandle);
-  const zpath_t *zpath=&d->zpath;
-  log_entered_function("%s  textbuffer_memusage  head: %'lld ",VP(),LLD(ramUsageForFilecontent()));
-  FOR(retry,0,MAX(1,NUM_PRELOADRAM_STORE_RETRY)){
-    LOCK_N(mutex_fhandle, bool ok=is_preloadram(d,r));
-    if (!ok) break;
-    if (retry){ log_verbose("Going to sleep 1s and retry  %s ...",VP()); usleep(1000*1000);} // cppcheck-suppress knownConditionTrueFalse
-    const int64_t start=currentTimeMillis();
-    ok=preloadram_store_try(d,r);
-    bool more=ok;
-    if (ok){
-      lock(mutex_fhandle);
-      if ((more=is_preloadram(d,r))){
-        d->preloadram->preloadram_took_mseconds=currentTimeMillis()-start;
-        if(retry){ // && d->preloadram->preloadram_already==zpath.stat_vp.st_size
-          warning(WARN_RETRY,VP(),"Success on retry %d",retry);fhandle_counter_inc(d,COUNT_RETRY_PRELOADRAM);
-        }
-      }
-      unlock(mutex_fhandle);
-    }
-    if (!more || ok){
-      return;
-    }
-  }/*for retry*/
-}
 /////////////////////////////////////////////////////////////////////////////////
 /// Directly set bytes to struct preloadram                                     ///
 /// Needed for fileconversion and for getting the real file path with suffix @SOURCE ///
@@ -392,10 +373,7 @@ static bool preloadram_wait(fHandle_t *d, const off_t min_fill){
     LOCK(mutex_fhandle, ok=is_preloadram(d,NULL);  a=!ok?0:d->preloadram->preloadram_already; preloadram_l=!ok?0:d->preloadram->preloadram_l;status=!ok?0:d->preloadram->preloadram_status);
     if (!ok) log_error("!ok");
     if (!ok || F) return ok;
-    if (status!=preloadram_reading && status!=preloadram_queued){
-      log_error("status!=preloadram_reading && status!=preloadram_queued");
-      return F;
-    }
+    if (status!=preloadram_reading && status!=preloadram_queued){log_error("status!=preloadram_reading && status!=preloadram_queued");return F;}
 #undef F
     if (preloadfile_time_exceeded(__func__,d,COUNT_PRELOADRAM_WAITFOR_TIMEOUT)) break;
     usleep(50+MIN(i,1<<18));

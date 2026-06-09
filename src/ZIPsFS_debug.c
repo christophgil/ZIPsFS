@@ -243,3 +243,17 @@ static bool debug_trigger_vp(const char *vp,const int vp_l){
 #else
 #define debug_trigger_vp(...) false
 #endif
+
+
+#if 0
+static void _debug_fhandle(fHandle_t *d,char *ansi){
+  fprintf(stderr,"%sd: %p "ANSI_RESET ANSI_YELLOW"%ld"ANSI_RESET" destroy:%d reading:%d   ",ansi, d,d->fhandle_fh,0!=(d->flags&FHANDLE_DESTROY_LATER),fhandle_currently_reading_writing(d));
+}
+
+static void debug_print_all_d_with_preloadram(fHandle_t *d){
+  _debug_fhandle(d,ANSI_INVERSE);
+  foreach_fhandle(id,e)    if (e!=d && e->preloadram==d->preloadram && !(e->flags&FHANDLE_DESTROY_LATER)) _debug_fhandle(e,"");
+  fputc('\n',stderr);
+}
+
+#endif //0

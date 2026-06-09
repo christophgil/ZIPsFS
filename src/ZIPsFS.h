@@ -397,6 +397,8 @@ typedef struct{
   int stat_timeout_seconds,readdir_timeout_seconds,openfile_timeout_seconds;
   const char **path_deny, **path_allow, **preload_extensions;
   atomic_int serialized_fileaccess;
+
+  atomic_int test1;
 } root_t;
 
 ////////////////
@@ -593,7 +595,8 @@ typedef struct{
   off_t zip_fread_position;
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,ht_t *ht_transient_cache);
   IF1(WITH_PRELOADRAM, struct preloadram * volatile preloadram; int how_often_bwdseek);
-  atomic_int volatile is_preloading, count_calls_read, serialized_incremented;
+  atomic_int volatile //is_preloading,
+    count_calls_read, serialized_incremented;
   IF1(WITH_FILECONVERSION, enum{FILECONVERSION_UNINITILIZED,FILECONVERSION_SUCCESS,FILECONVERSION_FAIL} fileconversion_state);
   time_t serialized_when_read;
 }  fHandle_t;

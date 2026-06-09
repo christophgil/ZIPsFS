@@ -7,9 +7,6 @@ set -u
 [[ -n ${TMUX_WINDOW_NUMBER:-} ]] && tmux rename-window -t "$TMUX_WINDOW_NUMBER" "${0##*/}"
 
 
-crc32_zip_entry(){
-    unzip -v "$1" "$2" | sed -n 4p| awk '{ print $7}'
-}
 IS_VERBOSE=0
 while getopts 'v' o; do
     case $o in
@@ -18,7 +15,6 @@ while getopts 'v' o; do
     esac
 done
 shift $((OPTIND-1))
-
 
 main(){
     if [[ -z ${1:-} ]]; then
@@ -39,22 +35,12 @@ EOF
     declare -A map_crc
     local f
     for f in "$@"; do
-        echo f=$f
-        local zipfile_entry z e
-        ! zipfile_entry=$(< $f@SOURCE.TXT) && return
-        echo zipfile_entry=$zipfile_entry
-        [[ -z $zipfile_entry ]] && read -r -p "Can not read $f@SOURCE.TXT  "
-        z=${zipfile_entry%$'\t'*}
-        if [[ $z != $zipfile_entry  ]]; then
-            e=${zipfile_entry#*$'\t'}
-            echo "$f"
-            echo "zipfile $z  entry $e" ; #read -r -p EEEEEEEEEEEEEE
-            ! ls -f -l $z && return
-            local crc=$(crc32_zip_entry "$z"  "$e")
-            echo  "$z    $ANSI_FG_MAGENTA$e    $ANSI_FG_BLUE$crc$ANSI_RESET"
-        else
-            crc=$(rhash --printf=%C --crc32 $z)
-            echo "Not a zip entry: $z  $ANSI_FG_BLUE$crc$ANSI_RESET"
+        ! ls -l $f && continue
+        local crc=''
+        crc=$(< $f@ARCHIVECRC32.TXT)
+        if [[ -z $crc ]]; then
+            echo "Not a ZIP entry?   Empty  $ANSI_FG_BLUE$f@ARCHIVECRC32.TXT$ANSI_RESET"
+            crc=$(rhash --printf=%C --crc32 $f)
         fi
         map_crc[$f]="${crc^^}"
     done

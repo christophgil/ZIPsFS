@@ -98,7 +98,7 @@ enum{ASYNC_SLEEP_USECONDS=5000};    /* Sleep microseconds after checking again. 
 /*********************************************************************************************************************************/
 #define WITH_ZIPFLAT 1
 #define WITH_ZIPFLATCACHE 1 /* When listing directory contents, cache the mapping virtual path to zip file.  This facilitates subsequent identification of zip files for virtual paths. */
-#define WITH_STATCACHE 1 /* DEBUG_NOW  Activate a cache for file attributes */
+#define WITH_STATCACHE 1 /*  Activate a cache for file attributes */
 #define WITH_EVICT_FROM_PAGECACHE 1 // See Not for MacOSX
 
 
@@ -135,7 +135,6 @@ enum{
   READDIR_TIMEOUT_SECONDS=100,
   OPENFILE_TIMEOUT_SECONDS=100,
   OPENZIP_TIMEOUT_SECONDS=50,
-  NUM_PRELOADRAM_STORE_RETRY=1,
  PRELOADFILE_TIMEOUT_SECONDS=4
 };
 
@@ -143,7 +142,6 @@ enum{
 
 #else
 enum{
-  NUM_PRELOADRAM_STORE_RETRY=2,
   PROBE_PATH_RESPONSE_TTL_SECONDS=9,   /* Root paths which have responded within that time are considered active. */
   PROBE_PATH_TIMEOUT_SECONDS=30,   /* Give up waiting for this root path after this time. */
   STAT_TIMEOUT_SECONDS=30, // Give up waiting for stat() result

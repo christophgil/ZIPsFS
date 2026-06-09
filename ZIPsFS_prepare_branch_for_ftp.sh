@@ -105,3 +105,4 @@ go ftp.pdbj.org/pub                                pdbj '::/db/pdbj/pdb/data/str
 
 echo 'Add the following CLI parameter to the commandline of ZIPsFS:' >&2
 echo $CLIPARAS
+# lftp -e "set ftp:ssl-allow false" massive-ftp.ucsd.edu

@@ -157,7 +157,7 @@ static int special_file_print_pathinfo( zpath_t *zpath,textbuffer_t *b_or_null){
   if (!zpath->stat_rp.st_ino && !find_realpath(0,zpath)) return -1;
   const int tmp_l=ZPF(ZP_IS_ARCHIVECRC32)?9:RP_L()+EP_L()+2;
   char tmp[tmp_l];
-  const int l=ZPF(ZP_IS_ARCHIVECRC32)?     snprintf(tmp,tmp_l,"%8x",zpath->zipcrc32):    snprintf(tmp,tmp_l,"%s%s%s\n",RP(),EP_L()?"\t":"",EP());
+  const int l=ZPF(ZP_IS_ARCHIVECRC32)?     snprintf(tmp,tmp_l,"%08x",zpath->zipcrc32):    snprintf(tmp,tmp_l,"%s%s%s\n",RP(),EP_L()?"\t":"",EP());
   if (l>0 && b_or_null) textbuffer_add_segment(TXTBUFSGMT_DUP,b_or_null,tmp,0);
   return l;
 }

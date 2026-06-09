@@ -95,7 +95,7 @@ static void log_print_roots(FILE *file){ /* n==0 for UNIX console with UTF8 else
   P("  This adds to the beginning of all virtual files.\n\
                Also the last path component of the root-path is used as the prefix unless a trailing slash is given.\n\
                This is consistent with the trailing slash semantics of UNIX tools like rsync, scp and cp.\n\n\
-Feature flags: W=Writable (First path)   R=Remote (Path starts with two slashes)  L=Preload files (option --preload)   1=one file system (no cross devices)  S=follow symlinks\n\
+Feature flags: W=Writable (First path) C=Immutable  R=Remote (Path starts with two slashes)  L=Preload files (option --preload)   1=one file system (no cross devices)  S=follow symlinks\n\
                T=Supports timeout (Path starts with three slashes and activated WITH_TIMEOUT_xxxx macros)  I=immutable WORM=Write-once-read-many\n\
                gz xz bz2 lrz Z: decompression on preloading to disk\n    B=Blocked (frozen)");
 

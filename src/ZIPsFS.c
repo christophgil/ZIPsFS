@@ -97,6 +97,7 @@
 #include "cg_log.c"
 #include "cg_cpu_usage_pid.c"
 #include "cg_textbuffer.c"
+#define  ALL_READABLE true
 static pid_t _pid;
 //cppcheck-suppress-macro [identicalInnerCondition]
 #define fhandle_busy_start(d) {if (d) d->is_busy++;}   DETECT_RESOURCE_LEAK_B(_fhandle_busy)
@@ -1186,7 +1187,9 @@ static void fhandle_init(fHandle_t *d, const zpath_t *zpath){
   d->flags|=FHANDLE_ACTIVE; /* Important; This must be the last assignment */
 }
 static fHandle_t* _fhandle_create_locked(const int flags,const uint64_t fh, const zpath_t *zpath){
+  //  { fHandle_t *d=fhandle_get(VP(),fh);  ASSERT(!(d && !(d->flags&FHANDLE_DESTROY_LATER)));}   Rarely possible
   fHandle_t *d=NULL;
+
   { foreach_fhandle_also_emty(ie,e) if (!e->flags){ d=e; break;}} /* Use empty slot */
   if (!d){ /* Append to list */
     if (_fhandle_n>=FHANDLE_MAX){ warning(WARN_FHANDLE|WARN_FLAG_ONCE_PER_PATH|WARN_FLAG_ERROR,VP(),"Excceeding FHANDLE_MAX");return NULL;}
@@ -1225,23 +1228,20 @@ static fHandle_t* fhandle_create(const int flags, uint64_t *fh, const zpath_t *z
   }
 }
 static bool fhandle_currently_reading_writing(const fHandle_t *d){
-  ASSERT_LOCKED_FHANDLE();
   if (!d) return false;
   assert(d->is_busy>=0);
   return d->is_busy>0;
 }
-static void fhandle_destroy(fHandle_t *d){
+static void fhandle_try_destroy(fHandle_t *d){
   ASSERT_LOCKED_FHANDLE();
-  if (d){
-    d->flags|=FHANDLE_DESTROY_LATER;
-    if (!fhandle_currently_reading_writing(d)) fhandle_destroy_now(d);
-    else warning(WARN_FLAG_ERROR|WARN_FLAG_ONCE_PER_PATH,D_VP(d),"fhandle_currently_reading_writing()");
-  }
-}
-static void fhandle_destroy_now(fHandle_t *d){
-  ASSERT_LOCKED_FHANDLE();
+  if (fhandle_currently_reading_writing(d)){  warning(WARN_FLAG_ERROR,D_VP(d),"fhandle_currently_reading_writing()");return;}
 #if WITH_PRELOADRAM
-  if (atomic_load(&d->is_preloading)>0) return; /* Currently not being copied to RAM */
+  //if (atomic_load(&d->is_preloading)>0) return; /* Currently not being copied to RAM */
+  {
+    const int s=!d->preloadram?0:d->preloadram->preloadram_status;
+    if (s==preloadram_queued || s==preloadram_reading) return; /* Avoid that d gets destroyed and reinitialized while a reference is in the queue or filled with data */
+  }
+
   if (!is_preloadram_shared_with_other(d) &&          /* Another fHandle_t could take care of struct preloadram instance later */
       !preloadram_try_destroy(d)) return;             /* struct preloadram is NULL or has been destroyed */
 #endif //WITH_PRELOADRAM
@@ -1259,23 +1259,20 @@ static void fhandle_destroy_now(fHandle_t *d){
   *d=FHANDLE_EMPTY;
   COUNTER2_INC(COUNT_FHANDLE_CONSTRUCT);
 }
-static void fhandle_destroy_those_that_are_marked(void){
+static fHandle_t* fhandle_get(const char *vp_or_null,const uint64_t fh){
   ASSERT_LOCKED_FHANDLE();
+  const ht_hash_t h=hash_value_strg(vp_or_null);
   foreach_fhandle(id,d){
-    if ((d->flags&FHANDLE_DESTROY_LATER)  && !fhandle_currently_reading_writing(d)) fhandle_destroy_now(d);
+    if (d->flags&FHANDLE_DESTROY_LATER){
+      fhandle_try_destroy(d);
+    }else if (vp_or_null && fh==d->fhandle_fh && D_VP_HASH(d)==h && !strcmp(vp_or_null,D_VP(d))){
+      return d;
+    }
   }
+
+  return NULL;
 }
-static fHandle_t* fhandle_get(const virtualpath_t *vipa,const uint64_t fh){
-  ASSERT_LOCKED_FHANDLE();
-  fhandle_destroy_those_that_are_marked();
-  const ht_hash_t h=hash_value_strg(vipa->vp);
-  fHandle_t* e=NULL;
-  foreach_fhandle(id,d){
-    if (fh==d->fhandle_fh && D_VP_HASH(d)==h && !strcmp(vipa->vp,D_VP(d))){ e=d; break;}
-  }
-  //log_exited_function("fh: %lu '%s' found: %s",fh,vipa->vp,success_or_fail(e!=NULL));
-  return e;
-}
+
 static bool fhandle_find_identical(const fHandle_t *d){
   foreach_fhandle(ie,e) if (fhandle_virtualpath_equals(d,e) && !(e->flags&FHANDLE_DESTROY_LATER)) return true;
   return false;
@@ -1673,7 +1670,12 @@ static int _xmp_getattr(const virtualpath_t *vipa, struct stat *st){ /* NOT_TO_H
 static int xmp_getattr(const char *vpath, struct stat *st IF1(WITH_XMP_GETATTR_FUSE_FILE_INFO,,struct fuse_file_info *fi_or_null)){
   FUSE_PREAMBLE(vpath);
   if (!er) er=_xmp_getattr(&vipa ,st);
+  if (!er){
+    // DEBUG_NOW
+    st->st_mode|=((st->st_mode&S_IFDIR)?0777:(st->st_mode&S_IFREG)?0666:0);
+  }
   log_fuse_function(__func__,&vipa,er);
+  //log_exited_function("vpath: %s %s",vpath, success_or_fail(er==0));
   return er;
 }
 
@@ -1740,7 +1742,7 @@ static int open_for_reading(const virtualpath_t *vipa, struct fuse_file_info *fi
   if (!fh){ /* ID for fHandle_t  */
     int ff=IF1(WITH_CCODE, config_c_open(C_FLAGS_FROM_ZPATH(zpath),VP(),VP_L())?FHANDLE_PREPARE_ONCE_IN_RW|FHANDLE_IS_CCODE:)0;
     IF1(WITH_INTERNET_DOWNLOAD,  if (!ff && vipa->dir==DIR_INTERNET_UPDATE) ff=FHANDLE_PREPARE_ONCE_IN_RW);
-    if (!ff && find_realpath(FILLDIR_FROM_OPEN,zpath)  IF1(WITH_FILECONVERSION,&&!fileconversion_remove_if_not_uptodate(zpath))){
+    if (!ff && find_realpath(FILLDIR_FROM_OPEN,zpath) IF1(WITH_FILECONVERSION, &&!fileconversion_remove_if_not_uptodate(zpath))){
       IF1(WITH_PRELOADDISK,      if (!ff && (is_preloaddisk_zpath(zpath) || vipa->dir==DIR_PRELOADED_UPDATE || path_with_compress_sfx_exists(zpath))) ff=FHANDLE_PREPARE_ONCE_IN_RW);
       IF1(WITH_PRELOADRAM,       if (preloadram_advise(zpath,0)) ff=FHANDLE_WITH_PRELOADRAM);
       if (zpath->flags&ZP_IS_ZIP)  { ff|=FHANDLE_PREPARE_ONCE_IN_RW; IF0(WITH_INEFFICIENT_ZIP_READING,fi->direct_io=1);}  /*Without direct_io,  multithreaded unordered read.*/
@@ -1761,11 +1763,12 @@ static int open_for_reading(const virtualpath_t *vipa, struct fuse_file_info *fi
   return errno?-errno:-1;
 }/*xmp_open*/
 static int xmp_open(const char *vpath, struct fuse_file_info *fi){
+  //log_entered_function("vpath %s",vpath);
   errno=0;
   ASSERT(fi!=NULL);
   FUSE_PREAMBLE_W((fi->flags&(O_WRONLY||O_RDWR|O_APPEND|O_CREAT))?1:0,vpath);
   if (!er)	er=_xmp_open(&vipa,fi);
-  IF_LOG_FLAG_OR(LOG_OPEN,er!=0)log_exited_function("%s res: %d",vpath,er);
+  IF_LOG_FLAG_OR(LOG_OPEN,er!=0)log_exited_function("%s res: %d  "ANSI_YELLOW"%ld"ANSI_RESET,vpath,er,fi->fh);
   if (fi->fh>2 && fi->fh<COUNT_BACKWARD_SEEK) _count_backward_seek[fi->fh]=0;
   return -er;
 }
@@ -1895,7 +1898,7 @@ static int xmp_write(const char *vpath, const char *buf, size_t size,off_t offse
     fd=MAX_int(0,open(real_path,O_WRONLY));
   }else{
     fd=fi->fh;
-    LOCK_N(mutex_fhandle, fHandle_t *d=fhandle_get(&vipa,fd); fhandle_busy_start(d));
+    LOCK_N(mutex_fhandle, fHandle_t *d=fhandle_get(vipa.vp,fd); fhandle_busy_start(d));
     if (d){
       fhandle_prepare_in_fuse_read_or_write(d,fi->flags);
       fd=d->fd_real;
@@ -2102,9 +2105,9 @@ static off_t fhandle_read_zip(char *buf, const off_t size, const off_t offset,fH
   cg_thread_assert_not_locked(mutex_fhandle);
   if (!fhandle_zip_fopen(d,__func__)){  warning(WARN_READ|WARN_FLAG_ONCE_PER_PATH,D_VP(d),"xmp_read_fhandle_zip fhandle_zip_open returned -1"); return -1;}
   if (!fhandle_zip_fseek(d,offset,"")){ /* Worst case=seek backward - need reopen zip file. Happens often without fi->direct_io */
-    log_debug_now("Failed seek");
+    //log_debug_now("Failed seek");
     IF1(WITH_PRELOADRAM,if ((*again=_preloadram_policy!=PRELOADRAM_NEVER && preloadram_is_free_ram(__func__,d,1+d->how_often_bwdseek++/9.9999f) && d->zpath.dir!=DIR_NEVER_PREFETCH_RAM)) return -1);
-    log_debug_now("%d %d %d %d",_preloadram_policy!=PRELOADRAM_NEVER, ramUsageForFilecontent()+d->zpath.stat_vp.st_size<_preloadram_bytes_limit, d->how_often_bwdseek , d->zpath.dir!=DIR_NEVER_PREFETCH_RAM);;
+    //log_debug_now("%d %d %d %d",_preloadram_policy!=PRELOADRAM_NEVER, ramUsageForFilecontent()+d->zpath.stat_vp.st_size<_preloadram_bytes_limit, d->how_often_bwdseek , d->zpath.dir!=DIR_NEVER_PREFETCH_RAM);;
     warning(WARN_SEEK,D_VP(d),ANSI_MAGENTA"Going to reopen zip offest=%'ld"ANSI_RESET,offset);
     fhandle_zip_fclose(false,d);    if (!fhandle_zip_fopen(d,"REWIND")) return -1;
     if (!fhandle_zip_fseek(d,offset,"REWIND")) return -1;
@@ -2195,11 +2198,11 @@ static void serialized_delay_read(fHandle_t *d,root_t *r){
 /* An exception to this is when the 'direct_io' mount option is specified, in which case the return value of the read system call will reflect the return value of this operation. */
 /***********************************************************************************************************************************************************************************/
 static int xmp_read(const char *vpath, char *buf, const size_t size, const off_t offset,struct fuse_file_info *fi){
-  //log_entered_function("%s Size:%'lld   Offset: %'lld +%'d buf:%p",vpath,LLD(size),LLD(offset),(int)size,buf);
+  //log_entered_function(ANSI_FG_GRAY"%s Size:%'lld   Offset: %'lld +%'d buf:%p"ANSI_RESET,vpath,LLD(size),LLD(offset),(int)size,buf);
   ASSERT(fi!=NULL); ASSERT(fi->fh);
   FUSE_PREAMBLE_Q(vpath);
   root_t *r=NULL;
-  LOCK_N(mutex_fhandle, fHandle_t *d=fhandle_get(&vipa,fi->fh);IF(d){r=D_ROOT(d); d->accesstime=time(NULL); fhandle_busy_start(d);});
+  LOCK_N(mutex_fhandle, fHandle_t *d=fhandle_get(vipa.vp,fi->fh);IF(d){r=D_ROOT(d); d->accesstime=time(NULL); fhandle_busy_start(d);});
   if (d){
     if (r && (d->flags&FHANDLE_SERIALIZED)) serialized_delay_read(d,r);
     fhandle_prepare_in_fuse_read_or_write(d,O_RDONLY);
@@ -2214,7 +2217,7 @@ static int xmp_read(const char *vpath, char *buf, const size_t size, const off_t
   }
   IF(d){LOCK(mutex_fhandle,fhandle_busy_end(d));}
   //if (bytes<=0 && d) DIE_DEBUG_NOW(RED_FAIL"%s bytes: %d  Size:%'lld   Offset: %'lld +%'d  FHANDLE_WITH_PRELOADRAM:%d",vpath, bytes, LLD(size),LLD(offset),(int)size,   (d->flags&FHANDLE_WITH_PRELOADRAM));
-  //log_exited_function("size:%'ld offset:%'ld  bytes:%'d",size,offset,bytes);
+  //log_exited_function(ANSI_FG_GRAY"%s "ANSI_YELLOW"%lu"ANSI_RESET"  Offset: %'lld  bytes: %'d"ANSI_RESET,vpath,fi->fh, LLD(offset),(int)bytes);
   return bytes; // cppcheck-suppress resourceLeak
 }
 static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const size_t size, const off_t offset,int fd, bool *again){
@@ -2270,10 +2273,12 @@ static int xmp_release(const char *vpath, struct fuse_file_info *fi){ // cppchec
   const uint64_t fd=fi->fh;
   if (fd>=FD_ZIP_MIN){
     lock(mutex_fhandle);
-    fHandle_t *d=fhandle_get(&vipa,fd);
+    fHandle_t *d=fhandle_get(vipa.vp,fd);
     if (d){
       count_backward_seek=d->count_backward_seek;
-      fhandle_destroy(d);
+      //log_entered_function(ANSI_FG_RED"%s  d: %p "ANSI_RESET ANSI_YELLOW"%ld"ANSI_RESET,vpath,d,fd);
+      d->flags|=FHANDLE_DESTROY_LATER;
+      fhandle_try_destroy(d);
     }
     unlock(mutex_fhandle);
   }else if (fd>2){
@@ -2542,4 +2547,4 @@ int main(const int argc,const char *argv[]){
 //   zip_stat    zip_t
 // crc32 mnt/Z2/Data/30-0039/20250531_Z2_KTT_001_30-0039_Benchmarking4Vadim_pepcal1.wiff
 // cg_print_stacktrace evict
-// zip_archive LLD
+// Transient-cache
