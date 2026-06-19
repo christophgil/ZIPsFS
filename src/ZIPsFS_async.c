@@ -3,6 +3,7 @@
 /// running stat() asynchronously in separate thread to avoid blocking ///
 /// COMPILE_MAIN=ZIPsFS                                                ///
 //////////////////////////////////////////////////////////////////////////
+// (search-forward " lock")
 enum {ASYNC_JOB_IDLE,ASYNC_JOB_SUBMITTED,ASYNC_JOB_PICKED};
 #define OK_OR_TIMEOUT(code_ok,code_timeout)    LOCK(mutex_async,if (id==ID){code_ok;G=0;}else{code_timeout;})
 #define DIE_IF_TIMEOUT(path)
@@ -109,6 +110,7 @@ static void directory_to_queue(const directory_t *dir){
   LOCK(mutex_dircache_queue,ht_only_once(&r->ht_dircache_queue,DIR_VP(),0));
 }
 
+    //        (my-indent-lock-blocks "  lock_ncancel("    "  unlock_ncancel(")
 
 static void *infloop_PTHREAD_DIRCACHE(void *arg){
   root_t *r=arg;
@@ -118,16 +120,16 @@ static void *infloop_PTHREAD_DIRCACHE(void *arg){
     {
       char buf[MAX_PATHLEN+1];
       const char *vp=NULL;
-      lock_ncancel(mutex_dircache_queue);
-      ht_entry_t *ee=HT_ENTRIES(&r->ht_dircache_queue);
-      RLOOP(i,r->ht_dircache_queue.capacity){
-        vp=ee[i].key;
-        if (vp){
-          ht_clear_entry(&r->ht_dircache_queue,ee+i);
-          break;
-        }
-      }
-      unlock_ncancel(mutex_dircache_queue);
+          lock_ncancel(mutex_dircache_queue);
+          ht_entry_t *ee=HT_ENTRIES(&r->ht_dircache_queue);
+          RLOOP(i,r->ht_dircache_queue.capacity){
+            vp=ee[i].key;
+            if (vp){
+              ht_clear_entry(&r->ht_dircache_queue,ee+i);
+              break;
+            }
+          }
+          unlock_ncancel(mutex_dircache_queue);
       if (!vp) { usleep(1024); continue;}
       virtualpath_init(&vipa,vp,buf);
     }
@@ -279,16 +281,16 @@ static void async_openzip(async_zipfile_t *zip){
 #define A ASYNC_READDIR
 #if WITH_TIMEOUT_READDIR
 static void directory_copy(directory_t *dst,const directory_t *src, root_t *r){
-  lock(mutex_dircache);
-  const int n=src->core.files_l;
-  directory_ensure_capacity(dst,n,n);
-  //directory_print(src,5);
-  const directory_core_t *d=&src->core;
-  assert(NULL!=src->ht_intern_names);
-  FOR(i,0,n) directory_add(Nth0(d->fflags,i)|DIRENT_DIRECT_NAME,dst,  Nth0(d->finode,i), d->fname[i],Nth0(d->fsize,i),Nth0(d->fmtime,i),Nth0(d->fcrc,i));
-  dst->dir_is_success=src->dir_is_success;
-  // Falsch ASSERT(src->core.files_l==dst->core.files_l);
-  //directory_print(dst,5);
+      lock(mutex_dircache);
+      const int n=src->core.files_l;
+      directory_ensure_capacity(dst,n,n);
+      //directory_print(src,5);
+      const directory_core_t *d=&src->core;
+      assert(NULL!=src->ht_intern_names);
+      FOR(i,0,n) directory_add(Nth0(d->fflags,i)|DIRENT_DIRECT_NAME,dst,  Nth0(d->finode,i), d->fname[i],Nth0(d->fsize,i),Nth0(d->fmtime,i),Nth0(d->fcrc,i));
+      dst->dir_is_success=src->dir_is_success;
+      // Falsch ASSERT(src->core.files_l==dst->core.files_l);
+      //directory_print(dst,5);
   unlock(mutex_dircache);
 }
 
@@ -342,23 +344,23 @@ static bool readdir_async(directory_t *dir){
 /******************************/
 static void root_start_thread(root_t *r,const enum enum_root_thread t,const bool evenIfAlreadyStarted){
   if (!r) return;
-  lock(mutex_start_thread);
-  if (!r->thread_already_started[t] ||evenIfAlreadyStarted){
-    log_verbose("Going to start thread %s / %s",r->rootpath,enum_root_thread_S[t]);
-#define C(T)  t==T?infloop_##T:
-    void *(*f)(void *)=C(PTHREAD_PRELOAD) C(PTHREAD_ASYNC) C(PTHREAD_MISC) C(PTHREAD_DIRCACHE) NULL;
-#undef C
-    if (f){
-      const int count=r->thread_count_started[t]++;
-      if (pthread_create(&r->thread[t],NULL,f,(void*)r)){
-#define C "Failed thread_create '%s'  Root: %d",enum_root_thread_S[t],rootindex(r)
-        if (count) warning(WARN_THREAD|WARN_FLAG_EXIT|WARN_FLAG_ERRNO,rootpath(r),C); else DIE(C);
-#undef C
+      lock(mutex_start_thread);
+      if (!r->thread_already_started[t] ||evenIfAlreadyStarted){
+        log_verbose("Going to start thread %s / %s",r->rootpath,enum_root_thread_S[t]);
+    #define C(T)  t==T?infloop_##T:
+        void *(*f)(void *)=C(PTHREAD_PRELOAD) C(PTHREAD_ASYNC) C(PTHREAD_MISC) C(PTHREAD_DIRCACHE) NULL;
+    #undef C
+        if (f){
+          const int count=r->thread_count_started[t]++;
+          if (pthread_create(&r->thread[t],NULL,f,(void*)r)){
+    #define C "Failed thread_create '%s'  Root: %d",enum_root_thread_S[t],rootindex(r)
+            if (count) warning(WARN_THREAD|WARN_FLAG_EXIT|WARN_FLAG_ERRNO,rootpath(r),C); else DIE(C);
+    #undef C
+          }
+          if (count) warning(WARN_THREAD,report_rootpath(r),"pthread_start %s function: %p",enum_root_thread_S[t],f);
+          r->thread_already_started[t]=true;
+        }
       }
-      if (count) warning(WARN_THREAD,report_rootpath(r),"pthread_start %s function: %p",enum_root_thread_S[t],f);
-      r->thread_already_started[t]=true;
-    }
-  }
   unlock(mutex_start_thread);
 }
 static void log_infinity_loop(const root_t *r, const enum enum_root_thread t){
@@ -468,51 +470,48 @@ static void *infloop_PTHREAD_PRELOAD(void *arg){
   root_t *r=arg;
   init_infloop(r,PTHREAD_PRELOAD);
   /* pthread_cleanup_push(infloop_preloadfile_start,r); Does not work because pthread_cancel not working when root blocked. */
-
-
   ASSERT(atomic_load(&r->test1)==0);  atomic_fetch_add(&r->test1,1);
   for(int i=0;;i++){
     fHandle_t *dm=NULL,*dl=NULL; // cppcheck-suppress constVariablePointer
-#define d() (dl?dl:dm)
-    {
-      lock(mutex_fhandle);
-      foreach_fhandle(id,e){
-        IF1(WITH_PRELOADRAM,if (e->preloadram && e->preloadram->preloadram_status==preloadram_queued && e->preloadram->m_zpath.root==r) dm=e);
-        if (e->zpath.root==r && e->flags&FHANDLE_PRELOADFILE_QUEUE) dl=e; // cppcheck-suppress unreadVariable
-      }
-      unlock(mutex_fhandle);
-    }
-    if (d() && wait_for_root_timeout(r)){
-      //log_debug_now("d: %s",D_VP(d()));
-      {
         lock(mutex_fhandle);
-        //atomic_fetch_add(&d()->is_preloading,1); /* Prevents destruction */
-        IF1(WITH_PRELOADRAM,  if (dm && preloadram_queued!=preloadram_get_status(dm))  dm=NULL;   preloadram_set_status(dm,preloadram_reading));
-        IF1(WITH_PRELOADDISK, if (dl && !(dl->flags&FHANDLE_PRELOADFILE_QUEUE))  dl=NULL; if (dl) { dl->flags|=FHANDLE_PRELOADFILE_RUN; dl->flags&=~FHANDLE_PRELOADFILE_QUEUE;});
+        FOREACH_FHANDLE(id,e){
+          IF1(WITH_PRELOADRAM,
+              if ((e->flags&FHANDLE_PRELOADRAM_MASTER)) assert(e->preloadram);
+              if ((e->flags&FHANDLE_PRELOADRAM_MASTER) && e->preloadram && e->preloadram->preloadram_status==PRELOADRAM_QUEUED && e->preloadram->m_zpath.root==r) dm=e);
+          if (e->zpath.root==r && e->flags&FHANDLE_PRELOADFILE_QUEUE) dl=e; // cppcheck-suppress unreadVariable
+        }
         unlock(mutex_fhandle);
-      }
-      IF1(WITH_PRELOADRAM,  if (dm) preloadram_now(dm,r));
+    if ((dl||dm) && wait_for_root_timeout(r)){
+          lock(mutex_fhandle);
+
+          if (dm){
+            ASSERT(dm->flags&FHANDLE_PRELOADRAM_MASTER);
+            if (r!=D_ROOT(dm)) dm=NULL; /* After timeout root in d might change in preloadram_wait() */
+          }
+          IF1(WITH_PRELOADRAM,  if (dm && PRELOADRAM_QUEUED!=preloadram_get_status(dm)) dm=NULL);
+          IF1(WITH_PRELOADDISK, if (dl && !(dl->flags&FHANDLE_PRELOADFILE_QUEUE))  dl=NULL; if (dl) { dl->flags|=FHANDLE_PRELOADFILE_RUN; dl->flags&=~FHANDLE_PRELOADFILE_QUEUE;});
+          unlock(mutex_fhandle);
+      IF1(WITH_PRELOADRAM, if (dm){
+          LOCK_N(mutex_fhandle,preloadram_set_status(dm,PRELOADRAM_READING); const uint64_t fhandle_fh=dm->fhandle_fh);
+
+          preloadram_now(dm,r);
+          assert(dm->fhandle_fh==fhandle_fh);
+          LOCK(mutex_fhandle,preloadram_set_status(dm,PRELOADRAM_DONE));
+        });
       //IF1(WITH_PRELOADDISK, if (dl){ char dst[MAX_PATHLEN+1];if (preloaddisk_writable_realpath(&dl->zpath,dst)) preloaddisk_now(dst,NULL,dl);});
       IF1(WITH_PRELOADDISK, fHandle_preloadfile_now(dl));
-      {
-        lock(mutex_fhandle);
-        //        atomic_fetch_add(&d()->is_preloading,-1);
-        IF1(WITH_PRELOADRAM,  preloadram_set_status(dm,preloadram_done));
-        unlock(mutex_fhandle);
-      }
     }/* if (d) */
     root_update_time(r,-PTHREAD_PRELOAD,0);
     usleep(500*1000);
   }
-#undef d
 #endif //WITH_PRELOADRAM || WITH_PRELOADDISK
 }
 #if WITH_TIMEOUT_PRELOADFILE && WITH_PRELOADRAM
 static bool preloadfile_time_exceeded(const char *func, const fHandle_t *d,const int counter){
-  lock(mutex_fhandle);
-  root_t *r=D_ROOT(d);
-  assert(r!=NULL);
-  time_t t=time(NULL)-ROOT_WHEN_ITERATED(r,PTHREAD_PRELOAD);
+      lock(mutex_fhandle);
+      root_t *r=D_ROOT(d);
+      assert(r!=NULL);
+      time_t t=time(NULL)-ROOT_WHEN_ITERATED(r,PTHREAD_PRELOAD);
   unlock(mutex_fhandle);
   if (t>PRELOADFILE_TIMEOUT_SECONDS){
     warning(WARN_PRELOADFILE,D_RP(d),"%s Timeout > "STRINGIZE(PRELOADFILE_TIMEOUT_SECONDS)" s",func);

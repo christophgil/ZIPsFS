@@ -19,6 +19,26 @@ static void fhandle_counter_inc( fHandle_t* d, enum enum_counter_rootdata f){
 /*   _rootdata_counter_inc(filetypedata_for_ext(path,r),f); */
 /* } */
 
+
+static void initial_msg(FILE *f){
+  setlocale(LC_NUMERIC,""); /* Enables decimal grouping in fprintf */
+  const time_t t=time(NULL);
+  //#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+#if defined(__has_feature) && defined(address_sanitizer) && __has_feature(address_sanitizer)
+  #define S "With sanitizer "
+  #else
+  #define S ""
+#endif
+  #define C ANSI_FG_BLUE
+  fprintf(f,C"Time: "ANSI_RESET"%s"C"%s:"ANSI_RESET" Version "ZIPSFS_VERSION"   Size %'ld  Compiled: "S" "STRINGIZE(__DATE__)" "STRINGIZE(__TIME__)"\n",ctime(&t), _self_exe, cg_file_size(_self_exe));
+  IF1(WITH_GNU,fprintf(f,C"gnu_ggnu_get_libc_version:"ANSI_RESET" %s\n",gnu_get_libc_version()));
+  fprintf(f,C"Version libfuse: "ANSI_RESET STRINGIZE(FUSE_MAJOR_VERSION)"."STRINGIZE(FUSE_MINOR_VERSION)"\n"
+          C"libzip: "ANSI_RESET STRINGIZE(LIBZIP_VERSION_MAJOR)"."STRINGIZE(LIBZIP_VERSION_MINOR)"\n"
+          C"MAX_PATHLEN: "ANSI_RESET"%d\n"
+          C"has_proc_fs: "ANSI_RESET"%s\n",MAX_PATHLEN,yes_no(has_proc_fs()));
+  #undef S
+  #undef C
+}
 /****************************/
 /* Print roots html or text */
 /****************************/
@@ -44,20 +64,20 @@ static void table_draw_horizontal(FILE *file, const int type, const int nColumn,
 #undef PU
 #undef U
 static void log_print_roots(FILE *file){ /* n==0 for UNIX console with UTF8 else for HTML with unicode */
-
+#define IS_HTML() (file!=stderr && file!=_fWarnErr[0])
 #define C(title,format,...)  pos+=(colw=r?S(format,__VA_ARGS__):S("%s",title));if (print) pos+=S(" %*s%s ",width[col]-colw,"",colsep); else width[col]=MAX(width[col],colw);col++;
 #define S(...) snprintf(line+pos,sizeof(line)-pos,__VA_ARGS__)
   int width[33]={0};
   char line[1024], colsep[9];
-  const bool html=file!=stderr;
-  if (html) fputs("If the table appears misaligned in MS-Edge, it can be  copied in MS-Notepad.\n\n<PRE>",file);
-  cg_unicode(colsep,BD_HEAVY_VERTICAL,html);
+  //const bool html=file!=stderr && DEBUG_NOW!=DEBUG_NOW;
+  if (IS_HTML()) fputs("If the table appears misaligned in MS-Edge, it can be  copied in MS-Notepad.\n\n<PRE>",file);
+  cg_unicode(colsep,BD_HEAVY_VERTICAL,IS_HTML());
   FOR(print,0,2){
     FOR(ir,-1,_root_n){
       char tmp[MAX_PATHLEN+1];
       root_t *r=ir<0?NULL:_root+ir;
-      if (!r && !html) P(ANSI_BOLD);
-      int colw,col=0, pos=cg_unicode(line,BD_HEAVY_VERTICAL,html);
+      if (!r && !IS_HTML()) P(ANSI_BOLD);
+      int colw,col=0, pos=cg_unicode(line,BD_HEAVY_VERTICAL,IS_HTML());
       line[pos++]=' ';
       C("No","%2d",1+rootindex(r));
       C("Path","%s",r->rootpath);
@@ -75,7 +95,7 @@ static void log_print_roots(FILE *file){ /* n==0 for UNIX console with UTF8 else
       if (r){ if (r->rootpath_mountpoint) sprintf(tmp,"(%d) %s",1+r->seq_fsid,r->rootpath_mountpoint); else sprintf(tmp,"(%d) %16lx",1+r->seq_fsid,r->f_fsid);}
       C("Filesystem","%s",tmp);
       C("Free [GB]","%'9ld",((r->statvfs.f_frsize*r->statvfs.f_bfree)>>30));
-      if (html){
+      if (IS_HTML()){
         if (r){ if (!r->remote) strcpy(tmp,"NA"); else if (ROOT_WHEN_SUCCESS(r,PTHREAD_ASYNC)) sprintf(tmp,"%'ld seconds ago",ROOT_SUCCESS_SECONDS_AGO(r)); else strcpy(tmp,"Never");}
         C("Last response","%s", tmp);
         C("Blocked","%'u times",r->log_count_delayed);
@@ -84,12 +104,12 @@ static void log_print_roots(FILE *file){ /* n==0 for UNIX console with UTF8 else
       if (!r) table_draw_horizontal(file,0,col,width);
       line[sizeof(line)-1]=0;
       P(line);
-      if (!html)P(ANSI_RESET);
+      if (!IS_HTML())P(ANSI_RESET);
       fputc('\n',file);
       table_draw_horizontal(file,ir==-1?1:ir<_root_n-1?2:3,col,width);
     }
   }
-  if (!html) P(ANSI_FG_GRAY);
+  if (!IS_HTML()) P(ANSI_FG_GRAY);
   P("If box-drawing chars are wrong then try 'export LANG=en_US'  or tmux 'tmux set-environment LANG en_US'\nExplain table:\n");
   P(ROOT_PROPERTY[ROOT_PROPERTY_path_prefix]);
   P("  This adds to the beginning of all virtual files.\n\
@@ -99,8 +119,8 @@ Feature flags: W=Writable (First path) C=Immutable  R=Remote (Path starts with t
                T=Supports timeout (Path starts with three slashes and activated WITH_TIMEOUT_xxxx macros)  I=immutable WORM=Write-once-read-many\n\
                gz xz bz2 lrz Z: decompression on preloading to disk\n    B=Blocked (frozen)");
 
-  root_property_print(html,-1,file);
-  P(html?"\n</PRE>":ANSI_RESET"\n\n");
+  root_property_print(IS_HTML(),-1,file);
+  P(IS_HTML()?"\n</PRE>":ANSI_RESET"\n\n");
 
 #undef C
 #undef S

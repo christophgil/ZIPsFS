@@ -100,9 +100,9 @@
 #define  ALL_READABLE true
 static pid_t _pid;
 //cppcheck-suppress-macro [identicalInnerCondition]
-#define fhandle_busy_start(d) {if (d) d->is_busy++;}   DETECT_RESOURCE_LEAK_B(_fhandle_busy)
+#define fhandle_busy_start(d) {if (d) atomic_fetch_add(&d->is_busy,1);}   DETECT_RESOURCE_LEAK_B(_fhandle_busy)
 //cppcheck-suppress-macro [identicalInnerCondition]
-#define fhandle_busy_end(d)   {if (d) d->is_busy--;}   DETECT_RESOURCE_LEAK_E(_fhandle_busy)
+#define fhandle_busy_end(d)   {if (d) atomic_fetch_add(&d->is_busy,-1);}   DETECT_RESOURCE_LEAK_E(_fhandle_busy)
 //cppcheck-suppress-macro unreadVariable
 #if WITH_FILECONVERSION
 #include "ZIPsFS_configuration_fileconversion.h"
@@ -665,18 +665,6 @@ static void mkSymlinkAfterStartPrepare(){
 static int zpath_strlen(const zpath_t *zpath,int s){
   return s==0?0:strlen(zpath->strgs+s);
 }
-static MAYBE_INLINE fHandle_t* fhandle_at_index(int i){
-  ASSERT_LOCKED_FHANDLE();
-  static fHandle_t *_fhandle[FHANDLE_BLOCKS];
-#define B _fhandle[i>>FHANDLE_LOG2_BLOCK_SIZE]
-  fHandle_t *block=B;
-  if (!block){
-    block=B=cg_calloc(COUNTm_FHANDLE_ARRAY_MALLOC,FHANDLE_BLOCK_SIZE,sizeof(fHandle_t));
-    assert(block!=NULL);
-  }
-  return block+(i&(FHANDLE_BLOCK_SIZE-1));
-#undef B
-}
 static void  zpath_set_atime(const zpath_t *zpath){
   if (zpath && zpath->root && zpath->root->writable  && zpath->root->noatime){
     struct stat st;
@@ -897,17 +885,17 @@ static bool readdir_from_zip(directory_t *dir){
   for(int k=0;k<N;){
     int i=0;
     for(;i<SB && k<N;k++) if (!zip_stat_index(za,k,0,s+i)) i++;
-    lock(mutex_dircache);
-    root_update_time(DIR_ROOT(),i>0?PTHREAD_ASYNC:-PTHREAD_ASYNC,0);
-#define S s[j]
-    FOR(j,0,i){
-      CONTAINS_PALCEHOLDER(S.name,dir);
-      if (!config_do_not_list_file(rp,S.name,strlen(S.name))){
-        directory_add(S.comp_method?DIRENT_IS_COMPRESSEDZIPENTRY:0,dir,0,S.name,S.size,S.mtime,S.crc);
-      }
-    }
-#undef S
-    unlock(mutex_dircache);
+        lock(mutex_dircache);
+        root_update_time(DIR_ROOT(),i>0?PTHREAD_ASYNC:-PTHREAD_ASYNC,0);
+    #define S s[j]
+        FOR(j,0,i){
+          CONTAINS_PALCEHOLDER(S.name,dir);
+          if (!config_do_not_list_file(rp,S.name,strlen(S.name))){
+            directory_add(S.comp_method?DIRENT_IS_COMPRESSEDZIPENTRY:0,dir,0,S.name,S.size,S.mtime,S.crc);
+          }
+        }
+    #undef S
+        unlock(mutex_dircache);
   }
   my_zip_close(za,rp);
   directory_to_cache_maybe(dir);
@@ -1165,8 +1153,28 @@ static bool find_realpath_other_root(zpath_t *zpath){
 /// Conversely, fuse_get_context()->private_data cannot be used.
 /// It returns always the same pointer address even for different file handles.
 ///////////////////////////////////////////////////////////////////////////////////
-//FHANDLE_IS_MUTEX_INITIALIZED
+/* static MAYBE_INLINE fHandle_t* XXXXfhandle_at_index(int i){ */
+/*   ASSERT_LOCKED_FHANDLE(); */
+/*   static fHandle_t *_fhandle[FHANDLE_BLOCKS]; */
+/* #define B (_fhandle[i>>FHANDLE_LOG2_BLOCK_SIZE]) */
+/*   fHandle_t *block=B; */
+/*   if (!block){ */
+/*     block=B=cg_calloc(COUNTm_FHANDLE_ARRAY_MALLOC,FHANDLE_BLOCK_SIZE,sizeof(fHandle_t)); */
+/*     assert(block!=NULL); */
+/*   } */
+/*   return block+(i&(FHANDLE_BLOCK_SIZE-1)); */
+/* #undef B */
+/* } */
 
+
+static MAYBE_INLINE fHandle_t* fhandle_at_index(int i){
+  ASSERT_LOCKED_FHANDLE();
+  static fHandle_t *_fhandle[FHANDLE_BLOCKS];
+#define B (_fhandle[i>>FHANDLE_LOG2_BLOCK_SIZE])
+  if (!B) B=cg_calloc(COUNTm_FHANDLE_ARRAY_MALLOC,FHANDLE_BLOCK_SIZE,sizeof(fHandle_t));
+  return B+(i&(FHANDLE_BLOCK_SIZE-1));
+#undef B
+}
 
 
 static void _fhandle_lock( int id,fHandle_t *d){
@@ -1187,9 +1195,7 @@ static void fhandle_init(fHandle_t *d, const zpath_t *zpath){
   d->flags|=FHANDLE_ACTIVE; /* Important; This must be the last assignment */
 }
 static fHandle_t* _fhandle_create_locked(const int flags,const uint64_t fh, const zpath_t *zpath){
-  //  { fHandle_t *d=fhandle_get(VP(),fh);  ASSERT(!(d && !(d->flags&FHANDLE_DESTROY_LATER)));}   Rarely possible
   fHandle_t *d=NULL;
-
   { foreach_fhandle_also_emty(ie,e) if (!e->flags){ d=e; break;}} /* Use empty slot */
   if (!d){ /* Append to list */
     if (_fhandle_n>=FHANDLE_MAX){ warning(WARN_FHANDLE|WARN_FLAG_ONCE_PER_PATH|WARN_FLAG_ERROR,VP(),"Excceeding FHANDLE_MAX");return NULL;}
@@ -1199,9 +1205,14 @@ static fHandle_t* _fhandle_create_locked(const int flags,const uint64_t fh, cons
   d->fhandle_fh=fh;
   d->flags=flags;
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES, transient_cache_activate(d));
-  IF1(WITH_SPECIAL_FILE,if (!(flags&FHANDLE_SPECIAL_FILE)) preloadram_infer_from_other_handle(d));
+  //if (!(flags&FHANDLE_SPECIAL_FILE)) preloadram_infer_from_other_handle(d);
   d->flags|=FHANDLE_ACTIVE;
   COUNTER1_INC(COUNT_FHANDLE_CONSTRUCT);
+  //log_exited_function("VP: %s %p",D_VP(d),d);
+
+
+  struct fuse_context *ctx = fuse_get_context();
+  d->pid=get_request_pid();
   return d;
 }
 
@@ -1219,7 +1230,7 @@ static uint64_t next_fh(){
 }
 static fHandle_t* fhandle_create(const int flags, uint64_t *fh, const zpath_t *zpath){
   cg_thread_assert_not_locked(mutex_fhandle);
-  *fh=next_fh();
+  LOCK(mutex_fhandle,*fh=next_fh());
   while(true){
     LOCK_N(mutex_fhandle, fHandle_t *d=_fhandle_create_locked(flags,*fh,zpath)); /* zpath is now stored in fHandle_t */
     if (d) return d;
@@ -1227,29 +1238,17 @@ static fHandle_t* fhandle_create(const int flags, uint64_t *fh, const zpath_t *z
     usleep(1000*1000);
   }
 }
-static bool fhandle_currently_reading_writing(const fHandle_t *d){
-  if (!d) return false;
-  assert(d->is_busy>=0);
-  return d->is_busy>0;
+static int fhandle_active_readers_writers(const fHandle_t *d){
+  const int b=!b?0:atomic_load(&d->is_busy);
+  assert(b>=0);
+  return b;
 }
 static void fhandle_try_destroy(fHandle_t *d){
   ASSERT_LOCKED_FHANDLE();
-  if (fhandle_currently_reading_writing(d)){  warning(WARN_FLAG_ERROR,D_VP(d),"fhandle_currently_reading_writing()");return;}
-#if WITH_PRELOADRAM
-  //if (atomic_load(&d->is_preloading)>0) return; /* Currently not being copied to RAM */
-  {
-    const int s=!d->preloadram?0:d->preloadram->preloadram_status;
-    if (s==preloadram_queued || s==preloadram_reading) return; /* Avoid that d gets destroyed and reinitialized while a reference is in the queue or filled with data */
-  }
-
-  if (!is_preloadram_shared_with_other(d) &&          /* Another fHandle_t could take care of struct preloadram instance later */
-      !preloadram_try_destroy(d)) return;             /* struct preloadram is NULL or has been destroyed */
-#endif //WITH_PRELOADRAM
-  {
-    root_t *r=D_ROOT(d);
-    const int c=!r?0:atomic_load(&d->serialized_incremented);
-    if (c) atomic_fetch_add(&r->serialized_fileaccess,-c);
-  }
+  if (fhandle_active_readers_writers(d)){  warning(WARN_FLAG_ERROR,D_VP(d),"fhandle_active_readers_writers() %p",d);return;}
+  IF1(WITH_PRELOADRAM,if (d->preloadram && (d->flags&FHANDLE_PRELOADRAM_MASTER) && !preloadram_try_destroy(d)) return);
+  root_t *r=D_ROOT(d);
+  if (r) atomic_fetch_add(&r->serialized_fileaccess,-atomic_load(&d->serialized_incremented));
   IF1(WITH_FILECONVERSION, const int fd=d->fd_real; d->fd_real=0;if (fd) close(fd));
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,transient_cache_destroy(d));
   fhandle_zip_fclose(true,d);
@@ -1262,19 +1261,18 @@ static void fhandle_try_destroy(fHandle_t *d){
 static fHandle_t* fhandle_get(const char *vp_or_null,const uint64_t fh){
   ASSERT_LOCKED_FHANDLE();
   const ht_hash_t h=hash_value_strg(vp_or_null);
-  foreach_fhandle(id,d){
-    if (d->flags&FHANDLE_DESTROY_LATER){
-      fhandle_try_destroy(d);
-    }else if (vp_or_null && fh==d->fhandle_fh && D_VP_HASH(d)==h && !strcmp(vp_or_null,D_VP(d))){
+  foreach_fhandle_including_pending_destruct(id,d){
+    if (!vp_or_null){
+      if (d->flags&FHANDLE_DESTROY_LATER) fhandle_try_destroy(d);
+    }else if (fh==d->fhandle_fh && D_VP_HASH(d)==h && !strcmp(vp_or_null,D_VP(d))){
       return d;
     }
   }
-
   return NULL;
 }
 
 static bool fhandle_find_identical(const fHandle_t *d){
-  foreach_fhandle(ie,e) if (fhandle_virtualpath_equals(d,e) && !(e->flags&FHANDLE_DESTROY_LATER)) return true;
+  FOREACH_FHANDLE(ie,e) if (fhandle_virtualpath_equals(d,e)) return true;
   return false;
 }
 /* ******************************************************************************** */
@@ -1305,10 +1303,10 @@ static ino_t make_inode(const ino_t inode0,root_t *r, const int entryIdx,const c
   }
 }
 static ino_t inode_from_virtualpath(const char *vp,const int vp_l){
-  lock(mutex_dircache);
-  ht_entry_t *e=ht_get_entry(&_ht_inodes_vp,vp,vp_l,0,true);
-  if (!e->value) e->value=(void*)next_inode();
-  ino_t i=(ino_t)e->value;
+      lock(mutex_dircache);
+      ht_entry_t *e=ht_get_entry(&_ht_inodes_vp,vp,vp_l,0,true);
+      if (!e->value) e->value=(void*)next_inode();
+      ino_t i=(ino_t)e->value;
   unlock(mutex_dircache);
   return i;
 }
@@ -1496,6 +1494,9 @@ static int realpath_mk_parent(char *rp, const virtualpath_t *vip){
 #define WITH_LIBFUSE_CACHE_STAT 0
 #define EVAL(a) a
 #define EVAL2(a) EVAL(a)
+static pid_t get_request_pid(void){
+    return fuse_get_context()->pid;
+}
 static void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_config *cfg)){
   //void *x=fuse_apply_conn_info_opts;  //cfg-async_read=1;
 #if WITH_FUSE_3
@@ -1671,7 +1672,6 @@ static int xmp_getattr(const char *vpath, struct stat *st IF1(WITH_XMP_GETATTR_F
   FUSE_PREAMBLE(vpath);
   if (!er) er=_xmp_getattr(&vipa ,st);
   if (!er){
-    // DEBUG_NOW
     st->st_mode|=((st->st_mode&S_IFDIR)?0777:(st->st_mode&S_IFREG)?0666:0);
   }
   log_fuse_function(__func__,&vipa,er);
@@ -1758,18 +1758,20 @@ static int open_for_reading(const virtualpath_t *vipa, struct fuse_file_info *fi
   if (fh){ fi->fh=fh; return 0;}
   zpath_set_atime(zpath);
   const int fd=async_openfile(zpath,fi->flags); /* POSIX file descriptor */
-  if (fd>0){  fi->fh=fd; return 0;} // && (!has_proc_fs() || cg_check_path_for_fd("_xmp_open",RP(),fd))
+  if (fd>0){ fi->fh=fd; return 0;} // && (!has_proc_fs() || cg_check_path_for_fd("_xmp_open",RP(),fd))
   if (!config_not_report_stat_error(vipa->vp,vipa->vp_l)) warning(WARN_OPEN|WARN_FLAG_ERRNO,RP(),"open:  fd=%d",fd);
   return errno?-errno:-1;
 }/*xmp_open*/
 static int xmp_open(const char *vpath, struct fuse_file_info *fi){
-  //log_entered_function("vpath %s",vpath);
-  errno=0;
   ASSERT(fi!=NULL);
+  atomic_fetch_add(&_open_minus_release,1);
+  //struct fuse_context *ctx=fuse_get_context();warning(WARN_OPEN,vpath,"ctx->pid %lld",LLD(ctx->pid));
+  //static atomic_int count;log_entered_function(ANSI_GREEN"vpath:"ANSI_RESET" %s %d ",vpath, atomic_fetch_add(&count,1));
+  errno=0;
   FUSE_PREAMBLE_W((fi->flags&(O_WRONLY||O_RDWR|O_APPEND|O_CREAT))?1:0,vpath);
   if (!er)	er=_xmp_open(&vipa,fi);
-  IF_LOG_FLAG_OR(LOG_OPEN,er!=0)log_exited_function("%s res: %d  "ANSI_YELLOW"%ld"ANSI_RESET,vpath,er,fi->fh);
   if (fi->fh>2 && fi->fh<COUNT_BACKWARD_SEEK) _count_backward_seek[fi->fh]=0;
+  //  IF_LOG_FLAG_OR(LOG_OPEN,er!=0)log_exited_function("%s res: %d  "ANSI_YELLOW"%llu"ANSI_RESET,vpath,er,LLU(fi->fh));
   return -er;
 }
 static int _xmp_open(const virtualpath_t *vipa, struct fuse_file_info *fi){
@@ -1788,7 +1790,6 @@ static int _xmp_open(const virtualpath_t *vipa, struct fuse_file_info *fi){
     res=open_for_reading(vipa,fi);
     log_fuse_function("open_read",vipa,res);
   }
-
   return res;
 }
 static int xmp_truncate(const char *vpath, off_t size IF1(WITH_FUSE_3,,struct fuse_file_info *fi)){
@@ -1823,7 +1824,6 @@ static int _xmp_readdir(const virtualpath_t *vipa, void *buf, fuse_fill_dir_t fi
   ht_t no_dups={0}; HT_INIT_WITH_KEYSTORE_DIM(&no_dups,8,4096); ht_set_id(HT_MALLOC_without_dups,&no_dups);
   no_dups.keystore->mstore_counter_mmap=COUNT_MSTORE_MMAP_NODUPS;
   no_dups.ht_counter_malloc=COUNT_HT_MALLOC_NODUPS;
-
   int opt=((vipa->dir==DIR_PRELOADED_UPDATE)?FILLDIR_FILES_S_ISVTX:0);
   NEW_ZIPPATH(vipa);
 #define A(n) filler_add(0,filler,buf,n,0,NULL,NULL,&no_dups);
@@ -2027,7 +2027,7 @@ static off_t _viamacro_my_zip_fread(zip_file_t *zf, void *buf, zip_uint64_t nbyt
 /* If successful, the number of bytes actually read is returned. When zip_fread() is called after reaching the end of the file, 0 is returned. In case of error, -1 is returned. */
 static off_t _viamacro_fhandle_zip_fread(fHandle_t *d, char *buf,  const zip_uint64_t nbytes,const char *func,const int line){
   //log_entered_function("%s %s  nbytes:%ld Caller %s:%d",D_RP(d),D_VP(d),nbytes,func,line);
-  IF1(WITH_EXTRA_ASSERT, LOCK(mutex_fhandle,  assert(fhandle_currently_reading_writing(d))));
+  IF1(WITH_EXTRA_ASSERT, LOCK(mutex_fhandle,  assert(fhandle_active_readers_writers(d))));
   off_t todo=nbytes,sum=0;
   while(todo>0){
     const off_t n=my_zip_fread(d->zip_file,buf+sum,todo,D_RP(d));
@@ -2107,7 +2107,7 @@ static off_t fhandle_read_zip(char *buf, const off_t size, const off_t offset,fH
   if (!fhandle_zip_fseek(d,offset,"")){ /* Worst case=seek backward - need reopen zip file. Happens often without fi->direct_io */
     //log_debug_now("Failed seek");
     IF1(WITH_PRELOADRAM,if ((*again=_preloadram_policy!=PRELOADRAM_NEVER && preloadram_is_free_ram(__func__,d,1+d->how_often_bwdseek++/9.9999f) && d->zpath.dir!=DIR_NEVER_PREFETCH_RAM)) return -1);
-    //log_debug_now("%d %d %d %d",_preloadram_policy!=PRELOADRAM_NEVER, ramUsageForFilecontent()+d->zpath.stat_vp.st_size<_preloadram_bytes_limit, d->how_often_bwdseek , d->zpath.dir!=DIR_NEVER_PREFETCH_RAM);;
+    //log_debug_now("%d %d %d %d",_preloadram_policy!=PRELOADRAM_NEVER, ramUsageForFilecontent()+D_ST_SIZE(d)<_preloadram_bytes_limit, d->how_often_bwdseek , d->zpath.dir!=DIR_NEVER_PREFETCH_RAM);;
     warning(WARN_SEEK,D_VP(d),ANSI_MAGENTA"Going to reopen zip offest=%'ld"ANSI_RESET,offset);
     fhandle_zip_fclose(false,d);    if (!fhandle_zip_fopen(d,"REWIND")) return -1;
     if (!fhandle_zip_fseek(d,offset,"REWIND")) return -1;
@@ -2169,25 +2169,25 @@ static void fhandle_prepare_in_fuse_read_or_write(fHandle_t *d,const int open_fl
 /* Many concurrent file readings from spinning disks are bad */
 /*************************************************************/
 static void serialized_delay_read(fHandle_t *d,root_t *r){
-    const int c=atomic_fetch_add(&d->count_calls_read,1);
-    if (!c){ /* First call to xmp_read() */
-      FOR(wait,2,99){
-        const int a=atomic_load(&r->serialized_fileaccess);
-        if (a<=0) break;
-        lock(mutex_fhandle);
-        bool identical=false;
-        foreach_fhandle(ie,e) if (fhandle_virtualpath_equals(d,e) && atomic_load(&e->serialized_incremented)){identical=true;break;}
-        if (identical) break;
-        unlock(mutex_fhandle);
-        log_verbose("WAITING %p mutex_serialized_fileaccess:#%d  %s  count-threads-in-read():%d",d,wait, D_VP(d),r->serialized_fileaccess);
-        usleep(1E6*a*a*a);
-      }
-      atomic_fetch_add(&r->serialized_fileaccess,1);
-      atomic_fetch_add(&d->serialized_incremented,1);
-      d->serialized_when_read=time(NULL);
+  const int c=atomic_fetch_add(&d->count_calls_read,1);
+  if (!c){ /* First call to xmp_read() */
+    FOR(wait,2,99){
+      const int a=atomic_load(&r->serialized_fileaccess);
+      if (a<=0) break;
+          lock(mutex_fhandle);
+          bool identical=false;
+          FOREACH_FHANDLE(ie,e) if (fhandle_virtualpath_equals(d,e) && atomic_load(&e->serialized_incremented)){identical=true;break;}
+          if (identical) break;
+          unlock(mutex_fhandle);
+      log_verbose("WAITING %p mutex_serialized_fileaccess:#%d  %s  count-threads-in-read():%d",d,wait, D_VP(d),r->serialized_fileaccess);
+      usleep(1E6*a*a*a);
     }
-    if (!(d->count_calls_read%10))   fputc('|',stderr);
-    if (!(d->count_calls_read%1000)) fputc('\\',stderr); //log_verbose("%s xmp_read() %d",D_VP(d),d->count_calls_read);
+    atomic_fetch_add(&r->serialized_fileaccess,1);
+    atomic_fetch_add(&d->serialized_incremented,1);
+    d->serialized_when_read=time(NULL);
+  }
+  if (!(d->count_calls_read%10))   fputc('|',stderr);
+  if (!(d->count_calls_read%1000)) fputc('\\',stderr); //log_verbose("%s xmp_read() %d",D_VP(d),d->count_calls_read);
 }
 
 #define IF(d) IF0(IS_CHECKING_CODE,if(d))
@@ -2202,7 +2202,16 @@ static int xmp_read(const char *vpath, char *buf, const size_t size, const off_t
   ASSERT(fi!=NULL); ASSERT(fi->fh);
   FUSE_PREAMBLE_Q(vpath);
   root_t *r=NULL;
-  LOCK_N(mutex_fhandle, fHandle_t *d=fhandle_get(vipa.vp,fi->fh);IF(d){r=D_ROOT(d); d->accesstime=time(NULL); fhandle_busy_start(d);});
+      lock(mutex_fhandle);
+      fHandle_t *d=fhandle_get(vipa.vp,fi->fh);
+      IF(d){
+        r=D_ROOT(d);
+        d->accesstime=time(NULL);
+        fhandle_busy_start(d);
+      }
+      const uint64_t fhandle_fh=!d?0:d->fhandle_fh;
+  unlock(mutex_fhandle);
+
   if (d){
     if (r && (d->flags&FHANDLE_SERIALIZED)) serialized_delay_read(d,r);
     fhandle_prepare_in_fuse_read_or_write(d,O_RDONLY);
@@ -2212,27 +2221,32 @@ static int xmp_read(const char *vpath, char *buf, const size_t size, const off_t
   RLOOP(i,2){
     bytes=_xmp_read(&vipa,d,buf,size,offset,fi->fh,&again);
     if (!(bytes<=0 && again)) break;
-    log_verbose(GREEN_SUCCESS"Detected backward seek. Going to preload into ram");
+    log_verbose(GREEN_SUCCESS"Detected backward seek. Going to preload into ram %s",vpath);
     d->flags|=FHANDLE_WITH_PRELOADRAM;
   }
-  IF(d){LOCK(mutex_fhandle,fhandle_busy_end(d));}
+  IF(d){ LOCK(mutex_fhandle, assert(fhandle_fh==d->fhandle_fh); fhandle_busy_end(d));}
   //if (bytes<=0 && d) DIE_DEBUG_NOW(RED_FAIL"%s bytes: %d  Size:%'lld   Offset: %'lld +%'d  FHANDLE_WITH_PRELOADRAM:%d",vpath, bytes, LLD(size),LLD(offset),(int)size,   (d->flags&FHANDLE_WITH_PRELOADRAM));
-  //log_exited_function(ANSI_FG_GRAY"%s "ANSI_YELLOW"%lu"ANSI_RESET"  Offset: %'lld  bytes: %'d"ANSI_RESET,vpath,fi->fh, LLD(offset),(int)bytes);
+  //log_exited_function(ANSI_FG_GRAY"%s "ANSI_YELLOW"%llu"ANSI_RESET"  Offset: %'lld  bytes: %'d"ANSI_RESET,vpath,LLU(fi->fh), LLD(offset),(int)bytes);
+
   return bytes; // cppcheck-suppress resourceLeak
 }
-static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const size_t size, const off_t offset,int fd, bool *again){
+static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const size_t size, const off_t offset, uint64_t fd, bool *again){
   off_t nread=-1;
   if (d){
-    ASSERT(d->is_busy>=0);
+    ASSERT(d->accesstime);
+    ASSERT(atomic_load(&d->is_busy)>=0);
     if (d->errorno) return d->errorno;
     if (d->fd_real) goto d_has_fd;
 #if WITH_PRELOADRAM
     if (d->flags&FHANDLE_PRELOADRAM_COMPLETE){  /* FHANDLE_PRELOADRAM_COMPLETE: Avoid overhead of preloadram_wait() if FHANDLE_PRELOADRAM_COMPLETE */
       LOCK(mutex_fhandle, nread=preloadram_read(buf,d,offset,offset+size));
     }else if (d->flags&FHANDLE_WITH_PRELOADRAM){
-      if (size+offset>d->zpath.stat_vp.st_size){ warning(WARN_READ,D_VP(d),"Beyond limit: size+offset:%'lld  st_size:%'lld",LLD(size+offset),LLD(d->zpath.stat_vp.st_size));}
       nread=preloadram_wait_and_read(buf,size,offset,d);
     }
+    if (nread<=0 && _is_tdf_or_tdf_bin(vipa->vp)){
+      if (nread<0 || offset<D_ST_SIZE(d)) warning(WARN_READ|WARN_FLAG_ERROR,D_VP(d),"%p  nread:%'lld  %'lld to %'lld   (%'lld)",d,LLD(nread),LLD(offset),LLD(offset+size),LLD(D_ST_SIZE(d)));
+    }
+    if (d->flags&FHANDLE_DESTROY_LATER)  warning(WARN_READ|WARN_FLAG_ERROR,D_VP(d),"FHANDLE_DESTROY_LATER  %p fi->fh: "ANSI_YELLOW"%llu"ANSI_RESET"  fhandle_fh: %ld",d,fd,LLU(d->fhandle_fh));
     if (nread>0) return nread;
 #endif //WITH_PRELOADRAM
     if (nread<0 && (d->zpath.flags&ZP_IS_ZIP)){
@@ -2266,21 +2280,26 @@ static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const s
   }
   return nread;
 }/*xmp_read*/
+
 static int xmp_release(const char *vpath, struct fuse_file_info *fi){ // cppcheck-suppress [constParameterCallback]
   ASSERT(fi!=NULL);
+    atomic_fetch_add(&_open_minus_release,1);
+    //static atomic_int count;log_entered_function(ANSI_RED"vpath:"ANSI_RESET" %s %d",vpath, atomic_fetch_add(&count,1));
   FUSE_PREAMBLE(vpath);
   int count_backward_seek=0;
   const uint64_t fd=fi->fh;
+  fHandle_t *d=NULL;
   if (fd>=FD_ZIP_MIN){
-    lock(mutex_fhandle);
-    fHandle_t *d=fhandle_get(vipa.vp,fd);
-    if (d){
-      count_backward_seek=d->count_backward_seek;
-      //log_entered_function(ANSI_FG_RED"%s  d: %p "ANSI_RESET ANSI_YELLOW"%ld"ANSI_RESET,vpath,d,fd);
-      d->flags|=FHANDLE_DESTROY_LATER;
-      fhandle_try_destroy(d);
-    }
-    unlock(mutex_fhandle);
+        lock(mutex_fhandle);
+        d=fhandle_get(vipa.vp,fd);
+        IF1(WITH_EXTRA_ASSERT, if (!d) DIE_DEBUG_NOW("d is NULL %s %ld",vpath,fd));
+        if (d){
+          count_backward_seek=d->count_backward_seek;
+          //warning(WARN_MISC,vpath,ANSI_FG_RED"%s"ANSI_RESET"  d: %p "ANSI_RESET" fi->fh: "ANSI_YELLOW"%llu"ANSI_RESET"  fhandle_fh: %ld  pid:%lld   ",__func__,d,fd,LLU(d->fhandle_fh),LLD(d->pid));
+          d->flags|=FHANDLE_DESTROY_LATER;
+          fhandle_try_destroy(d);
+        }
+        unlock(mutex_fhandle);
   }else if (fd>2){
     maybe_evict_from_filecache(fd,vipa.vp,vipa.vp_l,NULL,0);
     if ((er=close(fd))){
@@ -2289,6 +2308,7 @@ static int xmp_release(const char *vpath, struct fuse_file_info *fi){ // cppchec
     }
     count_backward_seek=fd<COUNT_BACKWARD_SEEK?_count_backward_seek[fd]:0;
   }
+  IF1(WITH_EXTRA_ASSERT, if (cg_uid_is_developer() && !d &&_is_tdf_or_tdf_bin(vpath)) DIE_DEBUG_NOW("%s",vpath));
   log_fuse_function(__func__,&vipa,count_backward_seek);
   return -er;
 }
@@ -2305,6 +2325,8 @@ static void _viamacro_exit_ZIPsFS(const char *func, const int line_num){
   IF1(WITH_FUSE_3,if (_fuse_started && fuse_get_context() && fuse_get_context()->fuse) fuse_unmount(fuse_get_context()->fuse));
   fflush(stderr);
 }
+
+
 int main(const int argc,const char *argv[]){
   _pid=getpid();
   IF1(WITH_CANCEL_BLOCKED_THREADS,assert(_pid==gettid()), assert(cg_pid_exists(_pid)));
@@ -2323,21 +2345,9 @@ int main(const int argc,const char *argv[]){
   }
   int colon=0;
   FOR(i,1,argc) if (STR_EQ_C(argv[i],':')){ colon=i; break;}
-  const char *compile_feature="";
-#if defined(__has_feature)
-#if defined(address_sanitizer) && __has_feature(address_sanitizer)
-  compile_feature="With sanitizer ";
-#endif
-#endif
-  fprintf(stderr,ANSI_INVERSE""ANSI_UNDERLINE"This is %s"ANSI_RESET" Version: "ZIPSFS_VERSION"  Compiled: %s "STRINGIZE(__DATE__)" "STRINGIZE(__TIME__)"  PID: "ANSI_FG_WHITE ANSI_BLUE"%d"ANSI_RESET"\n",
-          path_of_this_executable(),compile_feature,_pid);
-  IF1(WITH_GNU,fprintf(stderr,"gnu_ggnu_get_libc_version: %s\n",gnu_get_libc_version()));
-  fprintf(stderr,"Version libfuse: "STRINGIZE(FUSE_MAJOR_VERSION)"."STRINGIZE(FUSE_MINOR_VERSION)" libzip: "STRINGIZE(LIBZIP_VERSION_MAJOR)"."STRINGIZE(LIBZIP_VERSION_MINOR)"\n"
-          "MAX_PATHLEN: "STRINGIZE(MAX_PATHLEN)"\n"
-          "has_proc_fs: %s\n",yes_no(has_proc_fs()));
-  if (argc==1) return 0;
-  setlocale(LC_NUMERIC,""); /* Enables decimal grouping in fprintf */
 
+  initial_msg(stderr);
+  if (argc==1) return 0;
   static struct fuse_operations xmp_oper={0};
 #define S(f) xmp_oper.f=xmp_##f
   S(init);
@@ -2455,6 +2465,7 @@ int main(const int argc,const char *argv[]){
     }
     log_fuse_function_fd();
     warning(0,NULL,"");ht_set_id(HT_MALLOC_warnings,&_ht_warning);
+
     IF1(WITH_SPECIAL_FILE,	special_file_content_to_file(SFILE_DEBUG_CTRL,SFILE_REAL_PATHS[SFILE_DEBUG_CTRL]));
     snprintf(tmp,MAX_PATHLEN,"%s/cachedir",_dot_ZIPsFS); mstore_set_base_path(tmp);
   }
@@ -2497,10 +2508,8 @@ int main(const int argc,const char *argv[]){
   root_property_read_all(NULL,NULL,0); /* free line */
   log_msg("\n\nMount point: "ANSI_FG_BLUE"'%s'"ANSI_RESET"\n\n",_mnt);
   if (!_root_n){ log_error("Missing root directories\n");return 1;}
-  if (check_configuration(argv[argc-1])){
-    warning(WARN_CONFIG,"","Non-recommended configuration.");
-    if (!cg_uid_is_developer() && !_isBackground) fprintf(stderr,"Press enter\n"), cg_getc_tty();
-  }
+  if (check_configuration(stderr,argv[argc-1]) && !cg_uid_is_developer() && !_isBackground){ fprintf(stderr,"Press enter\n"), cg_getc_tty();}
+  warning(WARN_CONFIG,"path","msg %p",_fWarnErr[0]);
   mkSymlinkAfterStartPrepare();
   if (_isBackground)  _logIsSilent=_logIsSilentFailed=_logIsSilentWarn=_logIsSilentError=_cg_is_none_interactive=true;
   IF1(WITH_FILECONVERSION,fc_init());
@@ -2513,7 +2522,13 @@ int main(const int argc,const char *argv[]){
   _fuse_argv[_fuse_argc++]="";
   if (!_isBackground) _fuse_argv[_fuse_argc++]="-f";
   FOR(i,colon+1,argc) _fuse_argv[_fuse_argc++]=argv[i];
+
+
   log_print_roots(stderr);
+  initial_msg(_fWarnErr[0]);
+  check_configuration(_fWarnErr[0],argv[argc-1]);
+  log_print_roots(_fWarnErr[0]);
+
   const int fuse_stat=fuse_main(_fuse_argc,(char**)_fuse_argv,&xmp_oper,NULL);
   _fuse_started=true;
   log_msg(RED_WARNING" fuse_main returned %d\n",fuse_stat);
@@ -2547,4 +2562,7 @@ int main(const int argc,const char *argv[]){
 //   zip_stat    zip_t
 // crc32 mnt/Z2/Data/30-0039/20250531_Z2_KTT_001_30-0039_Benchmarking4Vadim_pepcal1.wiff
 // cg_print_stacktrace evict
-// Transient-cache
+// Transient-cache RED_FAIL FHANDLE_MAX  30-0028  FHANDLE_PRELOADRAM_MASTER
+// unlock_ncancel fhandle_get FOREACH_FHANDLE foreach_fhandle_including_pending_destruct  FHANDLE_DESTROY_LATER
+// gmtime Extension
+// fuse_get_context()

@@ -56,8 +56,8 @@
 static bool cg_uid_is_developer(){
   static int ok;
   if (!ok){
-     struct passwd *pw=getpwuid(getuid());
-     ok=(!pw || strcmp("cgille",pw->pw_name))?-1:1;
+    struct passwd *pw=getpwuid(getuid());
+    ok=(!pw || strcmp("cgille",pw->pw_name))?-1:1;
   }
   return ok==1;
 }
@@ -707,19 +707,6 @@ static int cg_count_fd_this_prg(void){
 }
 
 
-static bool cg_check_path_for_fd(const char *title, const char *path, int fd){
-  char check_path[MAX_PATHLEN+1],rp[PATH_MAX+1];
-  if (!realpath(path,rp)){
-    log_error("%s  Failed realpath(%s)\n",snull(title),path);
-    return false;
-  }
-  cg_path_for_fd(check_path,fd);
-  if (strncmp(rp,path,MAX_PATHLEN-1)){
-    log_error("%s  fd=%d,%s   D_VP(d)=%s   realpath(path)=%s\n",title,fd,check_path,path,rp);
-    return false;
-  }
-  return true;
-}
 
 static void cg_print_path_for_fd(int fd){
   if (!has_proc_fs()){
@@ -1142,19 +1129,33 @@ static bool _cg_recursive_mkdir(const bool parentOnly,const char *path){
 #define cg_recursive_mk_parentdir(path) _cg_recursive_mkdir(true,path)
 
 
-static void log_list_filedescriptors(const int fd){
-  if (!has_proc_fs()){
-    fputs(ERROR_MSG_NO_PROC_FS,stderr);
-  }else{
-    const pid_t pid0=getpid();
-    if (!fork()){
-      char path[33];
-      sprintf(path,"/proc/%d/fd",pid0);
-      execl("/usr/bin/ls","/usr/bin/ls",path,(char*)NULL);
-      exit(errno);
+
+
+static void pid_to_cmdline(char buf[PATH_MAX], const pid_t pid){
+  *buf=0;
+  if (has_proc_fs()){
+    char path[99];
+    sprintf(path,"/proc/%lld/cmdline",LLD(pid));
+    const int fd=open(path,O_RDONLY);
+    if(fd>0){
+      cg_fd_read(fd, buf,PATH_MAX-1,0);
+      close(fd);
     }
   }
 }
+
+
+static void pid_to_exe(char buf[PATH_MAX], const pid_t pid){
+  *buf=0;
+  if (has_proc_fs()){
+    char path[99];
+    sprintf(path,"/proc/%lld/exe",LLD(pid));
+    if (!realpath(path,buf)) *buf=0;
+  }
+}
+
+
+
 
 
 static char* cg_path_expand_tilde(char *dst, const int dst_max, const char *path){
@@ -1389,7 +1390,7 @@ static int cg_exec(const char *cmd[], const char *env[],const int fd_in,const in
 #else
   execvp(cmd[0],(char *const *)cmd);
 #endif
-   E("cg_exec");
+  E("cg_exec");
   return errno;
 }
 
@@ -1465,8 +1466,8 @@ static bool cg_pid_exists_proc(const pid_t pid){
 }
 
 int main(int argc, char *argv[]){
-  printf("cg_uid_is_developer(): %d",cg_uid_is_developer()); return 0;
-  switch(16){
+
+  switch(3){
   case 0:{
     bool *ccpath=cg_validchars(VALIDCHARS_PATH);
     fprintf(stderr,"ccpath\n");
@@ -1492,7 +1493,12 @@ int main(int argc, char *argv[]){
     free_untracked(h);
   } break;
   case 3:{
-
+    FOR(i,1,argc){
+      char buf[PATH_MAX];
+      const pid_t pid=atoi(argv[i]);
+      pid_to_exe(buf,pid);
+      fprintf(stderr,"%lld   '%s'\n\n",LLD(pid),buf);
+    }
 
   } break;
   case 4:{
@@ -1560,15 +1566,15 @@ int main(int argc, char *argv[]){
 
   case 14:
     FOR(i,1,argc){
-    char target[PATH_MAX+1],absolute_target[PATH_MAX+1];
+      char target[PATH_MAX+1],absolute_target[PATH_MAX+1];
       FOR(do_resolve,0,2){
         int res=cg_readlink_absolute(do_resolve,argv[i],target,absolute_target);
         printf("do_resolve:%d %s '%s' => '%s'\n",do_resolve,success_or_fail(res==0), argv[i],absolute_target);
       }
-    break;
+      break;
 
 
-  }
+    }
 
   case 15:{
     const char *aa[]={"","a","b","","","c","",NULL};

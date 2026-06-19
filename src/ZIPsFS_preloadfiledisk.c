@@ -89,7 +89,7 @@ static bool fHandle_preloadfile_now(fHandle_t *d){
 static fHandle_t *preloaddisk_fhandle(const fHandle_t *d){
   const char *vp=D_VP(d);
   const int vp_l=D_VP_L(d);
-  foreach_fhandle(id,e){
+  FOREACH_FHANDLE(id,e){
     if (e!=d && (e->flags&(FHANDLE_PRELOADFILE_QUEUE|FHANDLE_PRELOADFILE_RUN)) && D_VP_L(e)==vp_l && !memcmp(D_VP(e),vp,vp_l)) return e;
   }
   return NULL;

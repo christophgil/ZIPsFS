@@ -31,13 +31,13 @@ go(){
 
     if ((DO_UMOUNT)); then
         set -x
-        $DO_DRYRUN fusermount -u $mnt
+        $DO_DRYRUN fusermount -u $mnt >&2
         set +x
         return
     fi
     if ((DO_UMOUNT_SUDO)); then
         set -x
-        $DO_DRYRUN sudo umount -f $mnt || $DO_DRYRUN sudo umount -l $mnt
+        $DO_DRYRUN sudo umount -f $mnt  >&2 || $DO_DRYRUN sudo umount -l $mnt >&2
         set +x
         return
     fi
@@ -65,7 +65,7 @@ EOF
     echo Going to test mountpoint $mnt >&2
     mountpoint $mnt >&2 && return
     set -x
-    curlftpfs  $url  $mnt -o cache=yes,cache_timeout=999,noforget,allow_other
+    curlftpfs  $url  $mnt -o cache=yes,cache_timeout=999,noforget,allow_other >&2
     set +x
 }
 

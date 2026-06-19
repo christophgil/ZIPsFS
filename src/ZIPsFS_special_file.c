@@ -173,7 +173,7 @@ static uint64_t special_file_file_content_to_fhandle(zpath_t *zpath,const int sp
       if (!fhandle_set_text(d,b)){
         FREE_NULL_MALLOC_ID(b);
       }else{
-        preloadram_set_status(d,preloadram_done);
+        preloadram_set_status(d,PRELOADRAM_DONE);
         d->flags|=FHANDLE_PRELOADRAM_COMPLETE;
       }
       unlock(mutex_fhandle);

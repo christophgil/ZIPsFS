@@ -214,7 +214,7 @@ const int SFILE_NAMES_L[]={0, XMACRO() 0};
 /*******************************************/
 
 #define XMACRO_ENUMS()\
-  X(enum_preloadram_status, C(preloadram_status_nil)C(preloadram_queued)C(preloadram_reading)C(preloadram_done));\
+  X(enum_preloadram_status, C(PRELOADRAM_STATUS_NIL)C(PRELOADRAM_QUEUED)C(PRELOADRAM_READING)C(PRELOADRAM_DONE));\
   X(enum_when_preloadram_zip, C(PRELOADRAM_NEVER)C(PRELOADRAM_SEEK)C(PRELOADRAM_RULE)C(PRELOADRAM_COMPRESSED)C(PRELOADRAM_ALWAYS));\
   X(enum_mstoreid, C(HT_MALLOC_UNDEFINED)C(HT_MALLOC_warnings)C(HT_MALLOC__ht_count_by_ext)C(HT_MALLOC_file_ext)C(HT_MALLOC_inodes)C(HT_MALLOC_transient_cache)C(HT_MALLOC_without_dups));\
   X(enum_warnings, C(WARN_INIT)C(WARN_MISC)C(WARN_CONFIG)C(WARN_STR)C(WARN_INODE)C(WARN_THREAD)C(WARN_MALLOC)C(WARN_ROOT)C(WARN_OPEN)C(WARN_READ)C(WARN_ZIP_FREAD)C(WARN_READDIR)\
@@ -323,7 +323,10 @@ enum {FILETYPEDATA_NUM=1024, FILETYPEDATA_FREQUENT_NUM=64};
 #define fhandle_virtualpath_equals(d,e) (d!=e && D_VP_HASH(e)==D_VP_HASH(d) && !strcmp(D_VP(d),D_VP(e)))
 #define fhandle_zip_ftell(d) d->zip_fread_position
 // cppcheck-suppress-macro constVariablePointer
-#define foreach_fhandle(id,d)  foreach_fhandle_also_emty(id,d) if (d->flags)
+#define foreach_fhandle_including_pending_destruct(id,d)  foreach_fhandle_also_emty(id,d) if (d->flags)
+
+
+#define FOREACH_FHANDLE(id,d)  foreach_fhandle_also_emty(id,d) if (d->flags && !(d->flags&FHANDLE_DESTROY_LATER)) /* cppcheck-suppress-macro constVariablePointer */
 
 
 
@@ -531,14 +534,19 @@ typedef struct{
 #define D_VP_L(d)    ((d)->zpath.virtualpath_l)
 #define D_RP(d)      ((d)->zpath.strgs+d->zpath.realpath)
 #define D_RP_L(d)    ((d)->zpath.realpath_l)
+#define D_ST_SIZE(d) (d->zpath.stat_vp.st_size)
 #define NEW_ZIPPATH(vipa)  zpath_t __zp={0},*zpath=&__zp;zpath_init(zpath,vipa)
 #define FIND_REALPATH(virtpath)    NEW_ZIPPATH(virtpath);  found=find_realpath(0,zpath);
 #define FIND_REALPATH_NOT_EXPAND_SYMLINK(virtpath)    NEW_ZIPPATH(virtpath); zpath->flags|=ZP_NOT_EXPAND_SYMLINKS;  found=find_realpath(0,zpath);
 
 
 
-
+#if 0
 enum {FHANDLE_LOG2_BLOCK_SIZE=5, FHANDLE_BLOCKS=512};
+#else
+enum {FHANDLE_LOG2_BLOCK_SIZE=1, FHANDLE_BLOCKS=64};
+#endif
+
 enum {FHANDLE_BLOCK_SIZE=1<<FHANDLE_LOG2_BLOCK_SIZE, FHANDLE_MAX=FHANDLE_BLOCKS*FHANDLE_BLOCK_SIZE};
 
 
@@ -585,8 +593,7 @@ typedef struct{
   zpath_t zpath;
   volatile time_t accesstime;
   volatile int errorno;
-  enum {FHANDLE_ACTIVE=1<<0,FHANDLE_DESTROY_LATER=1<<1,FHANDLE_PREPARE_ONCE_IN_RW=1<<2,FHANDLE_SEEK_FW_FAIL=1<<3,FHANDLE_SEEK_BW_FAIL=1<<4,FHANDLE_WITH_TRANSIENT_ZIPENTRY_CACHES=1<<5,FHANDLE_IS_FILECONVERSION=1<<6,FHANDLE_WITH_PRELOADRAM=1<<8,FHANDLE_PRELOADRAM_COMPLETE=1<<10,FHANDLE_SPECIAL_FILE=1<<11,FHANDLE_IS_CCODE=1<<12,FHANDLE_PRELOADFILE_QUEUE=1<<13,FHANDLE_PRELOADFILE_RUN=1<<14,FHANDLE_IS_MUTEX_INITIALIZED_0=1<<15,FHANDLE_IS_MUTEX_INITIALIZED_1=1<<16,FHANDLE_SERIALIZED=1<<17} flags;
-  //  FHANDLE_WAITED_FREE_RAM=1<<9,
+  enum {FHANDLE_ACTIVE=1<<0,FHANDLE_DESTROY_LATER=1<<1,FHANDLE_PREPARE_ONCE_IN_RW=1<<2,FHANDLE_SEEK_FW_FAIL=1<<3,FHANDLE_SEEK_BW_FAIL=1<<4,FHANDLE_WITH_TRANSIENT_ZIPENTRY_CACHES=1<<5,FHANDLE_IS_FILECONVERSION=1<<6,FHANDLE_WITH_PRELOADRAM=1<<8,FHANDLE_PRELOADRAM_MASTER=1<<9, FHANDLE_PRELOADRAM_COMPLETE=1<<10,FHANDLE_SPECIAL_FILE=1<<11,FHANDLE_IS_CCODE=1<<12,FHANDLE_PRELOADFILE_QUEUE=1<<13,FHANDLE_PRELOADFILE_RUN=1<<14,FHANDLE_IS_MUTEX_INITIALIZED_0=1<<15,FHANDLE_IS_MUTEX_INITIALIZED_1=1<<16,FHANDLE_SERIALIZED=1<<17} flags;
   uint8_t already_logged;
   volatile int64_t offset,n_read;
   volatile atomic_int is_busy; /* Increases when entering xmp_read. If greater 0 then the instance must not be destroyed. */
@@ -595,10 +602,10 @@ typedef struct{
   off_t zip_fread_position;
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,ht_t *ht_transient_cache);
   IF1(WITH_PRELOADRAM, struct preloadram * volatile preloadram; int how_often_bwdseek);
-  atomic_int volatile //is_preloading,
-    count_calls_read, serialized_incremented;
+  atomic_int volatile count_calls_read, serialized_incremented;
   IF1(WITH_FILECONVERSION, enum{FILECONVERSION_UNINITILIZED,FILECONVERSION_SUCCESS,FILECONVERSION_FAIL} fileconversion_state);
   time_t serialized_when_read;
+  pid_t pid;
 }  fHandle_t;
 static const fHandle_t FHANDLE_EMPTY;
 

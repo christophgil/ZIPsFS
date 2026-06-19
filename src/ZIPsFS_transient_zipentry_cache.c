@@ -38,7 +38,7 @@ static ht_t* transient_cache_make_ht(fHandle_t *d){
     mstore_set_mutex(mutex_fhandle,ht->valuestore);
     //const ht_hash_t hash=d->zpath.virtualpath_without_entry_hash;
     ht->valuestore->mstore_counter_mmap=COUNT_MSTORE_MMAP_TRANSIENT_CACHE_VALUES;
-    foreach_fhandle(ie,e){
+    foreach_fhandle_including_pending_destruct(ie,e){
       if (!e->ht_transient_cache && FHANDLE_BOTH_SHARE_TRANSIENT_CACHE(e,d)) e->ht_transient_cache=ht;
     }
   }
@@ -58,7 +58,7 @@ static zpath_t *transient_cache_get_or_create_zpath(const bool create,const bool
   if (*virtualpath) assert(virtualpath_l>0);
   ht_t *ht1=NULL;
   fHandle_t *d1=NULL;
-  foreach_fhandle(id,d){ /* Look for fHandle_t with attached hash map */
+  FOREACH_FHANDLE(id,d){ /* Look for fHandle_t with attached hash map */
     if (create){
       if (!(d->flags&FHANDLE_WITH_TRANSIENT_ZIPENTRY_CACHES)) continue;
     }else{
@@ -101,7 +101,7 @@ static zpath_t *transient_cache_get_or_create_zpath(const bool create,const bool
 
 static yes_zero_no_t transient_cache_find_realpath(zpath_t *zpath){
   //_log_flags|=(1<<LOG_TRANSIENT_ZIPENTRY_CACHE);
-  //log_entered_function("vp: %s opt: %d ",VP(),(opt&FINDRP_NOT_TRANSIENT_CACHE));
+  //log_entered_function("vp: %s ",VP());
   if (zpath->flags&ZP_TRANSIENT_CACHE_ONCE) return ZERO;
   zpath->flags|=ZP_TRANSIENT_CACHE_ONCE;
   const char *vp=VP();
@@ -124,6 +124,7 @@ static yes_zero_no_t transient_cache_find_realpath(zpath_t *zpath){
 }
 
 static void transient_cache_store(const zpath_t *zpath, const char *vp,const int vp_l){
+  ASSERT_LOCKED_FHANDLE();
   zpath_t *zp=transient_cache_get_or_create_zpath(true,!zpath,vp,vp_l);
   //log_debug_now("%s %d %s  zpath: %s",vp,vp_l,success_or_fail(zp),zpath?VP():NULL);
   if (zp){
@@ -134,7 +135,7 @@ static void transient_cache_store(const zpath_t *zpath, const char *vp,const int
 #if 0 //WITH_EXTRA_ASSERT
       const zpath_t *wiedergefunden=transient_cache_get_or_create_zpath(false,false,vp,vp_l);
       assert(NULL!=wiedergefunden);
-      //log_debug_now("Wiederfinden: %p %s",wiedergefunden,wiedergefunden?ZP_VP(wiedergefunden):NULL);
+      log_verbose("Wiederfinden: %p %s",wiedergefunden,wiedergefunden?ZP_VP(wiedergefunden):NULL);
 #endif //WITH_EXTRA_ASSERT
     }
   }
@@ -144,20 +145,21 @@ static void transient_cache_destroy(fHandle_t *d){
   ht_t *ht=d->ht_transient_cache;
   if (ht){
     {
-      foreach_fhandle(ie,e) if (d!=e && ht==e->ht_transient_cache) return;
+    FOREACH_FHANDLE(ie,e) if (d!=e && ht==e->ht_transient_cache) return;
     }
     ht_destroy(ht);
     cg_free(COUNT_FHANDLE_TRANSIENT_CACHE,ht);
     {
-      foreach_fhandle(ie,e) if (ht==e->ht_transient_cache) e->ht_transient_cache=NULL;
+      foreach_fhandle_including_pending_destruct(ie,e) if (ht==e->ht_transient_cache) e->ht_transient_cache=NULL;
     }
   }
 }
 
 static void transient_cache_activate(fHandle_t *d){
+  ASSERT_LOCKED_FHANDLE();
   if ((d->zpath.flags&ZP_IS_ZIP) && config_advise_transient_cache_for_zipentries(D_VP(d),D_VP_L(d))){ // USED_TO_BE_ZP_TRY_ZIP
     d->flags|=FHANDLE_WITH_TRANSIENT_ZIPENTRY_CACHES;
-    foreach_fhandle(ie,e){
+    foreach_fhandle_including_pending_destruct(ie,e){
       if (d!=e && FHANDLE_BOTH_SHARE_TRANSIENT_CACHE(d,e) && NULL!=(d->ht_transient_cache=e->ht_transient_cache)) break;
     }
   }

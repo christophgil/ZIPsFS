@@ -17,7 +17,11 @@
 #define END_PRE()   if (IS_HTML()) P("\n</PRE>");else LF()
 
 #define INFO_TABLE_DESCRIPTION() info_table_description(file,describe,sizeof(describe),dc)
-#define IS_HTML() (file!=stderr)
+#define IS_HTML() (file!=stderr && file!=_fWarnErr[0])
+
+
+
+
 static void log_print_roots(FILE *file);
 static void _th_title(FILE *file,const char *title){
   if(*title!='<')P("<TH>");
@@ -48,7 +52,7 @@ static int append_description(const char *title, const char *descr, char *descri
 #define COLUMN_FILE_TYPE(ext)
 #else
 #define COLUMN_FILE_TYPE(ext)\
-  R(ext!=NULL,"X","Extension","%s",ext)\
+  R(ext!=NULL,"Extension","","%s",ext)\
        R(ext!=NULL,"K","Counting this known extension is optimized in source code","%c",isKnownExt(ext,0)?'+':' ')
 #endif //IS_CHECKING_CODE
 static void info_table_description(FILE *file,char *txt, const int txt_max, const int txt_l){
@@ -156,11 +160,11 @@ static void info_counts_by_filetype(FILE *file){
       const int *vv=x->value; // cppcheck-suppress variableScope
       /* see inc_count_by_ext() */
 #define G(field) vv[field]
-      SF("getattr","Number of calls to this FUSE call-back function success/fail",COUNTER_GETATTR);
-      SF("readdir","&#12291;",COUNTER_READDIR);
-      SF("opendir","Number of calls to this C library function  success/fail",COUNTER_OPENDIR);
-      SF("zip_open","&#12291;",COUNTER_ZIPOPEN);
-      SF("lstat","&#12291;",COUNTER_STAT);
+      SF("getattr", "Number of calls to this FUSE call-back function success/fail",COUNTER_GETATTR);
+      SF("readdir", "''",COUNTER_READDIR);
+      SF("opendir", "Number of calls to this C library function  success/fail",COUNTER_OPENDIR);
+      SF("zip_open","''",COUNTER_ZIPOPEN);
+      SF("lstat",   "''",COUNTER_STAT);
 #undef G
       END_HR();
     }
@@ -292,6 +296,7 @@ static void info_print_open_files(FILE *file, int *fd_count){
       P("</OL>\n");
     }
   }
+  F("\nCount call to open minus release: %d  (Should be 1 or higher because  this file is currently viewed) <BR>\n",atomic_load(&_open_minus_release));
 }
 static void print_maps(FILE *file){
   if (has_proc_fs()){
@@ -380,36 +385,58 @@ static void info_print_memory(FILE *file){
 #endif
 }
 static void print_fhandle(FILE *file,const char *title){
-  H1("Data associated to file descriptors (struct fHandle)");
-  F("_fhandle_n: %d (Maximum "STRINGIZE(FHANDLE_MAX)")<BR>Table should be empty when idle.<BR>\n<TABLE border=\"1\">\n",_fhandle_n);
-  char describe[999]; int dc=0;
+  ASSERT_LOCKED_FHANDLE();
+  H1("File handles structure fHandle_t");
+  F("_fhandle_n: %d (Maximum %d)<BR>Table should be empty when idle.<BR>\n<TABLE border=\"1\">\n",_fhandle_n,FHANDLE_MAX);
+  char describe[999], tmp[PATH_MAX]; int dc=0;
   const time_t t0=time(NULL);
-#define K(x) (((1<<10)-1+x)>>10)
   FOR(ir,-1,_fhandle_n){
     const bool isHeader=ir<0;
-    fHandle_t *d=isHeader?NULL:fhandle_at_index(ir);
-    if (d && !d->flags) continue;
-    if (isHeader) P("<THEAD>\n");
+    fHandle_t *d=NULL;
+    if (isHeader){
+      P("<THEAD>\n");
+    }else{
+      d=fhandle_at_index(ir);
+      if (!d || !d->flags) continue;
+      if (d->flags&FHANDLE_DESTROY_LATER) fhandle_try_destroy(d);
+      if (!d->flags) {log_verbose("fhandle_try_destroy success");continue;}
+    }
     P("<TR>\n");
+    R(true,"Seqid","","%llu",LLU(d->fhandle_fh));
     R(true,"Path","","%s",!d?"Null":D_VP(d));
     R(true,"Last-access","How many s ago","%'lld s",!d?0:LLD(d->accesstime?(t0-d->accesstime):-1));
+    R(true,"PID","PID of calling process","%lld",LLD(d->pid));
+
+    if (has_proc_fs()){
+      *tmp=0;
+      if (d) pid_to_exe(tmp,d->pid);
+      R(true,"Accessor","Program","%s",tmp);
+    }
 #if WITH_PRELOADRAM
     const struct preloadram *m=d?d->preloadram:NULL;
     const textbuffer_t *tb=m?m->txtbuf:NULL; // cppcheck-suppress unreadVariable
-    R(tb!=NULL,"Cache-ID",        "",                                                     "%05x",!m?0:m->id);
-    R(tb!=NULL,"Cache-read-kB",   "Number of KB already read into cache",                 "%'lld",!m?0:LLD(K(m->preloadram_already)));
-    R(tb!=NULL,"Entry-kB",        "Total size of file content",                           "%'lld",!m?0:LLD(K(m->preloadram_l)));
-    R(tb!=NULL,"Millisec",        "How long did it take to read file content into cache.","%'lld",!m?0:LLD(m->preloadram_took_mseconds));
+    R(tb!=NULL,"preloadram->ID",        "",                                                     "%05x",!m?0:m->id);
+    R(tb!=NULL,"Read",     "Bytes already read into cache",                        "%'lld",!m?0:LLD(m->preloadram_already));
+    R(tb!=NULL,"Bytes",    "Total size",                                           "%'lld",!m?0:LLD(m->preloadram_l));
+    R(tb!=NULL,"Millisec", "How long did it take to read file content into cache.","%'lld",!m?0:LLD(m->preloadram_took_mseconds));
 #endif //WITH_PRELOADRAM
     const bool locked=d && fhandle_mutex_initialized(0,d) && pthread_mutex_trylock(&d->mutex[0]);
     if (d && !locked) pthread_mutex_unlock(&d->mutex[0]);
-    const char *status_descr="<UL><LI>(D)elete indicates that it is marked for closing</LI>"
-      "<LI>(K)eep indicates that it can currently not be closed.</li>"
-      "<LI>(L)ocked: Cannot be released. Two reasons:"
-      "<OL><LI>xmp_read() is currently run</LI><LI>The cache is needed by another file descriptor  with the same virtual path.</LI></OL>"
-      "</UL>";
-    R(true,"Status",status_descr,"%c%c%c",locked?'L':' ',(d->flags&FHANDLE_DESTROY_LATER)?'D':' ', fhandle_currently_reading_writing(d)?'K':' ');
-    R(true,"Busy","Number of threads in currently in xmp_read()",  "%d",d->is_busy);
+    int n=0;
+    if (d){
+      RLOOP(i,MIN_int(10,fhandle_active_readers_writers(d))) tmp[n++]='*';
+      if (locked) tmp[n++]='L';
+#define f(f,c) if (d->flags&f) tmp[n++]=c;
+      f(FHANDLE_PRELOADRAM_MASTER,'M');
+      f(FHANDLE_DESTROY_LATER,'D');
+      f(FHANDLE_PREPARE_ONCE_IN_RW,'s');
+      f(FHANDLE_SEEK_FW_FAIL,'b');
+      f(FHANDLE_PRELOADRAM_COMPLETE,'C');
+#undef f
+    }
+    tmp[n]=0;
+    R(true,"Flags","See" __FILE__ ":" STRINGIZE(__LINE__),"%s",tmp);
+
 #if WITH_TRANSIENT_ZIPENTRY_CACHES
     const ht_t *ht=d?d->ht_transient_cache:NULL;
     R(ht!=NULL,"Transient-cache","Number of cached paths, count fetched non-existing paths, count fetched existing","%'u %d %d", ht->length, ht->client_value_int[0], ht->client_value_int[1]);
@@ -418,7 +445,7 @@ static void print_fhandle(FILE *file,const char *title){
   }
   P("</TABLE>\n");
   INFO_TABLE_DESCRIPTION();
-#undef K
+
 }
 #define PRINT_INFO_SHORT (1<<2)
 static void _print_info(const int flags,FILE *file){

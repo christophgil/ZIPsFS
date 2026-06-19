@@ -14,6 +14,7 @@
 /* errno -l | sed  's|^\([^ ]*\)\ .*|C(\1);|1' | paste -d " "  - - |paste -d " "  - - |paste -d " "  - - */
 
 /*********************************************************************************/
+static atomic_int  _open_minus_release;
 /* *** RAM *** */
 static bool _killOnError, _logIsSilent;
 static char *_warning_channel_name[1<<WARN_SHIFT_MAX]={0},*_warning_color[1<<WARN_SHIFT_MAX]={0};
@@ -27,7 +28,6 @@ static void _viamacro_warning(const char *fn,int line,const uint32_t channel,con
   static pthread_mutex_t mutex;
   static bool initialized;
   static int written;
-  const bool iserror=(channel&(WARN_FLAG_ERROR|WARN_FLAG_MAYBE_EXIT));
   if (!channel){
     assert(_fWarnErr[0]!=NULL);
         assert(_fWarnErr[1]!=NULL);
@@ -52,6 +52,8 @@ static void _viamacro_warning(const char *fn,int line,const uint32_t channel,con
   written+=strlen(format)+strlen(p);
 
   pthread_mutex_lock(&mutex);
+  const bool iserror=channel&(WARN_FLAG_ERROR|WARN_FLAG_MAYBE_EXIT);
+
   for(int j=2;--j>=0;){
     FILE *f=j?(_logIsSilent?NULL:stderr):!toFile?NULL:_fWarnErr[iserror];
     if (!f) continue;
@@ -59,6 +61,12 @@ static void _viamacro_warning(const char *fn,int line,const uint32_t channel,con
     if (channel&WARN_FLAG_SUCCESS) pfx=GREEN_SUCCESS;
         if (channel&WARN_FLAG_FAIL) pfx=RED_FAIL;
         if (!(channel&WARN_FLAG_WITHOUT_NL)) fputc('\n',f);
+        if (iserror){
+          time_t t=time(NULL);
+          char tmp[32];
+          strftime(tmp,31,"%Y%m%d_%H:%M:%S ",gmtime(&t));
+          fputs(tmp,f);
+        }
     fprintf(f,"%d\t%s%s"ANSI_RESET"\t%s():%d\t%s\t",_warning_count[i],color?color:ANSI_FG_RED,pfx?pfx:"ERROR",fn,line,p);
     va_list argptr; va_start(argptr,format);vfprintf(f,format,argptr);va_end(argptr);
     if ((channel&WARN_FLAG_ERRNO) && e){

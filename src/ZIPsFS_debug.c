@@ -8,7 +8,7 @@ static int countFhandleWithPreloadram(const char *path, int len,int h){
   if (!len) len=strlen(path);
   if (!h) h=hash32(path,len);
   int count=0;
-  IF1(WITH_PRELOADRAM,foreach_fhandle(id,d)  if(D_VP_HASH(d)==h && d->preloadram && d->preloadram->txtbuf && !strcmp(path,D_VP(d))) count++);
+  IF1(WITH_PRELOADRAM,foreach_fhandle_including_pending_destruct(id,d)  if(D_VP_HASH(d)==h && d->preloadram && d->preloadram->txtbuf && !strcmp(path,D_VP(d))) count++);
   return count;
 }
 
@@ -18,7 +18,7 @@ static void _viamacro_fhandleWithPreloadramPrint(const char *func,int line,const
   ASSERT_LOCKED_FHANDLE();
   if (!len) len=strlen(path);
   if (!h) h=hash32(path,len);
-  foreach_fhandle(id,d){
+  foreach_fhandle_including_pending_destruct(id,d){
     if (D_VP_HASH(d)==h){
       const struct preloadram *m=d->preloadram;
       if (m && (m->txtbuf||m->preloadram_status) && !strcmp(path,D_VP(d))){
@@ -169,7 +169,7 @@ static bool debug_fhandle(const fHandle_t *d){
 }
 static void debug_fhandle_listall(void){
   log_msg(ANSI_INVERSE"%s"ANSI_RESET"\n",__func__);
-  foreach_fhandle(id,d){
+  foreach_fhandle_including_pending_destruct(id,d){
     log_msg("d %p  '%s' fh: %llu\n",d,D_VP(d),LLU(d->fhandle_fh));
   }
 }
@@ -247,12 +247,12 @@ static bool debug_trigger_vp(const char *vp,const int vp_l){
 
 #if 0
 static void _debug_fhandle(fHandle_t *d,char *ansi){
-  fprintf(stderr,"%sd: %p "ANSI_RESET ANSI_YELLOW"%ld"ANSI_RESET" destroy:%d reading:%d   ",ansi, d,d->fhandle_fh,0!=(d->flags&FHANDLE_DESTROY_LATER),fhandle_currently_reading_writing(d));
+  fprintf(stderr,"%sd: %p "ANSI_RESET ANSI_YELLOW"%ld"ANSI_RESET" destroy:%d reading:%d   ",ansi, d,d->fhandle_fh,0!=(d->flags&FHANDLE_DESTROY_LATER),fhandle_active_readers_writers(d));
 }
 
 static void debug_print_all_d_with_preloadram(fHandle_t *d){
   _debug_fhandle(d,ANSI_INVERSE);
-  foreach_fhandle(id,e)    if (e!=d && e->preloadram==d->preloadram && !(e->flags&FHANDLE_DESTROY_LATER)) _debug_fhandle(e,"");
+  foreach_fhandle_including_pending_destruct(id,e)    if (e!=d && e->preloadram==d->preloadram && !(e->flags&FHANDLE_DESTROY_LATER)) _debug_fhandle(e,"");
   fputc('\n',stderr);
 }
 

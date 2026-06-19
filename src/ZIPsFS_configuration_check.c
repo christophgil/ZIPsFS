@@ -3,9 +3,9 @@
 /// Exit if incorrect settings for specific mountpoint        ///
 /// Maybe I have forgotten to restore after debugging ...     ///
 /////////////////////////////////////////////////////////////////
+#include <stdio.h>
 
-
-#define T(var,x)  if (!(var x)) warn=true, printf("%-30s   ( "ANSI_FG_BLUE"Value"ANSI_RESET" "ANSI_ITALIC"OPERATOR"ANSI_RESET" Recommended )   ( "ANSI_FG_BLUE"%d"ANSI_RESET" %s )   "ANSI_FG_RED"false"ANSI_RESET"\n",#var,var,#x)
+#define T(var,x)  if (!(var x)) warn=true, fprintf(fout,"%-30s   ( "ANSI_FG_BLUE"Value"ANSI_RESET" "ANSI_ITALIC"OPERATOR"ANSI_RESET" Recommended )   ( "ANSI_FG_BLUE"%d"ANSI_RESET" %s )   "ANSI_FG_RED"false"ANSI_RESET"\n",#var,var,#x)
 #if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
 #include "ZIPsFS_configuration.h"
 #include "ZIPsFS_early.h"
@@ -44,7 +44,7 @@
   T(WITH_STATCACHE,== 1);\
   T(WITH_TRANSIENT_ZIPENTRY_CACHES,== 1)
 
-static bool check_configuration1(){
+static bool check_configuration1(FILE *fout){
  bool warn=false;
   CHECK_DEBUG_OFF();
   CHECK_CACHES_ON();
@@ -63,8 +63,9 @@ static bool check_configuration1(){
   return warn;
 }
 #if !(defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0)
-static bool check_configuration(const char *mnt){
-  bool warn=check_configuration1();
+static bool check_configuration(FILE *fout,const char *mnt){
+  ASSERT(fout);
+  bool warn=check_configuration1(fout);
   char *m=strdup_untracked(mnt);
   cg_str_replace(0,m,0,".charite.de",0,"",0);
   cg_str_replace(0,m,0,"//",2,"/",1);
@@ -78,10 +79,10 @@ static bool check_configuration(const char *mnt){
   }
   free_untracked(m);
   if (!HAS_BACKTRACE){
-    fprintf(stderr,"Warning: No stack-traces can be written in case of a program error.\n");
+    fprintf(fout,"Warning: No stack-traces can be written in case of a program error.\n");
     warn=true;
   }else if (!HAS_ADDR2LINE && !HAS_ATOS){
-    fprintf(stderr,"For better stack-traces (debugging) it is recommended to install "ANSI_FG_BLUE IF01(IS_APPLE,"addr2line (package binutils)","atos")ANSI_RESET".\n");
+    fprintf(fout,"For better stack-traces (debugging) it is recommended to install "ANSI_FG_BLUE IF01(IS_APPLE,"addr2line (package binutils)","atos")ANSI_RESET".\n");
     warn=true;
   }
 #if WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT
@@ -91,17 +92,21 @@ static bool check_configuration(const char *mnt){
   }
 #endif
 
-  if (MAX_NUM_OPEN_FILES<8000){ fprintf(stderr,RED_WARNING"Consider to increase MAX_NUM_OPEN_FILES\n\n"); warn=true;}
+  if (MAX_NUM_OPEN_FILES<8000){ fprintf(fout,RED_WARNING"Consider to increase MAX_NUM_OPEN_FILES\n\n"); warn=true;}
+  if (FHANDLE_MAX<4096){
+    fputs("FHANDLE_MAX=" STRINGIZE(FHANDLE_MAX) "\n",fout);
+    warn=true;
+  }
 
   if (_writable_path_l){
     #define EXPLAIN_WRITABLE "The first upstream root is writable.'nIf an empty string is given as first root, it will not be possible to store files in the virtual file system.\n"
     if (_root_writable->remote){
-      fprintf(stderr,"%sThe leading double slash indicates a remote path which is probably not intended\n",EXPLAIN_WRITABLE);
+      fprintf(fout,"%sThe leading double slash indicates a remote path which is probably not intended\n",EXPLAIN_WRITABLE);
       warn=true;
     }
   }else{
     warn=true;
-    fprintf(stderr,"The first root-path is an empty string.\n%s\n",EXPLAIN_WRITABLE);
+    fprintf(fout,"The first root-path is an empty string.\n%s\n",EXPLAIN_WRITABLE);
   }
   IF1(WITH_FILECONVERSION,if (!cg_is_member_of_group("docker")){ log_warn(HINT_GRP_DOCKER); warn=true;});
   return warn;
@@ -112,7 +117,7 @@ static bool check_configuration(const char *mnt){
 
 int main(int argc, char *argv[]){
 
-  return check_configuration1();
+  return check_configuration1(stderr);
 }
 
 

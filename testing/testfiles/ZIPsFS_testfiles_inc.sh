@@ -111,8 +111,9 @@ assure_mountpoint_db(){
 
 
 MNT='mnt'
-MODI=~/tmp/ZIPsFS/testing/modifications
-REMOTE1=~/tmp/ZIPsFS/testing/remote1
+ROOTS0=~/tmp/ZIPsFS_testing/testing
+MODI=$ROOTS0/modifications
+REMOTE1=$ROOTS0/remote1
 TMPDIR=~/tmp/ZIPsFS/tmp
 mkdir -p $MODI $REMOTE1 $TMPDIR
 WITH_FTP_DIRS=1
