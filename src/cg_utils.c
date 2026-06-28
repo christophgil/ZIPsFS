@@ -356,7 +356,7 @@ static bool cg_endsWithZip(const char *s, const int len_or_0){
 /*   if (!iCompress) return true; */
 /*   int e_l; */
 /*   const char *e=cg_compression_file_ext(iCompress,&e_l); */
-/*   return !e || cg_endsWith(0,s,len_or_0?len_or_0:cg_strlen(s), e,e_l); */
+/*   return !e || cg_endsWith(0,s,len_or_0?len_or_0:cg_strlen(s),e,e_l); */
 /* } */
 
 
@@ -840,7 +840,7 @@ static bool cg_file_exists(const char *path){
 
 #define cg_pid_exists(pid)  (!kill(pid,0)) // Or   getpgid(pid)>=0
 
-enum{ST_BLKSIZE=4096, DECOMPRESS_CMD_MAX=8};
+enum{ST_BLKSIZE=4096,DECOMPRESS_CMD_MAX=8};
 
 static void stat_init(struct stat *st, int64_t size,const struct stat *uid_gid){
   const bool isdir=size<0;
@@ -1019,7 +1019,7 @@ static bool cg_fd_write(const int fd,const char *t,const off_t t_l){
 }
 
 
-static int cg_fd_read(const int fd, char *buf,const off_t buf_l,  const off_t offset){
+static int cg_fd_read(const int fd, const off_t offset, char *buf,const off_t buf_l){
   //  ssize_t pread(int fd, void buf[], size_t count,off_t offset);
   off_t todo=buf_l,sum=0;
   while(todo>0){
@@ -1031,6 +1031,14 @@ static int cg_fd_read(const int fd, char *buf,const off_t buf_l,  const off_t of
     todo-=n;
   }
   return sum;
+}
+
+static int cg_filepath_read(const char *path, const off_t offset, char *buf,const off_t buf_l){
+    const int fd=open(path,O_RDONLY);
+    if (fd<=0) return -1;
+    const int n=cg_fd_read(fd,0,buf,PATH_MAX-1);
+    close(fd);
+    return n;
 }
 
 
@@ -1131,31 +1139,38 @@ static bool _cg_recursive_mkdir(const bool parentOnly,const char *path){
 
 
 
-static void pid_to_cmdline(char buf[PATH_MAX], const pid_t pid){
+static void pid_to_cmdline(const pid_t pid,char buf[],const int buf_l){
   *buf=0;
   if (has_proc_fs()){
     char path[99];
     sprintf(path,"/proc/%lld/cmdline",LLD(pid));
-    const int fd=open(path,O_RDONLY);
-    if(fd>0){
-      cg_fd_read(fd, buf,PATH_MAX-1,0);
-      close(fd);
-    }
+    cg_filepath_read(path,0,buf,buf_l);
   }
 }
 
 
-static void pid_to_exe(char buf[PATH_MAX], const pid_t pid){
+static int pid_to_exe(pid_t pid,char buf[],const int buf_l){
+  //log_entered_function("pid=%d",pid);
   *buf=0;
+#if defined(HAS_PID2EXE_MACOSX) && HAS_PID2EXE_MACOSX || defined(HAS_PID2EXE_FREEBSD) && HAS_PID2EXE_FREEBSD  || defined(HAS_PID2EXE_NETBSD) && HAS_PID2EXE_NETBSD
+  _pid2exe_os_dependent(pid,buf,buf_l);
+#else
   if (has_proc_fs()){
     char path[99];
-    sprintf(path,"/proc/%lld/exe",LLD(pid));
-    if (!realpath(path,buf)) *buf=0;
+    sprintf(path,"/proc/%lld/comm",LLD(pid));
+    cg_filepath_read(path,0,buf,buf_l);
   }
+#endif //PROC FS
+  buf[buf_l-1]='\0';
+  return 0;
 }
-
-
-
+static void debug_pid_to_exe(pid_t pid){
+    char buf[99];
+    pid_to_exe(pid,buf,99);
+    log_debug_now("HAS_PID2EXE_MACOSX: "STRINGIZE(HAS_PID2EXE_MACOSX)
+                  " HAS_PID2EXE_FREEBSD: "STRINGIZE(HAS_PID2EXE_FREEBSD)
+                  "  has_proc_fs: %d  _pid: %lld pid_to_exe:%s\n",has_proc_fs(), LLD(pid),buf);
+}
 
 
 static char* cg_path_expand_tilde(char *dst, const int dst_max, const char *path){
@@ -1383,7 +1398,7 @@ static int cg_exec(const char *cmd[], const char *env[],const int fd_in,const in
   cg_log_exec_fd(STDERR_FILENO,cmd,env);
 #if defined(HAS_EXECVPE) && HAS_EXECVPE
   execvpe(cmd[0],(char *const *)cmd,(char *const *)env);
-#elif ! defined(HAS_UNDERSCORE_ENVIRON) || HAS_UNDERSCORE_ENVIRON
+#elif ! defined(HAS_US_ENVIRON) || HAS_US_ENVIRON
   extern char **_environ; /* default */
   if (env) _environ=(char**)env;
   execvp(cmd[0],(char *const *)cmd);
@@ -1465,7 +1480,17 @@ static bool cg_pid_exists_proc(const pid_t pid){
   return cg_file_exists(path);
 }
 
+
+
 int main(int argc, char *argv[]){
+
+  /* Linux	/proc/<pid>/comm */
+  /* Solaris	/proc/<pid>/psinfo */
+  /* macOS	sysctl(KERN_PROC_PID) */
+  /* FreeBSD	sysctl(KERN_PROC_PID) */
+  /* OpenBSD	sysctl(KERN_PROC,KERN_PROC_PID, ...) */
+  /* NetBSD	sysctl(KERN_PROC2,...) */
+
 
   switch(3){
   case 0:{
@@ -1496,7 +1521,7 @@ int main(int argc, char *argv[]){
     FOR(i,1,argc){
       char buf[PATH_MAX];
       const pid_t pid=atoi(argv[i]);
-      pid_to_exe(buf,pid);
+      pid_to_exe(pid,buf,PATH_MAX);
       fprintf(stderr,"%lld   '%s'\n\n",LLD(pid),buf);
     }
 

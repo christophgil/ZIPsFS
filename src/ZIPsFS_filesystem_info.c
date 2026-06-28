@@ -407,11 +407,11 @@ static void print_fhandle(FILE *file,const char *title){
     R(true,"Last-access","How many s ago","%'lld s",!d?0:LLD(d->accesstime?(t0-d->accesstime):-1));
     R(true,"PID","PID of calling process","%lld",LLD(d->pid));
 
-    if (has_proc_fs()){
+
       *tmp=0;
-      if (d) pid_to_exe(tmp,d->pid);
+      if (d) pid_to_exe(d->pid,tmp,PATH_MAX);
       R(true,"Accessor","Program","%s",tmp);
-    }
+
 #if WITH_PRELOADRAM
     const struct preloadram *m=d?d->preloadram:NULL;
     const textbuffer_t *tb=m?m->txtbuf:NULL; // cppcheck-suppress unreadVariable

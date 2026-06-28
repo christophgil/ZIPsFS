@@ -83,12 +83,11 @@
 //
 #include "cg_profiler.h"
 // ---
+#include "cg_OS_dependent.c"
 #include "cg_pthread.c"
 #include "cg_debug.c"
 #include "cg_stacktrace.c"
 #include "cg_utils.c"
-
-
 
 #include "cg_exec_pipe.c"
 #include "cg_download_file.c"
@@ -1209,9 +1208,6 @@ static fHandle_t* _fhandle_create_locked(const int flags,const uint64_t fh, cons
   d->flags|=FHANDLE_ACTIVE;
   COUNTER1_INC(COUNT_FHANDLE_CONSTRUCT);
   //log_exited_function("VP: %s %p",D_VP(d),d);
-
-
-  struct fuse_context *ctx = fuse_get_context();
   d->pid=get_request_pid();
   return d;
 }
@@ -1239,7 +1235,7 @@ static fHandle_t* fhandle_create(const int flags, uint64_t *fh, const zpath_t *z
   }
 }
 static int fhandle_active_readers_writers(const fHandle_t *d){
-  const int b=!b?0:atomic_load(&d->is_busy);
+  const int b=!d?0:atomic_load(&d->is_busy);
   assert(b>=0);
   return b;
 }
@@ -1495,7 +1491,7 @@ static int realpath_mk_parent(char *rp, const virtualpath_t *vip){
 #define EVAL(a) a
 #define EVAL2(a) EVAL(a)
 static pid_t get_request_pid(void){
-    return fuse_get_context()->pid;
+  return fuse_get_context()->pid;
 }
 static void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_config *cfg)){
   //void *x=fuse_apply_conn_info_opts;  //cfg-async_read=1;
@@ -1902,8 +1898,8 @@ static int xmp_write(const char *vpath, const char *buf, size_t size,off_t offse
     if (d){
       fhandle_prepare_in_fuse_read_or_write(d,fi->flags);
       fd=d->fd_real;
+      LOCK(mutex_fhandle,fhandle_busy_end(d)); // cppcheck nullPointerOutOfResources
     }
-    LOCK(mutex_fhandle,fhandle_busy_end(d)); // cppcheck nullPointerOutOfResources
     if (d && d->errorno) return d->errorno;
   }
   if (fd<=0) return errno?-errno:-EIO;
@@ -2120,7 +2116,7 @@ static off_t fhandle_read_zip(char *buf, const off_t size, const off_t offset,fH
   fhandle_counter_inc(d,num<0?ZIP_READ_NOCACHE_FAIL:!num?ZIP_READ_NOCACHE_ZERO:ZIP_READ_NOCACHE_SUCCESS);
   return num;
 #undef P
-}/*xmp_read_fhandle_zip*/
+}/*fhandle_read_zip*/
 
 /********************************************************************************/
 /* Called on first invocation of xmp_write() or xmp_read() for fHandle_t object */
@@ -2207,24 +2203,26 @@ static int xmp_read(const char *vpath, char *buf, const size_t size, const off_t
       IF(d){
         r=D_ROOT(d);
         d->accesstime=time(NULL);
-        fhandle_busy_start(d);
       }
       const uint64_t fhandle_fh=!d?0:d->fhandle_fh;
+  fhandle_busy_start(d);
   unlock(mutex_fhandle);
-
   if (d){
     if (r && (d->flags&FHANDLE_SERIALIZED)) serialized_delay_read(d,r);
     fhandle_prepare_in_fuse_read_or_write(d,O_RDONLY);
+    IF1(WITH_EXTRA_ASSERT, LOCK(mutex_fhandle,  assert(fhandle_active_readers_writers(d))));
   }
   bool again=false;
   int bytes=0;
+
+
   RLOOP(i,2){
     bytes=_xmp_read(&vipa,d,buf,size,offset,fi->fh,&again);
     if (!(bytes<=0 && again)) break;
     log_verbose(GREEN_SUCCESS"Detected backward seek. Going to preload into ram %s",vpath);
     d->flags|=FHANDLE_WITH_PRELOADRAM;
   }
-  IF(d){ LOCK(mutex_fhandle, assert(fhandle_fh==d->fhandle_fh); fhandle_busy_end(d));}
+  IF(d) LOCK(mutex_fhandle, assert(fhandle_fh==d->fhandle_fh); fhandle_busy_end(d));
   //if (bytes<=0 && d) DIE_DEBUG_NOW(RED_FAIL"%s bytes: %d  Size:%'lld   Offset: %'lld +%'d  FHANDLE_WITH_PRELOADRAM:%d",vpath, bytes, LLD(size),LLD(offset),(int)size,   (d->flags&FHANDLE_WITH_PRELOADRAM));
   //log_exited_function(ANSI_FG_GRAY"%s "ANSI_YELLOW"%llu"ANSI_RESET"  Offset: %'lld  bytes: %'d"ANSI_RESET,vpath,LLU(fi->fh), LLD(offset),(int)bytes);
 
@@ -2234,7 +2232,8 @@ static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const s
   off_t nread=-1;
   if (d){
     ASSERT(d->accesstime);
-    ASSERT(atomic_load(&d->is_busy)>=0);
+    IF1(WITH_EXTRA_ASSERT, LOCK(mutex_fhandle,  assert(fhandle_active_readers_writers(d))));
+
     if (d->errorno) return d->errorno;
     if (d->fd_real) goto d_has_fd;
 #if WITH_PRELOADRAM
@@ -2253,8 +2252,10 @@ static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const s
       fhandle_lock(d); /* Why lock: Comming here same/different fHandle_t instances and various pthread_self() */
       nread=fhandle_read_zip(buf,size,offset,d,again);
       fhandle_unlock(d);
-      if (*again){ASSERT(nread<0);}
-      IF1(WITH_PRELOADRAM, if (*again) return -1);
+      if (*again){
+        ASSERT(nread<0);
+        IF1(WITH_PRELOADRAM,return -1);
+      }
     }
     if (nread<0 && !config_not_report_stat_error(vipa->vp,vipa->vp_l)){
       LOCK_N(mutex_fhandle, const char *status=IF01(WITH_PRELOADRAM,"NA",enum_preloadram_status_S[preloadram_get_status(d)]));
@@ -2275,7 +2276,7 @@ static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const s
       log_msg(ANSI_FG_RED""ANSI_YELLOW"SEEK_REG_FILE:"ANSI_RESET" offset: %'lld ",LLD(offset)),log_msg("Failed %s fd=%llu\n",vipa->vp,LLU(fd));
       return errno?-errno:-1;
     }else{
-      return cg_fd_read(fd,buf,size,offset);
+      return cg_fd_read(fd,offset,buf,size);
     }
   }
   return nread;
@@ -2283,8 +2284,8 @@ static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const s
 
 static int xmp_release(const char *vpath, struct fuse_file_info *fi){ // cppcheck-suppress [constParameterCallback]
   ASSERT(fi!=NULL);
-    atomic_fetch_add(&_open_minus_release,1);
-    //static atomic_int count;log_entered_function(ANSI_RED"vpath:"ANSI_RESET" %s %d",vpath, atomic_fetch_add(&count,1));
+  atomic_fetch_add(&_open_minus_release,1);
+  //static atomic_int count;log_entered_function(ANSI_RED"vpath:"ANSI_RESET" %s %d",vpath, atomic_fetch_add(&count,1));
   FUSE_PREAMBLE(vpath);
   int count_backward_seek=0;
   const uint64_t fd=fi->fh;
@@ -2292,7 +2293,7 @@ static int xmp_release(const char *vpath, struct fuse_file_info *fi){ // cppchec
   if (fd>=FD_ZIP_MIN){
         lock(mutex_fhandle);
         d=fhandle_get(vipa.vp,fd);
-        IF1(WITH_EXTRA_ASSERT, if (!d) DIE_DEBUG_NOW("d is NULL %s %ld",vpath,fd));
+        IF1(WITH_EXTRA_ASSERT, if (!d) DIE_DEBUG_NOW("d is NULL %s %llu",vpath,LLU(fd)));
         if (d){
           count_backward_seek=d->count_backward_seek;
           //warning(WARN_MISC,vpath,ANSI_FG_RED"%s"ANSI_RESET"  d: %p "ANSI_RESET" fi->fh: "ANSI_YELLOW"%llu"ANSI_RESET"  fhandle_fh: %ld  pid:%lld   ",__func__,d,fd,LLU(d->fhandle_fh),LLD(d->pid));
@@ -2329,6 +2330,7 @@ static void _viamacro_exit_ZIPsFS(const char *func, const int line_num){
 
 int main(const int argc,const char *argv[]){
   _pid=getpid();
+  debug_pid_to_exe(_pid);
   IF1(WITH_CANCEL_BLOCKED_THREADS,assert(_pid==gettid()), assert(cg_pid_exists(_pid)));
   char tmp[PATH_MAX+1];
   if (realpath(*argv,tmp)) _self_exe=strdup_untracked(tmp); else DIE("Failed realpath %s",*argv);
@@ -2382,13 +2384,13 @@ int main(const int argc,const char *argv[]){
   if (_rlimit_vmemory){
     l.rlim_cur=l.rlim_max=_rlimit_vmemory;
     log_msg("Setting rlimit virtual memory to %llu MB \n",LLU(l.rlim_max>>20));
-    if (setrlimit(RLIMIT_AS,&l)) warning(WARN_CONFIG|WARN_FLAG_ERRNO,"setrlimit(RLIMIT_AS,n)","");
+    if (setrlimit(RLIMIT_AS,&l)) perror(ANSI_FG_RED"setrlimit(RLIMIT_AS,n)\n"ANSI_RESET);
   }
   if(MAX_NUM_OPEN_FILES){
     getrlimit(RLIMIT_NOFILE,&l);
     l.rlim_cur=MIN(l.rlim_max,MAX_NUM_OPEN_FILES);
     log_msg("Setting rlimit MAX_NUM_OPEN_FILES to %'d\n",(int)l.rlim_cur);
-    if (setrlimit(RLIMIT_NOFILE,&l)) warning(WARN_CONFIG|WARN_FLAG_ERRNO,"setrlimit(RLIMIT_NOFILE,n)","");
+    if (setrlimit(RLIMIT_NOFILE,&l)) perror(ANSI_FG_RED"setrlimit(RLIMIT_NOFILE,n)\n"ANSI_RESET);
   }
 #else
   log_warn("The function setrlimit() is not supported. Option -L  and MAX_NUM_OPEN_FILES will be ignored.");
@@ -2538,7 +2540,7 @@ int main(const int argc,const char *argv[]){
 
 ////////////////////////////////////////////////////////////////////////////
 // DIE  log_  FIXME  DIE_DEBUG_NOW   DEBUG_NOW   log_debug_now  log_entered_function     log_exited_function    directory_print
-// _GNU_SOURCE    HAS_EXECVPE HAS_UNDERSCORE_ENVIRON   HAS_ST_MTIM   HAS_POSIX_FADVISE
+// _GNU_SOURCE    HAS_EXECVPE HAS_US_ENVIRON   HAS_ST_MTIM   HAS_POSIX_FADVISE
 // USED_TO_BE
 // malloc calloc strdup  free  mmap munmap   readdir opendir   --- malloc_untracked calloc_untracked  strdup_untracked
 //

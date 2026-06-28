@@ -135,7 +135,7 @@ static struct preloadram *preloadram_new(fHandle_t *d){
   ASSERT_LOCKED_FHANDLE();
   if (!d->preloadram){
     d->flags|=FHANDLE_PRELOADRAM_MASTER;
-    log_entered_function(ANSI_FG_GREEN"'%s' d: %p "ANSI_YELLOW"%llu"ANSI_RESET" thread: %lx"ANSI_RESET, D_VP(d),d,LLU(d->fhandle_fh),pthread_self());
+    log_entered_function(ANSI_FG_GREEN"'%s' d: %p "ANSI_YELLOW"%llu"ANSI_RESET" thread: %llx"ANSI_RESET, D_VP(d),d,LLU(d->fhandle_fh),LLU(pthread_self()));
     static int id;
     (d->preloadram=cg_calloc(COUNT_PRELOADRAM_MALLOC,1,sizeof(struct preloadram)))->id=++id;
     d->preloadram->preloadram_l=D_ST_SIZE(d);
@@ -149,7 +149,7 @@ static bool preloadram_try_destroy(fHandle_t *d){
   if (m->preloadram_status==PRELOADRAM_QUEUED ||
       m->preloadram_status==PRELOADRAM_READING || /* Avoid that d gets destroyed and reinitialized while a reference is in the queue or filled with data */
       is_preloadram_shared_with_other(d)) return false;
-  log_entered_function(ANSI_FG_RED"'%s' d: %p "ANSI_YELLOW"%llu"ANSI_RESET" thread: %lx"ANSI_RESET, D_VP(d),d,LLU(d->fhandle_fh),pthread_self());
+  log_entered_function(ANSI_FG_RED"'%s' d: %p "ANSI_YELLOW"%llu"ANSI_RESET" thread: %llx"ANSI_RESET, D_VP(d),d,LLU(d->fhandle_fh),LLU(pthread_self()));
   textbuffer_destroy(m->txtbuf);
   FREE_NULL_MALLOC_ID(m->txtbuf);
   cg_free_null(COUNT_PRELOADRAM_MALLOC,d->preloadram);
@@ -264,7 +264,7 @@ static void preloadram_now(fHandle_t *d, root_t *r){
   //static int count;log_entered_function("%s  #%d",VP(),++count);
   char rp[PATH_MAX];
   LOCK_N(mutex_fhandle, strcpy(rp,ZP_RP(&d->preloadram->m_zpath)); const off_t st_size=D_ST_SIZE(d); const bool iszip=(d->zpath.flags&ZP_IS_ZIP));
-  log_entered_function("%s  textbuffer_memusage  ram-usage: %'lld d: %p "ANSI_YELLOW"%llu"ANSI_RESET" thread: %lx",D_VP(d),LLD(ramUsageForFilecontent()),d,LLU(d->fhandle_fh),pthread_self());
+  log_entered_function("%s  textbuffer_memusage  ram-usage: %'lld d: %p "ANSI_YELLOW"%llu"ANSI_RESET" thread: %llx",D_VP(d),LLD(ramUsageForFilecontent()),d,LLU(d->fhandle_fh),LLU(pthread_self()));
   cg_thread_assert_not_locked(mutex_fhandle);
   const int64_t start=currentTimeMillis();
   const int fd=iszip?0:open(rp,O_RDONLY); // USED_TO_BE_ZP_TRY_ZIP
@@ -281,11 +281,9 @@ static void preloadram_now(fHandle_t *d, root_t *r){
       PRELOADFILE_ROOT_UPDATE_TIME(d,r,true);
   unlock(mutex_fhandle);
   bool more=false, ok=true;
-  //char *buf=cg_malloc(COUNT_PRELOADRAM_MALLOC,PRELOADRAM_READ_BYTES_NUM);
   char *dst=textbuffer_first_segment_with_min_capacity(st_size>THRESHOLD_MALLOC_MMAP?TXTBUFSGMT_MUNMAP:0,d->preloadram->txtbuf,st_size);
   if (!dst){ warning(WARN_PRELOADRAM,rp,"dst is NULL"); DIE_DEBUG_NOW("");   return;}
   for(;st_size>already;){
-    //const off_t n_max=MIN_long(PRELOADRAM_READ_BYTES_NUM,st_size-already), n=zf?my_zip_fread(zf,buf,n_max,rp):read(fd,buf,n_max);
     const off_t n_max=MIN_long(PRELOADRAM_READ_BYTES_NUM,st_size-already), n=zf?my_zip_fread(zf,dst+already,n_max,rp):read(fd,dst+already,n_max);
     if (!n) break;
     if (n<0){ok=false;warning(WARN_PRELOADRAM,rp,"n<0  d: %p  read=%'zu st_size=%'ld",d,already,st_size);break;}
@@ -299,7 +297,6 @@ static void preloadram_now(fHandle_t *d, root_t *r){
           if (dst!=NULL){
             //log_debug_now("already: %'ld n:%'ld  Plus: %'ld  st_size: %'ld d: %p "ANSI_YELLOW"%llu"ANSI_RESET"   thread: %lx",already,n,already+n,st_size,d,LLU(d->fhandle_fh), pthread_self());
             ASSERT(already+n<=st_size);
-            //memcpy(dst+already,buf,n);
             if ((already+=n)>d->preloadram->preloadram_already) d->preloadram->preloadram_already=already;
             PRELOADFILE_ROOT_UPDATE_TIME(d,r,true);
           }
@@ -307,7 +304,6 @@ static void preloadram_now(fHandle_t *d, root_t *r){
         unlock(mutex_fhandle);
     if (!more) break; /* d is marked for destruct and d->preloadram not shared with other fHandle_t */
   }/*for already*/
-  //cg_free(COUNT_PRELOADRAM_MALLOC,buf);
   bool ok_crc=true;
   const char *msg=NULL;
       lock(mutex_fhandle);

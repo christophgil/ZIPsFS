@@ -8,7 +8,7 @@
 ///////////////////////////////
 /// Local helper functions  ///
 ///////////////////////////////
-#define WITH_SUGGESTIONS WITH_EXTRA_ASSERT
+static int _not_run_suggestions=0;
 static bool _isZipIC(const char *s){
   return *s=='.' && (s[1]|32)=='z' && (s[2]|32)=='i' && (s[3]|32)=='p';
 }
@@ -160,13 +160,12 @@ static bool config_not_report_stat_error(const char *path,const int path_l){
 ////////////////////////////////////////////////////////////
 static off_t config_advise_preload_file_ram(const int flags,const char *virtualpath, const int vp_l, const char *rootpath,const off_t filesize){
 
-#if WITH_SUGGESTIONS
-  /* You may want to make it dependent on the caller. Please note that the exe will be an empty string unless  there is a /proc/ file system */
-  const  pid_t pid=get_request_pid();
-  char exe[PATH_MAX];
-  pid_to_exe(exe,pid);
-  pid_to_cmdline(exe,pid);
-#endif //WITH_SHOW_OPTIONS
+  if (_not_run_suggestions){
+  /* You may want to make it dependent on the caller.  On some computer systems, the  command name  can be obtained.*/
+    const  pid_t pid=get_request_pid();
+    char exe[256];
+    pid_to_exe(pid,exe,256);
+  }
   const char *e=virtualpath+vp_l;
   if (vp_l>4 && e[-4]=='.' && (e[-3]|32)=='e' && (e[-2]|32)=='x' && (e[-1]|32)=='e') return -1; /* The exe files hold the icon for File Explorer */
   if (flags&ADVISE_CACHE_BY_POLICY) return filesize;

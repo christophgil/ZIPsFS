@@ -326,7 +326,8 @@ enum {FILETYPEDATA_NUM=1024, FILETYPEDATA_FREQUENT_NUM=64};
 #define foreach_fhandle_including_pending_destruct(id,d)  foreach_fhandle_also_emty(id,d) if (d->flags)
 
 
-#define FOREACH_FHANDLE(id,d)  foreach_fhandle_also_emty(id,d) if (d->flags && !(d->flags&FHANDLE_DESTROY_LATER)) /* cppcheck-suppress-macro constVariablePointer */
+// cppcheck-suppress-macro constVariablePointer
+#define FOREACH_FHANDLE(id,d)  foreach_fhandle_also_emty(id,d) if (d->flags && !(d->flags&FHANDLE_DESTROY_LATER))
 
 
 
@@ -541,11 +542,8 @@ typedef struct{
 
 
 
-#if 0
+
 enum {FHANDLE_LOG2_BLOCK_SIZE=5, FHANDLE_BLOCKS=512};
-#else
-enum {FHANDLE_LOG2_BLOCK_SIZE=1, FHANDLE_BLOCKS=64};
-#endif
 
 enum {FHANDLE_BLOCK_SIZE=1<<FHANDLE_LOG2_BLOCK_SIZE, FHANDLE_MAX=FHANDLE_BLOCKS*FHANDLE_BLOCK_SIZE};
 
