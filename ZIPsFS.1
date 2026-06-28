@@ -186,33 +186,32 @@ The disadvantage over the method below is, that repositories are not
 browsable.
 Browsing public repositories (Pride, Genomes, PDB, Swissprot)
 .PP
-Warning: this new feature is not yet fully tested!
-.PP
-Please install https://curlftpfs.sourceforge.net/ and curl.
-Consider to add timeout like
+This requires curl.
+Please also install rclone or curlftpfs
+(https://curlftpfs.sourceforge.net/).
+If using curlftpfs, consider to add timeout like
 \f[V]curl_easy_setopt(easy,CURLOPT_TIMEOUT,3600);\f[R] into the
 \f[V]main()\f[R] function in \f[V]ftpfs.c\f[R].
+There is also a similar script for AVFS.
 .SS Browsing FTP sites using nested Curlftpfs
 .PP
-The script file ZIPsFS_prepare_branch_for_ftp.sh generates an example
-folder \f[V]\[ti]/.ZIPsFS/DBcurlftpfs\f[R] with Curlftpfs mounts to be
-used in ZIPsFS.
+The script file ZIPsFS_prepare_branch_for_ftp.sh creates folders like
+\f[V]\[ti]/.ZIPsFS/db/pride\f[R] and mounts the respective FTP sites.
 .PP
-Above command line to start ZIPsFS can extended to include this folder:
+Its standard output is used as CLI parameters for the command line of
+ZIPsFS.
 .IP
 .nf
 \f[C]
-ZIPsFS   $b1 $b2 $b3 $b4  --preload \[ti]/.ZIPsFS/DB  :  \[ti]/test/ZIPsFS/mnt
+ZIPsFS   $b1 $b2 $b3 $b4  $(./ZIPsFS_prepare_branch_for_ftp.sh)   :  \[ti]/test/ZIPsFS/mnt
 \f[R]
 .fi
 .PP
-Due to the option \f[V]--preload\f[R], files are mirrord to the first
-branch on the local file system for fast access.
-Lets try
+Now the repositories are available
 .IP
 .nf
 \f[C]
-ls \[ti]/test/ZIPsFS/mnt/DBcurlftpfs
+ls \[ti]/test/ZIPsFS/mnt/db
 \f[R]
 .fi
 .PP
@@ -222,17 +221,6 @@ without gz suffix.
 Initially, they have an estimated file size.
 After reading the virtual file, the exact length of the decompressed
 data is known.
-.PP
-Performance: Without a trailing slash in the command line, the folder
-name \f[V]/DB/\f[R] will be the beginning of virtual paths.
-This is important for performance, because it avoids that the curlftpfs
-file systems will be requested for each file lookup.
-Only if virtual paths start with \f[V]/DB/\f[R], curlftpfs gets
-involved.
-.SS Browsing FTP sites using nested Avfs
-.PP
-Avfs can also be used.
-Please see ZIPsFS_prepare_branch_for_ftp_avfs.sh
 .SH DESCRIPTION
 .SS ZIPsFS is a Union / overlay file system
 .PP

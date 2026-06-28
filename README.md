@@ -139,39 +139,27 @@ Above method allows to access any remote file. The disadvantage over the method 
 <details><summary>Browsing  public repositories (Pride, Genomes, PDB, Swissprot)</summary>
 
 
-Warning: this new feature is not yet fully tested!
+This requires curl. Please also install  rclone or  curlftpfs (https://curlftpfs.sourceforge.net/).
+If using curlftpfs, consider to add timeout like  ``curl_easy_setopt(easy,CURLOPT_TIMEOUT,3600);`` into the ``main()`` function in ``ftpfs.c``.
+There is also a similar script for AVFS.
 
-Please install https://curlftpfs.sourceforge.net/ and curl.
-Consider to add timeout like  ``curl_easy_setopt(easy,CURLOPT_TIMEOUT,3600);`` into the ``main()`` function in ``ftpfs.c``.
 
 ### Browsing FTP sites using nested Curlftpfs
 
-The script file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) generates an example  folder
-``~/.ZIPsFS/DBcurlftpfs`` with  Curlftpfs mounts to be used in ZIPsFS.
+The script file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) creates folders like ``~/.ZIPsFS/db/pride``
+and mounts the respective FTP sites.
 
+Its standard output is used as CLI parameters for the command line of  ZIPsFS.
 
-Above command line to start ZIPsFS can extended to include this folder:
+    ZIPsFS   $b1 $b2 $b3 $b4  $(./ZIPsFS_prepare_branch_for_ftp.sh)   :  ~/test/ZIPsFS/mnt
 
-    ZIPsFS   $b1 $b2 $b3 $b4  --preload ~/.ZIPsFS/DB  :  ~/test/ZIPsFS/mnt
+Now the repositories are available
 
-Due to the option ``--preload``, files are mirrord to the first branch on the local file system for fast access.
-Lets try
-
-    ls ~/test/ZIPsFS/mnt/DBcurlftpfs
+    ls ~/test/ZIPsFS/mnt/db
 
 GZ compressed files are transparently de-compressed. Files with the ending ``.gz`` also  appear in the file listing without gz suffix.
 Initially, they have an estimated file size. After reading the virtual file, the exact length of the
 decompressed data is known.
-
-Performance:  Without a trailing slash in the command line,  the folder name  ``/DB/`` will be the beginning of virtual paths.  This
-is important for performance, because it avoids that the  curlftpfs file systems will be requested for each file lookup.
-Only if virtual paths start with ``/DB/``,  curlftpfs gets involved.
-
-
-### Browsing FTP sites using nested Avfs
-
-Avfs can also be used. Please see
-[ZIPsFS_prepare_branch_for_ftp_avfs.sh](./ZIPsFS_prepare_branch_for_ftp_avfs.sh)
 
 
 
