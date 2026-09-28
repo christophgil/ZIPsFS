@@ -36,7 +36,7 @@ ZIPsFS treats **ZIP files as expandable folders**, typically naming them by appe
 However, this behavior can be customized using filename-based rules. Extensive configuration options allow adjustments. Changes can be applied without disrupting the file system.
 
 With a trailing slash, the folder name is not part of the virtual path, in accordance with  the trailing slash semantics of many UNIX tools.
-More flexibility provides the property ``@path-prefix=...``.   Run ``ZIPsFS -h`` for a list of properties.
+More flexibility provides the property ``@path-prefix=...``.
 
 ZIPsFS includes specialized features like **automatic file conversions** and performance
 optimizations tailored for efficiently storing and accessing **large-scale mass spectrometry** data.
@@ -298,7 +298,9 @@ The file tree can be accessed in a modified way via
 
     /zipsfs/<view-option>/<file preload-option>[/<preload-selector>]
 
-### Folder ``/zipsfs/<View-Option>/``
+These three folders contain single letter directives which take precedence over root-folder settings at the command line.
+
+### Folder ``/zipsfs/<view-option>/``
 The 1st level subdirictory specifies view options. Directives are single letters. They can be combined.
 A preceding dash '-' negates.
   - <mount-point>/zipsfs/-     Default view.
@@ -319,7 +321,7 @@ A preceding dash '-' negates.
 
 Details are found in the contained readme files.
 
-### /zipsfs/<view-option>/<prefetch option>
+### Folder ``/zipsfs/<view-option>/<prefetch option>``
 The follwing path component may instruct preloading of files. Files are preloaded just before the first byte is read.
   - /-/ Apply  default preload rules defined in ``ZIPsFS_configuration.c`` and ``ZIPsFS_configuration.h`` and specified by root properties.
   - /m/ Prefetch to RAM
@@ -333,7 +335,7 @@ The /m/ and /l/ folder have a subfolder with selectors: (a) all, (r) remote and 
 ## Properties of upstream file trees
 
 In the command line, root file paths  can be followed by expressions like @immutable=1 to set specific properties.
-Alternatively, properties can be written in a file ``<root-path>.ZIPsFS.properties``. This is demonstrated in   [ZIPsFS_prepare_branch_for_ftp.sh](ZIPsFS_prepare_branch_for_ftp.sh).
+Alternatively, properties can be given in a file ``<root-path>.ZIPsFS.properties``. This is demonstrated in   [ZIPsFS_prepare_branch_for_ftp.sh](ZIPsFS_prepare_branch_for_ftp.sh).
 
 For a  list of properties  run
 
@@ -342,19 +344,21 @@ For a  list of properties  run
 <details><summary>Preload files</summary>
 
 
-Non-linear file loading in a random-access manner is inefficient for remote or ZIP-compressed files.
-This is the case for the MS-programs Diann and FragPipe (Fragger).
+Non-linear file loading in a random-access manner is very common for Windows style software were pipes and process substitution are rarely used.
+This is also the case for the widely used mass-spectrometry programs Diann and FragPipe (Fragger).
+Vendor specific mass-spectrometry files are loaded from varying file positions.
+Apparently, this mode of file access is inefficient for remote or ZIP-compressed data.
 
 ## File content pre-load
 
+Data preloading can help to provide file data out-of-order.
 Remote or compressed files can be preloaded in two different ways: (I) into RAM or (II) to the local disk.
 
 ### Preloading into RAM
 
 File names to be cached in RAM  are specified in the configurable method ``config_advise_cache_in_ram()``.  The default
 setting includes Brukertimstof mass-spectrometry files. Preloading to the RAM is appropriate for these files because
-each file is loaded only once per analysis. It is necessary because these mass-spectrometry files are loaded from varying file positions which would be inefficient for
-remote or compressed files.
+each file is loaded only once per analysis.
 The ``-l`` option sets an upper limit on memory usage
 for the ZIP RAM cache.  When available memory runs low, ZIPsFS can either pause, proceed without
 caching file data or just ignore the memory restriction depending on the configuration.
@@ -364,7 +368,7 @@ caching file data or just ignore the memory restriction depending on the configu
 File reading of remote or compressed files can be improved by caching the file content on the local disk.
 This is for example necessary for Thermo  mass-spectrometry raw files analyzed in FragPipe.
 Above method of preloading into RAM is here  inappropriate because each raw file is
-opened and closed multiple times during computation such that the large files would be transfered from the NAS several times.
+opened and closed multiple times during computation such that the large files would be transfered over the net several times.
 
 All remote (r) or compressed (c) or zippded (z) files
 accessed through the following folders will be first copied to local disk:
@@ -376,10 +380,38 @@ accessed through the following folders will be first copied to local disk:
 The Readme in these folders provide further information.
 Alternatively, the entire root-path can be marked for preloading with the property ``@preload``.
 
+
+### Preloading complete ZIP files to the local disk - a combination of both
+
+With the branch
+
+    <mount-point>/zipsfs/-/l/r/
+
+each ZIP entry would be preloaded separately.
+
+However, with
+
+    <mount-point>/zipsfs/-/lz/r/
+
+the ZIP file will be preloaded. Depending on the settings, the ZIP entries might be preloaded to RAM.
+
+
+### Transiently caching  file attributes and directory listings
+
+
+When loading Bruker mass spectrometry files with the Bruker DLLs, The file system is asked
+douzens of times per second to provide one and the same file listing and the same file
+attributes.  While this is no problem for local files, remote file systems get overloaded.
+ZIPsFS  implements a transient cache, that lives as long as the specific ZIP file is used.
+
+This cache is distinct from a persistent cache of directory listing that may last for ever for root
+branches with the property @immutable.
+
+
 ### Decompression
 
-Decompression is enabled with properties like ``@preload=1`` of for specific compression suffixes like  ``@preload=gz,xz``.
-Irrespectively of root attributes, decompression is  active for the file tree
+Decompression is enabled with properties like ``@preload=1`` of for specific compression suffixes
+like ``@preload=gz,xz`` or for the file tree
 
     <mount-point>/zipsfs/d/
 

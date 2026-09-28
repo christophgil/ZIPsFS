@@ -52,7 +52,6 @@ Changes can be applied without disrupting the file system.
 With a trailing slash, the folder name is not part of the virtual path,
 in accordance with the trailing slash semantics of many UNIX tools.
 More flexibility provides the property \f[V]\[at]path-prefix=...\f[R].
-Run \f[V]ZIPsFS -h\f[R] for a list of properties.
 .PP
 ZIPsFS includes specialized features like \f[B]automatic file
 conversions\f[R] and performance optimizations tailored for efficiently
@@ -418,7 +417,10 @@ The file tree can be accessed in a modified way via
 /zipsfs/<view-option>/<file preload-option>[/<preload-selector>]
 \f[R]
 .fi
-.SS Folder \f[V]/zipsfs/<View-Option>/\f[R]
+.PP
+These three folders contain single letter directives which take
+precedence over root-folder settings at the command line.
+.SS Folder \f[V]/zipsfs/<view-option>/\f[R]
 .PP
 The 1st level subdirictory specifies view options.
 Directives are single letters.
@@ -443,7 +445,7 @@ should rather be used with preloading of remote or compressed files.
 seek - Upper/lower case conversion of file names
 .PP
 Details are found in the contained readme files.
-.SS /zipsfs//
+.SS Folder \f[V]/zipsfs/<view-option>/<prefetch option>\f[R]
 .PP
 The follwing path component may instruct preloading of files.
 Files are preloaded just before the first byte is read.
@@ -459,7 +461,7 @@ remote and (z) ZIP-entry.
 .PP
 In the command line, root file paths can be followed by expressions like
 \[at]immutable=1 to set specific properties.
-Alternatively, properties can be written in a file
+Alternatively, properties can be given in a file
 \f[V]<root-path>.ZIPsFS.properties\f[R].
 This is demonstrated in ZIPsFS_prepare_branch_for_ftp.sh.
 .PP
@@ -472,11 +474,18 @@ ZIPsFS -h
 .fi
 Preload files
 .PP
-Non-linear file loading in a random-access manner is inefficient for
-remote or ZIP-compressed files.
-This is the case for the MS-programs Diann and FragPipe (Fragger).
+Non-linear file loading in a random-access manner is very common for
+Windows style software were pipes and process substitution are rarely
+used.
+This is also the case for the widely used mass-spectrometry programs
+Diann and FragPipe (Fragger).
+Vendor specific mass-spectrometry files are loaded from varying file
+positions.
+Apparently, this mode of file access is inefficient for remote or
+ZIP-compressed data.
 .SS File content pre-load
 .PP
+Data preloading can help to provide file data out-of-order.
 Remote or compressed files can be preloaded in two different ways: (I)
 into RAM or (II) to the local disk.
 .SS Preloading into RAM
@@ -486,9 +495,6 @@ File names to be cached in RAM are specified in the configurable method
 The default setting includes Brukertimstof mass-spectrometry files.
 Preloading to the RAM is appropriate for these files because each file
 is loaded only once per analysis.
-It is necessary because these mass-spectrometry files are loaded from
-varying file positions which would be inefficient for remote or
-compressed files.
 The \f[V]-l\f[R] option sets an upper limit on memory usage for the ZIP
 RAM cache.
 When available memory runs low, ZIPsFS can either pause, proceed without
@@ -502,7 +508,7 @@ This is for example necessary for Thermo mass-spectrometry raw files
 analyzed in FragPipe.
 Above method of preloading into RAM is here inappropriate because each
 raw file is opened and closed multiple times during computation such
-that the large files would be transfered from the NAS several times.
+that the large files would be transfered over the net several times.
 .PP
 All remote (r) or compressed (c) or zippded (z) files accessed through
 the following folders will be first copied to local disk:
@@ -518,12 +524,45 @@ the following folders will be first copied to local disk:
 The Readme in these folders provide further information.
 Alternatively, the entire root-path can be marked for preloading with
 the property \f[V]\[at]preload\f[R].
+.SS Preloading complete ZIP files to the local disk - a combination of both
+.PP
+With the branch
+.IP
+.nf
+\f[C]
+<mount-point>/zipsfs/-/l/r/
+\f[R]
+.fi
+.PP
+each ZIP entry would be preloaded separately.
+.PP
+However, with
+.IP
+.nf
+\f[C]
+<mount-point>/zipsfs/-/lz/r/
+\f[R]
+.fi
+.PP
+the ZIP file will be preloaded.
+Depending on the settings, the ZIP entries might be preloaded to RAM.
+.SS Transiently caching file attributes and directory listings
+.PP
+When loading Bruker mass spectrometry files with the Bruker DLLs, The
+file system is asked douzens of times per second to provide one and the
+same file listing and the same file attributes.
+While this is no problem for local files, remote file systems get
+overloaded.
+ZIPsFS implements a transient cache, that lives as long as the specific
+ZIP file is used.
+.PP
+This cache is distinct from a persistent cache of directory listing that
+may last for ever for root branches with the property \[at]immutable.
 .SS Decompression
 .PP
 Decompression is enabled with properties like \f[V]\[at]preload=1\f[R]
-of for specific compression suffixes like \f[V]\[at]preload=gz,xz\f[R].
-Irrespectively of root attributes, decompression is active for the file
-tree
+of for specific compression suffixes like \f[V]\[at]preload=gz,xz\f[R]
+or for the file tree
 .IP
 .nf
 \f[C]
