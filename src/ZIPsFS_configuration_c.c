@@ -21,7 +21,7 @@ static bool config_c_getattr(const int flags, const char *vp, const int vp_l, st
     return true;
   }
   if (CONFIG_C_IS_EXAMPLE(vp,vp_l)){
-    st->st_size=FSIZE_FROM_HASHTABLE(vp,vp_l,99);
+    st->st_size=FSIZE_FROM_HASHTABLE(vp,vp_l,999);
     st->st_mtime=time(NULL);
     return true;
   }

@@ -1,7 +1,6 @@
 /////////////////////////////////////////////////////////////////
 /// Logging in  ZIPsFS                                        ///
 /////////////////////////////////////////////////////////////////
-
 /*  Copyright (C) 2023   christoph Gille   This program can be distributed under the terms of the GNU GPLv3. */
 // cppcheck-suppress-file unusedFunction
 #ifndef _cg_utils_dot_c
@@ -72,12 +71,12 @@ static time_t _whenStarted;
 
 static void *malloc_untracked(const size_t size){
   void *m=malloc(size);
-  if (!m){ fprintf(stderr,RED_ERROR" malloc(%'lld)\n",LLD(size)); perror(""); exit(ENOMEM); }
+  if (!m){ fprintf(stderr,RED_ERROR" malloc(%'jd)\n",IM(size)); perror(""); exit(ENOMEM); }
   return m;
 }
 static void *calloc_untracked(const size_t nmemb,const size_t size){
   void *m=calloc(nmemb,size);
-  if (!m){ fprintf(stderr,RED_ERROR" calloc(%'lld,%'lld)\n",LLD(nmemb),LLD(size)); perror(""); exit(ENOMEM); }
+  if (!m){ fprintf(stderr,RED_ERROR" calloc(%'jd,%'jd)\n",IM(nmemb),IM(size)); perror(""); exit(ENOMEM); }
   return m;
 }
 static char *strdup_untracked(const char *s){
@@ -249,15 +248,6 @@ static char* cg_strrchr_null(const char *path, const char c){
   const char *found=strrchr(path,c);
   return (char*)(found?found:path+strlen(path));
 }
-
-
-static int cg_count_chr(const char *str, const char c){
-  int count=0;
-  if (str) for(const char *s=str; *s; s++) if (*s==c) count++;
-  return count;
-}
-
-
 static uint32_t hash32(const char* key, const uint32_t len){
   uint32_t hash=2166136261U;
   RLOOP(i,len){
@@ -281,20 +271,24 @@ static int cg_str_str(const char *s,const char *substr){
   return h?(int)(h-s):-1;
 }
 
-static const char *cg_str_lremove(const char *s, const char *pfx,const int  pfx_l){
-  return s+(strncmp(s,pfx,pfx_l)?0:pfx_l);
-}
 static int cg_empty_dot_dotdot(const char *s){
   return !s || !*s || (*s=='.' && (!s[1] || (s[1]=='.' && !s[2])));
 }
-#define  ASSERT_STRGS_NO_OVERLAP(dst,src,n) assert(!(dst<=src && dst+n>=src)); assert(!(src<=dst && src+n>=dst))
+#define STRGS_OVERLAP(dst,src,n) (dst<=src && dst+n>=src || src<=dst && src+n>=dst)
+//#define  ASSERT_STRGS_NO_OVERLAP(dst,src,n) {assert(!(dst<=src && dst+n>=src)); assert(!(src<=dst && src+n>=dst));}
 #define cg_strncpy0(...) _cg_strncpy(false,__VA_ARGS__)
 #define cg_stpncpy0(...) _cg_strncpy(true,__VA_ARGS__)
 static char *_cg_strncpy(const bool stpcpy,char *dst,const char *src,const int num){
   const int n=src?strnlen(src,num):0;
   if (n){
-    ASSERT_STRGS_NO_OVERLAP(dst,src,n);
-    memcpy(dst,src,n);
+    if (STRGS_OVERLAP(dst,src,n)){
+      //log_debug_now("STRGS_OVERLAP %s",src);
+      char buf[n];
+      memcpy(buf,src,n);
+      memcpy(dst,buf,n);
+    }else{
+      memcpy(dst,src,n);
+    }
   }
   dst[n]=0;
   return dst+(stpcpy?n:0);
@@ -324,6 +318,26 @@ static int cg_idx_of_pointer(void **aa, const int n, const void *a){
   return -1;
 }
 
+static int cg_idx_of_strg(const char **aa, const char *needle){
+  int i=0;
+    FOREACH_CSTRING(a,aa){
+      if (!strcmp(needle,*a)){
+        return i;
+      }
+      i++;
+    }
+  return -1;
+}
+enum{ADD_TO_STRG_UNIQUE=1<<0,ADD_TO_STRG_STRDUP=1<<1};
+static int cg_add_to_strg_array(const int opt,const char **aa, const int a_l,const char *a){
+  int i=(opt&ADD_TO_STRG_UNIQUE)?cg_idx_of_strg(aa,a):-1;
+  if (i==-1){
+    i=cg_idx_of_NULL((void**)aa,a_l);
+    if (i>=0) aa[i]= (opt&ADD_TO_STRG_STRDUP)?strdup(a):a;
+  }
+  return i;
+}
+
 
 static const char* snull(const char *s){ return s?s:"Null";}
 static MAYBE_INLINE char *yes_no(int i){ return i?"Yes":"No";}
@@ -349,18 +363,6 @@ static bool cg_endsWithZip(const char *s, const int len_or_0){
   const int len=len_or_0?len_or_0:cg_strlen(s);
   return s && ENDSWITHI(s,len,".zip");
 }
-
-
-
-/* static bool cg_ends_with_compression_ext(const int iCompress,const char *s, const int len_or_0){ */
-/*   if (!iCompress) return true; */
-/*   int e_l; */
-/*   const char *e=cg_compression_file_ext(iCompress,&e_l); */
-/*   return !e || cg_endsWith(0,s,len_or_0?len_or_0:cg_strlen(s),e,e_l); */
-/* } */
-
-
-
 
 static bool cg_isURL(const char *url){
   const int url_l=cg_strlen(url);
@@ -556,12 +558,6 @@ static int64_t currentTimeMillis(void){
   gettimeofday(&tv,NULL);
   return tv.tv_sec*1000+tv.tv_usec/1000;
 }
-static char *time_as_strg(time_t t){
-  char *s=ctime(&t), *nl=strchr(s,'\n');
-  if (nl) *nl=0;
-  return s;
-}
-
 #define cg_sleep_ms(...) _viamacro_cg_sleep_ms(__VA_ARGS__,__func__,__LINE__)
 static void _viamacro_cg_sleep_ms(const int millisec, const char *msg, const char *func,const int line){
   if (millisec>0){
@@ -600,8 +596,8 @@ static bool cg_path_equals_or_is_parent(const char *subpath,const int subpath_l,
 }
 
 
-static int cg_readlink_absolute(const bool resolve,const char *symlink_path, char link_target[PATH_MAX+1], char absolute_target[PATH_MAX+1]){
-  char absolute_tmp[PATH_MAX+1];
+static int cg_readlink_absolute(const bool resolve,const char *symlink_path, char link_target[PATH_MAX], char absolute_target[PATH_MAX]){
+  char absolute_tmp[PATH_MAX];
   *link_target=*absolute_target=0;
   if (resolve && *symlink_path!='/'){
     log_error("symlink_path is not absolute: '%s'",symlink_path);
@@ -611,12 +607,12 @@ static int cg_readlink_absolute(const bool resolve,const char *symlink_path, cha
   if (len==-1){ log_errno("readlink '%s'",symlink_path); return errno; }
   link_target[len]=0;
   if (*link_target=='/') {
-    cg_strncpy0(absolute_tmp,link_target,PATH_MAX);
+    cg_strncpy0(absolute_tmp,link_target,PATH_MAX-1);
   }else{
     // Relative target → resolve against symlink directory
     const int slash=cg_last_slash(symlink_path);
     strncpy(absolute_tmp,symlink_path,slash+1);
-    strncpy(absolute_tmp+slash+1,link_target,PATH_MAX-slash-1);
+    strncpy(absolute_tmp+slash+1,link_target,PATH_MAX-slash-2);
   }
   if (!resolve){
     strcpy(absolute_target,absolute_tmp);
@@ -628,7 +624,7 @@ static int cg_readlink_absolute(const bool resolve,const char *symlink_path, cha
   }
   return 0;
 }
-static bool *cg_validchars(enum enum_validchars type){
+static bool *cg_validchars(enum_validchars_t type){
   static bool ccc[VALIDCHARS_NUM][128];
   static bool initialized;
   if (!initialized){
@@ -649,7 +645,7 @@ static bool *cg_validchars(enum enum_validchars type){
   }
   return ccc[type];
 }
-static int cg_find_invalidchar(enum enum_validchars type,const char *s,const int len){
+static int cg_find_invalidchar(enum_validchars_t type,const char *s,const int len){
   if (s){
     const bool *bb=cg_validchars(type);
     FOR(i,0,len){
@@ -658,7 +654,7 @@ static int cg_find_invalidchar(enum enum_validchars type,const char *s,const int
   }
   return -1;
 }
-static int url_encode(char *dst, const int dst_l, const char *name){
+static int url_encode(char *dst, const int dst_max, const char *name){
   static const bool *bb;
   bb=cg_validchars(VALIDCHARS_FILE);
   int i=0;
@@ -666,20 +662,21 @@ static int url_encode(char *dst, const int dst_l, const char *name){
     const unsigned char c=*t;
 
     if (c<128 && bb[c]){
-      if (i+1<dst_l) dst[i]=c;
+      if (i+1<dst_max) dst[i]=c;
       i++;
     }else{
-      if (i+3<dst_l) sprintf(dst+i,"%%%02x",c);
+      if (i+3<dst_max) sprintf(dst+i,"%%%02x",c);
       i+=3;
     }
   }
-  dst[i]=0;
+  if (i>=dst_max) log_error("i=%d dst_max=%d",i,dst_max);
+  dst[MIN(i,dst_max-1)]=0;
   return i;
 }
 
 #define cg_path_for_fd(path,fd) _viamacro_cg_path_for_fd(__func__,__LINE__,path,fd)
 static char * _viamacro_cg_path_for_fd(const char *func, const int line, char *path, const int fd){
-  static char path0[PATH_MAX+1];
+  static char path0[PATH_MAX];
   if (!path) path=path0;
   *path=0;
   if (has_proc_fs()){
@@ -772,15 +769,17 @@ static bool is_square_number(unsigned int y){
   return s*s==y;
 }
 
-/* Schnapszahl */
-static long closest_with_identical_digits(const long num){
+/*****************************/
+/* Return next "Schnapszahl" */
+/*****************************/
+static off_t nextRepdigit(const off_t num){
   int count=0;
-  long n=num;
+  off_t n=num;
   while(n>9){
     n/=10;
     count++;
   }
-  long ret=n;RLOOP(i,count) ret=10*ret+n;
+off_t ret=n;RLOOP(i,count) ret=10*ret+n;
   //fprintf(stderr,"num: %ld  ret=%ld n: %ld\n\n",num,ret,n);
   if (num>ret){
     ret=++n; RLOOP(i,count) ret=10*ret+n;
@@ -799,10 +798,6 @@ static MAYBE_INLINE int64_t cg_atol_kmgt(const char *s){
   *c&=~32;
   return atol(s)<<(*c=='K'?10:*c=='M'?20:*c=='G'?30:*c=='T'?40:0);
 }
-
-
-
-
 
 ///////////////////
 /// file stat   ///
@@ -867,12 +862,18 @@ static void stat_init(struct stat *st, int64_t size,const struct stat *uid_gid){
 }
 
 
-static bool cg_stat_parent_and_file(const char *parent, const int parent_l, const char *n, const int n_l, struct stat *st){
-  char rp[parent_l+n_l+2];
-  char *e=stpcpy(rp,parent);
-  *e++='/';
-  stpcpy(e,n);
-  return !stat(rp,st);
+static int cg_stat_concat_path(struct stat *st,const char *pathcomponents[]){
+  int p_l=0;
+  FOREACH_CSTRING(s,pathcomponents) p_l+=strlen(*s);
+  char path[p_l+1],*p=path;
+
+  FOREACH_CSTRING(s,pathcomponents) p=stpcpy(p,*s);
+  if (stat(path,st)){
+    log_errno("stat(%s)",path);
+    return errno;
+  }
+  //log_debug_now("stat(%s) "ANSI_FG_GREEN"size=%jd "ANSI_RESET,path,IM(st->st_size));
+  return 0;
 }
 
 #define cg_log_file_stat(name,st) _viamacro_cg_log_file_stat(__FILE_NAME__,__LINE__,name,st)
@@ -880,11 +881,12 @@ static void _viamacro_cg_log_file_stat(const char *srcfile,const int line,const 
 
   const char *color=ANSI_FG_BLUE;
 #ifdef SHIFT_INODE_ROOT
-  if (s->st_ino>(1L<<SHIFT_INODE_ROOT)) color=ANSI_FG_MAGENTA;
+  if (s->st_ino>(1ULL<<SHIFT_INODE_ROOT)) color=ANSI_FG_MAGENTA;
 #endif
   fprintf(stderr,"%s:%d '%s' stat: %s",srcfile,line,name,s?" ":"NULL");
   if (s){
-    fprintf(stderr,"size=%lld lm:%s blksize=%lld blocks=%lld links=%u inode=%s%llu"ANSI_RESET" dir=%s uid=%u gid=%u ",LLD(s->st_size),ST_MTIME(s),LLD(s->st_blksize),LLD(s->st_blocks),  (uint32_t) s->st_nlink,color,LLU(s->st_ino),  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
+    DATETIME_BUF();
+    fprintf(stderr,"size=%jd lm:%s blksize=%jd blocks=%jd links=%u inode=%s%ju"ANSI_RESET" dir=%s uid=%u gid=%u ",IM(s->st_size),DATETIME_COLON(s->st_mtime),IM(s->st_blksize),IM(s->st_blocks),  (uint32_t) s->st_nlink,color,UIM(s->st_ino),  yes_no(S_ISDIR(s->st_mode)), s->st_uid,s->st_gid);
     cg_print_file_mode(s->st_mode,stderr);
   }
   fputc('\n',stderr);
@@ -947,7 +949,7 @@ static bool cg_is_stat_mode(const mode_t mode,const char *f){
   return !PROFILED(lstat)(f,&st) &&  (st.st_mode&S_IFMT)==mode;
 }
 
-static bool cg_access_from_stat(const struct stat *stats,int mode){ // equivaletn to access(path,mode)
+static bool cg_access_from_stat(const struct stat *stats,int mode){ // equivalent to access(path,mode)
   int granted;
   mode&=(X_OK|W_OK|R_OK);
 #if R_OK!=S_IROTH || W_OK!=S_IWOTH || X_OK!=S_IXOTH
@@ -965,10 +967,9 @@ static bool cg_access_from_stat(const struct stat *stats,int mode){ // equivalet
 static bool cg_file_set_atime(const bool rel,const char *path, const struct stat *st_or_null,long secondsFuture){
   const struct stat st;
   if (!st_or_null && stat(path,(struct stat*)(st_or_null=&st))) return false;
-
   struct utimbuf new_times={.actime=(rel?time(NULL):0)+secondsFuture,.modtime=st_or_null->st_mtime};
   const bool ok=!utime(path,&new_times);
-  log_exited_function("%s  secondsFuture=%ld  %s\n",path,secondsFuture,success_or_fail(ok));
+  //log_exited_function("%s  secondsFuture=%ld  %s\n",path,secondsFuture,success_or_fail(ok));
   return ok;
 }
 
@@ -1034,11 +1035,11 @@ static int cg_fd_read(const int fd, const off_t offset, char *buf,const off_t bu
 }
 
 static int cg_filepath_read(const char *path, const off_t offset, char *buf,const off_t buf_l){
-    const int fd=open(path,O_RDONLY);
-    if (fd<=0) return -1;
-    const int n=cg_fd_read(fd,0,buf,PATH_MAX-1);
-    close(fd);
-    return n;
+  const int fd=open(path,O_RDONLY);
+  if (fd<=0) return -1;
+  const int n=cg_fd_read(fd,0,buf,PATH_MAX-1);
+  close(fd);
+  return n;
 }
 
 
@@ -1112,7 +1113,7 @@ static void cg_print_substring(int fd,const char *s,int f,int t){  write(fd,s,MI
 static bool cg_mkdir(const char *path,const mode_t mode){
   if (!path) return false;
   const bool ok=!mkdir(path,mode) || errno==EEXIST;
-  if (!ok) perror(path);
+  if (!ok){ fprintf(stderr,ANSI_FG_RED"Failed: mkdir '%s' "ANSI_RESET,path); perror("");}
   return ok;
 
 }
@@ -1123,10 +1124,7 @@ static bool _cg_recursive_mkdir(const bool parentOnly,const char *path){
   FOR(i,2,n){
     if (p[i]=='/'){
       p[i]=0;
-      if (!cg_mkdir(p,S_IRWXU)){
-        log_error("path: %s",path);
-        return false;
-      }
+      if (!cg_mkdir(p,S_IRWXU)) return false;
       p[i]='/';
     }
   }
@@ -1143,7 +1141,7 @@ static void pid_to_cmdline(const pid_t pid,char buf[],const int buf_l){
   *buf=0;
   if (has_proc_fs()){
     char path[99];
-    sprintf(path,"/proc/%lld/cmdline",LLD(pid));
+    sprintf(path,"/proc/%jd/cmdline",IM(pid));
     cg_filepath_read(path,0,buf,buf_l);
   }
 }
@@ -1157,23 +1155,23 @@ static int pid_to_exe(pid_t pid,char buf[],const int buf_l){
 #else
   if (has_proc_fs()){
     char path[99];
-    sprintf(path,"/proc/%lld/comm",LLD(pid));
+    sprintf(path,"/proc/%jd/comm",IM(pid));
     cg_filepath_read(path,0,buf,buf_l);
   }
 #endif //PROC FS
-  buf[buf_l-1]='\0';
+  buf[buf_l-1]=0;
   return 0;
 }
 static void debug_pid_to_exe(pid_t pid){
-    char buf[99];
-    pid_to_exe(pid,buf,99);
-    log_debug_now("HAS_PID2EXE_MACOSX: "STRINGIZE(HAS_PID2EXE_MACOSX)
-                  " HAS_PID2EXE_FREEBSD: "STRINGIZE(HAS_PID2EXE_FREEBSD)
-                  "  has_proc_fs: %d  _pid: %lld pid_to_exe:%s\n",has_proc_fs(), LLD(pid),buf);
+  char buf[128];
+  pid_to_exe(pid,buf,128);
+  log_verbose("HAS_PID2EXE_MACOSX: "STRINGIZE(HAS_PID2EXE_MACOSX)
+                " HAS_PID2EXE_FREEBSD: "STRINGIZE(HAS_PID2EXE_FREEBSD)
+                "  has_proc_fs: %d  _pid: %jd pid_to_exe:%s\n",has_proc_fs(), IM(pid),buf);
 }
 
 
-static char* cg_path_expand_tilde(char *dst, const int dst_max, const char *path){
+static char* cg_path_expand_tilde(char *dst,  const int dst_max, const char *path){
   if (!dst) dst=(char*)path;
   if (dst){
     char *d=dst;
@@ -1184,7 +1182,11 @@ static char* cg_path_expand_tilde(char *dst, const int dst_max, const char *path
         assert(h!=NULL);
         if (h){
           const int hl=strlen(h),path_l=strlen(path);
-          assert(hl+path_l<=(dst_max?dst_max:PATH_MAX));
+          if (hl+path_l>=dst_max-1){
+            log_warn("h:%s %d  path:%s %d  dst_max:%d",h,hl,path,path_l,dst_max);
+            //cg_print_stacktrace(0);
+          assert(hl+path_l<dst_max-1);
+          }
           memmove(dst+hl-1,path,path_l+1); /* Overlapping allowed. dst and path may be identical*/
           memcpy(dst,h,hl);
           s=dst;
@@ -1437,7 +1439,7 @@ static bool is_installed_curl(){ I("curl");}
 /* Compression */
 /***************/
 static char *cg_compression_file_ext(const int i,int *ext_l){
-  switch(i){
+  if (i) switch(i){
 #define X(x,d) case COMPRESSION_##x: if (ext_l) *ext_l=sizeof(#x);  return "."#x;
     XMACRO_COMPRESSION();
 #undef X
@@ -1484,6 +1486,18 @@ static bool cg_pid_exists_proc(const pid_t pid){
 
 int main(int argc, char *argv[]){
 
+  {
+    char *symlink_path=argv[1];
+    char absolute_tmp[PATH_MAX];
+    char link_target[PATH_MAX];
+    const int len=readlink(symlink_path,link_target,PATH_MAX);
+    if (len==-1){ log_errno("readlink '%s'",symlink_path); return errno; }
+    link_target[len]=0;
+    fprintf(stderr," link_target='%s'\n",link_target);
+
+
+    return 0;
+  }
   /* Linux	/proc/<pid>/comm */
   /* Solaris	/proc/<pid>/psinfo */
   /* macOS	sysctl(KERN_PROC_PID) */
@@ -1492,7 +1506,7 @@ int main(int argc, char *argv[]){
   /* NetBSD	sysctl(KERN_PROC2,...) */
 
 
-  switch(3){
+  switch(20){
   case 0:{
     bool *ccpath=cg_validchars(VALIDCHARS_PATH);
     fprintf(stderr,"ccpath\n");
@@ -1522,7 +1536,7 @@ int main(int argc, char *argv[]){
       char buf[PATH_MAX];
       const pid_t pid=atoi(argv[i]);
       pid_to_exe(pid,buf,PATH_MAX);
-      fprintf(stderr,"%lld   '%s'\n\n",LLD(pid),buf);
+      fprintf(stderr,"%jd   '%s'\n\n",IM(pid),buf);
     }
 
   } break;
@@ -1591,7 +1605,7 @@ int main(int argc, char *argv[]){
 
   case 14:
     FOR(i,1,argc){
-      char target[PATH_MAX+1],absolute_target[PATH_MAX+1];
+      char target[PATH_MAX],absolute_target[PATH_MAX];
       FOR(do_resolve,0,2){
         int res=cg_readlink_absolute(do_resolve,argv[i],target,absolute_target);
         printf("do_resolve:%d %s '%s' => '%s'\n",do_resolve,success_or_fail(res==0), argv[i],absolute_target);
@@ -1614,6 +1628,33 @@ int main(int argc, char *argv[]){
   case 16:
     cg_copy_file_content(argv[1], argv[2]);
     break;
+
+  case 17:{
+    char dst[PATH_MAX];
+    cg_strncpy0(dst,"ABCDefghijklmnop",999); fprintf(stderr,"dst='%s'\n",dst);
+    cg_strncpy0(dst,dst+4,999); fprintf(stderr,"dst='%s'\n",dst);
+    break;
+  }
+  case 18:{
+    const char *pp[]={"/etc","/","fstab",NULL};
+    struct stat st;
+    cg_stat_concat_path(&st,pp);
+    log_verbose("size %ld",st.st_size);
+  } break;
+
+    #if 0
+  case 19:{
+    char buf[TO_BINARY_BUFSIZE];
+
+    FOR(i,1,argc){ to_binary_strg(TO_BINARY_GROUP_4,buf,atol(argv[i]));fprintf(stderr,"%lu '%s'\n",atol(argv[i]), buf);}
+  } break;
+    #endif
+
+  case 20:{
+    const char *aa[99]={0};
+    FOR(i,1,argc) cg_add_to_strg_array(ADD_TO_STRG_UNIQUE|ADD_TO_STRG_STRDUP,aa, argc,argv[i]);
+    for(int i=0;aa[i];i++) fprintf(stderr,"(%d) '%s'\n",i,aa[i]);
+  }
 
     /* case 14:{ */
     /*   char *aa[99]; */

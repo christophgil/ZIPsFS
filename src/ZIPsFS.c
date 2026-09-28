@@ -11,16 +11,13 @@
 //__asm__(".symver realpath,realpath@GLIBC_2.2.5");
 // cppcheck-suppress-file knownConditionTrueFalse
 // #define ewlog(x) cg_endsWith(0,x,cg_strlen(x),".log",4)
-
-#define VFILE_SFX_INFO "@SOURCE.TXT"
+// (search-forward-regexp "VFOLDER_PATH(vipa)=\\w")
+#define VFILE_SFX_SOURCE "@SOURCE.TXT"
 #define VFILE_SFX_ZIPCRC32 "@ARCHIVECRC32.TXT"
-#define FEHLER(zpath) ASSERT(!strstr(ZP_VP(zpath),"home"))
+#define VFILE_SFX_PROPERTIES "@PROPERTIES.TXT"
 #define HOMEPAGE "https://github.com/christophgil/ZIPsFS"
 #define _GNU_SOURCE
 #define FUSE_USE_VERSION 31
-#ifndef PATH_MAX // in OpenSolaris
-#define PATH_MAX 1024
-#endif
 // ---
 #include <pthread.h> /* Keep. Required by OpenBSD */
 #include <sys/types.h>
@@ -52,7 +49,7 @@
 #define WITH_FUSE_3 0
 #define COMMA_FILL_DIR_PLUS
 #endif
-#define HOOK_MSTORE_CLEAR(m)   {char mpath[PATH_MAX+1];mstore_file(mpath,m,-1);warning(WARN_DIRCACHE,mpath,"Clearing mstore_t %s ",m->name);}
+#define HOOK_MSTORE_CLEAR(m)   {char mpath[PATH_MAX];mstore_file(mpath,m,-1);warning(WARN_DIRCACHE,mpath,"Clearing mstore_t %s ",m->name);}
 // ---
 ////////////////////
 /// Early Macros ///
@@ -110,14 +107,15 @@ static pid_t _pid;
 #if WITH_CCODE
 #include "ZIPsFS_c.c"
 #endif //WITH_CCODE
+struct fuse *_fuse;
 static char *_mkSymlinkAfterStart, *_mnt_apparent;
 static const char *_self_exe, *_mnt, *_dot_ZIPsFS;
-static const char *SFILE_REAL_PATHS[SFILE_NUM];
 static int _fhandle_n=0,_mnt_l=0, _debug_is_readdir;
+static uint32_t _fuse_max_write;
 static rlim_t _rlimit_vmemory=0;
 enum {COUNT_BACKWARD_SEEK=1024};
 static int _count_backward_seek[COUNT_BACKWARD_SEEK];
-IF1(WITH_PRELOADRAM,static enum enum_when_preloadram_zip _preloadram_policy=PRELOADRAM_RULE);
+IF1(WITH_PRELOADRAM,static  enum_when_preloadram_zip_t _preloadram_policy=PRELOADRAM_RULE);
 static ht_t *ht_set_id(const int id,ht_t *ht){
 #if WITH_DEBUG_MALLOC
   if (!ht) return NULL;
@@ -138,12 +136,14 @@ XMACRO_HT_GLOBAL()
 static float _ucpu_usage,_scpu_usage;/* user and system */
 static int64_t _preloadram_bytes_limit=3L*1000*1000*1000;
 static int _unused_int,_writable_path_l;
-static bool _thread_unblock_ignore_existing_pid, _fuse_started, _isBackground, _exists_root_with_preload;
+static bool _thread_unblock_ignore_existing_pid, _fuse_started, _isBackground;
 static bool _logIsSilentFailed,_logIsSilentWarn,_logIsSilentError;
-static const char *_fuse_argv[99]={0}, *_writable_path, *_cleanup_script; /*"<path-first-root>"FILE_CLEANUP_SCRIPT*/;
+static const char *_fuse_argv[99], *_writable_path;
 static int _fuse_argc;
-static root_t _root[ROOTS]={0}, *_root_writable;
-static int _root_n=0;  /* Num of root_t instances in _root[] */
+static root_t _root[ROOTS], *_root_writable;
+static int _root_n;  /* Num of root_t instances in _root[] */
+static virtualfolder_t _virtualfolders[VIRTUALFOLDER_MAX+1];
+static specialfile_t _specialfiles[SFILE_NUM];
 #if WITH_INTERNET_DOWNLOAD
 #include "ZIPsFS_configuration_internet.c"
 #include "ZIPsFS_internet.c"
@@ -152,7 +152,7 @@ static const char* rootpath(const root_t *r){
   return r?r->rootpath:NULL;
 }
 static const char* report_rootpath(const root_t *r){
-  return !r?"No root" : r->rootpath;
+  return !r?"No root":r->rootpath;
 }
 static int rootindex(const root_t *r){
   return !r?-1: (int)(r-_root);
@@ -198,7 +198,7 @@ static void root_init(const bool isWritable,root_t *r, const char *path, const c
       perror(r->rootpath_orig);
       exit_ZIPsFS();
     }
-    r->f_fsid=st.f_fsid;
+    r->f_fsid=st.f_fsid; /* IS allowed to be zero */
     IF1(HAS_NO_ATIME,r->noatime=(st.f_flag&ST_NOATIME));
   }
   {
@@ -228,7 +228,7 @@ static void root_init(const bool isWritable,root_t *r, const char *path, const c
   if (r->path_prefix){
     char *p=strdup_untracked(r->path_prefix);
     if (strstr(p,"//")) DIE(RED_ERROR" The path prefix '%s' of root '%s' contains double slash.",p,rootpath(r));
-    RLOOP(i,(r->pathpfx_l=strlen(p))) if (p[i]=='/') p[i]=0;
+    RLOOP(i,(r->path_prefix_l=strlen(p))) if (p[i]=='/') p[i]=0;
     r->pathpfx_slash_to_null=p;
   }
   {
@@ -236,6 +236,7 @@ static void root_init(const bool isWritable,root_t *r, const char *path, const c
     if (stat(path,&st)){ log_errno("stat '%s'",path); DIE("");}
     r->st_dev=st.st_dev;
   }
+  if (WITH_FOLLOW_SYMLINK_ALL_ROOTS) r->follow_symlinks=1;
   root_verify(r);
 }
 
@@ -255,7 +256,6 @@ static void root_verify(root_t *r){
           ROOT_PROPERTY[ROOT_PROPERTY_probe_path],ROOT_PROPERTY[ROOT_PROPERTY_probe_path_timeout], ROOT_PROPERTY[ROOT_PROPERTY_probe_path_response_ttl]);
     }
   }
-  if (r->decompress_mask || r->preload)  _exists_root_with_preload=true;
   if (r->decompress_mask){
     if (!_writable_path_l) warning(WARN_CONFIG,r->rootpath,"Setting  --preload to root, but no writable root.");
     if (_root_writable==r) DIE("Do not set --preload for  first root.");
@@ -286,7 +286,7 @@ static int rp_parse_number(const char *v){
 }
 static char *rp_parse_vpath(root_t *r,char *v){
   const int v_l=cg_strlen(v);
-  char tmp[PATH_MAX+1];
+  char tmp[PATH_MAX];
   if (v_l){
     if (cg_find_invalidchar(VALIDCHARS_PATH,v,v_l)>=0) _root_property_error="Invalid character";
     v[cg_pathlen_ignore_trailing_slash(v)]=0;
@@ -300,16 +300,6 @@ static const char *rp_parse_rpath(root_t *r,char *v){
   if (!rp){perror(v);DIE("Cannot resolve path");}
   return rp;
 }
-#define RP_HELP(x,type) _root_property_example=x;_root_property_type=type
-#define RP_PRINT(code)
-#define RP_GET(code)
-#define RP_NUMBER(unit,x,assign_to)   RP_HELP(x,unit)                            RP_PRINT(if (assign_to) sprintf(buf,"%lld",LLD(assign_to)))		   RP_GET(assign_to=rp_parse_number(v))
-#define RP_01(x,assign_to)       RP_HELP(x,"0 or 1")							 RP_PRINT(if (assign_to) sprintf(buf,"%d",assign_to))			   RP_GET(assign_to=rp_parse_01(v))
-#define RP_PATHS(x,assign_to)    RP_HELP(x,"File paths separated by :")      RP_PRINT(if (assign_to) rp_print_paths(buf,sizeof(buf),assign_to)) RP_GET(assign_to=(const char**)cg_split_string(":",v))
-#define RP_LIST(x,assign_to)     RP_HELP(x,"Like .jpg,.tgz,.tar.gz")RP_PRINT(if (assign_to) rp_print_paths(buf,sizeof(buf),assign_to)) RP_GET(assign_to=(const char**)cg_split_string(" ",v))
-#define RP_VPATH(x,assign_to)    RP_HELP(x,"Virtual file path")                  RP_PRINT(if (assign_to) sprintf(buf,"%s",assign_to))               RP_GET(assign_to=rp_parse_vpath(r,v))
-#define RP_RPATH(x,assign_to)    RP_HELP(x,"Real absolute file path")            RP_PRINT(if (assign_to) sprintf(buf,"%s",assign_to))               RP_GET(assign_to=rp_parse_rpath(r,v))
-
 static void rp_parse_decompress(root_t *r,char *v){
   if (!r){ RP_HELP("Preloaded and decompressed. "REQUIRES_1(WITH_PRELOADDISK),"List of  gz,bz2,xz,lrz,Z");return;}
   if (_root_property_print){
@@ -319,7 +309,8 @@ static void rp_parse_decompress(root_t *r,char *v){
       const char *x=cg_compression_file_ext(iCompress,NULL);
       if (x && *x) n+=sprintf(_root_property_print+n,"%s%s",n?" ":"{",x+1);
     }
-    if (n) _root_property_print[n]='}';
+    if (n) _root_property_print[n++]='}';
+    _root_property_print[n]=0;
   }
   char tmp[64];
   if (v){
@@ -350,30 +341,45 @@ static void root_property_help(const int id_or_minus_1, FILE *f){
 #define RP_HELP(...)
 #undef F
 }
-static void root_property_print(const bool html,const int id_or_minus_1, FILE *f){
+static int root_property_print(const output_formats_t outformat,const root_t *only_this_root,  char *tmp, const int tmp_max){
+  tmp[0]=0;
+  int l=0;
+#define S(...) {if (l<tmp_max) l+=snprintf(tmp+l,tmp_max-l,__VA_ARGS__);}
+
 #define v NULL
 #undef RP_PRINT
 #define RP_PRINT(code) code
-  const char *reset=html?"":ANSI_RESET;
-  if (id_or_minus_1<0) fprintf(f,"\n%s *** Properties of roots *** %s",html?"":ANSI_INVERSE,reset);
+  const char *reset=outformat==OUTPUT_HTML?"":outformat==OUTPUT_ANSI?ANSI_RESET:"";
+  if (!only_this_root) S("\n%s *** Properties of roots *** %s",outformat==OUTPUT_ANSI?ANSI_INVERSE:"",reset);
   char buf[4096];
   _root_property_print=buf;
   foreach_root(r){
+    if (only_this_root && r!=only_this_root) continue;
     int header=0;
     FOR(id,0,ROOT_PROPERTY_NUM){
-      if (id_or_minus_1>=0 && id!=id_or_minus_1) continue;
-      *buf=0;
+      *buf=0; //memset(buf,0,sizeof(buf));
       switch(id){XMACRO_ROOT_PROPERTY();}
       if (*buf){
-        if (!header++) fprintf(f,"\n%sProperties of %s%s\n",html?"":ANSI_UNDERLINE ANSI_BOLD,r->rootpath,reset);
-        fprintf(f,"   - %s%s: %s %s\n",html?"":ANSI_FG_MAGENTA,ROOT_PROPERTY[id],reset,buf);
+        if (!header++) S("\n%sProperties of %s%s\n",outformat==OUTPUT_ANSI?ANSI_UNDERLINE ANSI_BOLD:"",r->rootpath,reset);
+        S("   - %s%s: %s %s\n",outformat==OUTPUT_ANSI?ANSI_FG_MAGENTA:"",ROOT_PROPERTY[id],reset,buf);
       }
     }
+    if (only_this_root){
+      S("   - Filesystem ID: %lx\n", r->f_fsid);
+      if (r->rootpath_mountpoint) S("   - Filesystem mountpoint: %s\n", r->rootpath_mountpoint);
+      S("   - Free: %'ld GB\n",((r->statvfs.f_frsize*r->statvfs.f_bfree)>>30));
+      S("   - noatime: %s\n",yes_no(r->noatime));
+    }
+
+
+
   }
-  if (id_or_minus_1<0) fputs("For a list of supported properties run ZIPsFS -h\n",f);
+  if (!only_this_root) S("For a list of supported properties run ZIPsFS -h\n");
 #undef v
 #undef RP_PRINT
+#undef S
 #define RP_PRINT(code)
+  return l;
 }
 static void root_property_read(const char *propertypath,const int iLine,root_t *r,const char *assignment){
 #undef RP_GET
@@ -449,13 +455,13 @@ static void root_property_read_all(root_t *r,const char **annotations, const int
 #endif
 // ---
 #if WITH_PRELOADDISK
-#include "ZIPsFS_preloadfiledisk.c"
+#include "ZIPsFS_preloaddisk.c"
 #endif //WITH_PRELOADDISK
 #include "ZIPsFS_async.c"
 // ---
 #include "ZIPsFS_filesystem_info.c"
 #if WITH_PRELOADRAM
-#include "ZIPsFS_preloadfileram.c"
+#include "ZIPsFS_preloadram.c"
 #include "ZIPsFS_ctrl.c"
 #include "ZIPsFS_special_file.c"
 #endif // WITH_PRELOADRAM
@@ -567,9 +573,9 @@ static void directory_add(uint8_t flags,directory_t *dir, int64_t inode, const c
   dc->fflags[L]=(flags&DIRENT_SAVE_MASK)|(s[s_l]=='/'?DIRENT_ISDIR:0);
   assert(dir->files_capacity>L);
 #define C(name) if (dc->f##name) dc->f##name[L]=name
-  C(mtime);C(size);C(inode); //C(crc);
+  C(mtime);C(size);C(inode); C(crc);
 #undef C
-  //if (crc) ASSERT(NULL!=dc->fcrc);
+  if (crc) ASSERT(NULL!=dc->fcrc);
   ASSERT(NULL!=dc->fname);
   if (!(flags&DIRENT_DIRECT_NAME)){
 #if WITH_TIMEOUT_READDIR
@@ -597,6 +603,14 @@ static void stat_set_dir(struct stat *s){
   }
 }
 
+/*******************************************************************/
+/* Next Schnappszahl, larger than n.                               */
+/* Also  larger 2 block sizes to facilitate fuse_invalidate_path() */
+/* in case of underestimation of file size.                        */
+/*******************************************************************/
+static off_t nextRepdigitFileSize(uint64_t n){
+  return nextRepdigit(MAX(n,_fuse_max_write*2));
+}
 
 /****************************************************************************************************/
 /* Single point for calling lstat() / stat()														*/
@@ -604,14 +618,15 @@ static void stat_set_dir(struct stat *s){
 /* For all other invokations, fd_parent is 0.  Using lstat().										*/
 /* For remote paths, the calls to lstat() are reduced with an attribut cache                        */
 /****************************************************************************************************/
-static bool zpath_stat_direct(const int opt_filldir_findrp,zpath_t *zpath,const time_t now){
-  if (!RP_L() || (opt_filldir_findrp&FINDRP_CACHE_ONLY)) return false; /* Also  see FINDRP_CACHE_NOT */
+
+static bool zpath_stat_direct(const int opts_findrp,zpath_t *zpath,const time_t now){
+  if (!RP_L() || (opts_findrp&FINDRP_CACHE_ONLY)) return false; /* Also  see FINDRP_CACHE_NOT */
   if (!stat_direct(&zpath->stat_rp,RP())) return false;
-  IF1(WITH_STATCACHE,if(zpath->root) stat_to_cache(opt_filldir_findrp,&zpath->stat_rp,VP0(),VP0_L(),zpath->root,now?now:time(NULL)));
+  IF1(WITH_STATCACHE,if(ZPR()) stat_to_cache(opts_findrp,&zpath->stat_rp,VP0(),VP0_L(),ZPR(),zpath->vfolder,now?now:time(NULL)));
   return true;
 }
 static bool _viamacro_stat_direct(const int fd_parent,struct stat *st,const char *rp,const char *callerFunc){
-  //  if (opt_filldir_findrp&FINDRP_CACHE_ONLY){log_debug_now("SKIP %s",rp); if (r)assert(r!=_root_writable);}
+  //  if (opts_findrp&FINDRP_CACHE_ONLY){log_debug_now("SKIP %s",rp); if (r)assert(r!=_root_writable);}
   //static int count;log_entered_function("#%d fd=%d %s  (%s)",count++,fd_parent,rp,callerFunc);
   cg_thread_assert_not_locked(mutex_fhandle);
   const int res=
@@ -640,7 +655,7 @@ static void mkSymlinkAfterStartPrepare(){
     }
     if (!is_installed_curl()){ fputs("curl is not installed\n",stderr); cg_getc_tty();}
     const int err=cg_symlink_overwrite_atomically(_mnt,_mkSymlinkAfterStart);
-    char rp[PATH_MAX+1];
+    char rp[PATH_MAX];
     if (err || !realpath(_mkSymlinkAfterStart,rp)){
       char cwd[MAX_PATHLEN+1];
       warning(WARN_MISC,_mkSymlinkAfterStart,"Working-dir: %s  cg_symlink_overwrite_atomically(%s,%s); %s",getcwd(cwd,MAX_PATHLEN),_mnt,_mkSymlinkAfterStart,strerror(err));
@@ -661,11 +676,8 @@ static void mkSymlinkAfterStartPrepare(){
 /// A new one is created with zpath_newstr() and one or several calls to zpath_strncat()     ///
 /// The length of the created string is finally obtained with zpath_commit()                 ///
 ////////////////////////////////////////////////////////////////////////////////////////////////
-static int zpath_strlen(const zpath_t *zpath,int s){
-  return s==0?0:strlen(zpath->strgs+s);
-}
 static void  zpath_set_atime(const zpath_t *zpath){
-  if (zpath && zpath->root && zpath->root->writable  && zpath->root->noatime){
+  if (zpath && ZPR() && ZPR()->writable  && ZPR()->noatime){
     struct stat st;
     if (stat(RP(),&st)){
       log_errno("stat '%s'",RP());
@@ -676,7 +688,6 @@ static void  zpath_set_atime(const zpath_t *zpath){
     }
   }
 }
-
 static int zpath_newstr(zpath_t *zpath){
   assert(zpath!=NULL);
   const int n=(zpath->current_string=++zpath->strgs_l);
@@ -684,11 +695,11 @@ static int zpath_newstr(zpath_t *zpath){
   return n;
 }
 static bool zpath_strncat(zpath_t *zpath,const char *s,int len){
-  if (ZPF(ZP_OVERFLOW)) return false;
+  if (ZPF(ZP_OVERFLOW) || !s) return false;
   const int l=MIN_int(cg_strlen(s),len);
   if (l){
     if (zpath->strgs_l+l+3>ZPATH_STRGS){
-      warning(enum_warnings_N|WARN_FLAG_MAYBE_EXIT,"zpath_strncat %s %d exceeding ZPATH_STRGS\n",s,len);
+      warning(WARN_PATH|WARN_FLAG_MAYBE_EXIT,VP(),"zpath_strncat %s %d exceeding %d for \n%s\n",s,len,ZPATH_STRGS,zpath->strgs);
       zpath->flags|=ZP_OVERFLOW;
       return false;
     }
@@ -697,24 +708,33 @@ static bool zpath_strncat(zpath_t *zpath,const char *s,int len){
   }
   return true;
 }
-/* static int zpath_commit_hash(const zpath_t *zpath, ht_hash_t *hash){ */
-/*   const int l=zpath->strgs_l-zpath->current_string; */
-/*   if (hash) *hash=hash32(zpath->strgs+zpath->current_string,l); */
-/*   return l; */
-/* } */
-static void zpath_set_realpath(zpath_t *zpath, const char *rp1,const char *rp2){
-  zpath->strgs_l-=RP_L();
-  ZPATH_NEWSTR(realpath);
+static void zpath_reset_realpath(zpath_t *zpath){
+  zpath->stat_rp=empty_stat;
+  if (zpath->realpath){
+    //log_debug_now("RP_L():%d realpath:%d     strgs_l=%d",RP_L(),zpath->realpath,zpath->strgs_l);
+    assert(zpath->current_string==zpath->realpath); /* realpath was appended  */
+    zpath->strgs_l=zpath->realpath;
+  }else{
+    ZPATH_NEWSTR(realpath);
+  }
+}
+static void zpath_set_realpath(zpath_t *zpath, const char *rp1,const char *rp2,const char *rp3){
+  zpath_reset_realpath(zpath);
+  if (rp1==_writable_path) ZPR()=_root_writable;
   if (rp1) ZPATH_STRCAT(rp1);
   if (rp2) ZPATH_STRCAT(rp2);
+  if (rp3) ZPATH_STRCAT(rp3);
   ZPATH_COMMIT(realpath);
-  FEHLER(zpath);
+  //log_exited_function("%s realpath:%d  rp12:%s%s   strgs_l=%d",RP(),zpath->realpath,rp1,rp2,zpath->strgs_l);
 }
-
+static int realpath_writable_folder(char *dst, const zpath_t *zpath, const char *dir){
+  return stpcpy(stpcpy(stpcpy(dst,_writable_path),dir),VP()+VFOLDER_PATH_L(zpath))-dst;
+}
 static void _viamacro_zpath_assert_strlen(const char *fn,const char *file,const int line,zpath_t *zpath){
   bool e=false;
-#define C(a)  if (zpath_strlen(zpath,zpath->a)!=zpath->a##_l && (e=true)) log_error(#a" != "#a"_l   %d!=%d\n",zpath_strlen(zpath,zpath->a),zpath->a##_l);
-  C(virtualpath);C(virtualpath_without_entry);C(entry_path);
+  int l;
+#define C(a)   l=zpath->a==0?0:  strlen(zpath->strgs+zpath->a); if (l!=zpath->a##_l && (e=true)) log_error(#a" != "#a"_l   %d!=%d\n",l,zpath->a##_l);
+  C(vp);C(virtualpath_without_entry);C(entry_path);
 #undef C
   if (e){
     log_zpath("Error ",zpath);
@@ -723,69 +743,87 @@ static void _viamacro_zpath_assert_strlen(const char *fn,const char *file,const 
   }
 }
 static void zpath_reset_keep_VP(zpath_t *zpath){
-#define X(f) zpath->f=zpath->f##_l=
-  XMACRO_ZIPPATH_NEED_RESET()
+#define X(f) zpath->f=zpath->f##_l=0;
+  XMACRO_ZIPPATH_NEED_RESET();
 #undef X
-    zpath->zipcrc32=zpath->virtualpath_without_entry_hash=
-    zpath->stat_vp.st_ino=zpath->stat_rp.st_ino=0;
-  zpath->root=NULL;
-  zpath->strgs_l=zpath->virtualpath+VP_L();
-  zpath->flags=zpath->flags&ZP_KEEP_NOT_RESET_MASK;
+  zpath->zipcrc32=zpath->virtualpath_without_entry_hash=zpath->stat_vp.st_ino=zpath->stat_rp.st_ino=0;
+  ZPR()=NULL;
+  zpath->strgs_l=zpath->vp+VP_L();
+  zpath->flags=ZPF(ZP_MASK_KEEP_NOT_RESET);
+  zpath->flags2=0;
 }
-
 static bool zpath_init_vp(zpath_t *zpath, const char *vp0,   const int vp0_l, const char *optionalPathComp){
   const int optionalPathComp_l=cg_strlen(optionalPathComp), vp_l=vp0_l+optionalPathComp_l+(optionalPathComp_l!=0);
-  zpath->virtualpath=zpath->strgs_l=1;  /* To distinguish from virtualpath==0  meaning not defined we use 1*/
-  zpath->virtualpath_l=vp_l;
+  zpath->vp=zpath->strgs_l=1;  /* To distinguish from virtualpath==0  meaning not defined we use 1*/
+  zpath->vp_l=vp_l;
   if (!ZPATH_STRCAT_N(vp0, vp0_l) || optionalPathComp_l && (!ZPATH_STRCAT("/") || !ZPATH_STRCAT_N(optionalPathComp,optionalPathComp_l))) return false;
-  zpath->strgs[zpath->virtualpath+vp_l]=0;
+  zpath->strgs[zpath->vp+vp_l]=0;
   zpath_reset_keep_VP(zpath);
   zpath->virtualpath_hash=hash32(VP(),vp_l);
+  zpath->vfolder=_virtualfolders;
   return true;
 }
-
 static void zpath_init(zpath_t *zpath, const virtualpath_t *vipa){
   ASSERT(zpath);
   ASSERT(vipa);
   ASSERT(vipa->vp);
-  ASSERT(!(zpath->flags&ZP_IS_IN_FHANDLE));
+  ASSERT(!ZPF(ZP_IS_IN_FHANDLE));
   ASSERT(cg_strlen(vipa->vp)>=vipa->vp_l);
   memset(zpath,0,sizeof(zpath_t));
   zpath_init_vp(zpath,vipa->vp,vipa->vp_l,NULL);
 #define C(f)   zpath->f=vipa->f
-  IF1(WITH_PRELOADDISK,C(preloadpfx));
-  C(dir);
+  //IF1(WITH_PRELOADDISK,C(preloadpfx));
+  C(vfolder);
   C(flags);
   C(zipfile_l);
   C(zipfile_cutr);
+  C(specialfile_id);
   C(zipfile_append);
+  C(vfile_sfx);
 #undef C
 }
-
-
-
-static bool zpath_stat(const int opt_filldir_findrp, zpath_t *zpath){
-  const root_t *r=zpath->root;
-  //log_entered_function("%s root:%s  dir:%s",VP(),rootpath(r),zpath->dir);
+static bool zpath_stat(const int opts_findrp, zpath_t *zpath){
+  const root_t *r=ZPR();
+  //if (ENDSWITH(VP(),VP_L(),"scan"))log_entered_function("%s root:%s  vdir:%s",VP(),rootpath(r),VFOLDER_PATH(zpath));
   bool ok=zpath->stat_rp.st_ino;
   if (!ok){
     if (r){
       cg_thread_assert_not_locked(mutex_fhandle);
-      IF1(WITH_STATCACHE, ok=zpath_stat_from_cache(opt_filldir_findrp,zpath));
-      if (!ok && r->remote) ok=async_stat(opt_filldir_findrp,zpath);
-      if (!ok) ok=zpath_stat_direct(opt_filldir_findrp,zpath,0);
+      IF1(WITH_STATCACHE, ok=zpath_stat_from_cache(opts_findrp,zpath));
+      if (!ok && r->remote) ok=async_stat(opts_findrp,zpath);
+      if (!ok) ok=zpath_stat_direct(opts_findrp,zpath,0);
     }else{
       ok=!stat(RP(),&zpath->stat_rp);
     }
-    if (ok) zpath->stat_vp=zpath->stat_rp;
-    IF1(WITH_PRELOADDISK, if (!ok && path_with_compress_sfx_exists(zpath)) ok=true);
-    if (ok){
-      int idx=zpath->is_decompressed>COMPRESSION_NIL?1:0;
-      if ((zpath->dir==DIR_INTERNET_UPDATE || zpath->dir==DIR_PRELOADED_UPDATE) && S_ISREG(zpath->stat_rp.st_mode)){ zpath->stat_vp.st_size=4096; idx+=2;}
-      if (!(ZPF(ZP_IS_ZIP))) zpath->stat_vp.st_ino=zpath_make_inode(zpath,idx); // USED_TO_BE_ZP_TRY_ZIP
+    IF1(WITH_PRELOADDISK, if (!ok) ok=path_with_compress_sfx_exists(zpath));
+  }
+  if (ok){
+    zpath->stat_vp=zpath->stat_rp;
+    //    int idx=VFOLDER_IS_UPDATE(zpath,PRELOAD_UPDATE,INTERNET_UPDATE)?PSEUDO_ENTRYIDX_FOR_UPDATE:0;
+    int idx=IS_UPDATE_GO(zpath)?PSEUDO_ENTRYIDX_FOR_UPDATE:0;
+    if (zpath->is_decompressed>COMPRESSION_NIL){
+      idx=PSEUDO_ENTRYIDX_FOR_DECOMPRESS;
+      zpath->stat_vp.st_size=nextRepdigitFileSize(16*zpath->stat_rp.st_size);
+    }
+
+    if (!(ZPF(ZP_IS_ZIPENTRY))){
+      if (zpath->zipfile_append||zpath->zipfile_cutr) ASSERT(ZPF(VP_IS_ZIP_AS_DIR));
+      if (ZPF(VP_IS_ZIP_AS_DIR)) idx=PSEUDO_ENTRYIDX_FOR_ZIP_AS_DIR;
+      zpath->stat_vp.st_ino=ZPATH_MAKE_INODE(zpath,idx);
+      //if (idx==PSEUDO_ENTRYIDX_FOR_ZIP_AS_DIR)log_debug_now("PSEUDO_ENTRYIDX_FOR_ZIP_AS_DIR %s rp:%s   stat_rp.st_ino: %lu    => stat_vp.st_ino: %lu",VP(),RP(), zpath->stat_rp.st_ino,zpath->stat_vp.st_ino);
     }
   }
   return ok;
+}
+static bool is_preload_by_selectors(const zpath_t *zpath){
+  if (ZPR()==_root_writable) return false;
+#define C(c,condition)  if (VFOLDER_FLAGS(zpath)&ID_FLAG(c) && condition)return true
+  C(PRELOAD_SELECT_ALL, true);
+  C(PRELOAD_SELECT_REMOTE, ZPR()->remote);
+  C(PRELOAD_SELECT_ZIP, ZPF(ZP_IS_ZIPENTRY));
+  C(VIEWMOD_DECOMPRESS, ZPF(ZP_IS_ZIPENTRY|ZP_IS_COMPRESSEDZIPENTRY)==(ZP_IS_ZIPENTRY|ZP_IS_COMPRESSEDZIPENTRY) || (ZPR()->decompress_mask&~(1<<COMPRESSION_NIL)));
+#undef C
+  return false;
 }
 
 
@@ -793,7 +831,6 @@ static void _viamacro_warning_zipf(const char *func, const int line, const char 
   zip_error_t *e=zf?zip_file_get_error(zf):za?zip_get_error(za):NULL;
   if (!e) return;
   const int se=!e?0:zip_error_code_system(e);
-
   char s[1024];*s=0;  if (se) strerror_r(se,s,1023);
   //const int ze=!e?0:zip_error_code_zip(e);
   //warning(WARN_FHANDLE|WARN_FLAG_ONCE_PER_PATH,path,"%s    sys_err: %s %s zip_err: %s %s",txt,!e?"e is NULL":!se?"":cg_error_symbol(se),s, !ze?"":error_symbol_zip(ze), !ze?"":zip_error_strerror(e));
@@ -814,29 +851,6 @@ static void fsize_to_hashtable(const char *vp, const int vp_l, const off_t size)
   LOCK(mutex_dircache,ht_set(&_ht_fsize,vp,vp_l,0,(void*)size));
 }
 #endif //WITH_FILECONVERSION_OR_CCODE
-/****************************************************************************************************************************/
-/* Is the virtualpath a zip entry?                                                                                          */
-/* Normally append will be ".Content" and cutr will be 0.                                                                   */
-/* Bruker MS files. The ZIP file name without the zip-suffix is the  folder name: append will be empty and cutr will be -4; */
-/****************************************************************************************************************************/
-static int virtual_dirpath_to_zipfile(const char *vp, const int vp_l,int *cutr, char *append[]){
-  ASSERT(vp_l>=0);
-  ASSERT(cg_strlen(vp)>=vp_l);
-  const char *b=vp;
-  int ret=0;
-  for(int i=4;i<=vp_l;i++){
-    if (i==vp_l || vp[i]=='/'){
-      if ((ret=config_virtual_dirpath_to_zipfile(b,vp+i,append))!=INT_MAX){
-        *cutr=-ret;
-        ret+=i;
-        break;
-      }
-      if (vp[i]=='/') b=vp+i+1;
-    }
-  }
-  //log_exited_function("%s cutr=%d append=%s",vp,*cutr,*append);
-  return ret==INT_MAX?0:ret;
-}
 /////////////////////////////////////////////////////////////
 // Read directory
 // Is calling directory_add(directory_t,...)
@@ -847,16 +861,16 @@ static void directory_to_cache_maybe(directory_t *dir){
   config_exclude_files(DIR_RP(),DIR_RP_L(),dir->core.files_l, dir->core.fname,dir->core.fsize);
 #if WITH_DIRCACHE
   const root_t *r=DIR_ROOT();
-  bool doCache=dir->always_to_cache ||  //(opt_filldir_findrp&FILLDIR_FROM_OPEN) DEBUG_NOW Warum?
+  bool doCache=dir->always_to_cache ||
     config_advise_cache_directory_listing(((r&&r->remote)?ADVISE_DIRCACHE_IS_REMOTE:0)|
-                                          (dir->dir_zpath.dir==DIR_PLAIN?ADVISE_DIRCACHE_IS_DIRPLAIN:0)|
-                                          (DIR_IS_ZIP()?ADVISE_DIRCACHE_IS_ZIP:0), // USED_TO_BE DIR_IS_TRY_ZIP
+                                          (VFOLDER_HAS_FLAG(&dir->dir_zpath,VIEWMOD_KEEP_ZIP)?ADVISE_DIRCACHE_IS_AS_IS:0)|
+                                          (DIR_IS_ZIP()?ADVISE_DIRCACHE_IS_ZIP:0),
                                           DIR_RP(),DIR_RP_L(), dir->dir_zpath.stat_rp.ST_MTIMESPEC);
   if (doCache) LOCK_NCANCEL(mutex_dircache,dircache_directory_to_cache(dir));
 #endif //WITH_DIRCACHE
 }
 
-static bool readdir_from_cache_zip_or_filesystem(const int opt_filldir_findrp,directory_t *dir){
+static bool readdir_from_cache_zip_or_filesystem(const int opts_findrp,directory_t *dir){
   if (!DIR_RP_L()) return false;
 #if WITH_DIRCACHE
   {
@@ -866,9 +880,8 @@ static bool readdir_from_cache_zip_or_filesystem(const int opt_filldir_findrp,di
     if (success) return true;
   }
 #endif //WITH_DIRCACHE
-  if (opt_filldir_findrp&FILLDIR_FROM_OPEN) dir->always_to_cache=true;
+  if (opts_findrp&FINDRP_IN_OPEN) dir->always_to_cache=true;
   if (!readdir_async(dir)) return false;
-
   return true;
 }
 #define DIRECTORY_PREAMBLE(isZip)    if (DIR_IS_TRY_ZIP()!=isZip) return false;   char *rp; LOCK(mutex_dircache, rp=DIR_RP(); dir->core.files_l=0) // RICHTIG  DIR_IS_TRY_ZIP
@@ -904,38 +917,37 @@ static bool readdir_from_zip(directory_t *dir){
 #ifndef HAS_DIRENT_D_TYPE
 #define HAS_DIRENT_D_TYPE 1
 #endif
-
 static bool readir_from_filesystem(directory_t *dir){
   DIRECTORY_PREAMBLE(false);
   DIR *d=opendir(rp);
+  zpath_t *zpath=&dir->dir_zpath;
   const int fd=!d?-1:dirfd(d);
   IF_LOG_FLAG(LOG_OPENDIR){ static int count;log_verbose("# %d  opendir('%s')  fd:%d ",count++,rp, fd);}
   if (!d){ log_errno("opendir: %s",rp); return false; }
   inc_count_by_ext(rp,d?COUNTER_OPENDIR_SUCCESS:COUNTER_OPENDIR_FAIL);
-  root_t *r=DIR_ROOT();
-  root_update_time(r,PTHREAD_ASYNC,0);
+  root_update_time(ZPR(),PTHREAD_ASYNC,0);
   time_t now=time(NULL);
-  const bool need_stat=IF01(HAS_DIRENT_D_TYPE,true,r->remote || dir->when_readdir_call_stat_and_store_in_cache);
+  const bool need_stat=IF01(HAS_DIRENT_D_TYPE,true,ZPR()->remote || dir->when_readdir_call_stat_and_store_in_cache);
   struct stat st;
   struct dirent *de;
   char rp2[MAX_PATHLEN+1],vp2[MAX_PATHLEN+1];
   if (need_stat){
-    strcpy(rp2,DIR_RP())[DIR_RP_L()]='/';
-    strcpy(vp2,DIR_VP())[DIR_VP_L()]='/';
+    strcpy(rp2,RP())[RP_L()]='/';
+    strcpy(vp2,VP())[VP_L()]='/';
   }
   for(int i=0;(de=readdir(d));i++){
-    if (!(i++&255)) root_update_time(r,PTHREAD_ASYNC,(now=time(NULL)));
+    if (!(i++&255)) root_update_time(ZPR(),PTHREAD_ASYNC,(now=time(NULL)));
     const char *n=de->d_name;
     const int n_l=strlen(n);
     CONTAINS_PALCEHOLDER(n,zip);
     if (config_do_not_list_file(rp,n,n_l)) continue;
     int isdir=IF01(HAS_DIRENT_D_TYPE,0, isdir=(de->d_type==DT_DIR)?1:-1);// cppcheck-suppress selfAssignment
-    if (need_stat && DIR_RP_L()+1+n_l<MAX_PATHLEN){
-      stpcpy(rp2+DIR_RP_L()+1,n);
+    if (need_stat && RP_L()+1+n_l<MAX_PATHLEN){
+      stpcpy(rp2+RP_L()+1,n);
       if (fstatat_direct(fd,&st,rp2)){
-        stpcpy(vp2+DIR_VP_L()+1,n);
+        stpcpy(vp2+VP_L()+1,n);
         isdir=S_ISDIR(st.st_mode)?1:-1;
-        IF1(WITH_STATCACHE,if(r) stat_to_cache(FINDRP_STAT_TOCACHE_ALWAYS,&st,vp2,DIR_VP_L()+1+n_l,r,now));
+        IF1(WITH_STATCACHE,if(ZPR()) stat_to_cache(FINDRP_STAT_TOCACHE_ALWAYS,&st,vp2,VP_L()+1+n_l,ZPR(),zpath->vfolder,now));
       }
     }
     LOCK(mutex_dircache, directory_add(isdir==1?DIRENT_ISDIR: 0,dir,de->d_ino,n,0,0,0));
@@ -949,95 +961,92 @@ static bool readir_from_filesystem(directory_t *dir){
 /*  for a given virtual path,                                   */
 /*  Returns true on success                                     */
 /****************************************************************/
-static bool test_realpath_pfx(const bool dirFileconversion,  int opt_filldir_findrp, zpath_t *zpath, root_t *r){
-  const char *vp=VP(), *vp0=VP0_L()?VP0():vp;
-  const int vp_l=VP_L(), vp0_l=VP0_L()?VP0_L():VP_L();
-  FOREACH_CSTRING(t,r->path_allow)  if (cg_path_equals_or_is_parent(*t,strlen(*t),vp,vp_l)) goto filter_ok;
- filter_ok:
-  FOREACH_CSTRING(t,r->path_deny) if (cg_path_equals_or_is_parent(*t,strlen(*t), vp,vp_l)) return false;
-  if (r->pathpfx_l && !cg_path_equals_or_is_parent(r->path_prefix, r->pathpfx_l,vp0,vp0_l)) return false;
-  zpath->root=r;
-  if (r->worm) opt_filldir_findrp|=FINDRP_IS_WORM;
-  if (r->immutable) opt_filldir_findrp|=FINDRP_IS_IMMUTABLE;
-  ZPATH_NEWSTR(realpath); /* realpath is next string on strgs_l stack */
-  ZPATH_STRCAT_N(r->rootpath,r->rootpath_l);
-  if (dirFileconversion) ZPATH_STRCAT(DIR_FILECONVERSION);
-  ZPATH_STRCAT_N(vp0+r->pathpfx_l,vp0_l-r->pathpfx_l);
-  ZPATH_COMMIT(realpath);
-  zpath->stat_rp=empty_stat;
-  if (ZPF(ZP_OVERFLOW) || !RP_L() || !zpath_stat(opt_filldir_findrp,zpath))return false;
-  if (r->one_file_system && r->st_dev!=zpath->stat_rp.st_dev) return false;
-#define M zpath->stat_rp.st_mode
-  if (zpath->dir==DIR_PRELOADED_UPDATE && (!(M&(S_IFREG|S_IFDIR)) || (M&S_IFREG)&&!(M&S_ISVTX))) return false;
-  if ((WITH_FOLLOW_SYMLINK || r->follow_symlinks) && !ZPF(ZP_NOT_EXPAND_SYMLINKS) && S_ISLNK(M) && zpath_expand_symlinks(zpath)){
-    zpath->stat_rp.st_ino=0;
-    return zpath_stat(opt_filldir_findrp,zpath);
+//IS_VFOLDER_ROOT DIR_PRELOADED WITH_PRELOADDISK SFX_UPDATE compre
+static bool test_realpath_pfx(const bool dirFileconversion,  int opts, zpath_t *zpath, root_t *r){
+  //bool debug=strstr(VP(),"db") && r && strstr(rootpath(r),"db");
+  //bool debug=r && strstr(rootpath(r),"massive");
+  //bool debug=r && ENDSWITH(VP(),VP_L(),"tdf");
+  const bool isInternetUD=VFOLDER_HAS_FLAG(zpath,INTERNET_UPDATE), isPreloadUD=VFOLDER_HAS_FLAG(zpath,PRELOAD_UPDATE);
+  const int vfolder_l=IS_VFOLDER_ROOT(zpath->vfolder)?VFOLDER_PATH_L(zpath):0;
+  //if (isInternetUD)log_entered_function("%s  root:%s  %d vfolder_l:%d",VP(),rootpath(r),IS_UPDATE_GO(zpath),vfolder_l);
+  const char *vp=VP()+vfolder_l, *vp0=VP0_L()?VP0()+vfolder_l:vp;
+  if ((r!=_root_writable) && VFOLDER_PATH(zpath)==DIR_INTERNET) return false;
+  const int vp_l=VP_L()-vfolder_l, vp0_l=(VP0_L()?VP0_L():VP_L())-vfolder_l;
+  if (r->path_allow){
+    FOREACH_CSTRING(t,r->path_allow) if (cg_path_equals_or_is_parent(*t,strlen(*t),vp,vp_l)) goto allow;
+    return false;
+  allow:;
   }
-#undef M
+  FOREACH_CSTRING(t,r->path_deny)   if (cg_path_equals_or_is_parent(*t,strlen(*t), vp,vp_l)) return false;
+  ASSERT(strlen(vp0)==vp0_l);
+  ASSERT(strlen(vp)==vp_l);
+  if (r->path_prefix_l && !cg_path_equals_or_is_parent(r->path_prefix, r->path_prefix_l, vp0,vp0_l)) return false;
+  ZPR()=r;
+  zpath_reset_realpath(zpath);
+  ZPATH_STRCAT(r->rootpath);
+  ZPATH_STRCAT(isPreloadUD?DIR_PRELOADED: isInternetUD?DIR_INTERNET: dirFileconversion?DIR_CONVERTED:   (opts&FINDRP_DIR_PRELOADED_ONLY)?DIR_PRELOADED:NULL);
+  const bool isSfxUD=IS_UPDATE_GO(zpath);
+  const int l_skip=isInternetUD? VFOLDER_PATH_L(zpath): r->path_prefix_l;
+  ZPATH_STRCAT_N(vp0+l_skip,vp0_l-l_skip-(isSfxUD?SFX_UPDATE_L:0));
+  if (isInternetUD && isSfxUD) ZPATH_STRCAT(NET_SFX_HEADER);
+  ZPATH_COMMIT(realpath);
+  //log_debug_now("vp=%s #%d vp0=%s #%d  rp:%s   ",VP(), VP_L(), VP0(), VP0_L(), RP());
+  if (ZPF(ZP_OVERFLOW) || !RP_L() || !zpath_stat(opts,zpath))return false;
+  if (r->one_file_system && r->st_dev!=zpath->stat_rp.st_dev) return false;
+  if (zpath->is_decompressed){
+    ZPATH_STRCAT(cg_compression_file_ext(zpath->is_decompressed,NULL));
+    ZPATH_COMMIT(realpath);
+  }
+  const mode_t m=zpath->stat_rp.st_mode;
+  if (r->follow_symlinks && !ZPF(ZP_NOT_EXPAND_SYMLINKS) && S_ISLNK(m) && zpath_expand_symlinks(zpath)){
+    zpath->stat_rp.st_ino=0;
+    return zpath_stat(opts,zpath);
+  }
   if (ZPF(ZP_TRY_ZIP)){
     if (!cg_endsWithZip(RP(),0)){ IF_LOG_FLAG(LOG_REALPATH) log_verbose("!cg_endsWithZip rp: %s\n",RP()); return false;}
-    //if (EP_L() && filler_readdir_zip(opt_filldir_findrp,zpath,NULL,NULL,NULL)) return false; /* This sets the file stat of zip entry */
-    zpath->flags|=ZP_IS_ZIP;
-    if (EP_L() && !zpath_zip_stat(zpath)) return false;
+    if (EP_L()){
+      if (filler_readdir_zip(opts,zpath,NULL,NULL,NULL)) return false; /* This sets the file stat of zip entry */
+      zpath->flags|=ZP_IS_ZIPENTRY;
+    }
+    //log_debug_now("ZP_IS_ZIPENTRY %s %d",VP(),ZPF(ZP_IS_ZIPENTRY));
   }
   return true;
 }
 
-static bool zpath_zip_stat(zpath_t *zpath){
-  zpath->stat_vp.st_size=zpath->stat_vp.st_ino=0;
-  zip_t *za=my_zip_open(RP());
-  if (!za){warning(WARN_ZIP,RP(),"%s",zip_error_strerror);  return false;}
-  zip_stat_t st;
-  zip_stat_init(&st);
-  const int ret=zip_stat(za, EP(),0,&st);
-  if (ret){
-    warning_zip_a(RP(),za," zip_stat( %s )");
-  }else{
-    zpath->stat_vp.st_size=st.size;
-    zpath->stat_vp.st_mtime=st.mtime;
-    zpath->zipcrc32=st.crc;
-  }
-  my_zip_close(za,RP());
-  return !ret;
-}
-
-
-
-static bool test_realpath(const int opt_filldir_findrp,const int zpath_flags,zpath_t *zpath, root_t *r){
+static bool test_realpath(const int opts,const int zpath_flags,zpath_t *zpath, root_t *r){
   assert(r!=NULL);
   bool ok=false;
   zpath->flags|=zpath_flags;
-  IF1(WITH_FILECONVERSION, if (r==_root_writable && zpath->dir==DIR_FILECONVERSION  && test_realpath_pfx(true,opt_filldir_findrp,zpath,r)) ok=true);
-  ok=ok || test_realpath_pfx(false,opt_filldir_findrp,zpath,r);
+  //  IF1(WITH_PRELOADDISK,if (VFOLDER_HAS_FLAG(zpath,PRELOAD_UPDATE)) return r==_root_writable && preloaddisk_test_realpath_preloaded_strcat_rp(true,zpath));
+  IF1(WITH_PRELOADDISK,if (IS_SPECIALFILE(zpath,SFILE_PRELOAD_UPDATE_GO)) return r==_root_writable && preloaddisk_test_realpath_preloaded_strcat_rp(true,zpath));
+  IF1(WITH_FILECONVERSION, if (r==_root_writable && VFOLDER_HAS_FLAG(zpath,VIEWMOD_FILECONVERSION) && test_realpath_pfx(true,opts,zpath,r)) ok=true);
+  IF1(WITH_PRELOADDISK, ok=ok || r==_root_writable && preloaddisk_test_realpath_preloaded_strcat_rp(false,zpath));
+  if (!ok) ok=test_realpath_pfx(false,opts,zpath,r);
   if (!ok && (zpath_flags&ZP_RESET_IF_NEXISTS)) zpath_reset_keep_VP(zpath);
+  //log_exited_function("VP:%s root:%s RP:%s ZPRP:%s  %s",VP(),rootpath(r),RP(),ZPRP(),success_or_fail(ok));
   return ok;
 }
-
 static bool zpath_expand_symlinks(zpath_t *zpath){
-  char target[PATH_MAX+1],absolute_target[PATH_MAX+1];
+  char target[PATH_MAX],absolute_target[PATH_MAX];
   if (cg_readlink_absolute(true,RP(),target,absolute_target)) return false;
   root_t *parent_root=NULL;
   foreach_root(r) if (cg_path_equals_or_is_parent(r->rootpath,r->rootpath_l,absolute_target,strlen(absolute_target))){ parent_root=r; break;}
   const bool ok=parent_root || config_allow_expand_symlink(RP(),target,absolute_target);
   //log_verbose("%s -> %s    '%s' parent_root:%s",RP(),target,absolute_target,yes_no(parent_root!=NULL));
-
   if (ok){
-    zpath_set_realpath(zpath,absolute_target,NULL);
-    if (parent_root) zpath->root=parent_root;
+    zpath_set_realpath(zpath,absolute_target,NULL,NULL);
+    if (parent_root) ZPR()=parent_root;
   }
   //log_exited_function("RP:'%s'    absolute_target:'%s'  parent_root:%s ok:%d",RP(),absolute_target,parent_root?parent_root->rootpath:"",ok);
   return ok;
 }
 /* Uses different approaches and calls test_realpath */
 /* Initially, only zpath->virtualpath is defined. */
-
-
-static bool find_realpath_for_root(const int opt_filldir_findrp,zpath_t *zpath,root_t *r){
-  //log_entered_function(" %s  VP_L:%d  zipfile_l=%d",VP(), VP_L(), zpath->zipfile_l);
+static bool find_realpath_for_root(const int opts,zpath_t *zpath,root_t *r){
+  //if (VFOLDER_HAS_FLAG(zpath,PRELOADED_UPDATE))
+  //  log_entered_function(" VP:%s  VP_L:%d  zipfile_l=%d  root=%s",VP(), VP_L(), zpath->zipfile_l,rootpath(r));
   if (r){
-    if (r==_root_writable?  zpath->dir==DIR_EXCLUDE_FIRST_ROOT: DIR_REQUIRES_WRITABLE_ROOT(zpath->dir)){
-      return false;
-    }
+    if (r==_root_writable?VFOLDER_HAS_FLAG(zpath,VIEWMOD_1_NOT): IS_VFOLDER_SKIP_READONLY_ROOT(zpath)) return false;
     if (!wait_for_root_timeout(r)) return false;
   }
   if (VP_L()){
@@ -1052,10 +1061,9 @@ static bool find_realpath_for_root(const int opt_filldir_findrp,zpath_t *zpath,r
         if (pos<VP_L()) ZPATH_STRCAT(VP()+pos);
       }
       if (ZPF(ZP_OVERFLOW)) return false;
-      //EP_L()=zpath_commit(zpath);
       ZPATH_COMMIT(entry_path);
       zpath_assert_strlen();
-      if (test_realpath(opt_filldir_findrp,zpath->dir==DIR_PLAIN?ZP_RESET_IF_NEXISTS:ZP_TRY_ZIP|ZP_RESET_IF_NEXISTS,zpath,r)){  /* ZP_TRY_ZIP is being set */
+      if (test_realpath(opts,ZP_RESET_IF_NEXISTS|(VFOLDER_HAS_FLAG(zpath,VIEWMOD_KEEP_ZIP)?0:ZP_TRY_ZIP),zpath,r)){  /* ZP_TRY_ZIP is being set */
         if (!EP_L()) stat_set_dir(&zpath->stat_vp); /* ZIP file without entry path */
         return true;
       }
@@ -1064,10 +1072,12 @@ static bool find_realpath_for_root(const int opt_filldir_findrp,zpath_t *zpath,r
   }
   /* Just a file */
   zpath_reset_keep_VP(zpath);
-  return test_realpath(opt_filldir_findrp,ZP_RESET_IF_NEXISTS,zpath,r);
+  const bool ok=test_realpath(opts,ZP_RESET_IF_NEXISTS,zpath,r);
+  //log_debug_now(" %s  VP_L:%d  zipfile_l=%d  root=%s  %s  rp:%s",VP(), VP_L(), zpath->zipfile_l,rootpath(r),success_or_fail(ok) ,RP());
+  return ok;
 } /*find_realpath_for_root */
 static long search_file_which_roots(const zpath_t *zpath){
-  if (ZPATH_IS_FILECONVERSION(zpath)){
+  if (ZPATH_IS_FILECONVERSION()){
 #if WITH_FILECONVERSION
     struct fileconversion_files ff={0};
     struct_fileconversion_files_init(&ff,VP(),VP_L()-(ENDSWITH(VP(),VP_L(),".log")?4:0));
@@ -1078,17 +1088,16 @@ static long search_file_which_roots(const zpath_t *zpath){
   }
   return config_search_file_which_roots(VP(),VP_L());
 }
-static bool find_realpath_in_roots(int opt_filldir_findrp,zpath_t *zpath, const long roots){
+static bool find_realpath_in_roots(int opts,zpath_t *zpath, const long roots){
   if (!roots) return false;
-  if (zpath->dir==DIR_PLAIN) opt_filldir_findrp|=FINDRP_IS_PFXPLAIN;
+  if (VFOLDER_HAS_FLAG(zpath,VIEWMOD_KEEP_ZIP)) opts|=FINDRP_IS_PFXPLAIN;
   zpath_reset_keep_VP(zpath);
-  if (!(opt_filldir_findrp&FINDRP_CACHE_NOT)){
-
+  if (!(opts&FINDRP_CACHE_NOT)){
     IF1(WITH_TRANSIENT_ZIPENTRY_CACHES, yes_zero_no_t ok=transient_cache_find_realpath(zpath); if (ok) return ok==YES);
     IF1(WITH_ZIPFLATCACHE,              if (zipflatcache_find_realpath(zpath,roots)) return true);
   }
   foreach_root(r){
-    if (roots&(1<<rootindex(r)) && find_realpath_for_root(opt_filldir_findrp,zpath,r)){
+    if (roots&(1<<rootindex(r)) && find_realpath_for_root(opts,zpath,r)){
       ASSERT(zpath->realpath!=0);
       IF1(WITH_TRANSIENT_ZIPENTRY_CACHES, LOCK(mutex_fhandle,transient_cache_store(zpath,VP(),VP_L())));
       return true;
@@ -1096,40 +1105,39 @@ static bool find_realpath_in_roots(int opt_filldir_findrp,zpath_t *zpath, const 
   }
   return false;
 }
-static bool find_realpath(const int opt_filldir_findrp,zpath_t *zpath){
+static bool find_realpath(const int opts,zpath_t *zpath){
+  //log_entered_function("%s ",VP());
   const long roots=search_file_which_roots(zpath);
-  IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,   foreach_root(r){ yes_zero_no_t ok=transient_cache_find_realpath(zpath); if (ok)return ok==YES;});
-#define F(mask) if ((mask) && find_realpath_in_roots(opt,zpath,mask)) return true
-  int opt=opt_filldir_findrp;
-  if (_root_writable) F(roots&1);
-  //log_debug_now(ANSI_MAGENTA"Erste Runde %s"ANSI_RESET,VP());
-  foreach_root(r){
-    opt=opt_filldir_findrp|FINDRP_CACHE_ONLY;
-    if (r->remote) F(roots&(1<<rootindex(r)));
+  IF1(WITH_TRANSIENT_ZIPENTRY_CACHES, foreach_root(r){ yes_zero_no_t ok=transient_cache_find_realpath(zpath); if (ok)return ok==YES;});
+#define F(opt,mask) if ((mask) && find_realpath_in_roots(opts|opt,zpath,roots&(mask))) return true
+  if (_root_writable){
+    F(FINDRP_DIR_PRELOADED_ONLY,1);
+    F(0,roots&1);
   }
-  //log_debug_now(ANSI_MAGENTA"Zweite Runde %s"ANSI_RESET,VP());
-  foreach_root(r){
-    //    opt=opt_filldir_findrp|(r->remote?FINDRP_CACHE_NOT:0);
-    opt=opt_filldir_findrp;
-    if (r!=_root_writable) F(roots&(1<<rootindex(r)));
-  }
+  foreach_root(r) if (r->remote) F(FINDRP_CACHE_ONLY, 1<<rootindex(r));
+  foreach_root(r) if (r!=_root_writable) F(0,1<<rootindex(r));
 #undef F
-  if (IF1(WITH_FILECONVERSION,!ZPATH_IS_FILECONVERSION(zpath) &&)  !config_not_report_stat_error(VP(),VP_L()) IF1(WITH_INTERNET_DOWNLOAD, && !net_is_internetfile(VP(),VP_L()))){
+  if (IF1(WITH_FILECONVERSION,!ZPATH_IS_FILECONVERSION() &&)  !config_not_report_stat_error(VP(),VP_L()) IF1(WITH_INTERNET_DOWNLOAD, && !net_is_internetfile(VP(),VP_L()))){
     warning(WARN_STAT|WARN_FLAG_ONCE_PER_PATH,VP(),"Not found");
   }
   return false;
 } /* find_realpath_any_root */
-static bool _find_realpath_other_root(zpath_t *zpath){
-  assert(zpath->root);
+
+
+static bool _find_realpath_other_root(zpath_t *zpath){ /*TODO*/
+  if (DEBUG_NOW==DEBUG_NOW) return false; // _find_realpath_other_root TODO
+  // find_realpath_other_root() ->  test_realpath_pfx() -> strgs_l wird immer laenger.
+  //log_entered_function("%s",VP());
+  assert(ZPR());
   assert(zpath->realpath);
   const off_t size0=zpath->stat_rp.st_size;
   ASSERT(zpath->stat_rp.st_ino);
   const root_t *prev=NULL;
   foreach_root(r){
-    if (prev==zpath->root){
+    if (prev==ZPR()){
       zpath->strgs_l=zpath->realpath;
       zpath->realpath=0;
-      if (test_realpath(0,0,zpath,r) && size0==zpath->stat_rp.st_size)  return true;
+      if (test_realpath(0,0,zpath,r) && size0==zpath->stat_rp.st_size) return true;  // Not call test_realpath !!!!
     }
     prev=r;
   }
@@ -1158,7 +1166,7 @@ static bool find_realpath_other_root(zpath_t *zpath){
 /* #define B (_fhandle[i>>FHANDLE_LOG2_BLOCK_SIZE]) */
 /*   fHandle_t *block=B; */
 /*   if (!block){ */
-/*     block=B=cg_calloc(COUNTm_FHANDLE_ARRAY_MALLOC,FHANDLE_BLOCK_SIZE,sizeof(fHandle_t)); */
+/*     block=B=cg_calloc(COUNT_FHANDLE_ARRAY_MALLOC,FHANDLE_BLOCK_SIZE,sizeof(fHandle_t)); */
 /*     assert(block!=NULL); */
 /*   } */
 /*   return block+(i&(FHANDLE_BLOCK_SIZE-1)); */
@@ -1170,7 +1178,7 @@ static MAYBE_INLINE fHandle_t* fhandle_at_index(int i){
   ASSERT_LOCKED_FHANDLE();
   static fHandle_t *_fhandle[FHANDLE_BLOCKS];
 #define B (_fhandle[i>>FHANDLE_LOG2_BLOCK_SIZE])
-  if (!B) B=cg_calloc(COUNTm_FHANDLE_ARRAY_MALLOC,FHANDLE_BLOCK_SIZE,sizeof(fHandle_t));
+  if (!B) B=cg_calloc(COUNT_FHANDLE_ARRAY_MALLOC,FHANDLE_BLOCK_SIZE,sizeof(fHandle_t));
   return B+(i&(FHANDLE_BLOCK_SIZE-1));
 #undef B
 }
@@ -1225,6 +1233,7 @@ static uint64_t next_fh(){
   return fh;
 }
 static fHandle_t* fhandle_create(const int flags, uint64_t *fh, const zpath_t *zpath){
+
   cg_thread_assert_not_locked(mutex_fhandle);
   LOCK(mutex_fhandle,*fh=next_fh());
   while(true){
@@ -1241,10 +1250,9 @@ static int fhandle_active_readers_writers(const fHandle_t *d){
 }
 static void fhandle_try_destroy(fHandle_t *d){
   ASSERT_LOCKED_FHANDLE();
+  //log_entered_function("%s  FHANDLE_NEED_INVALIDATE_PATH: %s", D_VP(d),yes_no(d->flags&FHANDLE_NEED_INVALIDATE_PATH));
   if (fhandle_active_readers_writers(d)){  warning(WARN_FLAG_ERROR,D_VP(d),"fhandle_active_readers_writers() %p",d);return;}
   IF1(WITH_PRELOADRAM,if (d->preloadram && (d->flags&FHANDLE_PRELOADRAM_MASTER) && !preloadram_try_destroy(d)) return);
-  root_t *r=D_ROOT(d);
-  if (r) atomic_fetch_add(&r->serialized_fileaccess,-atomic_load(&d->serialized_incremented));
   IF1(WITH_FILECONVERSION, const int fd=d->fd_real; d->fd_real=0;if (fd) close(fd));
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,transient_cache_destroy(d));
   fhandle_zip_fclose(true,d);
@@ -1253,6 +1261,7 @@ static void fhandle_try_destroy(fHandle_t *d){
   IF1(WITH_EVICT_FROM_PAGECACHE,if (!fhandle_find_identical(d)) maybe_evict_from_filecache(0,D_RP(d),D_RP_L(d),D_EP(d),D_EP_L(d)));
   *d=FHANDLE_EMPTY;
   COUNTER2_INC(COUNT_FHANDLE_CONSTRUCT);
+
 }
 static fHandle_t* fhandle_get(const char *vp_or_null,const uint64_t fh){
   ASSERT_LOCKED_FHANDLE();
@@ -1279,11 +1288,11 @@ static ino_t next_inode(void){
 }
 
 
-static ino_t make_inode(const ino_t inode0,root_t *r, const int entryIdx,const char *rp){
+static ino_t make_inode(const ino_t inode0,root_t *r, const int entryIdx,const char *for_err_msg){
   const static int SHIFT_FSID=42,SHIFT_ENTRY=(SHIFT_FSID+LOG2_FILESYSTEMS);
   const ino_t fsid=r?r->seq_fsid:LOG2_FILESYSTEMS; /* Better than rootindex(r) */
-  if (!inode0) warning(WARN_INODE|WARN_FLAG_ONCE_PER_PATH|WARN_FLAG_MAYBE_EXIT,rp,"inode0 is zero");
-  if (inode0<(1L<<SHIFT_FSID) && entryIdx<(1<<(63-SHIFT_ENTRY))){  // (- 63 46)
+  if (!inode0) warning(WARN_INODE|WARN_FLAG_ONCE_PER_PATH|WARN_FLAG_MAYBE_EXIT,"","for_err_msg='%s' inode0 is zero",for_err_msg);
+  if (inode0<(1ULL<<SHIFT_FSID) && entryIdx<(1LLU<<(63-SHIFT_ENTRY))){  // (- 63 46)
     const ino_t ino=inode0| (((int64_t)entryIdx)<<SHIFT_ENTRY)| (fsid<<SHIFT_FSID);
     return ino;
   }else{
@@ -1324,47 +1333,35 @@ static int zipentry_placeholder_expand(char *u,const char *orig, const char *rp,
 ///                     NULL for running stat for a specific ZIP entry               ///
 ////////////////////////////////////////////////////////////////////////////////////////
 
-
-static void filler_add(const int opt_filldir_findrp,fuse_fill_dir_t filler,void *buf, const char *name, int name_l,const char *sfx, const struct stat *st, ht_t *no_dups){
+static void filler_add(fuse_fill_dir_t filler,void *buf, const char *name, int name_l, const struct stat *st, ht_t *no_dups){
   if (strchr(name,'/')) return;
-  IF1(WITH_FILECONVERSION,if(opt_filldir_findrp&FILLDIR_FILECONVERSION) fileconversion_filldir(filler,buf,name,st,no_dups);else)
-    {
-      if (!name_l) name_l=strlen(name);
-      const int sfx_l=cg_strlen(sfx);
-      char tmp[name_l+1+sfx_l];
-      if (name[name_l] || sfx_l){ /* Trim to length name_l */
-        memcpy(tmp,name,name_l);
-        if (sfx_l) memcpy(tmp+name_l,sfx,sfx_l);
-        tmp[name_l+sfx_l]=0;
-        name=tmp;
-      }
-      if (ht_only_once(no_dups,name,name_l)){
-        assert_validchars(VALIDCHARS_FILE,name,name_l);
-        filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);
-      }
-#define X(x,code) if ((opt_filldir_findrp&(1<<COMPRESSION_##x)) && cg_endsWith(0,name,name_l,"."#x,sizeof(#x))) filler_add(0,filler,buf,name,name_l-sizeof(#x),sfx,st,no_dups);
-      IF1(WITH_PRELOADDISK_DECOMPRESS,if (opt_filldir_findrp){XMACRO_COMPRESSION()});
-#undef X
-    }
+  if (!name_l) name_l=strlen(name);
+  if (name[name_l]){
+    char tmp[name_l+1];
+    cg_strncpy0(tmp,name,name_l);
+    name=tmp;
+  }
+  if(ht_only_once(no_dups,name,name_l)){
+    assert_validchars(VALIDCHARS_FILE,name,name_l);
+    filler(buf,name,st,0 COMMA_FILL_DIR_PLUS);
+  }
 }
 
 
-
-
-
-static int filler_readdir_zip(const int opt_filldir_findrp,zpath_t *zpath,void *buf, fuse_fill_dir_t filler,ht_t *no_dups){
-  ASSERT(zpath->dir!=DIR_PLAIN);
+static int filler_readdir_zip(const int opts_findrp,zpath_t *zpath,void *buf, fuse_fill_dir_t filler,ht_t *no_dups){
+  //log_entered_function("%s",VP());
+  ASSERT(!VFOLDER_HAS_FLAG(zpath,VIEWMOD_KEEP_ZIP));
   char ep[MAX_PATHLEN+1]; /* This will be the entry path of the parent dir */
   const int ep_l=filler?EP_L():MAX_int(0,cg_last_slash(EP()));
   memcpy(ep,EP(),ep_l); ep[ep_l]=0;
   const char *lastComponent=EP()+ep_l+(ep_l>0);
   const int lastComponent_l=EP_L()-(ep_l+(ep_l>0));
   if(!filler && !EP_L()) return 0; /* When the virtual path is a Zip file then just report success */
-  //  if (!zpath_stat(zpath,zpath->root)) return ENOENT;
-  if (!zpath_stat(opt_filldir_findrp,zpath)) return ENOENT;
+  //  if (!zpath_stat(zpath,ZPR())) return ENOENT;
+  if (!zpath_stat(opts_findrp,zpath)) return ENOENT;
   directory_t mydir={0}, *dir=&mydir; mydir.debug=true;
   directory_init_zpath(dir,zpath);
-  if (!readdir_from_cache_zip_or_filesystem(opt_filldir_findrp,dir)) return ENOENT;
+  if (!readdir_from_cache_zip_or_filesystem(opts_findrp,dir)) return ENOENT;
   IF1(WITH_ZIPFLATCACHE,LOCK(mutex_dircache,zipflatcache_store_allentries_of_dir(dir)));
   char u[MAX_PATHLEN+1]; /* entry path expanded placeholder */
   directory_core_t dc=dir->core;
@@ -1385,65 +1382,100 @@ static int filler_readdir_zip(const int opt_filldir_findrp,zpath_t *zpath,void *
       if (!*n || (filler?NULL!=strchr(n,'/'):(n_l!=lastComponent_l || strcmp(lastComponent,n)))) continue;
       struct stat stbuf,*st=filler?&stbuf:&zpath->stat_vp;
       stat_init(st,isdir?-1:Nth0(dc.fsize,i),&zpath->stat_rp);
-      //st->st_ino=make_inode(zpath->stat_rp.st_ino,zpath->root,idx,RP());
-      st->st_ino=zpath_make_inode(zpath,idx);
-
+      st->st_ino=ZPATH_MAKE_INODE(zpath,idx+INODE_OFFSET_ENTRY);
+      //log_debug_now("ZZZZZ iiiiiiiiiiiii  %s %lu",u,st->st_ino);
       st->st_mtime=Nth0(dc.fmtime,i);
       if (!filler){  /* ---  Called from test_realpath_or_reset() to set zpath->stat_vp --- */
+        zpath->stat_vp.st_ino=st->st_ino;
         zpath->stat_vp.st_uid=getuid();
         zpath->stat_vp.st_gid=getgid();
         ASSERT(dir->files_capacity>=dc.files_l);
         if (Nth0(dc.fflags,i)&DIRENT_IS_COMPRESSEDZIPENTRY) zpath->flags|=ZP_IS_COMPRESSEDZIPENTRY;
-        //zpath->zipcrc32=Nth0(dc.fcrc,i);
+        zpath->zipcrc32=Nth0(dc.fcrc,i);
         directory_destroy(dir);
         return 0;
       }
-      filler_add(opt_filldir_findrp,filler,buf,n,n_l,NULL,st,no_dups);
+      filler_add(filler,buf,n,n_l,st,no_dups);
     }
   }
   directory_destroy(dir);
   return filler?0:ENOENT;
 }/*filler_readdir_zip*/
-static bool filler_readdir(const int opt_filldir_findrp,zpath_t *zpath, void *buf, fuse_fill_dir_t filler,ht_t *no_dups){
-  if (!RP_L()) return false;
-  if (ZPF(ZP_IS_ZIP) && filler_readdir_zip(opt_filldir_findrp,zpath,buf,filler,no_dups)) return true; // USED_TO_BE_ZP_TRY_ZIP
-  if (!zpath->stat_rp.st_ino) return true;
-  ASSERT(zpath->root!=NULL);
+
+
+static void filler_from_dir_generated(fuse_fill_dir_t filler,const directory_t *dir,void *buf, ht_t *no_dups){
+  //log_debug_now("filler_from_dir %d",dir->core.files_l);
+  struct stat st;
+  char u[PATH_MAX];
+  FOR(i,0,dir->core.files_l){
+    int u_l=zipentry_placeholder_expand(u,dir->core.fname[i],ZP_RP(&dir->dir_zpath) ,dir);
+    stat_init(&st,dir->core.fsize[i],NULL);
+    st.st_ino=dir->core.finode[i];
+    filler_add(filler,buf,u,u_l,&st,no_dups);
+  }
+}
+
+// WITH_PRELOADDISK
+static void filler_readdir(zpath_t *zpath, void *buf, fuse_fill_dir_t filler,ht_t *no_dups,directory_t *dir_generated){
+  //log_entered_function("VP=%s  RP:%s    dir_generated:%d",VP(),RP(),dir_generated->core.files_l);
+  if (zpath->zipfile_l && ZPF(ZP_TRY_ZIP) && filler_readdir_zip(0,zpath,buf,filler,no_dups)) return;
+  ASSERT(zpath->stat_rp.st_ino);
+  if (!zpath->stat_rp.st_ino) return;
+  ASSERT(ZPR());
+  const bool isInternetUD=VFOLDER_HAS_FLAG(zpath,INTERNET_UPDATE), isInternet=VFOLDER_PATH(zpath)==DIR_INTERNET,is_as_is=VFOLDER_HAS_FLAG(zpath,VIEWMOD_KEEP_ZIP);
+  IF1(WITH_PRELOADDISK, const int decompress_mask=zpath_decompress_mask(zpath));
   char dirname_from_zip[MAX_PATHLEN+1];
-  ASSERT(zpath!=NULL);
-  const char *append_ext=zpath->dir==DIR_PRELOADED_UPDATE?SFX_UPDATE: zpath->dir==DIR_INTERNET_UPDATE?NET_SFX_UPDATE:NULL;
-  directory_t dir={0};  directory_init_zpath(&dir,zpath);
-  if (readdir_from_cache_zip_or_filesystem(opt_filldir_findrp,&dir)){
-    char u[MAX_PATHLEN+1]; /*buffers for unsimplify_fname() */
+  directory_t dir={0};
+  bool readdir_success=true;
+  directory_init_zpath(&dir,zpath);
+  readdir_success=readdir_from_cache_zip_or_filesystem(0,&dir);
+  if (readdir_success){
     const directory_core_t dc=dir.core;
     FOR(i,0,dc.files_l){
-      if (cg_empty_dot_dotdot(dc.fname[i])) continue;
+      const off_t size=Nth0(dc.fsize,i);
+      char u[MAX_PATHLEN+1];*u=0; /*buffer for dir entry  name*/
       int u_l=zipentry_placeholder_expand(u,dc.fname[i],RP(),&dir);
-      IF1(WITH_INTERNET_DOWNLOAD,if (zpath->dir==DIR_INTERNET_UPDATE && !net_internet_filename_colon(u,u_l)) continue);
-      //IF1(WITH_INTERNET_DOWNLOAD, if (_writable_path_l && (opt_filldir_findrp&FILLDIR_STRIP_NET_HEADER)) u_l=net_filename_from_header_file(u,u_l));
-      if (!u_l || 0==(opt_filldir_findrp&FILLDIR_FILECONVERSION) && no_dups && ht_get(no_dups,u,u_l,0)) continue;
-      IF1(WITH_ZIPFLAT,if (zpath->dir!=DIR_PLAIN && config_skip_zipfile_show_zipentries_instead(u,u_l) && readdir_zipflat_from_cache(opt_filldir_findrp,zpath,u,buf,filler,no_dups)) continue);
-      struct stat st;
-      if ((opt_filldir_findrp&FILLDIR_FILES_S_ISVTX) && (!cg_stat_parent_and_file(RP(),RP_L(),u,u_l, &st)|| S_IFREG==(st.st_mode&(S_ISVTX|S_IFREG)))) continue;
-      const bool isDIR=Nth0(dc.fflags,i)&DIRENT_ISDIR;
-      stat_init(&st,isDIR?-1:Nth0(dc.fsize,i),NULL);
-      //st.st_ino=make_inode(zpath->stat_rp.st_ino,zpath->root,0,RP());
-      st.st_ino=zpath_make_inode(zpath,0);
-      if (!config_do_not_list_file(RP(),u,u_l)){
+      if (!u_l || cg_empty_dot_dotdot(u) || ht_get(no_dups,u,u_l,0) || config_do_not_list_file(RP(),u,u_l)) continue;
+      const bool isDir=(Nth0(dc.fflags,i)&DIRENT_ISDIR);
+      if (!isDir){
+        IF1(WITH_PRELOADDISK,      if (VFOLDER_HAS_FLAG(zpath,PRELOAD_UPDATE)){strcpy(u+u_l,SFX_UPDATE); u_l+=SFX_UPDATE_L;});
+        IF1(WITH_INTERNET_DOWNLOAD,if ((isInternetUD||isInternet) && !(u_l=net_direntry(zpath,u,u_l))) continue);
+      }
+      IF1(WITH_ZIPFLAT,if (!is_as_is && config_skip_zipfile_show_zipentries_instead(u,u_l) && readdir_zipflat_from_cache(zpath,u,buf,filler,no_dups,dir_generated)) continue);
+      const ino_t finode=Nth0(dc.finode,i);
+      {
+        struct stat st={0};
+        stat_init(&st,isDir?-1:size,NULL);
+        if (finode) st.st_ino=make_inode(finode,ZPR(),i+INODE_OFFSET_ENTRY,__func__);
         *dirname_from_zip=0;
-        const bool also_show_zip_file_itself=!append_ext && zpath->dir!=DIR_PLAIN && config_zipfilename_to_virtual_dirname(dirname_from_zip,u,u_l);
+        const bool also_show_zip_file_itself=!is_as_is && config_zipfilename_to_virtual_dirname(dirname_from_zip,u,u_l);
+        if (!*dirname_from_zip || also_show_zip_file_itself) filler_add(filler,buf,u,u_l,&st,no_dups);
         if (*dirname_from_zip){
           stat_set_dir(&st);
-          filler_add(opt_filldir_findrp,filler,buf,dirname_from_zip,0,NULL,&st,no_dups);
-          if (also_show_zip_file_itself) filler_add(opt_filldir_findrp,filler,buf,u,u_l,isDIR?NULL:append_ext,&st,no_dups); // cppcheck-suppress knownConditionTrueFalse
-        }else{
-          filler_add(opt_filldir_findrp|(zpath->dir==DIR_PLAIN?0:zpath->root->decompress_mask),filler,buf,u,u_l,isDIR?NULL:append_ext,&st,no_dups);
+          st.st_ino=make_inode(finode,ZPR(),PSEUDO_ENTRYIDX_FOR_ZIP_AS_DIR,__func__);
+          filler_add(filler,buf,dirname_from_zip,0,&st,no_dups);
+          //log_debug_now("Virtual: %s  rp: %s    finode=%lu -> ino:%lu ",dirname_from_zip, u, finode, st.st_ino);
+        }
+        IF1(WITH_FILECONVERSION, if (VFOLDER_HAS_FLAG(zpath,VIEWMOD_FILECONVERSION)) fileconversion_add_to_dir(buf,u,u_l,no_dups,dir_generated));
+      }
+#if WITH_PRELOADDISK
+      if (!isDir && decompress_mask){
+        FOR(iCompress,1,COMPRESSION_NUM){
+          if (!(decompress_mask&(1<<iCompress))) continue;
+          int x_l; const char *x=cg_compression_file_ext(iCompress,&x_l);
+          if (!cg_endsWith(0,u,u_l,x,x_l)) continue;
+          u[u_l-=x_l]=0;
+          if (!ht_get(no_dups,u,u_l,0)){
+            directory_add(0,dir_generated, make_inode(finode,ZPR(),PSEUDO_ENTRYIDX_FOR_DECOMPRESS,u),u,size?nextRepdigitFileSize(64*size):9999999999L, Nth0(dc.fmtime,i),0);
+          }
+          break;
         }
       }
+#endif //WITH_PRELOADDISK
     }
     directory_destroy(&dir);
   }
-  return true;
+  //log_exited_function("VP=%s  RP:%s",VP(),RP());
 }
 static int minus_val_or_errno(int res){ return res==-1?-errno:-res;}
 static int xmp_releasedir(const char *path, struct fuse_file_info *fi){ return 0;} // cppcheck-suppress [constParameterCallback]
@@ -1455,7 +1487,7 @@ static int mk_parentdir_if_sufficient_storage_space(const char *rp){
   const int slash=cg_last_slash(rp);
   if (slash<=0) return EINVAL;
   if (!cg_recursive_mk_parentdir(rp)){ warning(WARN_OPEN|WARN_FLAG_ERRNO,rp,"failed cg_recursive_mk_parentdir"); return EPERM;}
-  char parent[PATH_MAX+1]; cg_stpncpy0(parent,rp,slash);
+  char parent[PATH_MAX]; cg_stpncpy0(parent,rp,slash);
   struct statvfs st;
   if (statvfs(parent,&st)){ warning(WARN_OPEN|WARN_FLAG_ERRNO,parent,"Going return EIO"); return EIO;}
   const long free=st.f_frsize*st.f_bavail, total=st.f_frsize*st.f_blocks;
@@ -1469,15 +1501,17 @@ static int mk_parentdir_if_sufficient_storage_space(const char *rp){
 /*  Return EACCES if file should not be overwritten                           */
 /*  If the parent path exists in any root, then create it in _root_writable.  */
 /******************************************************************************/
+
 static int realpath_mk_parent(char *rp, const virtualpath_t *vip){
   if (!_writable_path_l) return EACCES;/* Only first root is writable */
   if (config_not_overwrite(vip->vp,vip->vp_l)){
     bool found;FIND_REALPATH(vip);
-    if (found && zpath->root>0) return EACCES;
+    if (found && ZPR()>0) return EACCES;
   }
   assert(_writable_path_l+vip->vp_l<MAX_PATHLEN);
   const int slash=cg_last_slash(vip->vp);
-  stpcpy(stpcpy(rp,_writable_path),vip->vp);
+  REALPATH_WRITABLE_FOLDER(rp,vip,"");
+  // See realpath_writable_folder // DEBUG_NOW
   if (slash<=0) return 0;
   char parent[slash+1]; cg_strncpy0(parent,vip->vp,slash);
   NEW_VIRTUALPATH(parent);
@@ -1491,8 +1525,10 @@ static int realpath_mk_parent(char *rp, const virtualpath_t *vip){
 #define EVAL(a) a
 #define EVAL2(a) EVAL(a)
 static pid_t get_request_pid(void){
+  assert(fuse_get_context()->fuse==_fuse);
   return fuse_get_context()->pid;
 }
+
 static void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_config *cfg)){
   //void *x=fuse_apply_conn_info_opts;  //cfg-async_read=1;
 #if WITH_FUSE_3
@@ -1509,125 +1545,301 @@ static void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_c
       DIE("");
     }
   }
+  _fuse=fuse_get_context()->fuse;
+  _fuse_max_write=conn->max_write;
   return NULL;
 }
 
-
-static void init_special_files(){
-  if (cg_uid_is_developer() && cg_file_exists(__FILE__)){
-    const int slash=cg_last_slash(__FILE__);
-    char tmp[PATH_MAX+1];strcpy(tmp,__FILE__);
-    RLOOP(i,enum_configuration_src_N){
-      char *e=stpcpy(tmp+slash+1,enum_configuration_src_S[i]);
-      strcpy(e,".h"); if (cg_file_exists(tmp)) continue;
-      strcpy(e,".c"); if (cg_file_exists(tmp)) continue;
-      DIE(RED_ERROR"Not found '%s'",tmp);
+/*************************************************************/
+/* Get the tree of folder names from the  XMACRO_SPECIAL_FILES */
+/*************************************************************/
+static void virtualfolder_new(virtualfolder_t *f, const vfolder_flags_t flags, const char *pathcomponents[]){
+  char path[99];
+  {
+    char *path_e=path;
+    FOREACH_CSTRING(b,pathcomponents) if (*b){ if (**b!='/') *path_e++='/'; path_e=stpcpy(path_e,*b); }
+    *path_e=0;
+  }
+  FOREACH_CSTRING(dir,_vfolders_in_zipsfs) if (!strcmp(path,*dir)){f->path=*dir; goto found;}
+  f->path=strdup(path);
+ found:;
+  f->path_l=strlen(path);
+  f->flags=flags;
+  IF1(WITH_EXTRA_ASSERT, if (f->path &&!strcmp(f->path,DIR_INTERNET))assert(f->path==DIR_INTERNET));
+}
+static char _dirOldLogs[MAX_PATHLEN+1];
+static void specialfile_init(const int id,  const char *filename,const char *parent){
+  assert(id<SFILE_NUM);
+  if (id==SFILE_CLEANUP_SH && !_writable_path) return;
+  const bool has_real_path=filename && *filename=='/';
+  specialfile_t *sf=_specialfiles+id;
+  if (filename)  sf->name_l=strlen((sf->name=filename+has_real_path));
+  sf->parent=parent;
+  sf->id=id;
+  if (has_real_path){
+    char path[MAX_PATHLEN+1],tmp[MAX_PATHLEN+1];
+    snprintf(path,MAX_PATHLEN,"%s/%s",_dot_ZIPsFS,sf->name);
+    if (id==SFILE_CLEANUP_SH && _writable_path) snprintf(path,MAX_PATHLEN,"%s%s/%s",_writable_path,sf->parent,sf->name);
+    sf->rp=strdup_untracked(path);
+    struct stat st;
+    if (id==SFILE_LOG_ERRORS||id==SFILE_LOG_WARNINGS){
+      if (!lstat(path,&st) && st.st_size){ /* Save old logs with a mtime in file name. */
+        const time_t t=st.st_mtime;
+        struct tm lt;
+        localtime_r(&t,&lt);
+        snprintf(tmp,MAX_PATHLEN,"%s/%s",_dirOldLogs,sf->name);
+        strftime(strrchr(tmp,'.'),22,"_%Y_%m_%d_%H:%M:%S",&lt);
+        strcat(tmp,".log");
+        if (cg_rename(path,tmp)) DIE("rename");
+        const char *cmd[]={"gzip","-f","--best",tmp,NULL};
+        cg_fork_exec(cmd,NULL,0,0,0);
+      }
+#define F _fWarnErr[id==SFILE_LOG_ERRORS]
+      if (!(F=fopen(path,"w"))) DIE("Failed open '%s'",path);
+      fprintf(F,"%s\n",path);
+#undef F
     }
   }
 }
 
+static void specialfiles_init(){
+#define X(id,...) specialfile_init(ID_##id,"_README_"#id".html",NULL);
+  XMACRO_DIRFLAGS(); /* READMEs in each special folder */
+#undef X
+  char path[MAX_PATHLEN+1],tmp[MAX_PATHLEN+1];
+  assert(_mnt);
+  {
+    char *d=path+strlen(cg_copy_path(path,PATH_DOT_ZIPSFS));
+    strcat(d,_mnt);
+    while(*++d) if (*d=='/') *d='_';
+  }
+  snprintf(_dirOldLogs,MAX_PATHLEN,"%s%s",path,"/old_logs");
+  cg_recursive_mkdir(_dirOldLogs);
+  strcpy(stpcpy(tmp,path),"/PID.TXT");
+  fprintf(stderr,"Writing '%s' ... ",tmp);
+  FILE *f=fopen(tmp,"w");
+  if (f){
+    fprintf(f,"%d\n",_pid);
+    fclose(f);
+    fputs(GREEN_SUCCESS"\n",stderr);
+  }else{
+    perror(RED_FAIL);
+  }
+  _dot_ZIPsFS=strdup_untracked(path);
+#define X(filename,parent,id) specialfile_init(id,filename,parent);
+  XMACRO_SPECIALFILES();
+#undef X
+}
+static const char *_ffd_foldername;
+static int _ffd_length, _ffd_id_from,_ffd_id_to;
+static vfolder_flags_t _flags_from_dirflags(const int id, const char *symbol, const char *dirflag){
+  if (!symbol || !*symbol || !dirflag || !*dirflag || *dirflag=='-' && !dirflag[1] || !num_in_range(id,_ffd_id_from,_ffd_id_to)) return 0;
+  if (*dirflag=='-'){
+    if (strstr(_ffd_foldername,dirflag)) goto ok;
+  }else{
+    for(const char *c=_ffd_foldername;*c; c++) if (*c==*dirflag && (c==_ffd_foldername||c[-1]!='-')) goto ok;
+  }
+  return 0;
+ ok:;
+  _ffd_length+=strlen(dirflag);
+  //log_debug_now("'%s'  Found dirflag %s  %ld",foldername, dirflag,strlen(dirflag));
+  return 1ULL<<id;
+}
+static vfolder_flags_t flags_from_dirflags(const char *foldername, const int id_from, const int id_to){
+  if(!strcmp(foldername,"-")) return num_in_range(id_from,ID_RANGE_VIEWMOD)?ID_FLAG(VIEWMOD_NIL):0;
+  _ffd_length=0;
+  _ffd_foldername=foldername;
+  _ffd_id_from=id_from;
+  _ffd_id_to=id_to;
+  vfolder_flags_t flags=0;
+#define X(id,dirflag) flags|=_flags_from_dirflags(ID_##id,#id,dirflag);
+  XMACRO_DIRFLAGS();
+#undef X
+  if (_ffd_length!=strlen(foldername)) DIE("foldername: '%s':%zu / %d",foldername,strlen(foldername),_ffd_length);
+  return flags;
+}
+static void virtualfolders_init(){
+  //log_entered_function("");
+  int vf_n=1; _virtualfolders->path=""; /* First element as default */
+  FOREACH_CSTRING(d,_vfolders_in_zipsfs){
+    virtualfolder_t *f=_virtualfolders+vf_n++;
+    f->path_l=strlen((f->path=*d));
+  }
+#define N(flags) { assert(VIRTUALFOLDER_MAX>vf_n); virtualfolder_new(_virtualfolders+vf_n++,flags,ee);}
+  const char  *ee[5]={DIR_ZIPsFS};
+  static const char *vv[]={"-","n","1","-1","c","1z","-1z","z","d","1d","-1d","cd","1dz","-1dz","dc",NULL};
+  FOREACH_CSTRING(v_pointer,vv){
+    ee[1]=*v_pointer;ee[2]=ee[3]=0;
+    const vfolder_flags_t flags_view=flags_from_dirflags(*v_pointer,ID_RANGE_VIEWMOD);
+    N(flags_view);
+    if (flags_view&ID_FLAG(VIEWMOD_INTERNET)){   ee[2]=DIRNAME_INTERNET_UPDATE;   N(flags_view|(ID_FLAG(INTERNET_UPDATE)));}
+    if (flags_view&ID_FLAG(VIEWMOD_DECOMPRESS)){ ee[2]=DIRNAME_PRELOADDISK_UPDATE;N(flags_view|(ID_FLAG(PRELOAD_UPDATE)));}
+    if (flags_view&(ID_FLAG(VIEWMOD_NIL)|ID_FLAG(VIEWMOD_KEEP_ZIP)|ID_FLAG(VIEWMOD_DECOMPRESS)|ID_FLAG(VIEWMOD_1)|ID_FLAG(VIEWMOD_1_NOT)|ID_FLAG(VIEWMOD_FILECONVERSION))){
+      static const char *preloads[]={"-","m","l","-m","-l", "l-m","-lm","-l-m","lz","l-z",NULL};
+      FOREACH_CSTRING(pl,preloads){
+        ee[2]=*pl;ee[3]=ee[4]=0;
+        const vfolder_flags_t flags=flags_view|flags_from_dirflags(*pl,ID_RANGE_PRELOAD);
+        N(flags);
+        if (flags&ID_FLAG(PRELOADDISK)){ ee[3]=DIRNAME_PRELOADDISK_UPDATE;N(flags|(ID_FLAG(PRELOAD_UPDATE)));}
+        if (flags&(ID_FLAG(PRELOADDISK)|ID_FLAG(PRELOADDISK_ENTIRE_ZIP)|ID_FLAG(PRELOADDISK_ENTIRE_ZIP_NOT)|(ID_FLAG(PRELOADRAM)))){
+          static const char *selectors[]={"a","r","z","rz",NULL};
+          FOREACH_CSTRING(selector,selectors){
+            ee[3]=*selector;
+            N(flags|flags_from_dirflags(*selector,ID_RANGE_PRELOAD_SELECT));
+          }
+        }
+      }
+    }
+  }
+#undef N
+  FOREACH_VIRTUALFOLDER(,f){
+    int childs_n=cg_idx_of_NULL((void*)f->childs,VIRTUALFOLDER_CHILDS_MAX);
+    assert(childs_n>=0);
+    FOREACH_VIRTUALFOLDER(const,g){
+      if (f->path_l<g->path_l && cg_path_equals_or_is_parent(f->path,f->path_l,g->path,g->path_l) && !strchr(g->path+f->path_l+1,'/')){
+        assert(childs_n<VIRTUALFOLDER_CHILDS_MAX);
+        f->childs[childs_n++]=g->path+f->path_l+1;
+      }
+    }
+  }
+}
+
+static int virtualfolders_print_dirflags(char *buf,const int buf_max, const vfolder_flags_t flags){
+  int l=0;
+#define X(id,...)  if (flags&ID_FLAG(id)){ if (l<buf_max) l+=snprintf(buf+l,buf_max-l,"%s  ",#id);}
+  XMACRO_DIRFLAGS();
+#undef X
+  return l;
+}
 
 
-static bool special_file_set_stat(struct stat *st, const virtualpath_t *vipa){
-  const int id=vipa->special_file_id;
+static void debug_print_virtual_folders(){
+  assert(PATH_STARTS_WITH_DIR_ZIPsFS(DIR_ZIPsFS));
+  fprintf(stderr,"SFILE_NUM=%d\n",SFILE_NUM);
+  fprintf(stderr,ANSI_INVERSE"Checking virtual folders and their subfolders ..."ANSI_RESET"\n");
+  FOREACH_VIRTUALFOLDER(const,f){
+    fprintf(stderr,"%20s\t"ANSI_FG_MAGENTA,f->path);
+    char buf[4096];
+    virtualfolders_print_dirflags(buf,4096,f->flags);
+    fputs(buf,stderr);
+    fputs(ANSI_FG_BLUE,stderr);FOREACH_CSTRING(subdir,f->childs) fprintf(stderr," %s",*subdir);
+    fprintf(stderr,ANSI_FG_GREEN"%s"ANSI_RESET"\n",IS_VFOLDER_ROOT(f)?"ROOT": "");
+  }
+  if (cg_file_exists(__FILE__)){
+    fprintf(stderr,ANSI_INVERSE"Checking names of configuration files ..."ANSI_RESET"\n");
+    char tmp[PATH_MAX];
+    cg_stpncpy0(tmp,__FILE__,cg_last_slash(__FILE__));
+    chdir(tmp);
+    FOREACH_CSTRING(s, enum_sourcefiles_S) if (!cg_file_exists(*s)) DIE(RED_ERROR"Not found '%s'",*s);
+  }
+  fprintf(stderr,"Done %s\n",__func__);exit(0);
+}
+// _specialfiles
+static bool specialfile_set_stat(struct stat *st, const virtualpath_t *vipa){
+  const int id=vipa->specialfile_id;
   bool ok=false;
-  if ((vipa->flags&(ZP_IS_PATHINFO|ZP_IS_ARCHIVECRC32))){
-    bool found;FIND_REALPATH(vipa);
-    const int l=special_file_print_pathinfo(zpath,NULL);
-    if (l>=0) stat_init(st,l,NULL);
-    ok=l>=0;
-  }else if (SFILE_IS_IN_RAM(id)){
-    stat_init(st,IF01(WITH_PRELOADRAM,0,special_file_size(id)),NULL);
+  const specialfile_t *sf=_specialfiles+id;
+  //log_entered_function("%s id:%d  SFILE_IS_IMMUTABLE:%d IS_UPDATE_GO:%d",vipa->vp,id,SFILE_IS_IMMUTABLE(id),IS_UPDATE_GO(vipa));
+  if (vipa->vfile_sfx){ /* e.g. @SOURCE or @PROPERTIES */
+    bool found; FIND_REALPATH(vipa);
+    if (found){
+      stat_init(st,specialfile_print_pathinfo(zpath,NULL),NULL);
+      ok=true;
+    }
+  }else if (SFILE_IS_IMMUTABLE(id) || IS_UPDATE_GO(vipa)){
+    stat_init(st,IF01(WITH_PRELOADRAM,0,SFILE_IS_IMMUTABLE(id)?specialfile_size(id):4096),NULL);
     time(&st->st_mtime);
     st->st_mode&=~(S_IWOTH|S_IWUSR|S_IWGRP);
     st->st_ino=inode_from_virtualpath(vipa->vp,vipa->vp_l);
     ok=true;
-  }else if (SFILE_REAL_PATHS[id]){
-    ok=!lstat(SFILE_REAL_PATHS[id],st);
+  }else if (sf->rp){
+    ok=!lstat(sf->rp,st);
     if (id==SFILE_INFO){
       if (!ok) stat_init(st,1E6,NULL); else st->st_size+=1E5;
       ok=true;
     }
+  }else{
+    IF1(WITH_PRELOADRAM, if (trigger_files(vipa->vp,vipa->vp_l)){ stat_init(st,0,NULL);return true;});
   }
-  IF1(WITH_PRELOADRAM,  else if (trigger_files(vipa->vp,vipa->vp_l)){ stat_init(st,0,NULL);return true;});
   if (ok && ENDSWITH(vipa->vp,vipa->vp_l,".command")) st->st_mode|=(S_IXOTH|S_IXUSR|S_IXGRP);
-  //log_exited_function("%s   %s",vipa->vp,success_or_fail(ok));
+  //log_exited_function("%s   %s  S_ISDIR:%d",vipa->vp,success_or_fail(ok),  S_ISDIR(st->st_mode));
   return ok;
 }
 
 static void vipa_setSpecialFile(virtualpath_t *vipa){
-  const char *found_p=NULL;
-  int found_p_l=0, found_id=0;
-  RLOOP(id,SFILE_NUM){
-    const int p_l=SFILE_PARENTS_L[id];
-    const char *p=SFILE_PARENTS[id];
-    if (!p_l || !cg_path_equals_or_is_parent(p,p_l,vipa->vp,vipa->vp_l)) continue;
-    if (found_p_l<=p_l){  /* If previously found p==DIR_ZIPsFS then p==DIR_INTERNET is stronger. */
-      found_p_l=p_l;
-      found_p=p;
-      if (SFILE_NAMES_L[id] && p_l+1+SFILE_NAMES_L[id]==vipa->vp_l  && !strcmp(SFILE_NAMES[id],vipa->vp+p_l+1)) found_id=id;
-    }
+  FOREACH_VIRTUALFOLDER(const,f){
+    if (VFOLDER_PATH_L(vipa)>f->path_l&&cg_path_equals_or_is_parent(f->path,f->path_l,VFOLDER_PATH(vipa),VFOLDER_PATH_L(vipa))) continue; /* Take longest */
+    if (!cg_path_equals_or_is_parent(f->path,f->path_l,vipa->vp,vipa->vp_l)) continue;
+    vipa->vfolder=f;
   }
-  if (found_p_l){
-    vipa->special_file_id=found_id;
-    vipa->dir=found_p;
-    vipa->dir_l=found_p_l;
-    if (found_p==DIR_PRELOADDISK_R||found_p==DIR_PRELOADDISK_RC||found_p==DIR_PRELOADDISK_RZ){
-      vipa->preloadpfx_l=found_p_l;
-      vipa->preloadpfx=found_p;
+  const int vdir_l=VFOLDER_PATH_L(vipa);
+  if (vdir_l){
+    FOREACH_SPECIAL_FILE(sf){
+      if (sf->parent && sf->parent!=VFOLDER_PATH(vipa)) continue;
+      if (vdir_l+1+sf->name_l==vipa->vp_l && !strcmp(sf->name,vipa->vp+vdir_l+1)) vipa->specialfile_id=sf->id;
     }
-    if (SPECIAL_DIR_STRIP(found_p)){vipa->vp+=found_p_l;vipa->vp_l-=found_p_l;}
+    if (VFOLDER_HAS_FLAG(vipa,PRELOAD_UPDATE)  && ENDSWITH(vipa->vp,vipa->vp_l,SFX_UPDATE)) vipa->specialfile_id=SFILE_PRELOAD_UPDATE_GO;
+    if (VFOLDER_HAS_FLAG(vipa,INTERNET_UPDATE) && ENDSWITH(vipa->vp,vipa->vp_l,SFX_UPDATE)) vipa->specialfile_id=SFILE_INTERNET_UPDATE_GO;
   }
 }
-
+/****************************************************************************************************************************/
+/* Is the virtualpath a zip entry?                                                                                          */
+/* Normally, append will be ".Content" and cutr will be 0.                                                                   */
+/* Bruker MS files. The ZIP file name without the zip-suffix is the  folder name: append will be empty and cutr will be -4; */
+/****************************************************************************************************************************/
+static void virtual_dirpath_to_zipfile(virtualpath_t *vipa){
+  ASSERT(vipa->vp_l>=0);
+  ASSERT(cg_strlen(vipa->vp)>=vipa->vp_l);
+  const char *b=vipa->vp;
+  for(int i=4;i<=vipa->vp_l;i++){
+    if (i==vipa->vp_l || vipa->vp[i]=='/'){
+      const int ret=config_virtual_dirpath_to_zipfile(b,vipa->vp+i,&vipa->zipfile_append);
+      if (ret!=INT_MAX){
+        vipa->zipfile_cutr=-ret;
+        vipa->flags|=VP_IS_ZIP_AS_DIR;
+        vipa->zipfile_l=ret+i;
+        return;
+      }
+      if (vipa->vp[i]=='/') b=vipa->vp+i+1;
+    }
+  }
+}
 static int virtualpath_init(virtualpath_t *vipa, const char *vpath, char *buf){
   *buf=0;
-  ASSERT(vpath!=NULL);
+  ASSERT(vpath);
   *vipa=empty_virtualpath;
+  vipa->vfolder=_virtualfolders;
   vipa->vp_l=strlen((vipa->vp=vpath+(*vpath=='/'&&!vpath[1])));
   if (PATH_STARTS_WITH_DIR_ZIPsFS(vipa->vp)) vipa_setSpecialFile(vipa);
   if (64+vipa->vp_l+_rootdata_path_max>MAX_PATHLEN) return ENAMETOOLONG;
-  int cut=0;
-#define S() cut=ENDSWITH(vipa->vp,vipa->vp_l,SFX_UPDATE)?sizeof(SFX_UPDATE)-1: ENDSWITH(vipa->vp,vipa->vp_l,NET_SFX_UPDATE)?sizeof(NET_SFX_UPDATE)-1:0
+
 #define B(l) if (!*buf) strncpy(buf,vipa->vp,l); buf[l]=0
-  if (vipa->dir!=DIR_PLAIN) vipa->zipfile_l=virtual_dirpath_to_zipfile(vipa->vp, vipa->vp_l, &vipa->zipfile_cutr, &vipa->zipfile_append);
-  if (vipa->dir==DIR_INTERNET_UPDATE){
-    S();
-    stpcpy(stpcpy(buf,DIR_INTERNET),vipa->vp+DIR_INTERNET_UPDATE_L);
-  }else if (vipa->dir==DIR_PRELOADED_UPDATE){
-    S();
-  }
-  if (ENDSWITH(vipa->vp,vipa->vp_l,VFILE_SFX_INFO))    {  B(vipa->vp_l-(sizeof(VFILE_SFX_INFO)-1));        vipa->flags|=ZP_IS_PATHINFO;  }
-  if (ENDSWITH(vipa->vp,vipa->vp_l,VFILE_SFX_ZIPCRC32)){  B(vipa->vp_l-(sizeof(VFILE_SFX_ZIPCRC32)-1));    vipa->flags|=ZP_IS_ARCHIVECRC32;  }
+#define E(s) if (ENDSWITH(vipa->vp,vipa->vp_l,s)){ vipa->vfile_sfx=s; B(vipa->vp_l-(sizeof(s)-1));}
+  E(VFILE_SFX_ZIPCRC32);E(VFILE_SFX_SOURCE);E(VFILE_SFX_PROPERTIES);
+#undef E
   if (cg_strcasestr(vpath,"$NOCSC$")){ /* Windows no-client-side-cache */
     B(vipa->vp_l);
     cg_str_replace(0,buf,0, "$NOCSC$",7,"",0);
   }
-  if (cut) B(vipa->vp_l);
-  if (cut) ASSERT(*buf);
   if (*buf){
-    vipa->vp_l=strlen(buf)-cut;
-    if (cut) buf[vipa->vp_l]=0;
+    vipa->vp_l=strlen(buf);
     vipa->vp=buf;
   }
 #undef S
 #undef B
+  if (!(VFOLDER_HAS_FLAG(vipa,VIEWMOD_KEEP_ZIP))) virtual_dirpath_to_zipfile(vipa);
   return 0;
 }
 static int virtualpath_error(const virtualpath_t *vipa,const int create_or_del){
-  IF0(WITH_PRELOADRAM, if (vipa->dir==DIR_INTERNET_UPDATE || vipa->dir==DIR_PRELOADED_UPDATE) return EACCES);
-  if (!_writable_path_l &&  (create_or_del==1 || DIR_REQUIRES_WRITABLE_ROOT(vipa->dir))) return EACCES;
-  if (vipa->vp_l==0 && vipa->preloadpfx_l) return create_or_del==1?EEXIST:EPERM;
-  if (vipa->dir && create_or_del){
-    if (vipa->dir==DIR_INTERNET && create_or_del==1) return EEXIST;
-    if (create_or_del==1 && SFILE_IS_IN_RAM(vipa->special_file_id)) return EACCES;
+  IF0(WITH_PRELOADRAM, if (VFOLDER_HAS_FLAG2(vipa,INTERNET_UPDATE,PRELOAD_UPDATE)) return EACCES);
+  if (!_writable_path_l &&  (create_or_del==1 || IS_VFOLDER_SKIP_READONLY_ROOT(vipa))) return EACCES;
+  if (vipa->vp_l==0 && VFOLDER_HAS_FLAG(vipa,PRELOADDISK)) return create_or_del==1?EEXIST:EPERM;
+  if (VFOLDER_PATH(vipa) && create_or_del){
+    if (VFOLDER_PATH(vipa)==DIR_INTERNET && create_or_del==1) return EEXIST;
+    if (create_or_del==1 && SFILE_IS_IMMUTABLE(vipa->specialfile_id)) return EACCES;
   }
   return 0;
 }
-
-
-
-
 /*  Release FUSE 2.9 The chmod, chown, truncate, utimens and getattr handlers of the high-level API now  additional struct fuse_file_info pointer (which, may be NULL even if the file is currently open) */
 #if VERSION_AT_LEAST(FUSE_MAJOR_VERSION,FUSE_MINOR_VERSION, 2,10)
 #define WITH_XMP_GETATTR_FUSE_FILE_INFO 1
@@ -1636,42 +1848,78 @@ static int virtualpath_error(const virtualpath_t *vipa,const int create_or_del){
 #endif
 
 
+/********************************************************************************/
+/* Consider a root tree with r->path_prefix "/db/pride"                         */
+/* The parrents like "/db/" need to be captured and accepted as a valid folder. */
+/********************************************************************************/
+static bool vp_is_part_of_path_prefix(const zpath_t *zpath){
+  static const char *dd[ROOTS+1];
+  static int dd_l[ROOTS+1];
+  static bool initialized;
+  if (!zpath){
+    assert(!initialized);
+    initialized=true;
+    foreach_root(r){
+      if (!r->path_prefix_l) continue;
+      char d[r->path_prefix_l+1]; strcpy(d,r->path_prefix);
+      RLOOP(i,r->path_prefix_l){
+        if (i && d[i]=='/'){
+          d[i]=0;
+          const int j=cg_add_to_strg_array(ADD_TO_STRG_UNIQUE|ADD_TO_STRG_STRDUP,dd,ROOTS,d);
+          if (j>=0) dd_l[j]=strlen(d);
+        }
+      }
+    }
+  }else{
+    assert(initialized);
+    const int vfolder_l=IS_VFOLDER_ROOT(zpath->vfolder)?VFOLDER_PATH_L(zpath):0;
+    static int ll[ROOTS];
+    for(int i=0;dd[i];i++){
+      if (cg_path_equals_or_is_parent(dd[i], dd_l[i], VP()+vfolder_l,VP_L()-vfolder_l)) return true;
+    }
+  }
+  return false;
+}
+// WITH_PRELOADDISK
 
+// specialfile_set_stat specialfile_id
 static int _xmp_getattr(const virtualpath_t *vipa, struct stat *st){ /* NOT_TO_HEADER */
-  if (special_file_set_stat(st,vipa)) return 0;
-  bool vp_is_root_pfx=false;
-  foreach_root(r) if (IS_VP_IN_ROOT_PFX(r,vipa)){vp_is_root_pfx=true;break;}
-  if (vp_is_root_pfx || vipa->dir && vipa->vp_l==vipa->dir_l && !strcmp(vipa->vp,vipa->dir)){
-    stat_init(st,-1,NULL);
+  //if (ENDSWITH(vipa->vp,vipa->vp_l,"htmL"))
+  //log_entered_function("vipa->vp: %s   vdir=%s       specialfile=%d",vipa->vp, VFOLDER_PATH(vipa),  vipa->specialfile_id);
+#define D() {stat_init(st,-1,NULL);    st->st_ino=inode_from_virtualpath(vipa->vp,vipa->vp_l); return 0;}
+  if (vipa->vp_l==VFOLDER_PATH_L(vipa)) D();
+  if (specialfile_set_stat(st,vipa)) return 0;
+  IF1(WITH_CCODE, if (c_getattr(st,vipa)) return 0);
+  if (VFOLDER_HAS_FLAG2(vipa,PRELOAD_UPDATE,INTERNET_UPDATE) && !IS_UPDATE_GO(vipa)){
+    stat_init(st,vipa->specialfile_id?4096:-1,NULL);
     st->st_ino=inode_from_virtualpath(vipa->vp,vipa->vp_l);
     time(&st->st_mtime);
     return 0;
   }
-  IF1(WITH_CCODE, if (c_getattr(st,vipa)) return 0);
   bool found;FIND_REALPATH(vipa);
+  //log_debug_now("%s found:%s",vipa->vp, success_or_fail(found));
   int er=0;
   if (found){
     *st=zpath->stat_vp;
+    return 0;
   }else{
-    if (vipa->dir!=DIR_PRELOADED_UPDATE){
-      IF1(WITH_INTERNET_DOWNLOAD, if (net_getattr(st,vipa)) return 0);
-      IF1(WITH_FILECONVERSION,    if (fileconversion_getattr(st,zpath,vipa)) return 0);
-    }
-    er=ENOENT;
+    if (vp_is_part_of_path_prefix(zpath)) D();
+    IF1(WITH_INTERNET_DOWNLOAD, char buf[vipa->vp_l+1]; if (net_getattr(st,buf,vipa->vp, vipa->vp_l)) return 0);
+    IF1(WITH_FILECONVERSION,    if (fileconversion_getattr(st,zpath,vipa)) return 0);
   }
+  er=ENOENT;
   inc_count_by_ext(vipa->vp,er?COUNTER_GETATTR_FAIL:COUNTER_GETATTR_SUCCESS);
   IF1(WITH_DEBUG_TRACK_FALSE_GETATTR_ERRORS, if (er) debug_track_false_getattr_errors(vipa->vp,vipa->vp_l));
   if (config_file_is_readonly(vipa->vp,vipa->vp_l)) st->st_mode&=~(S_IWOTH|S_IWUSR|S_IWGRP); /* Does not improve performance */
   return -er;
+#undef D
 }/*xmp_getattr*/
 static int xmp_getattr(const char *vpath, struct stat *st IF1(WITH_XMP_GETATTR_FUSE_FILE_INFO,,struct fuse_file_info *fi_or_null)){
   FUSE_PREAMBLE(vpath);
   if (!er) er=_xmp_getattr(&vipa ,st);
-  if (!er){
-    st->st_mode|=((st->st_mode&S_IFDIR)?0777:(st->st_mode&S_IFREG)?0666:0);
-  }
+  if (!er) st->st_mode|=((st->st_mode&S_IFDIR)?0777:(st->st_mode&S_IFREG)?0666:0);
   log_fuse_function(__func__,&vipa,er);
-  //log_exited_function("vpath: %s %s",vpath, success_or_fail(er==0));
+  //log_exited_function("vpath: %s %s ino: %lu  ",vpath, success_or_fail(er==0),st->st_ino);
   return er;
 }
 
@@ -1684,7 +1932,7 @@ static int xmp_getattr(const char *vpath, struct stat *st IF1(WITH_XMP_GETATTR_F
 static int xmp_utimens(const char *vpath, const struct timespec ts[2]  IF1(WITH_UTIMENS_FUSE_FILE_INFO,,struct fuse_file_info *fi_not_used)){
   FUSE_PREAMBLE_W(1,vpath);
   bool found; FIND_REALPATH(&vipa);
-  er=!found?ENOENT:   zpath->root!=_root_writable?EPERM: utimensat(0,RP(),ts,AT_SYMLINK_NOFOLLOW);
+  er=!found?ENOENT:   ZPR()!=_root_writable?EPERM: utimensat(0,RP(),ts,AT_SYMLINK_NOFOLLOW);
   return minus_val_or_errno(er);   /* don't use utime/utimes since they follow symlinks */
 }
 static int xmp_readlink(const char *vpath, char *buf, size_t size){
@@ -1699,14 +1947,11 @@ static int xmp_unlink(const char *vpath){
   FUSE_PREAMBLE_W(-1,vpath);
   bool found;FIND_REALPATH_NOT_EXPAND_SYMLINK(&vipa);
   int res=found?0:-ENOENT;
-  IF1(WITH_INTERNET_DOWNLOAD,if (!res && zpath->dir==DIR_INTERNET && VP_L()>DIR_INTERNET_L+6 && config_internet_must_not_delete(VP()+(DIR_INTERNET_L+1),VP_L()-(DIR_INTERNET_L+1))) res=-EPERM);
+  IF1(WITH_INTERNET_DOWNLOAD,if (!res && VFOLDER_PATH(zpath)==DIR_INTERNET && VP_L()>DIR_INTERNET_L+6 && config_internet_must_not_delete(VP()+(DIR_INTERNET_L+1),VP_L()-(DIR_INTERNET_L+1))) res=-EPERM);
   if (!res) res=!ZPATH_ROOT_WRITABLE()?-EPERM:  minus_val_or_errno(unlink(RP()));
   log_fuse_function(__func__,&vipa,res);
   return res;
 }
-
-
-
 static int xmp_rmdir(const char *vpath){
   FUSE_PREAMBLE_W(-1,vpath);
   bool found;FIND_REALPATH_NOT_EXPAND_SYMLINK(&vipa);
@@ -1714,8 +1959,6 @@ static int xmp_rmdir(const char *vpath){
   log_fuse_function(__func__,&vipa,res);
   return res;
 }
-
-
 /***************************************************************************************************************/
 /* Time consuming processes should be performed in xmp_read() and not in xmp_open().                           */
 /* We identify  cases of time consuming file content generation here in xmp_open(). */
@@ -1725,30 +1968,29 @@ static int xmp_rmdir(const char *vpath){
 /***************************************************************************************************************/
 
 static int open_for_reading(const virtualpath_t *vipa, struct fuse_file_info *fi){
-  const int id=vipa->special_file_id;
+  const int id=vipa->specialfile_id;
+  const specialfile_t *sf=_specialfiles+id;
   uint64_t fh=0;
-  if (SFILE_REAL_PATHS[id]){
-    fh=open(SFILE_REAL_PATHS[id],O_RDONLY);
-    if (fh<3){ warning(WARN_OPEN|WARN_FLAG_ERRNO,SFILE_REAL_PATHS[id],"open()");  return -errno;}
+  if (sf->rp){
+    fh=open(sf->rp,O_RDONLY);
+    if (fh<3){ warning(WARN_OPEN|WARN_FLAG_ERRNO,sf->rp,"open()");  return -errno;}
     fi->fh=fh;
     return 0;
   }
   NEW_ZIPPATH(vipa);
-  IF1(WITH_SPECIAL_FILE,fh=special_file_file_content_to_fhandle(zpath,id)); /* Only case where file content is generated in xmp_open() */
+  IF1(WITH_SPECIAL_FILE,fh=specialfile_content_to_fhandle(zpath,id)); /* Only case where file content is generated in xmp_open() */
   if (!fh){ /* ID for fHandle_t  */
     int ff=IF1(WITH_CCODE, config_c_open(C_FLAGS_FROM_ZPATH(zpath),VP(),VP_L())?FHANDLE_PREPARE_ONCE_IN_RW|FHANDLE_IS_CCODE:)0;
-    IF1(WITH_INTERNET_DOWNLOAD,  if (!ff && vipa->dir==DIR_INTERNET_UPDATE) ff=FHANDLE_PREPARE_ONCE_IN_RW);
-    if (!ff && find_realpath(FILLDIR_FROM_OPEN,zpath) IF1(WITH_FILECONVERSION, &&!fileconversion_remove_if_not_uptodate(zpath))){
-      IF1(WITH_PRELOADDISK,      if (!ff && (is_preloaddisk_zpath(zpath) || vipa->dir==DIR_PRELOADED_UPDATE || path_with_compress_sfx_exists(zpath))) ff=FHANDLE_PREPARE_ONCE_IN_RW);
+    //IF1(WITH_INTERNET_DOWNLOAD,  if (!ff && VFOLDER_HAS_FLAG(vipa,INTERNET_UPDATE)) ff=FHANDLE_PREPARE_ONCE_IN_RW);
+    if (!ff && find_realpath(FINDRP_IN_OPEN,zpath) IF1(WITH_FILECONVERSION, &&!fileconversion_remove_if_not_uptodate(zpath))){
+      if (IS_UPDATE_GO(vipa))  ff=FHANDLE_PREPARE_ONCE_IN_RW; /* after find_realpath() */
+      IF1(WITH_PRELOADDISK,      if (!ff && (is_preloaddisk_zpath(zpath) || path_with_compress_sfx_exists(zpath))) ff=FHANDLE_PREPARE_ONCE_IN_RW);
       IF1(WITH_PRELOADRAM,       if (preloadram_advise(zpath,0)) ff=FHANDLE_WITH_PRELOADRAM);
-      if (zpath->flags&ZP_IS_ZIP)  { ff|=FHANDLE_PREPARE_ONCE_IN_RW; IF0(WITH_INEFFICIENT_ZIP_READING,fi->direct_io=1);}  /*Without direct_io,  multithreaded unordered read.*/
-      if (vipa->dir==DIR_SERIALIZED) ff|=FHANDLE_SERIALIZED;
+      if (ZPF(ZP_IS_ZIPENTRY))  { ff|=FHANDLE_PREPARE_ONCE_IN_RW; IF0(WITH_INEFFICIENT_ZIP_READING,fi->direct_io=1);}  /*Without direct_io,  multithreaded unordered read.*/
     }else{
       IF1(WITH_INTERNET_DOWNLOAD,if (!ff && net_is_internetfile(VP(),VP_L())) ff=FHANDLE_PREPARE_ONCE_IN_RW);
-      IF1(WITH_FILECONVERSION,   if (!ff && fileconversion_check_infiles_exist(vipa)){ LOCK(mutex_fhandle, fileconversion_set_rp(zpath,vipa)); ff=FHANDLE_PREPARE_ONCE_IN_RW|FHANDLE_IS_FILECONVERSION;});
+      IF1(WITH_FILECONVERSION,   if (!ff && fileconversion_check_infiles_exist(vipa)){ LOCK(mutex_fhandle,set_realpath_to_writable_folder(zpath,DIR_CONVERTED)); ff=FHANDLE_PREPARE_ONCE_IN_RW|FHANDLE_IS_FILECONVERSION;});
     }
-    //log_debug_now(ANSI_MAGENTA"vipa->vp: %s ff:%d  is_preloaddisk_zpath:%d  zpath->preloadpfx:%s zpath->root:%s  "ANSI_RESET,vipa->vp,ff, is_preloaddisk_zpath(zpath), zpath->preloadpfx, rootpath(zpath->root));
-    //log_debug_now(ANSI_MAGENTA"vipa->vp: %s ff:%d path_with_compress_sfx_exists:%d",VP(),ff,path_with_compress_sfx_exists(zpath));
     if (ff) fhandle_create(ff|FHANDLE_PREPARE_ONCE_IN_RW,&fh,zpath);
   }
   if (fh){ fi->fh=fh; return 0;}
@@ -1761,18 +2003,17 @@ static int open_for_reading(const virtualpath_t *vipa, struct fuse_file_info *fi
 static int xmp_open(const char *vpath, struct fuse_file_info *fi){
   ASSERT(fi!=NULL);
   atomic_fetch_add(&_open_minus_release,1);
-  //struct fuse_context *ctx=fuse_get_context();warning(WARN_OPEN,vpath,"ctx->pid %lld",LLD(ctx->pid));
-  //static atomic_int count;log_entered_function(ANSI_GREEN"vpath:"ANSI_RESET" %s %d ",vpath, atomic_fetch_add(&count,1));
   errno=0;
   FUSE_PREAMBLE_W((fi->flags&(O_WRONLY||O_RDWR|O_APPEND|O_CREAT))?1:0,vpath);
   if (!er)	er=_xmp_open(&vipa,fi);
   if (fi->fh>2 && fi->fh<COUNT_BACKWARD_SEEK) _count_backward_seek[fi->fh]=0;
-  //  IF_LOG_FLAG_OR(LOG_OPEN,er!=0)log_exited_function("%s res: %d  "ANSI_YELLOW"%llu"ANSI_RESET,vpath,er,LLU(fi->fh));
+  //  IF_LOG_FLAG_OR(LOG_OPEN,er!=0)log_exited_function("%s res: %d  "ANSI_YELLOW"%ju"ANSI_RESET,vpath,er,UIM(fi->fh));
   return -er;
 }
+
 static int _xmp_open(const virtualpath_t *vipa, struct fuse_file_info *fi){
   int res=0;
-  if (vipa->special_file_id==SFILE_INFO){
+  if (IS_SPECIALFILE(vipa,SFILE_INFO)){
     if (fi->flags&O_WRONLY) return -EPERM;
     const char *rp=print_info_file();
     if (!rp) return !errno?-1:-errno;
@@ -1782,6 +2023,7 @@ static int _xmp_open(const virtualpath_t *vipa, struct fuse_file_info *fi){
   }else if ((fi->flags&O_WRONLY) || ((fi->flags&(O_RDWR|O_CREAT))==(O_RDWR|O_CREAT))){
     res=-create_or_open(vipa,0775,fi);
     log_fuse_function("open_write",vipa,res);
+    //log_debug_now("open_write vp:%s   res=%d ",vipa->vp,res);
   }else{
     res=open_for_reading(vipa,fi);
     log_fuse_function("open_read",vipa,res);
@@ -1808,6 +2050,7 @@ static int xmp_truncate(const char *vpath, off_t size IF1(WITH_FUSE_3,,struct fu
 #define WITH_XMP_READDIR_FLAGS 0
 #endif
 static int xmp_readdir(const char *vpath, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi IF1(WITH_XMP_READDIR_FLAGS,,enum fuse_readdir_flags flags)){
+  //log_entered_function("%s",vipa->vp);
   FUSE_PREAMBLE(vpath);
   // static int count=0;log_entered_function("# %d %s",count++,vpath);
   const int res=_xmp_readdir(&vipa,buf,filler,offset,fi);
@@ -1815,47 +2058,48 @@ static int xmp_readdir(const char *vpath, void *buf, fuse_fill_dir_t filler,off_
   inc_count_by_ext(vpath,res?COUNTER_READDIR_FAIL:COUNTER_READDIR_SUCCESS);
   return res;
 }
+
 static int _xmp_readdir(const virtualpath_t *vipa, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi){
+  //log_entered_function("%s",vipa->vp);
   (void)offset;(void)fi;
   ht_t no_dups={0}; HT_INIT_WITH_KEYSTORE_DIM(&no_dups,8,4096); ht_set_id(HT_MALLOC_without_dups,&no_dups);
   no_dups.keystore->mstore_counter_mmap=COUNT_MSTORE_MMAP_NODUPS;
   no_dups.ht_counter_malloc=COUNT_HT_MALLOC_NODUPS;
-  int opt=((vipa->dir==DIR_PRELOADED_UPDATE)?FILLDIR_FILES_S_ISVTX:0);
   NEW_ZIPPATH(vipa);
-#define A(n) filler_add(0,filler,buf,n,0,NULL,NULL,&no_dups);
   bool ok=false;
   const int vp_l=VP_L();
   {
+    directory_t dir_generated={0};
     int opt_rp=0;
     foreach_root(r){ /* FINDRP_FILECONVERSION_CUT_NOT means only without cut.  Giving 0 means cut and not cut. */
-      if (r!=_root_writable && DIR_REQUIRES_WRITABLE_ROOT(vipa->dir)) continue;
-      if (vp_l<r->pathpfx_l && IS_VP_IN_ROOT_PFX(r,vipa)){
+      if (r!=_root_writable && IS_VFOLDER_SKIP_READONLY_ROOT(vipa)) continue;
+      if (vp_l<r->path_prefix_l && IS_VP_IN_ROOT_PFX(r,vipa)){
         ok=true;
-        filler_add(0,filler,buf,r->pathpfx_slash_to_null+vp_l+1,0,NULL,NULL,&no_dups);
+        filler_add(filler,buf,r->pathpfx_slash_to_null+vp_l+1,0,NULL,&no_dups);
       }else if (find_realpath_in_roots(opt_rp,zpath,1<<rootindex(r))){
-        filler_readdir(opt,zpath,buf,filler,&no_dups);
-        IF1(WITH_FILECONVERSION, if (ZPATH_IS_FILECONVERSION(zpath)) filler_readdir(FILLDIR_FILECONVERSION,zpath,buf,filler,&no_dups));
+        directory_init_zpath(&dir_generated,zpath);
+        filler_readdir(zpath,buf,filler,&no_dups,&dir_generated);
         ok=true;
-        IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,if (ZPF(ZP_FROM_TRANSIENT_CACHE))break); /*Performance*/
+        IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,if (!VFOLDER_HAS_FLAG(zpath,VIEWMOD_KEEP_ZIP) && ZPF(ZP_IS_FROM_TRANSIENT_CACHE))break); /*Performance*/
         if (config_readir_no_other_roots(RP(),RP_L())) break; /*Performance*/
       }
     }
+    filler_from_dir_generated(filler,&dir_generated,buf,&no_dups);
+    directory_destroy(&dir_generated);
   }
-  const bool is_dir_zipsfs=(vipa->vp_l==DIR_ZIPsFS_L && vipa->dir==DIR_ZIPsFS);
-  if (is_dir_zipsfs) ok=true;
-  FOR(i,0,SFILE_NUM){
-    const char *d=SFILE_PARENTS[i], *n=SFILE_NAMES[i];
-    if (!d) continue;
-    if (n && vipa->dir==d && (vp_l==vipa->dir_l||!vp_l)) A(n);
-    if (is_dir_zipsfs && d!=DIR_ZIPsFS) A(d+(DIR_ZIPsFS_L+1));
-  }
+#define A(n) filler_add(filler,buf,n,0,NULL,&no_dups)
   IF1(WITH_CCODE, if (c_readdir(zpath,buf,filler,NULL)) ok=true);
-  IF1(WITH_PRELOADRAM,if (vipa->dir==DIR_INTERNET  && vipa->vp_l==DIR_INTERNET_L)  A((DIR_INTERNET_UPDATE)+(DIR_INTERNET_L+1)));
-  if (!vipa->vp_l && !vipa->dir) A((DIR_ZIPsFS)+1);
+  if (!vipa->vp_l){
+    ok=true;
+    A((DIR_ZIPsFS)+1);
+  }else if (vp_l==VFOLDER_PATH_L(vipa)){
+    FOREACH_CSTRING(subdir, vipa->vfolder->childs) A(*subdir);
+    FOREACH_SPECIAL_FILE(sf) if (VFOLDER_PATH(vipa)==sf->parent || (sf->id<VFOLDER_FLAG_NUM && (VFOLDER_FLAGS(vipa)&(1LLU<<sf->id)))) A(sf->name);
+    ok=true;
+  }
 #undef A
   ht_destroy(&no_dups);
-  //log_exited_function("ok: %d",ok);
-  return ok?0:-1;
+  return VFOLDER_HAS_FLAG2(vipa,PRELOAD_UPDATE,INTERNET_UPDATE) || ok?0:-1;
 }
 //#define ERRNO_FOR_MINUS1(x) (x==-1?errno:0)
 /////////////////////////////////////////////////////////////////////////////////
@@ -1970,7 +2214,6 @@ static int my_zip_close(zip_t *za,const char *path){
   }
   return ret;
 }
-
 static zip_t *my_zip_open(const char *rp){
   zip_t *za=NULL;
   if (rp){
@@ -2017,7 +2260,7 @@ static off_t _viamacro_my_zip_fread(zip_file_t *zf, void *buf, zip_uint64_t nbyt
   if (nbytes<=0 || !zf) return 0;
   ASSERT(buf);
   const off_t n=zip_fread(zf,buf,nbytes);
-  if (n<0) warning_zip_f(rp,zf," %s:%d rrrrrrrrrrrrrrrrrrrrrrrrrrr  zip_fread()");
+  if (n<0) warning_zip_f(rp,zf," %s:%d  zip_fread()");
   return n;
 }
 /* If successful, the number of bytes actually read is returned. When zip_fread() is called after reaching the end of the file, 0 is returned. In case of error, -1 is returned. */
@@ -2074,7 +2317,7 @@ static bool fhandle_zip_fseek(fHandle_t *d, const off_t offset, const char *errm
   if (offset==P) return true;
   const bool backward=offset<P;
   //IF_LOG_FLAG(LOG_ZIP);
-  //log_entered_function("%p %s offset: %'lld  ftell: %'lld   backward: %s  thread: %lu"ANSI_RESET,d, D_VP(d),LLD(offset),LLD(P), backward?ANSI_FG_RED"Yes":ANSI_FG_GREEN"No",pthread_self());
+  //log_entered_function("%p %s offset: %'jd  ftell: %'jd   backward: %s  thread: %lu"ANSI_RESET,d, D_VP(d),IM(offset),IM(P), backward?ANSI_FG_RED"Yes":ANSI_FG_GREEN"No",pthread_self());
 
   const int fwbw=backward?FHANDLE_SEEK_BW_FAIL:FHANDLE_SEEK_FW_FAIL;
 #if VERSION_AT_LEAST(LIBZIP_VERSION_MAJOR,LIBZIP_VERSION_MINOR,1,9)
@@ -2094,15 +2337,14 @@ static bool fhandle_zip_fseek(fHandle_t *d, const off_t offset, const char *errm
     if (read<0){ warning(WARN_SEEK,D_VP(d),"fhandle_zip_fread returns <0   offset-P=%ld ",offset-P);return false;}
     if (!read){warning(WARN_SEEK,D_VP(d),"fhandle_zip_fread returns  0    offset-P=%ld ",offset-P);break;}
   }
-  //log_exited_function("%p %s offset: %'lld  ftell: %'lld   backward: %s"ANSI_RESET,d, D_VP(d),LLD(offset),LLD(P), backward?ANSI_FG_RED"Yes":ANSI_FG_GREEN"No");
+  //log_exited_function("%p %s offset: %'jd  ftell: %'jd   backward: %s"ANSI_RESET,d, D_VP(d),IM(offset),IM(P), backward?ANSI_FG_RED"Yes":ANSI_FG_GREEN"No");
   return offset==P;
 }
 static off_t fhandle_read_zip(char *buf, const off_t size, const off_t offset,fHandle_t *d,bool *again){
   cg_thread_assert_not_locked(mutex_fhandle);
   if (!fhandle_zip_fopen(d,__func__)){  warning(WARN_READ|WARN_FLAG_ONCE_PER_PATH,D_VP(d),"xmp_read_fhandle_zip fhandle_zip_open returned -1"); return -1;}
   if (!fhandle_zip_fseek(d,offset,"")){ /* Worst case=seek backward - need reopen zip file. Happens often without fi->direct_io */
-    //log_debug_now("Failed seek");
-    IF1(WITH_PRELOADRAM,if ((*again=_preloadram_policy!=PRELOADRAM_NEVER && preloadram_is_free_ram(__func__,d,1+d->how_often_bwdseek++/9.9999f) && d->zpath.dir!=DIR_NEVER_PREFETCH_RAM)) return -1);
+    IF1(WITH_PRELOADRAM,if ((*again=_preloadram_policy!=PRELOADRAM_NEVER && preloadram_is_free_ram(__func__,d,1+d->how_often_bwdseek++/9.9999f) && !VFOLDER_HAS_FLAG_d(PRELOADRAM_NOT))) return -1);
     //log_debug_now("%d %d %d %d",_preloadram_policy!=PRELOADRAM_NEVER, ramUsageForFilecontent()+D_ST_SIZE(d)<_preloadram_bytes_limit, d->how_often_bwdseek , d->zpath.dir!=DIR_NEVER_PREFETCH_RAM);;
     warning(WARN_SEEK,D_VP(d),ANSI_MAGENTA"Going to reopen zip offest=%'ld"ANSI_RESET,offset);
     fhandle_zip_fclose(false,d);    if (!fhandle_zip_fopen(d,"REWIND")) return -1;
@@ -2125,32 +2367,59 @@ static off_t fhandle_read_zip(char *buf, const off_t size, const off_t offset,fH
 #define DEBUG_D_WRITE_TEXTBUF(d)  {log_debug_now("%s   textbuf-len:%ld  complete:%d root:%s\nTEXT: ",D_VP(d),!d->preloadram?-1:textbuffer_length(d->preloadram->txtbuf),0!=(d->flags&FHANDLE_PRELOADRAM_COMPLETE),rootpath(D_ROOT(d)));\
     if (d->preloadram) textbuffer_write_fd(d->preloadram->txtbuf,STDERR_FILENO);}
 #define D_HAS_TB() (IF01(WITH_PRELOADRAM,false,d->preloadram && d->preloadram->txtbuf))
+#if WITH_FUSE_INVALIDATE_PATH
+static void fHandle_wait_little_while_need_invalidate_path(const fHandle_t *d, const int us){
+  if (!(d->flags&FHANDLE_NEED_INVALIDATE_PATH)) return;
+  const int wait=1e5;
+  for(int i=us/wait; --i>=0  &&  (d->flags&FHANDLE_NEED_INVALIDATE_PATH); i++){ if (!(i%20)) fputs(" Still  FHANDLE_NEED_INVALIDATE_PATH ",stderr); usleep(wait);}
+  log_verbose("Waiting while FHANDLE_NEED_INVALIDATE_PATH released %s ",success_or_fail(!(d->flags&FHANDLE_NEED_INVALIDATE_PATH)));
+}
+#endif //WITH_FUSE_INVALIDATE_PATH
 static void fhandle_prepare_in_fuse_read_or_write(fHandle_t *d,const int open_flags){
   zpath_t *zpath=&d->zpath;
   {
     LOCK_N(mutex_fhandle, const bool go=(d->flags&FHANDLE_PREPARE_ONCE_IN_RW);   d->flags&=~FHANDLE_PREPARE_ONCE_IN_RW);
-    if (!go) return;
+    IF1(WITH_FUSE_INVALIDATE_PATH,if (!go){ fHandle_wait_little_while_need_invalidate_path(d,1e7);return;});
   }
-  if (DIR_REQUIRES_WRITABLE_ROOT(zpath->dir))    zpath->root=_root_writable;
-  IF1(WITH_PRELOADDISK, if (d->zpath.dir==DIR_PRELOADED_UPDATE) preloaddisk_uptodate_or_update(d));
+  if (IS_VFOLDER_SKIP_READONLY_ROOT(zpath))    ZPR()=_root_writable;
+  const ssize_t size=d->zpath.stat_vp.st_size;
+  IF1(WITH_PRELOADDISK,       if (IS_SPECIALFILE(zpath,SFILE_PRELOAD_UPDATE_GO)) preloaddisk_uptodate_or_update(d));
+  IF1(WITH_INTERNET_DOWNLOAD, if (IS_SPECIALFILE(zpath,SFILE_INTERNET_UPDATE_GO)) net_update(d));
+
   IF1(WITH_CCODE, c_file_content_to_fhandle(d));
   IF1(WITH_FILECONVERSION, if (open_flags==O_RDONLY && (d->flags&FHANDLE_IS_FILECONVERSION)) fileconversion_run(d));
   if (!D_HAS_TB()){
-    bool do_open=!ZPF(ZP_IS_ZIP)  && !(d->flags&FHANDLE_WITH_PRELOADRAM); // USED_TO_BE  && !D_HAS_TB()
+    bool do_open=false;
+    do_open=!ZPF(ZP_IS_ZIPENTRY)  && !(d->flags&FHANDLE_WITH_PRELOADRAM);
     int Done=0;
     //  if (D_HAS_TB() && (d->flags&FHANDLE_PRELOADRAM_COMPLETE)){ do_open=false; Done=1;}
-    IF1(WITH_INTERNET_DOWNLOAD, if (zpath->dir==DIR_INTERNET_UPDATE && !Done++){                         do_open=false;net_update(d);});
-    IF1(WITH_INTERNET_DOWNLOAD, if (zpath->dir==DIR_INTERNET && !Done++){                                do_open=net_maybe_download(0,zpath); });
+
+    IF1(WITH_INTERNET_DOWNLOAD, if (VFOLDER_PATH(zpath)==DIR_INTERNET               && !Done++){   do_open=net_maybe_download_zpath(zpath);});
     if (open_flags==O_RDONLY){
-      IF1(WITH_PRELOADDISK,
-          if (!Done && !zpath->root->remote && zpath->is_decompressed){ Done=1; if (!fHandle_preloadfile_now(d)) d->errorno=EPIPE;}
-          if (!Done && is_preloaddisk_zpath(&d->zpath)){ Done=1;  do_open=false; d->errorno=preloaddisk(d);});
+#if WITH_PRELOADDISK
+      if (!Done && !ZPR()->remote && zpath->is_decompressed){ Done=1; if (!fHandle_preloadfile_now(d)) d->errorno=EPIPE;}
+      if (!Done && is_preloaddisk_zpath(zpath)){
+        Done=1;
+        ASSERT(!d->fd_real);
+        do_open=!(d->errorno=preloaddisk(d)) && !D_ZPF(ZP_IS_PRELOADED_ZIPFILE_BUT_NOT_ZIPENTRY);
+      }
+#endif //WITH_PRELOADDISK
     }
     IF1(IS_CHECKING_CODE,putchar(Done));
+#if WITH_FUSE_INVALIDATE_PATH
+    if (!d->errorno && d->zpath.stat_vp.st_size>size && ((d->flags&FHANDLE_WITH_PRELOADRAM)||do_open)){
+      root_start_thread(D_ROOT(d),PTHREAD_INVALIDATE_PATH,false);
+      log_verbose("Set FHANDLE_NEED_INVALIDATE_PATH to %s",VP());
+      d->flags|=FHANDLE_NEED_INVALIDATE_PATH;
+      // fHandle_wait_little_while_need_invalidate_path(d,1e6);
+      usleep(1e5);
+    }
+#endif //WITH_FUSE_INVALIDATE_PATH
     if (do_open){
+      //log_debug_now("Going open %s",RP());
       if (!RP_L() || !zpath_stat(0,zpath)){
         if (!d->errorno) d->errorno=ENOENT;
-        warning(WARN_READ,VP(),"open root: %s RP:%s  D_HAS_TB:%d",rootpath(zpath->root),RP(),D_HAS_TB());
+        warning(WARN_READ,VP(),"open root: %s RP:%s  D_HAS_TB:%d",ZPRP(),RP(),D_HAS_TB());
       }else if (!(d->fd_real=open(RP(),open_flags))){
         d->errorno=errno;
         log_errno("open RP:%s",RP());
@@ -2158,32 +2427,6 @@ static void fhandle_prepare_in_fuse_read_or_write(fHandle_t *d,const int open_fl
     }
   }
   if (!d->errorno && d->fd_real<0) d->errorno=EIO;
-}
-
-/*************************************************************/
-/* Anti congestion                                           */
-/* Many concurrent file readings from spinning disks are bad */
-/*************************************************************/
-static void serialized_delay_read(fHandle_t *d,root_t *r){
-  const int c=atomic_fetch_add(&d->count_calls_read,1);
-  if (!c){ /* First call to xmp_read() */
-    FOR(wait,2,99){
-      const int a=atomic_load(&r->serialized_fileaccess);
-      if (a<=0) break;
-          lock(mutex_fhandle);
-          bool identical=false;
-          FOREACH_FHANDLE(ie,e) if (fhandle_virtualpath_equals(d,e) && atomic_load(&e->serialized_incremented)){identical=true;break;}
-          if (identical) break;
-          unlock(mutex_fhandle);
-      log_verbose("WAITING %p mutex_serialized_fileaccess:#%d  %s  count-threads-in-read():%d",d,wait, D_VP(d),r->serialized_fileaccess);
-      usleep(1E6*a*a*a);
-    }
-    atomic_fetch_add(&r->serialized_fileaccess,1);
-    atomic_fetch_add(&d->serialized_incremented,1);
-    d->serialized_when_read=time(NULL);
-  }
-  if (!(d->count_calls_read%10))   fputc('|',stderr);
-  if (!(d->count_calls_read%1000)) fputc('\\',stderr); //log_verbose("%s xmp_read() %d",D_VP(d),d->count_calls_read);
 }
 
 #define IF(d) IF0(IS_CHECKING_CODE,if(d))
@@ -2194,28 +2437,21 @@ static void serialized_delay_read(fHandle_t *d,root_t *r){
 /* An exception to this is when the 'direct_io' mount option is specified, in which case the return value of the read system call will reflect the return value of this operation. */
 /***********************************************************************************************************************************************************************************/
 static int xmp_read(const char *vpath, char *buf, const size_t size, const off_t offset,struct fuse_file_info *fi){
-  //log_entered_function(ANSI_FG_GRAY"%s Size:%'lld   Offset: %'lld +%'d buf:%p"ANSI_RESET,vpath,LLD(size),LLD(offset),(int)size,buf);
+  //log_entered_function(ANSI_FG_GRAY"%s Size:%'jd   Offset: %'jd +%'d buf:%p"ANSI_RESET,vpath,IM(size),IM(offset),(int)size,buf);
   ASSERT(fi!=NULL); ASSERT(fi->fh);
   FUSE_PREAMBLE_Q(vpath);
-  root_t *r=NULL;
       lock(mutex_fhandle);
       fHandle_t *d=fhandle_get(vipa.vp,fi->fh);
-      IF(d){
-        r=D_ROOT(d);
-        d->accesstime=time(NULL);
-      }
+      IF(d){d->accesstime=time(NULL);}
       const uint64_t fhandle_fh=!d?0:d->fhandle_fh;
-  fhandle_busy_start(d);
+      fhandle_busy_start(d);
   unlock(mutex_fhandle);
   if (d){
-    if (r && (d->flags&FHANDLE_SERIALIZED)) serialized_delay_read(d,r);
     fhandle_prepare_in_fuse_read_or_write(d,O_RDONLY);
     IF1(WITH_EXTRA_ASSERT, LOCK(mutex_fhandle,  assert(fhandle_active_readers_writers(d))));
   }
   bool again=false;
   int bytes=0;
-
-
   RLOOP(i,2){
     bytes=_xmp_read(&vipa,d,buf,size,offset,fi->fh,&again);
     if (!(bytes<=0 && again)) break;
@@ -2223,9 +2459,7 @@ static int xmp_read(const char *vpath, char *buf, const size_t size, const off_t
     d->flags|=FHANDLE_WITH_PRELOADRAM;
   }
   IF(d) LOCK(mutex_fhandle, assert(fhandle_fh==d->fhandle_fh); fhandle_busy_end(d));
-  //if (bytes<=0 && d) DIE_DEBUG_NOW(RED_FAIL"%s bytes: %d  Size:%'lld   Offset: %'lld +%'d  FHANDLE_WITH_PRELOADRAM:%d",vpath, bytes, LLD(size),LLD(offset),(int)size,   (d->flags&FHANDLE_WITH_PRELOADRAM));
-  //log_exited_function(ANSI_FG_GRAY"%s "ANSI_YELLOW"%llu"ANSI_RESET"  Offset: %'lld  bytes: %'d"ANSI_RESET,vpath,LLU(fi->fh), LLD(offset),(int)bytes);
-
+  //log_exited_function(ANSI_FG_GRAY"%s "ANSI_YELLOW"%ju"ANSI_RESET"  Offset: %'jd  bytes: %'d"ANSI_RESET,vpath,UIM(fi->fh), IM(offset),(int)bytes);
   return bytes; // cppcheck-suppress resourceLeak
 }
 static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const size_t size, const off_t offset, uint64_t fd, bool *again){
@@ -2233,7 +2467,6 @@ static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const s
   if (d){
     ASSERT(d->accesstime);
     IF1(WITH_EXTRA_ASSERT, LOCK(mutex_fhandle,  assert(fhandle_active_readers_writers(d))));
-
     if (d->errorno) return d->errorno;
     if (d->fd_real) goto d_has_fd;
 #if WITH_PRELOADRAM
@@ -2243,12 +2476,12 @@ static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const s
       nread=preloadram_wait_and_read(buf,size,offset,d);
     }
     if (nread<=0 && _is_tdf_or_tdf_bin(vipa->vp)){
-      if (nread<0 || offset<D_ST_SIZE(d)) warning(WARN_READ|WARN_FLAG_ERROR,D_VP(d),"%p  nread:%'lld  %'lld to %'lld   (%'lld)",d,LLD(nread),LLD(offset),LLD(offset+size),LLD(D_ST_SIZE(d)));
+      if (nread<0 || offset<D_ST_SIZE(d)) warning(WARN_READ|WARN_FLAG_ERROR,D_VP(d),"%p  nread:%'jd  %'jd to %'jd   (%'jd)",d,IM(nread),IM(offset),IM(offset+size),IM(D_ST_SIZE(d)));
     }
-    if (d->flags&FHANDLE_DESTROY_LATER)  warning(WARN_READ|WARN_FLAG_ERROR,D_VP(d),"FHANDLE_DESTROY_LATER  %p fi->fh: "ANSI_YELLOW"%llu"ANSI_RESET"  fhandle_fh: %ld",d,fd,LLU(d->fhandle_fh));
+    if (d->flags&FHANDLE_DESTROY_LATER)  warning(WARN_READ|WARN_FLAG_ERROR,D_VP(d),"FHANDLE_DESTROY_LATER  %p fi->fh: "ANSI_YELLOW"%ju"ANSI_RESET"  fhandle_fh: %ld",d,fd,UIM(d->fhandle_fh));
     if (nread>0) return nread;
 #endif //WITH_PRELOADRAM
-    if (nread<0 && (d->zpath.flags&ZP_IS_ZIP)){
+    if (nread<0 && (D_ZPF(ZP_IS_ZIPENTRY))){
       fhandle_lock(d); /* Why lock: Comming here same/different fHandle_t instances and various pthread_self() */
       nread=fhandle_read_zip(buf,size,offset,d,again);
       fhandle_unlock(d);
@@ -2259,13 +2492,13 @@ static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const s
     }
     if (nread<0 && !config_not_report_stat_error(vipa->vp,vipa->vp_l)){
       LOCK_N(mutex_fhandle, const char *status=IF01(WITH_PRELOADRAM,"NA",enum_preloadram_status_S[preloadram_get_status(d)]));
-      warning(WARN_READ|WARN_FLAG_ONCE_PER_PATH,d?D_RP(d):vipa->vp,"nread %lld  offset:%ld  size:%lld    n_read=%llu  status:%s",LLD(nread),offset,LLD(size),d->n_read,status);
+      warning(WARN_READ|WARN_FLAG_ONCE_PER_PATH,d?D_RP(d):vipa->vp,"nread %jd  offset:%ld  size:%jd    n_read=%ju  status:%s",IM(nread),offset,IM(size),d->n_read,status);
     }else if(nread>0){
       LOCK(mutex_fhandle,d->n_read+=nread);
       if (offset<d->offset_expected) d->count_backward_seek++;
       d->offset_expected+=nread;
     }
-    if ((d->zpath.flags&ZP_IS_ZIP)) return nread>=0?nread:errno?-errno:-1;
+    if (D_ZPF(ZP_IS_ZIPENTRY)) return nread>=0?nread:errno?-errno:-1;
   }/* if (d)*/
  d_has_fd: /* Normal reading from file descriptor  d->fd_real or fi->fh */
   if (nread<0){
@@ -2273,7 +2506,8 @@ static int _xmp_read(const virtualpath_t *vipa, fHandle_t *d, char *buf, const s
     const off_t seeking=offset-lseek(fd,0,SEEK_CUR);
     if (seeking<0 && fd>2 && fd<COUNT_BACKWARD_SEEK) _count_backward_seek[fd]++;
     if (seeking && offset!=lseek(fd,offset,SEEK_SET)){
-      log_msg(ANSI_FG_RED""ANSI_YELLOW"SEEK_REG_FILE:"ANSI_RESET" offset: %'lld ",LLD(offset)),log_msg("Failed %s fd=%llu\n",vipa->vp,LLU(fd));
+      log_msg(ANSI_FG_RED""ANSI_YELLOW"SEEK_REG_FILE:"ANSI_RESET" offset: %'jd ",IM(offset));
+      log_msg("Failed %s fd=%"PRIu64"\n",vipa->vp,fd);
       return errno?-errno:-1;
     }else{
       return cg_fd_read(fd,offset,buf,size);
@@ -2293,10 +2527,10 @@ static int xmp_release(const char *vpath, struct fuse_file_info *fi){ // cppchec
   if (fd>=FD_ZIP_MIN){
         lock(mutex_fhandle);
         d=fhandle_get(vipa.vp,fd);
-        IF1(WITH_EXTRA_ASSERT, if (!d) DIE_DEBUG_NOW("d is NULL %s %llu",vpath,LLU(fd)));
+        ASSERT(d);
         if (d){
           count_backward_seek=d->count_backward_seek;
-          //warning(WARN_MISC,vpath,ANSI_FG_RED"%s"ANSI_RESET"  d: %p "ANSI_RESET" fi->fh: "ANSI_YELLOW"%llu"ANSI_RESET"  fhandle_fh: %ld  pid:%lld   ",__func__,d,fd,LLU(d->fhandle_fh),LLD(d->pid));
+          //warning(WARN_MISC,vpath,ANSI_FG_RED"%s"ANSI_RESET"  d: %p "ANSI_RESET" fi->fh: "ANSI_YELLOW"%ju"ANSI_RESET"  fhandle_fh: %ld  pid:%jd   ",__func__,d,fd,UIM(d->fhandle_fh),IM(d->pid));
           d->flags|=FHANDLE_DESTROY_LATER;
           fhandle_try_destroy(d);
         }
@@ -2304,19 +2538,18 @@ static int xmp_release(const char *vpath, struct fuse_file_info *fi){ // cppchec
   }else if (fd>2){
     maybe_evict_from_filecache(fd,vipa.vp,vipa.vp_l,NULL,0);
     if ((er=close(fd))){
-      warning(WARN_OPEN|WARN_FLAG_ERRNO,vpath,"close(fd: %llu)",fd);
+      warning(WARN_OPEN|WARN_FLAG_ERRNO,vpath,"close(fd: %ju)",fd);
       cg_print_path_for_fd(fd);
     }
     count_backward_seek=fd<COUNT_BACKWARD_SEEK?_count_backward_seek[fd]:0;
   }
-  IF1(WITH_EXTRA_ASSERT, if (cg_uid_is_developer() && !d &&_is_tdf_or_tdf_bin(vpath)) DIE_DEBUG_NOW("%s",vpath));
   log_fuse_function(__func__,&vipa,count_backward_seek);
   return -er;
 }
 static int xmp_flush(const char *vpath, struct fuse_file_info *fi){
   ASSERT(fi!=NULL);
   FUSE_PREAMBLE(vpath);
-  IF1(WITH_SPECIAL_FILE, if (vipa.special_file_id) return 0);
+  IF1(WITH_SPECIAL_FILE, if (vipa.specialfile_id) return 0);
   return fi->fh<FD_ZIP_MIN?fsync(fi->fh):0;
 }
 
@@ -2328,16 +2561,23 @@ static void _viamacro_exit_ZIPsFS(const char *func, const int line_num){
 }
 
 
+
+
+
 int main(const int argc,const char *argv[]){
   _pid=getpid();
   debug_pid_to_exe(_pid);
   IF1(WITH_CANCEL_BLOCKED_THREADS,assert(_pid==gettid()), assert(cg_pid_exists(_pid)));
-  char tmp[PATH_MAX+1];
+  ASSERT(_virtualfolder_dirflags[ID_(PRELOAD_SELECT_ALL)]=="a");
+  char tmp[PATH_MAX];
   if (realpath(*argv,tmp)) _self_exe=strdup_untracked(tmp); else DIE("Failed realpath %s",*argv);
   init_mutex();
-  init_sighandler(argv[0],(1L<<SIGSEGV)|(1L<<SIGUSR1)|(1L<<SIGABRT),stderr);
-  init_special_files();
+  init_sighandler(argv[0],(1ULL<<SIGSEGV)|(1ULL<<SIGUSR1)|(1ULL<<SIGABRT),stderr);
+  virtualfolders_init();
+
   _whenStarted=time(NULL);
+
+
   {
     _warning_color[WARN_THREAD]=ANSI_FG_RED;
     _warning_color[WARN_GETATTR]=ANSI_FG_MAGENTA;
@@ -2347,9 +2587,7 @@ int main(const int argc,const char *argv[]){
   }
   int colon=0;
   FOR(i,1,argc) if (STR_EQ_C(argv[i],':')){ colon=i; break;}
-
   initial_msg(stderr);
-  if (argc==1) return 0;
   static struct fuse_operations xmp_oper={0};
 #define S(f) xmp_oper.f=xmp_##f
   S(init);
@@ -2379,11 +2617,12 @@ int main(const int argc,const char *argv[]){
     default: if (isalnum(c)) fprintf(stderr,"Wrong option '-%c'. Enter",c); cg_getc_tty(); break;
     }
   }
+
 #if ! defined(HAS_RLIMIT) || HAS_RLIMIT
   static struct rlimit l={0};
   if (_rlimit_vmemory){
     l.rlim_cur=l.rlim_max=_rlimit_vmemory;
-    log_msg("Setting rlimit virtual memory to %llu MB \n",LLU(l.rlim_max>>20));
+    log_msg("Setting rlimit virtual memory to %ju MB \n",UIM(l.rlim_max>>20));
     if (setrlimit(RLIMIT_AS,&l)) perror(ANSI_FG_RED"setrlimit(RLIMIT_AS,n)\n"ANSI_RESET);
   }
   if(MAX_NUM_OPEN_FILES){
@@ -2400,15 +2639,27 @@ int main(const int argc,const char *argv[]){
     if (_isBackground) DIE("It is only allowed in foreground mode  with option -f.");
     fprintf(stderr,"Do you accept the risks [Enter / Ctrl-C] ?\n");cg_getc_tty();
   }
-  if (!colon){ log_error("No colon ':'  found in parameter list\n"); suggest_help(); return 1;}
-  if (colon==argc-1){ log_error("Expect mount point after single colon\n"); suggest_help(); return 1;}
+
+  if (!colon || colon==argc-1){
+    log_error("In the list of command parameters there should be  single colon ':' followed by the an empty folder as mountpoint. %s\n", !colon?"No colon":"There is no further  parameter after the colon.\n");
+    _mnt=""; /* avoid assert */
+    specialfiles_init();
+    debug_print_virtual_folders();
+    suggest_help();
+    return 1;
+  }
   _mnt_l=cg_strlen(realpath(argv[argc-1],tmp)); _mnt=strdup_untracked(tmp);
   if (!_mnt_apparent) _mnt_apparent=(char*)argv[argc-1];
   if (*_mnt_apparent!='/'){
-    if (!getcwd(tmp,PATH_MAX-strlen(_mnt_apparent)-1)) log_errno("getcwd()");
+    if (!getcwd(tmp,PATH_MAX-strlen(_mnt_apparent)-2)) log_errno("getcwd()");
     else _mnt_apparent=strdup(strcat(strcat(tmp,"/"),_mnt_apparent));
     cg_str_replace(0,_mnt_apparent,0, "/s-mcpb-ms03.charite.de/",0,"/s-mcpb-ms03/",0);
+    //    for(int i=strlen(_mnt_apparent); i && _mnt_apparent[i]=='/') _mnt_apparent[i]==0;
   }
+  cg_str_replace(0,_mnt_apparent,0, "//",2,"/",1);
+  _mnt_apparent[cg_pathlen_ignore_trailing_slash(_mnt_apparent)]=0;
+
+
   if (!_mnt_l) DIE("realpath(%s): '%s'",argv[argc-1],_mnt);
   {
     struct stat st;
@@ -2421,62 +2672,16 @@ int main(const int argc,const char *argv[]){
       if (!S_ISDIR(st.st_mode)) DIE("Not a directory: %s",_mnt);
     }
   }
-  { /* dot_ZIPsFS */
-    char path[MAX_PATHLEN+1], dirOldLogs[MAX_PATHLEN+1];
-    {
-      {
-        char *d=path+strlen(cg_copy_path(path,PATH_DOT_ZIPSFS));
-        strcat(d,_mnt); while(*++d) if (*d=='/') *d='_';
-      }
-      snprintf(dirOldLogs,MAX_PATHLEN,"%s%s",path,"/old_logs");
-      cg_recursive_mkdir(dirOldLogs);
-      strcpy(stpcpy(tmp,path),"/PID.TXT");
-      fprintf(stderr,"Writing '%s' ... ",tmp);
-      FILE *f=fopen(tmp,"w");
-      if (f){
-        fprintf(f,"%d\n",_pid);
-        fclose(f);
-        fputs(GREEN_SUCCESS"\n",stderr);
-      }else{
-        perror(RED_FAIL);
-      }
-    }
-    _dot_ZIPsFS=strdup_untracked(path);
-    FOR(id,1,SFILE_NUM){
-      if (!SFILE_HAS_REALPATH(id)) continue;
-      snprintf(path,MAX_PATHLEN,"%s/%s",_dot_ZIPsFS,SFILE_NAMES[id]);
-      SFILE_REAL_PATHS[id]=strdup_untracked(path);
-      struct stat st;
-      if (id==SFILE_LOG_ERRORS||id==SFILE_LOG_WARNINGS){
-        if (!lstat(path,&st) && st.st_size){ /* Save old logs with a mtime in file name. */
-          const time_t t=st.st_mtime;
-          struct tm lt;
-          localtime_r(&t,&lt);
-          snprintf(tmp,MAX_PATHLEN,"%s/%s",dirOldLogs,SFILE_NAMES[id]);
-          strftime(strrchr(tmp,'.'),22,"_%Y_%m_%d_%H:%M:%S",&lt);
-          strcat(tmp,".log");
-          if (cg_rename(path,tmp)) DIE("rename");
-          const char *cmd[]={"gzip","-f","--best",tmp,NULL};
-          cg_fork_exec(cmd,NULL,0,0,0);
-        }
-#define F _fWarnErr[id==SFILE_LOG_ERRORS]
-        if (!(F=fopen(path,"w"))) DIE("Failed open '%s'",path);
-        fprintf(F,"%s\n",path);
-#undef F
-      }
-    }
-    log_fuse_function_fd();
-    warning(0,NULL,"");ht_set_id(HT_MALLOC_warnings,&_ht_warning);
 
-    IF1(WITH_SPECIAL_FILE,	special_file_content_to_file(SFILE_DEBUG_CTRL,SFILE_REAL_PATHS[SFILE_DEBUG_CTRL]));
-    snprintf(tmp,MAX_PATHLEN,"%s/cachedir",_dot_ZIPsFS); mstore_set_base_path(tmp);
-  }
+  //  log_fuse_function_fd();  warning(0,NULL,"");ht_set_id(HT_MALLOC_warnings,&_ht_warning);
+  IF1(WITH_SPECIAL_FILE, specialfile_content_to_file(SFILE_DEBUG_CTRL,_specialfiles[SFILE_DEBUG_CTRL].rp));
   MSTORE_INIT(&_mstore_persistent,MSTORE_OPT_MMAP_WITH_FILE|0x10000);   MSTORE_SET_MUTEX(mutex_fhandle);
   HT_INIT_INTERNER_FILE(&_ht_intern_vp,16,DIRECTORY_CACHE_SIZE); HT_SET_MUTEX(mutex_dircache);
   HT_INIT_INTERNER_FILE(&_ht_intern_fileext,8,4096);            HT_SET_MUTEX(mutex_fhandle);
   HT_INIT(&_ht_valid_chars,HT_FLAG_NUMKEY|12);                          HT_SET_MUTEX(mutex_validchars);
   IF1(WITH_FILECONVERSION_OR_CCODE,HT_INIT_WITH_KEY_INTERNER(&_ht_fsize,9,&_ht_intern_vp));
   HT_INIT_WITH_KEYSTORE(&_ht_count_by_ext,11,&_mstore_persistent);                   HT_SET_MUTEX(mutex_fhandle); HT_SET_ID(HT_MALLOC__ht_count_by_ext);
+
   FOR(i,optind,colon){ /* Source roots are given at command line. Between optind and colon */
     const char *a=argv[i];
     if (*a=='@') continue;
@@ -2488,11 +2693,6 @@ int main(const int argc,const char *argv[]){
     root_t *r=_root+_root_n;
     int features=0;while(*argv[i+features+1]=='@') features++;
     root_init(!_root_n++,r,a, argv+i+1,features);
-    if (_writable_path_l){
-      char rp[MAX_PATHLEN+1];
-      assert(_writable_path_l+sizeof(FILE_CLEANUP_SCRIPT)<sizeof(rp));
-      _cleanup_script=strdup_untracked(strcat(strcpy(rp,_writable_path),FILE_CLEANUP_SCRIPT));
-    }
 #if WITH_DIRCACHE_or_STATCACHE_or_TIMEOUT_READDIR
     MSTORE_INIT(&r->dircache_mstore,MSTORE_OPT_MMAP_WITH_FILE|DIRECTORY_CACHE_SIZE);      MSTORE_SET_MUTEX(mutex_dircache);
     HT_INIT_INTERNER_FILE(&r->ht_int_fname,16,DIRECTORY_CACHE_SIZE);                                   HT_SET_MUTEX(mutex_dircache);
@@ -2506,8 +2706,12 @@ int main(const int argc,const char *argv[]){
     IF1(WITH_STATCACHE,HT_INIT_WITH_KEY_INTERNER(&r->ht_stat,16,&_ht_intern_vp));
     IF1(WITH_ZIPFLATCACHE, HT_INIT(&r->ht_zipflatcache_vpath_to_rule,HT_FLAG_NUMKEY|16); HT_SET_MUTEX(mutex_dircache));
   }/* Loop roots */
-
+  {/* Order is important! */
+    specialfiles_init();  log_fuse_function_fd();  warning(0,NULL,"");ht_set_id(HT_MALLOC_warnings,&_ht_warning);
+    assert(_dot_ZIPsFS); snprintf(tmp,MAX_PATHLEN,"%s/cachedir",_dot_ZIPsFS);  mstore_set_base_path(tmp);
+  }
   root_property_read_all(NULL,NULL,0); /* free line */
+  vp_is_part_of_path_prefix(NULL);
   log_msg("\n\nMount point: "ANSI_FG_BLUE"'%s'"ANSI_RESET"\n\n",_mnt);
   if (!_root_n){ log_error("Missing root directories\n");return 1;}
   if (check_configuration(stderr,argv[argc-1]) && !cg_uid_is_developer() && !_isBackground){ fprintf(stderr,"Press enter\n"), cg_getc_tty();}
@@ -2524,16 +2728,13 @@ int main(const int argc,const char *argv[]){
   _fuse_argv[_fuse_argc++]="";
   if (!_isBackground) _fuse_argv[_fuse_argc++]="-f";
   FOR(i,colon+1,argc) _fuse_argv[_fuse_argc++]=argv[i];
-
-
   log_print_roots(stderr);
   initial_msg(_fWarnErr[0]);
   check_configuration(_fWarnErr[0],argv[argc-1]);
   log_print_roots(_fWarnErr[0]);
-
   const int fuse_stat=fuse_main(_fuse_argc,(char**)_fuse_argv,&xmp_oper,NULL);
   _fuse_started=true;
-  log_msg(RED_WARNING" fuse_main returned %d\n",fuse_stat);
+  log_msg(RED_WARNING" fuse_main() returned %d\n",fuse_stat);
   IF1(WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,IF1(WITH_DIRCACHE,dircache_clear_if_reached_limit_all(true,0xFFFF)));
   exit_ZIPsFS();
 }
@@ -2543,28 +2744,17 @@ int main(const int argc,const char *argv[]){
 // _GNU_SOURCE    HAS_EXECVPE HAS_US_ENVIRON   HAS_ST_MTIM   HAS_POSIX_FADVISE
 // USED_TO_BE
 // malloc calloc strdup  free  mmap munmap   readdir opendir   --- malloc_untracked calloc_untracked  strdup_untracked
-//
-// ZIPsFS_print_source.sh  mnt/zipsfs/lr/Z1/Data/30-0001/20220802_Z1_AF_009_30-0001_SWATH_P01_Plasma-V-Position-Rep5.wiff  SOURCE.TX VFILE_SFX_INFO ZP_IS_PATHINFO
-// md5sum   mnt/zipsfs/lrz/misc_tests/zip/20220202_A1_KTT_008_22-2222_Benchmarking4_dia.raw
-// error_symbol
-// cg_split_string  64 wait_for_root_timeout   find_realpath_try_zipflat_rules() find_realpath_try_zipflat()
-// readdir_from_zip stat_direct
-// readdir_from_cache_zip_or_filesystem  dircache_directory_from_cache dircache_directory_to_cache
-// zpath_stat_from_cache( key_from_rp lrz  ENOENT ERANGE
-// COPY_FLAGS_BEGIN   dircache_directory_to_cache()  dircache_directory_to_cache  dircache_directory_from_cache
-//  fileconversion-fsize
-//  _ht_fsize
-// fileconversion_rule_t fileconversion_rule
-// WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT  preloadram_now
-// ZP_IS_ZIP ZP_TRY_ZIP  DIR_IS_TRY_ZIP   DIR_IS_ZIP  FHANDLE_WITH_PRELOADRAM WAS
-//  _viamacro_my_zip_fread
-// crc32   mnt/Z2/Data/30-0017/20241023_Z2_KTT_001_30-0017_CoreFacility-TissueSamplePrep_01.wiff mnt/PRO1/Maintenance/202601/20260106_PRO1_ANZW_000_MA_BSA25fmol-18.d/analysis.tdf | grep -e 'b67bf8ae\|034b27cc\|'
-// fhandle_zip_ftell() fhandle_zip_fseek()  fhandle_zip_fread()     zip_strerror(za); _viamacro_my_zip_fread warning_zip
-// #define fhandle_zip_ftell(d) d->zip_fread_position  fhandle_zip_open
-//   zip_stat    zip_t
-// crc32 mnt/Z2/Data/30-0039/20250531_Z2_KTT_001_30-0039_Benchmarking4Vadim_pepcal1.wiff
-// cg_print_stacktrace evict
-// Transient-cache RED_FAIL FHANDLE_MAX  30-0028  FHANDLE_PRELOADRAM_MASTER
-// unlock_ncancel fhandle_get FOREACH_FHANDLE foreach_fhandle_including_pending_destruct  FHANDLE_DESTROY_LATER
-// gmtime Extension
-// fuse_get_context()
+
+
+
+//   PSEUDO_ENTRYIDX_FOR_UPDATE   ID_FLAG(INTERNET_UPDATE
+
+// cg_readlink_absolute
+// PRIu64
+//  Test mgf: mnt/zipsfs/c/-/QEP/50-0052  Test bz2  mnt/zipsfs/d/-/6600-tof2/Cal/202106/_associatedFiles/
+//        cg_compression_file_ext(zpath->is_decompressed,&e_l);
+//  mnt/zipsfs/d/l/UPDATE/_README_PRELOAD_UPDATE.html  # 6600-tof2/Cal/ # 202106/Cal20210604162723046.wiff
+// grep bz2  //s-mcpb-ms04/dia/Misc/content_of_disks/CHA-CHA-RALSER-RAW.txt
+// head  mnt/zipsfs/d/-/6600-tof2/Data/50-0055/_associatedFiles/20201215_TOF1_LS_100_50-0055_Kurth-Covid19-Dexa_P2_A1.wiff
+// filler_readdir( cg_download_url  FINDRP_DIR_PRELOADED_ONLY
+// https://music.apple.com/de/new

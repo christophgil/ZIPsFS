@@ -361,7 +361,7 @@ static void ht_report_memusage(FILE *file,const ht_t *ht,const bool html){
     mstore_report_memusage(file,NULL);
     FOR(i,0,i_mstore) mstore_report_memusage(file,(mstore_t*)mstores[i]);
   }else{
-    fprintf(file,"%36s %'10u %'12lld B ", snull(ht->name),ht->length,LLD(ht->capacity*sizeof(ht_entry_t)));
+    fprintf(file,"%36s %'10u %'12jd B ", snull(ht->name),ht->length,IM(ht->capacity*sizeof(ht_entry_t)));
     char s[99];*s=0;
     if (ht->keystore){
       mstore_name_dash_id(s,ht->keystore);
@@ -564,7 +564,7 @@ static void test_mstore2(int argc, const char *argv[]){
         if (is_square_number(iLine)) printf(" %d ",iLine);
       }else{
         const char *from_cache=ht_sget(&ht,line);
-        if (is_square_number(iLine))  printf("(%4d) Line: %s  Length: %lld   hash: %s from_cache: %s \n",iLine,line,LLD(n),value,from_cache);
+        if (is_square_number(iLine))  printf("(%4d) Line: %s  Length: %jd   hash: %s from_cache: %s \n",iLine,line,IM(n),value,from_cache);
         assert(!strcmp(value,from_cache));
       }
     }

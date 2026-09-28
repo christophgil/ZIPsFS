@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-src=${BASH_SOURCE[0]}
-source ${src%/*}/ZIPsFS_testfiles_inc.sh
+source ${BASH_SOURCE%/*}/ZIPsFS_testfiles_inc.sh
 
 main(){
 

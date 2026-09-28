@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-src=${BASH_SOURCE[0]}
-source ${src%/*}/ZIPsFS_testfiles_inc.sh
+source ${BASH_SOURCE%/*}/ZIPsFS_testfiles_inc.sh
 declare -A CC=([gzip]=gz [bzip2]=bz2 [xz]=xz [lrz]=lrz  [compress]=Z)
 VP=txt/numbers.txt
 RP=$REMOTE1/$VP
@@ -12,8 +11,7 @@ go1(){
     local opt=$1 c=$2  vp=${VP}
     local sfx=${CC[$c]}
     [[ -n $sfx ]] && vp=${vp%.txt} && vp+=_$sfx.txt.$sfx
-
-    local p=$MNT/zipsfs/lr/${vp%.$sfx}
+    local p=$MNT/zipsfs/d/l/r/${vp%.$sfx}
     case $opt in
         ### Make files
         -m) local f=$REMOTE1/$vp
@@ -33,12 +31,12 @@ go1(){
             print_src $p /${MODI##*/}/;;
     esac
 }
-
 go(){
     local opt=$1
     shift
     for c in "${!CC[@]}"; do
         go1 $opt $c
+        break ######################
     done
 }
 
@@ -51,10 +49,7 @@ main(){
     WITH_REMOVE=0
     go -r
 
-
-    read -r -p "Remove preloaded files? [Y/n] "
-    [[ ${REPLY,,} != *n*  ]] && go -d
-    WITH_REMOVE=1
+    askRemoveYn && go -d
     go -r
 }
 

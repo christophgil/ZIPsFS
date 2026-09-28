@@ -14,7 +14,7 @@
 #define PROFILER_E(f)   _clock_fn[PROFILE_##f]+=(long)(clock()-c)
 // ---
 #define C(x) PROFILE_##x,
-enum enum_profile_fn{
+enum{
 #include "generated_profiler_names.c"
                      PROFILE_LENGTH};
 #undef C

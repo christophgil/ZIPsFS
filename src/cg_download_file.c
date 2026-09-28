@@ -22,7 +22,7 @@ enum {COPY_HEADER=1<<14,COPY_USE_DOT_URL_FILE=1<<15,COPY_ADD_STDERR=1<<16};
 #define _COPY_FLAGS_BEGIN (COPY_HEADER)
 _Static_assert(!(COMPRESSION_MASK&_COPY_FLAGS_BEGIN),"COMPRESSION_MASK");
 
-enum {_CG_DOWNLOAD_URL_CMD=16};
+enum {_CG_DOWNLOAD_URL_CMD=32};
 static long cg_read_fd(const int in, const int out,void (*progress)(void*), void *progress_para){
   errno=0;
   char buf[16*1024];
@@ -55,7 +55,9 @@ static bool cg_cmd_curl(const int opt,const char *cmd[],const char *url){
   if (!is_installed_curl()){ log_error("curl is not installed.");  return false;}
   int k=0;
 #define P(a) cmd[k++]=a;
-  P("curl")P("-o")P("-");
+  P("curl")
+    P("--insecure") P("--ftp-ssl")
+    P("-o")P("-");
   if (opt&COPY_HEADER) P("-I");
 #ifdef CURL_OPTS
   const char *extra[]={CURL_OPTS NULL};
@@ -68,18 +70,16 @@ static bool cg_cmd_curl(const int opt,const char *cmd[],const char *url){
 
 // cppcheck-suppress nullPointerRedundantCheck
 static bool cg_download_url(const int opt_and_compress, const char *url, const char *outfile, void (*progress)(void*), void *progress_para){
-  OPT_AND_COMPRESS(); // rph
+  OPT_AND_COMPRESS();
   log_entered_function("header:%d  url:%s outfile:'%s' iCompress=%d",(opt_and_compress&COPY_HEADER),url,outfile,iCompress); // cppcheck-suppress [ctunullpointer,nullPointerRedundantCheck]
   const char *cmd[_CG_DOWNLOAD_URL_CMD]; if (!cg_cmd_curl(opt,cmd,url)) return false;
   TMP_FOR_FILE(tmp,outfile);
   int fdout=0;
   if (outfile && (fdout=open(tmp,O_WRONLY|O_CREAT|O_TRUNC,0644))==-1){ log_errno("open(%s)",outfile); return false;}
   bool ok=true;
-
   if (iCompress){
     const char *decomp[DECOMPRESS_CMD_MAX+1]={0};
     if (iCompress!=COMPRESSION_gz) cg_cmd_decompress(iCompress,decomp,NULL);
-    log_debug_now("cmd0=%s",decomp[0]);
     ok=cg_exec_pipe(cmd,NULL,
                     *decomp?decomp:_PSEUDO_CMD_ZLIB,
                     // style: Condition '*decomp' is always false [knownConditionTrueFalse]
@@ -124,7 +124,7 @@ static int cg_read_file_into_buffer(char *buf, const int buf_l, const char *path
   close(fd);
   return pos;
 }
-static bool cg_url_by_dot_url_file(char url[PATH_MAX+1], const char *root_or_null, const char *vp){
+static bool cg_url_by_dot_url_file(char url[PATH_MAX], const char *root_or_null, const char *vp){
   const int vp_l=strlen(vp),root_l=cg_strlen(root_or_null);
   if (ENDSWITH(vp,vp_l,".URL")) return false;
   char tmp[root_l+vp_l+6];
@@ -137,7 +137,7 @@ static bool cg_url_by_dot_url_file(char url[PATH_MAX+1], const char *root_or_nul
     while(url_l>0 && isspace(url[url_l-1])) url_l--;
     if (url_l>0){
       url[url_l]=0;
-      if (url_l+vp_l-i+root_l>PATH_MAX){ log_error("URL exceeds "STRINGIZE(PATH_MAX)" characters: %s",tmp);continue;}
+      if (url_l+vp_l-i+root_l>=PATH_MAX-1){ log_error("URL exceeds "STRINGIZE(PATH_MAX)" characters: %s",tmp);continue;}
       stpcpy(url+url_l,vp+i-root_l);
       return true;
     }
@@ -146,7 +146,7 @@ static bool cg_url_by_dot_url_file(char url[PATH_MAX+1], const char *root_or_nul
 }
 
 
-static bool cg_url_associated_with_path(char url[PATH_MAX+1], const char *path){
+static bool cg_url_associated_with_path(char url[PATH_MAX], const char *path){
   *url=0;
   if (cg_isURL(path)){
     strcpy(url,path);
@@ -169,13 +169,12 @@ static bool cg_url_associated_with_path(char url[PATH_MAX+1], const char *path){
 /* Entry point for ZIPsFS_preloaddisk.c  */
 /*********************************************/
 
-static bool cg_copy_url_or_file(const int iCompress,const char *src_path_without_ext, const char *dst, void (*progress)(void*), void *progress_para){
-  char src_path[strlen(src_path_without_ext)+COMPRESSION_EXT_MAX_LEN];
-  stpcpy(stpcpy(src_path,src_path_without_ext),cg_compression_file_ext(iCompress,NULL));
-  char src[PATH_MAX+1];
+static bool _cg_copy_url_or_file(const int iCompress,const char *src_path, const char *dst, void (*progress)(void*), void *progress_para){
+  if (cg_isURL(src_path)) return cg_download_url(iCompress,src_path,dst,progress,progress_para);
+  char src[PATH_MAX];
   if (!realpath(src_path,src)){ log_errno("%s",src_path); return false;}
   {
-    char url[PATH_MAX+1];
+    char url[PATH_MAX];
     cg_url_associated_with_path(url,src);
     if (*url) return cg_download_url(iCompress,url,dst,progress,progress_para);
   }
@@ -185,20 +184,32 @@ static bool cg_copy_url_or_file(const int iCompress,const char *src_path_without
   if (out<3){ log_errno("open(%s)",tmp); return false;}
   const char *cmd[DECOMPRESS_CMD_MAX+1];
   bool ok=cg_cmd_decompress(iCompress,cmd,src);
-  log_debug_now("cmd0=%s ok=%i",cmd[0],ok);
   if (ok){
     ok=cg_fork_exec(cmd,NULL,0,out,0);
   }else{
     const int in=open(src,O_RDONLY);
-    if (in<3){ log_errno("open(%s)",tmp); return false;}
+    if (in<3){ log_errno("open(%s)",tmp); close(out); return false;}
     ok=(iCompress==COMPRESSION_gz?
         cg_read_gzip(in,out,progress,progress_para):
         cg_read_fd(  in,out,progress,progress_para))>0;
   }
+  close(out);
   if (!ok) {unlink(tmp);return false;}
   return cg_rename_tmp_outfile(tmp,dst);
 }
 
+static bool cg_copy_url_or_file(const int iCompress_or_minus_1,const char *src_path, const char *dst, void (*progress)(void*), void *progress_para){
+  int iCompress=iCompress_or_minus_1;
+  if (iCompress_or_minus_1==-1){
+    iCompress=cg_compression_for_filename(src_path,0);
+    if (iCompress==cg_compression_for_filename(dst,0)) iCompress=COMPRESSION_NIL;
+  }
+
+  log_entered_function("src_path:%s dst:%s  iCompress=%d ",src_path,dst,iCompress);
+  const bool ok=_cg_copy_url_or_file(iCompress,src_path,dst,progress,progress_para);
+  log_exited_function("dst:%s   %s",dst,success_or_fail(ok));
+  return ok;
+}
 
 /************/
 /* HTTP FTP */
@@ -234,7 +245,7 @@ static void cg_httpheader_parse_line(cg_httpheader_t *h,const char *line){
   }
   F("Last-Modified:",h->mtime=cg_httpheader_parse_date(line+l));
   F("Content-Length:",h->size=atol(line+l));
-  //if (iCompress) h->size=closest_with_identical_digits(10*st->st_size); /* Guess file size and make it a Schnapszahl */
+  //if (iCompress) h->size=nextRepdigitFileSize(8*st->st_size); /* Guess file size and make it a Schnapszahl */
   F("Content-type:",);
   I("Content-Location:") h->has_content_location=true; /* http://hgdownload.soe.ucsc.edu/goldenPath/archive/susScr3/uniprot/2022_05/UP000005640_9606.fasta.gz without gz */
 #undef F
@@ -264,7 +275,7 @@ static int cg_httpheader_read_fd(cg_httpheader_t *h,const int fd){
 static int _pipe_curl(const int opt_curl,const char *url, int pipefd[2], int *pid){
   const char *cmd[_CG_DOWNLOAD_URL_CMD]; if (!cg_cmd_curl(opt_curl,cmd,url)) return false;
   if (pipe(pipefd)==-1){ E("pipe");return false;}
-*pid=fork();
+  *pid=fork();
   if (*pid<0){ E("fork()"); return false;}
   if (!*pid){
     close(pipefd[0]);
@@ -348,7 +359,8 @@ static void _viamacro_cg_httpheader_print(const char *msg,const cg_httpheader_t 
 
 int main(int argc, char *argv[]){
   const char *urlgz="ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/complete/docs/keywlist.xml.gz";
-  const char *urlbz2="http://localhost/~cgille/test/t.txt.bz2";
+  const char *url_test_bz2="http://localhost/~cgille/test/t.txt.bz2";
+  const char *url_test_gz="http://localhost/~cgille/test/t.txt.gz";
   const char *urlxz="http://localhost/~cgille/test/t.txt.xz";
   const char *filegz="/var/lib/apt/lists/debian.charite.de_debian_dists_bookworm_main_dep11_Components-amd64.yml.gz";
   const char *url="ftp://ftp.uniprot.org/pub/databases/uniprot/LICENSE";
@@ -359,15 +371,17 @@ int main(int argc, char *argv[]){
   const char *fsrc="/home/cgille/.ZIPsFS/DB/pride/DB/pride.URL";
   const char *fdst="/home/_cache/cgille/ZIPsFS/modifications/zipsfs/.preloaded_by_root/DB/pride.URL";
 #define PRINT_URL_DST() fprintf(stderr,"%s -> %s\n",url,dst)
-  switch(8){
+  const int test_id=1;
+  switch(test_id){
   case 0:{
     bool ok=cg_copy_url_or_file(0,fsrc,fdst,NULL,NULL);
     log_msg("cg_copy_url_or_file(%d,%s,%s)  ok:%d",0,fsrc,fdst,ok);
   }
     break;
   case 1:
-    cg_copy_url_or_file(0,argv[1],"/dev/stdout",NULL,NULL);
-    sleep_exit();
+    cg_copy_url_or_file(-1,argv[1],"/dev/stdout",NULL,NULL);
+    return 0;
+    //sleep_exit();
     break;
   case 2:{
     cg_httpheader_t h={0};
@@ -393,25 +407,34 @@ int main(int argc, char *argv[]){
   }
     break;
   case 5:{
-    char url[PATH_MAX+1];
+    char url[PATH_MAX];
     cg_url_by_dot_url_file(url,argv[1],argv[2]);
     printf(" url:'%s'\n",url);
   }
     break;
   case 6:
-    FOR(i,1,argc) printf("%'ld ->%'ld ",atol(argv[i]), closest_with_identical_digits(atol(argv[i])));
+    FOR(i,1,argc) printf("%'ld ->%'ld ",atol(argv[i]), nextRepdigit(atol(argv[i])));
     break;
   case 7:
     printf("curl: %d \n",is_installed_curl());
     break;
-  case 8:{
+  case 8: case 9:{
+    const char *src=url_test_bz2;
+    if (test_id==9) src=url_test_gz;
     int ret=0;
     PRINT_URL_DST();
-    ret=cg_download_url(COPY_HEADER*000|COMPRESSION_bz2,urlbz2,dst,NULL,NULL);
-    log_exited_function(ANSI_FG_RED"ret: %d"ANSI_RESET,ret);
+    //COMPRESSION_bz2
+    const int iComp=cg_compression_for_filename(src,0);
+    fprintf(stderr,ANSI_FG_MAGENTA"iComp=%d   Corresponds to ext %s\n\n"ANSI_RESET,iComp,cg_compression_file_ext(iComp,NULL));
+
+    ret=cg_download_url(COPY_HEADER*000|iComp,src,dst,NULL,NULL);
+    log_exited_function(ANSI_FG_RED"src=%s\nret: %d\ndst=%s\n"ANSI_RESET,src,ret,dst);
   }
     break;
-  case 9:{
+
+
+
+  case 10:{
     char txt[999];
     const int nread=cg_load_url(txt, sizeof(txt)-1,"ftp://ftp.expasy.org/databases/uniprot/current_release/relnotes.txt");
     log_msg("read: %d",nread);
@@ -427,6 +450,7 @@ int main(int argc, char *argv[]){
 #endif //__INCLUDE_LEVEL__
 #undef E
 
+// bunzip2 bzip2
 
 // mnt/DB/ebi/databases/pdb/data/structures/all/pdb
 

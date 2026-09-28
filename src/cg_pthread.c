@@ -1,7 +1,6 @@
 #if defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0 || defined(__cppcheck__)
 #define WITH_ASSERT_LOCK 1
-#define mutex_fhandle 1
-#define mutex_mutex_count 10
+enum {mutex_fhandle=1,  mutex_mutex_count=10};
 #endif
 
 
@@ -18,7 +17,7 @@
 /////////////////////////////////////////////////////////////////
 #include "cg_stacktrace.c"
 #ifndef NUM_MUTEX //  defined(__INCLUDE_LEVEL__) && __INCLUDE_LEVEL__==0
-#define NUM_MUTEX 99
+enum{NUM_MUTEX=99};
 #endif
 
 

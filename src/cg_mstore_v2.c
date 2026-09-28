@@ -55,7 +55,7 @@ static void _mstore_block_init_with_capacity(const char *d,const off_t capacity)
   MSTORE_OFFSET_NEXT_FREE(d)=_MSTORE_LEADING;
   MSTORE_BLOCK_CAPACITY(d)=capacity;
 }
-static off_t _mstore_common(mstore_t *m,enum enum_mstore_operation opt,const void *pointer){
+static off_t _mstore_common(mstore_t *m,enum_mstore_operation_t opt,const void *pointer){
   if (!m) return 0;
   lock(m->mutex);
   //  CG_THREAD_OBJECT_ASSERT_LOCK(m);
@@ -101,11 +101,11 @@ static void mstore_report_memusage(FILE *file, mstore_t *m){
     fprintf(file,"%30s %20s %20s %20s\n", "Name", "Sum size", "Memory usage", "# mmap-files");
   }else{
     char buf[99]; mstore_name_dash_id(buf,m);
-    fprintf(file,"%30s %'18lld B %'18lld B",buf,LLD(mstore_sum_size(m)),LLD(mstore_usage(m)));
+    fprintf(file,"%30s %'18jd B %'18jd B",buf,IM(mstore_sum_size(m)),IM(mstore_usage(m)));
     const char *s;
     switch(m->opt&(MSTORE_OPT_MMAP_WITH_FILE|MSTORE_OPT_MALLOC)){
     case MSTORE_OPT_MALLOC: s="(malloc)";  break;
-    case MSTORE_OPT_MMAP_WITH_FILE:  sprintf(buf,"%lld",LLD(mstore_count_blocks(m))); s=buf; break;
+    case MSTORE_OPT_MMAP_WITH_FILE:  sprintf(buf,"%jd",IM(mstore_count_blocks(m))); s=buf; break;
     case 0: s="(anonymous mmap)"; break;
     };
     fprintf(file,"%20s\n",s);
@@ -119,6 +119,7 @@ static void mstore_report_memusage(FILE *file, mstore_t *m){
 static const char *mstore_set_base_path(const char *f){
   static char base[MAX_PATHLEN+1];
   if (f && !*base){
+    assert(!strstr(f,"(null)"));
    log_verbose("Directory for cache files %s",f);
     cg_recursive_mkdir(cg_copy_path(base,f));
     DIR *dir=opendir(base);
@@ -132,7 +133,7 @@ static const char *mstore_set_base_path(const char *f){
       closedir(dir);
     }else log_errno("Deleting old cache files %s",base);
   }
-  assert(base);
+  assert(*base);
   return base;
 }
 
@@ -171,15 +172,14 @@ static void mstore_init(mstore_t *m,const char *name, const int size_and_opt){
 ////////////////////////////////////////
 // Allocate memory of number of bytes //
 ////////////////////////////////////////
-
-static void mstore_file(char path[PATH_MAX+1],const mstore_t *m,const int block){
+static void mstore_file(char path[PATH_MAX],const mstore_t *m,const int block){
   char b[9]={'*',0};
   if (block>=0) sprintf(b,"%02d",block);
   char n[99]; mstore_name_dash_id(n,m);
-  snprintf(path,PATH_MAX-1,"%s/%s_%s.cache",mstore_base_path(),cg_cut_left_no_filename(n),b);
+  snprintf(path,PATH_MAX,"%s/%s_%s.cache",mstore_base_path(),cg_cut_left_no_filename(n),b);
 }
 static int _mstore_openfile(const mstore_t *m,const uint32_t block,const off_t adim){
-  char path[PATH_MAX+1];  mstore_file(path,m,block);
+  char path[PATH_MAX];  mstore_file(path,m,block);
   /* Note, there might be several with same name. Unique file names by adding iinstance to the file name */
   const int fd=open(path,O_RDWR|O_CREAT|O_TRUNC,0640);
   if (fd<2) DIE("Open failed: '%s' fd: %d  mstore_base_path: '%s'\n",path,fd,mstore_base_path());
@@ -190,7 +190,6 @@ static int _mstore_openfile(const mstore_t *m,const uint32_t block,const off_t a
   }
   return fd;
 }
-
 static char *_mstore_block_try_allocate(mstore_t *m,char *block,const off_t bytes,const int align){
   if (!block) return NULL;
   //  char not_used=block[0];
@@ -201,7 +200,6 @@ static char *_mstore_block_try_allocate(mstore_t *m,char *block,const off_t byte
   IF1(_WITH_MSTORE_PREVIOUS,m->_previous_sgmt=block);
   return block+begin;
 }
-
 static void _mstore_double_capacity(mstore_t *m){
   assert(m);
   const uint32_t c=m->capacity;
@@ -234,12 +232,12 @@ static void *mstore_malloc(mstore_t *m,const off_t bytes, const int align){
   }else{
     const int fd=(m->opt&MSTORE_OPT_MMAP_WITH_FILE)?_mstore_openfile(m,ib,blockCapacity+_MSTORE_LEADING):0;
     if (MAP_FAILED==(block=cg_mmap(_MSTORE_COUNTER_MMAP(m),blockCapacity+_MSTORE_LEADING,fd))) block=NULL;
-    if (!block) DIE("Allocation failed   %lld  fd: %d",LLD(blockCapacity+_MSTORE_LEADING),fd);
+    if (!block) DIE("Allocation failed   %jd  fd: %d",IM(blockCapacity+_MSTORE_LEADING),fd);
   }
   _mstore_block_init_with_capacity(block,blockCapacity);
   m->_data[ib]=block;
   if (!(dst=_mstore_block_try_allocate(m,block,bytes,align))){
-    DIE("dst is NULL.  block: %p bytes: %lld align: %d  ib: %d",block, LLD(bytes),align, ib);
+    DIE("dst is NULL.  block: %p bytes: %jd align: %d  ib: %d",block, IM(bytes),align, ib);
   }
   assert(MSTORE_BLOCK_CAPACITY(block)>=bytes);
   return dst;
@@ -340,7 +338,7 @@ int main(int argc,char *argv[]){
     printf("mstore_base_path %s\n",mstore_base_path());
     mstore_t m={0};
     MSTORE_INIT(&m,MSTORE_OPT_MMAP_WITH_FILE|1024);
-    fprintf(stderr,"m->bytes_per_block: %lld\n",LLD(m.bytes_per_block));
+    fprintf(stderr,"m->bytes_per_block: %jd\n",IM(m.bytes_per_block));
     FOR(i,0,8){
       char *s=mstore_malloc(&m,1024,4);
       fprintf(stderr,"%d) s: %p\n",i,s);

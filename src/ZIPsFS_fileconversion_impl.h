@@ -14,11 +14,12 @@ _Static_assert(WITH_FILECONVERSION,"");
 #define fileconversion_filecontent_append(ff,s,s_l)  _fileconversion_filecontent_append(0,ff,s,s_l)
 #define fileconversion_filecontent_append_munmap(ff,s,s_l)  _fileconversion_filecontent_append(TXTBUFSGMT_MUNMAP,ff,s,s_l)
 
-enum enum_fileconversion_capture_output{STDOUT_DROP,              /* Ignore standard output stream of the external app */
-                                        STDOUT_TO_OUTFILE,        /* Save the standard output stream of the external app in the output file */
-                                        STDOUT_TO_MALLOC,         /* Temporarily keep the standard output stream of the external app in the RAM until the file pointer is closed. */
-                                        STDOUT_TO_MMAP,           /* Same.  STDOUT_TO_MALLOC uses the application heap which has a limited size. Use STDOUT_TO_MALLOC for larger outputs. */
-                                        STDOUT_MERGE_WITH_STDERR};/* Both  output streams of the external app go to the outputfile-dot-log  file. */
+typedef enum{STDOUT_DROP,              /* Ignore standard output stream of the external app */
+             STDOUT_TO_OUTFILE,        /* Save the standard output stream of the external app in the output file */
+             STDOUT_TO_MALLOC,         /* Temporarily keep the standard output stream of the external app in the RAM until the file pointer is closed. */
+             STDOUT_TO_MMAP,           /* Same.  STDOUT_TO_MALLOC uses the application heap which has a limited size. Use STDOUT_TO_MALLOC for larger outputs. */
+             STDOUT_MERGE_WITH_STDERR/* Both  output streams of the external app go to the outputfile-dot-log  file. */
+}enum_fileconversion_capture_output_t;
 
 struct fileconversion_rule{
   FILECONVERSION_RULE_CUSTOM_FIELDS;
@@ -33,7 +34,7 @@ struct fileconversion_rule{
   int *_ends_ll, *_ends_ic_ll;            /* String lengths */
   int _ext_l;
   /* -------------------------------------------- */
-  enum enum_fileconversion_capture_output out;   /* Where should the Standard output of the called command go to */
+ enum_fileconversion_capture_output_t out;   /* Where should the Standard output of the called command go to */
   double estimated_filesize;          /* File size is guessed for not yet generated files. See  CA_FLAG_fsize_is_multiple_of_infile. */
   int concurrent_computations;        /* If 0 or 1 (recommended), it will be computed in a locked code block such that only one computation is performed at a time */
   int min_free_diskcapacity_gb;       /* If the free disk  capacity is below, no files are created. Error ENOSPC is returned. If zero, DEFAULT_MIN_FREE_DISKCAPACITY_GB is used. */
@@ -71,8 +72,8 @@ struct fileconversion_files{
   char log[MAX_PATHLEN+1];
   char fail[MAX_PATHLEN+1];
   textbuffer_t *fc_txtbuf;
-  enum enum_fileconversion_capture_output out;   /* Like fileconversion_rule.out.  Corrected for low memory */
+ enum_fileconversion_capture_output_t out;   /* Like fileconversion_rule.out.  Corrected for low memory */
 };
 
 
-enum enum_fileconversion_run_res{ FILECONVERSION_RUN_SUCCESS,FILECONVERSION_RUN_FAIL,FILECONVERSION_RUN_NOT_APPLIED};
+typedef enum{ FILECONVERSION_RUN_SUCCESS,FILECONVERSION_RUN_FAIL,FILECONVERSION_RUN_NOT_APPLIED} enum_fileconversion_run_res_t;

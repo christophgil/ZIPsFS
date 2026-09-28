@@ -65,7 +65,7 @@ static zpath_t *transient_cache_get_or_create_zpath(const bool create,const bool
       if (!d->ht_transient_cache) continue;
     }
     const int vp_l=D_VP_L(d);
-    if (!vp_l || !(d->zpath.flags&ZP_IS_ZIP) || !zpath_has_inode(&d->zpath) ) continue; // USED_TO_BE_ZP_TRY_ZIP
+    if (!vp_l || !D_ZPF(ZP_IS_ZIPENTRY) || !zpath_has_inode(&d->zpath) ) continue; // USED_TO_BE_ZP_TRY_ZIP
     const char *vp=D_VP(d);
     const int path_without_entry_path_l=vp_l-D_EP_L(d)-1;
     const bool maybe_same_zip=path_without_entry_path_l && cg_path_equals_or_is_parent(vp,path_without_entry_path_l,virtualpath,virtualpath_l);
@@ -80,13 +80,13 @@ static zpath_t *transient_cache_get_or_create_zpath(const bool create,const bool
     ht_entry_t *e=ht_numkey_get_entry(ht,hash,virtualpath_l,false);
     if (!e || !e->key || !e->value) continue;
     zpath_t *zpath=e->value;
-    if (!zpath->virtualpath        || strcmp(virtualpath,VP())){ /* Accept hash_collision */
+    if (!zpath->vp        || strcmp(virtualpath,VP())){ /* Accept hash_collision */
       NEW_VIRTUALPATH(virtualpath);
       zpath_init(zpath,&vipa);
     }
     if (maybe_same_zip && ZPF(ZP_DOES_NOT_EXIST)) return NULL;
     ht->client_value_int[zpath_has_inode(zpath)]++;
-    if (maybe_same_zip) zpath->flags|=ZP_FROM_TRANSIENT_CACHE;
+    if (maybe_same_zip) zpath->flags|=ZP_IS_FROM_TRANSIENT_CACHE;
     return zpath;
   }
   if (create && d1){
@@ -102,17 +102,17 @@ static zpath_t *transient_cache_get_or_create_zpath(const bool create,const bool
 static yes_zero_no_t transient_cache_find_realpath(zpath_t *zpath){
   //_log_flags|=(1<<LOG_TRANSIENT_ZIPENTRY_CACHE);
   //log_entered_function("vp: %s ",VP());
-  if (zpath->flags&ZP_TRANSIENT_CACHE_ONCE) return ZERO;
-  zpath->flags|=ZP_TRANSIENT_CACHE_ONCE;
+  if (ZPF(ZP_FLAG2_TRANSIENT_CACHE_ONCE)) return ZERO;
+  zpath->flags|=ZP_FLAG2_TRANSIENT_CACHE_ONCE;
   const char *vp=VP();
   const int vp_l=VP_L();
   zpath_t cached={0};
   LOCK(mutex_fhandle,const zpath_t *zp=transient_cache_get_or_create_zpath(false,false,vp,vp_l); if (zp) cached=*zp);
   const int f=cached.flags;
   if (!(f&ZP_DOES_NOT_EXIST) && zpath_has_inode(&cached)){
-    assert(cached.virtualpath && !strcmp(ZP_VP(&cached),vp));
+    assert(cached.vp && !strcmp(ZP_VP(&cached),vp));
     *zpath=cached;
-    IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(GREEN_SUCCESS"%s %d r:%s"ANSI_RESET,vp,vp_l,rootpath(zpath->root));
+    IF_LOG_FLAG(LOG_TRANSIENT_ZIPENTRY_CACHE) log_verbose(GREEN_SUCCESS"%s %d r:%s"ANSI_RESET,vp,vp_l,ZPRP());
     return YES;
   }
   if (f&ZP_DOES_NOT_EXIST){
@@ -130,7 +130,7 @@ static void transient_cache_store(const zpath_t *zpath, const char *vp,const int
   if (zp){
     if (!zpath){
       zp->flags|=ZP_DOES_NOT_EXIST; /* Not found in any root. */
-    }else if (!zp->virtualpath){
+    }else if (!zp->vp){
       *zp=*zpath;
 #if 0 //WITH_EXTRA_ASSERT
       const zpath_t *wiedergefunden=transient_cache_get_or_create_zpath(false,false,vp,vp_l);
@@ -157,7 +157,7 @@ static void transient_cache_destroy(fHandle_t *d){
 
 static void transient_cache_activate(fHandle_t *d){
   ASSERT_LOCKED_FHANDLE();
-  if ((d->zpath.flags&ZP_IS_ZIP) && config_advise_transient_cache_for_zipentries(D_VP(d),D_VP_L(d))){ // USED_TO_BE_ZP_TRY_ZIP
+  if (D_ZPF(ZP_IS_ZIPENTRY) && config_advise_transient_cache_for_zipentries(D_VP(d),D_VP_L(d))){ // USED_TO_BE_ZP_TRY_ZIP
     d->flags|=FHANDLE_WITH_TRANSIENT_ZIPENTRY_CACHES;
     foreach_fhandle_including_pending_destruct(ie,e){
       if (d!=e && FHANDLE_BOTH_SHARE_TRANSIENT_CACHE(d,e) && NULL!=(d->ht_transient_cache=e->ht_transient_cache)) break;

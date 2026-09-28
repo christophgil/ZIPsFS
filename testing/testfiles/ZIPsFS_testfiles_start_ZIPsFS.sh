@@ -1,8 +1,19 @@
 #!/usr/bin/env bash
 set -u
-src=${BASH_SOURCE[0]}
+
+
+
+####################################################################################
+###  Please check where your core dumps go.                                      ###
+### cat /proc/sys/kernel/core_pattern                                            ###
+### Make sure it has an absolute path and does not go the   "current-directory>  ###
+### This can cause a dead lock                                                   ###
+####################################################################################
+ulimit -c 0
+
+
 inc=ZIPsFS_testfiles_inc.sh
-source ${src%/*}/$inc
+source ${BASH_SOURCE%/*}/$inc
 #STORE=//s-mcpb-ms03.charite.de/fulnas1/1/
 STORE=''
 
@@ -13,14 +24,11 @@ FTP_DIRS=''
 [[ -n ${TMUX:-} ]] && tmux set-environment LANG en_US.UTF-8
 [[ -n ${TMUX:-} ]] && tmux set-environment LC_ALL=en_US.UTF-8
 
-
-
-
 run_ZIPsFS(){
         ## rm ~/.ZIPsFS/_home_cgille_tmp_ZIPsFS_mnt/cachedir/*.cache
         mountpoint $MNT && umount $MNT
         mountpoint $MNT && umount -l $MNT
-        mountpoint $MNT 2>&1 |grep 'connected' &&  sudo umount $MNT
+        mountpoint $MNT 2>&1 |grep 'connected' && sudo umount $MNT
         mountpoint $MNT && return
 
         [[ -n $STORE ]] && ! ls -d $STORE && read -t 3 -r -p "Directory $STORE not found " && STORE=''

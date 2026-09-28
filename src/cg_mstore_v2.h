@@ -24,15 +24,15 @@
 #define mstore_base_path() mstore_set_base_path(NULL)
 
 #if WITH_DEBUG_MALLOC
-#define _MSTORE_COUNTER_MMAP(m)   ((m->mstore_counter_mmap?m->mstore_counter_mmap:COUNTm_MSTORE_MMAP))
-#define _MSTORE_COUNTER_MALLOC(m) ((m->mstore_counter_mmap?m->mstore_counter_mmap:COUNTm_MSTORE_MALLOC))
-//#define _MSTORE_MMAP_ID(m) (m->mstore_counter_mmap?m->mstore_counter_mmap:COUNTm_MSTORE_MMAP)
+#define _MSTORE_COUNTER_MMAP(m)   ((m->mstore_counter_mmap?m->mstore_counter_mmap:COUNT_MSTORE_MMAP))
+#define _MSTORE_COUNTER_MALLOC(m) ((m->mstore_counter_mmap?m->mstore_counter_mmap:COUNT_MSTORE_MALLOC))
+//#define _MSTORE_MMAP_ID(m) (m->mstore_counter_mmap?m->mstore_counter_mmap:COUNT_MSTORE_MMAP)
 #else
 #define _MSTORE_COUNTER_MMAP(m) 0
 //#define _MSTORE_MMAP_ID(m) 0
 #endif //WITH_DEBUG_MALLOC
 
-enum enum_mstore_operation{_mstore_destroy,_mstore_usage,_mstore_sum_size,_mstore_clear,_mstore_contains,_mstore_blocks};
+typedef enum {_mstore_destroy,_mstore_usage,_mstore_sum_size,_mstore_clear,_mstore_contains,_mstore_blocks} enum_mstore_operation_t;
 
 #define _MSTORE_MASK_SIZE (MSTORE_OPT_MMAP_WITH_FILE-1) // Must be lowest
 typedef struct{
@@ -54,7 +54,7 @@ static mstore_t *_mstore_last_initialized;
 static const mstore_t empty_mstore;
 #define MSTORE_SET_MUTEX(mutex)  mstore_set_mutex(mutex,_mstore_last_initialized)
 
-static void mstore_file(char path[PATH_MAX+1],const mstore_t *m,const int block);
+static void mstore_file(char path[PATH_MAX],const mstore_t *m,const int block);
 
 
 

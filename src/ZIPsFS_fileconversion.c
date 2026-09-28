@@ -57,7 +57,7 @@ static void fileconversion_run(fHandle_t *d){
     cg_recursive_mk_parentdir(ff.log);
     ff.grealpath=rp;
     const int slash=cg_last_slash(rp);
-    snprintf(stpncpy(ff.tmpout,rp,slash+1),MAX_PATHLEN,"fileconversion_tmp_%d_%llu_%s",getpid(),LLU(currentTimeMillis()),rp+slash+1);
+    snprintf(stpncpy(ff.tmpout,rp,slash+1),MAX_PATHLEN,"fileconversion_tmp_%d_%ju_%s",getpid(),UIM(currentTimeMillis()),rp+slash+1);
   }
   if (fileconversion_realinfiles(&ff)<=0){
     d->fileconversion_state=FILECONVERSION_FAIL;
@@ -76,7 +76,7 @@ static void fileconversion_run(fHandle_t *d){
       warning(WARN_FILECONVERSION|WARN_FLAG_ERRNO,ff.tmpout," size=%ld ino: %ld",st.st_size, st.st_ino);
       d->fileconversion_state=FILECONVERSION_FAIL;
     }else{/* tmpout success */
-      IF_LOG_FLAG(LOG_FILECONVERSION) log_verbose("Size: %lld ino: %llu, Going to rename(%s,%s)\n",LLD(st.st_size),LLU(st.st_ino),ff.tmpout,rp);
+      IF_LOG_FLAG(LOG_FILECONVERSION) log_verbose("Size: %jd ino: %ju, Going to rename(%s,%s)\n",IM(st.st_size),UIM(st.st_ino),ff.tmpout,rp);
       fileconversion_mv_tmp_to_rp(ff.tmpout,rp);
       zpath_stat(0,&d->zpath);
       ASSERT(_root_writable==d->zpath.root);
@@ -102,7 +102,7 @@ static long fileconversion_estimate_filesize(const char *vp,const int vp_l,const
 
 
 static bool fileconversion_remove_if_not_uptodate(zpath_t *zpath){
-  if (!(_fileconversion_rp && ZPATH_IS_FILECONVERSION(zpath))) return false;
+  if (!(_fileconversion_rp && ZPATH_IS_FILECONVERSION())) return false;
   bool utd=true;
   {
     struct stat stats[FILECONVERSION_MAX_INFILES];
@@ -128,16 +128,15 @@ static bool fileconversion_remove_if_not_uptodate(zpath_t *zpath){
   return false;
 }
 
-static bool fileconversion_filldir(fuse_fill_dir_t filler,void *buf, const char *name, const struct stat *stbuf,ht_t *no_dups){
-  const int name_l=strlen(name);
-  if (!ENDSWITH(name,name_l,EXT_CONTENT)){
-    char generated[MAX_PATHLEN+1];
+static bool fileconversion_add_to_dir(void *buf, const char *name,const int name_l,const ht_t *no_dups, directory_t *dir){
+    char vp[PATH_MAX];
+    char *u=stpcpy(vp,ZP_VP(&dir->dir_zpath));*u++='/';
+    const int l1=dir->dir_zpath.vp_l;
     const FOREACH_FILECONVERSION_RULE(iac,ac){
-      fc_vgenerated_from_vinfile(generated,name,name_l,ac);
-      if (*generated) filler_add(0,filler,buf,generated,0,NULL,stbuf,no_dups);
+      fc_vgenerated_from_vinfile(u,name,name_l,ac);
+      const int u_l=strlen(u);
+      if (u_l && !ht_get(no_dups,u,u_l,0)) directory_add(0,dir, inode_from_virtualpath(vp,l1+u_l),u, 9999999999, time(NULL),0);
     }
-  }
-  //log_exited_function("%s",name);
   return true;
 }
 
@@ -154,7 +153,7 @@ static char *fileconversion_apply_replacements_for_argv(char *dst_or_NULL,const 
     int replace_l=0;
     const char *replace=NULL;
     if (placeholder==PLACEHOLDER_EXTERNAL_QUEUE){
-      static char q[PATH_MAX+1];
+      static char q[PATH_MAX];
       LOCK(mutex_fileconversion_init, if (!*q) strcpy(strcpy(q,_self_exe)+cg_last_slash(_self_exe)+1,"ZIPsFS_fileconversion_queue.sh"));
       replace=q;
     }else if (placeholder==PLACEHOLDER_INFILE){
@@ -170,7 +169,7 @@ static char *fileconversion_apply_replacements_for_argv(char *dst_or_NULL,const 
     }else if (placeholder==PLACEHOLDER_TMP_DIR){
       ASSERT(_writable_path_l);
       static char t[MAX_PATHLEN+1];
-      LOCK(mutex_fileconversion_init,if (!*t) snprintf(t,MAX_PATHLEN,"%s"DIR_FILECONVERSION"/.tmp",_writable_path);cg_recursive_mkdir(replace=t));
+      LOCK(mutex_fileconversion_init,if (!*t) snprintf(t,MAX_PATHLEN,"%s"DIR_CONVERTED"/.tmp",_writable_path);cg_recursive_mkdir(replace=t));
     }else if (placeholder==PLACEHOLDER_INFILE_NAME){
       replace=rin+cg_last_slash(rin)+1;
     }else if (placeholder==PLACEHOLDER_TMP_OUTFILE_NAME){
@@ -216,21 +215,8 @@ static void fileconversion_free_argv(const char **cmd,const char **cmd_orig){
   }
 }
 
-
-static void fileconversion_set_rp(zpath_t *zpath,const virtualpath_t  *vipa){
-  if (!_fileconversion_rp) return;
-  zpath_reset_keep_VP(zpath);
-  zpath->root=_root_writable;
-  ZPATH_NEWSTR(realpath);
-  ZPATH_STRCAT(_writable_path);
-  ZPATH_STRCAT(DIR_FILECONVERSION);
-  ZPATH_STRCAT(vipa->vp);
-  ZPATH_COMMIT(realpath);
-}
-
-
 static bool fileconversion_getattr(struct stat *stbuf,const zpath_t *zpath,const virtualpath_t *vipa){
-  if (vipa->dir!=DIR_FILECONVERSION) return false;
+  if (!VFOLDER_HAS_FLAG(zpath,VIEWMOD_FILECONVERSION)) return false;
   const long size=fileconversion_estimate_filesize(vipa->vp,vipa->vp_l,0);
   if (size<=0) return false;
   stat_init(stbuf,size,&zpath->stat_rp);
@@ -241,7 +227,7 @@ static bool fileconversion_getattr(struct stat *stbuf,const zpath_t *zpath,const
 
 static bool fileconversion_check_infiles_exist(const virtualpath_t *vipa){
   bool ok=false;
-  if (ZPATH_IS_FILECONVERSION(vipa)){
+  if (VFOLDER_HAS_FLAG(vipa,VIEWMOD_FILECONVERSION)){
     struct fileconversion_files FF={0};
     struct_fileconversion_files_init(&FF,vipa->vp,vipa->vp_l);
     if (fileconversion_realinfiles(&FF)>0) ok=true;

@@ -64,10 +64,6 @@ static void debug_assert_crc32_not_null(const directory_t *dir){
 #if WITH_DIRCACHE
 static void dircache_directory_to_cache(directory_t *dir){
   cg_thread_assert_locked(mutex_dircache);
-  //if (DEBUG_NOW!=DEBUG_NOW){
-    //if (DIR_VP_L()!=DIR_VP0_L() || strcmp(DIR_VP0(),DIR_VP())) log_entered_function("VP:'%s' %d VP0:'%s' %d",DIR_VP(),DIR_VP_L(),DIR_VP0(),DIR_VP0_L());
-    //if (tdf_or_tdf_bin(DIR_VP0())) DIE_DEBUG_NOW("VP:'%s' %d VP0:'%s' %d",DIR_VP(),DIR_VP_L(),DIR_VP0(),DIR_VP0_L());
-  //}
   //debug_assert_crc32_not_null(dir);
   root_t *r=DIR_ROOT();
   IF1(WITH_RESET_DIRCACHE_WHEN_EXCEED_LIMIT,dircache_clear_if_reached_limit(false,0xFFFF,r,NUM_BLOCKS_FOR_CLEAR_DIRECTORY_CACHE));
@@ -132,6 +128,7 @@ static void maybe_evict_from_filecache(const int fdOrZero,const char *realpath,c
   if (!config_advise_evict_from_filecache(realpath,realpath_l, zipentry, zipentry_l)) return;
   const int err=fdOrZero?posix_fadvise(fdOrZero,0,0,POSIX_FADV_DONTNEED):cg_vmtouch_e(realpath);
   IF_LOG_FLAG(LOG_EVICT_FROM_CACHE) log_verbose(ANSI_MAGENTA"Evicted %s: %s%s"ANSI_RESET, snull(realpath), err?ANSI_FG_GREEN:ANSI_FG_RED,cg_error_symbol(err));
+
 #else
   static int i;
   if (!i++) warning(WARN_CONFIG,"","The method posix_fadvise is not available.");

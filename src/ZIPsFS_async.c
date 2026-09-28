@@ -8,7 +8,7 @@ enum {ASYNC_JOB_IDLE,ASYNC_JOB_SUBMITTED,ASYNC_JOB_PICKED};
 #define OK_OR_TIMEOUT(code_ok,code_timeout)    LOCK(mutex_async,if (id==ID){code_ok;G=0;}else{code_timeout;})
 #define DIE_IF_TIMEOUT(path)
 
-#define R(code)  root_t *r=zpath->root; if (!r || ROOT_NOT_RESPONDING(r)){code;}  // r is null e.g. for warnings.log
+#define R(code)  root_t *r=ZPR(); if (!r || ROOT_NOT_RESPONDING(r)){code;}  // r is null e.g. for warnings.log
 #define L() pthread_mutex_lock(r->async_mtx+A)
 #define UL() LOCK(mutex_async, G=0); pthread_mutex_unlock(r->async_mtx+A)
 #define G           r->async_go[A]
@@ -98,18 +98,18 @@ static bool readdir_now(directory_t *dir){
 
 
 
-#if WITH_ZIPFLAT
+
 /**************************************************************/
 /* Read the ZIP index asynchroneously for Inlined ZIP-entries */
 /* Applies to Sciex mass-spec raw files                       */
 /**************************************************************/
+#if WITH_DIRCACHE
 static void directory_to_queue(const directory_t *dir){
   //ht_only_once(r->ht_dircache_queue,DIR_RP(),0);
   root_t *r=DIR_ROOT();  assert(r);
   root_start_thread(r,PTHREAD_DIRCACHE,false);
   LOCK(mutex_dircache_queue,ht_only_once(&r->ht_dircache_queue,DIR_VP(),0));
 }
-
     //        (my-indent-lock-blocks "  lock_ncancel("    "  unlock_ncancel(")
 
 static void *infloop_PTHREAD_DIRCACHE(void *arg){
@@ -139,8 +139,8 @@ static void *infloop_PTHREAD_DIRCACHE(void *arg){
       log_verbose("Should not happen r:'%s'  RP:'%s'  VP:'%s'",rootpath(r),RP(),VP());
     }else{
       ASSERT(zpath->stat_rp.st_ino);
-      //log_debug_now(GREEN_SUCCESS"find_realpath_for_root %s %s  ZP_IS_ZIP=%d zipfile_l=%d",vipa.vp,RP(),(zpath->flags&ZP_IS_ZIP),zpath->zipfile_l);
-      zpath->flags|=ZP_IS_ZIP;
+      //log_debug_now(GREEN_SUCCESS"find_realpath_for_root %s %s  ZP_IS_ZIPENTRY=%d zipfile_l=%d",vipa.vp,RP(),ZPF(ZP_IS_ZIPENTRY),zpath->zipfile_l);
+      zpath->flags|=ZP_IS_ZIPENTRY;
       directory_t dir={0};
       directory_init_zpath(&dir,zpath);
       dir.async_never=dir.always_to_cache=true;
@@ -160,7 +160,7 @@ static void openzip_now(async_zipfile_t *zip){
   if (!zip->za) zip->za=my_zip_open(RP());
   assert(!zip->zf);
   zip->zf=my_zip_fopen(zip->za,EP(),ZIP_RDONLY,RP());
-  LOCK(mutex_fhandle,_rootdata_counter_inc(filetypedata_for_ext(VP(),zpath->root),zip->za?ZIP_OPEN_SUCCESS:ZIP_OPEN_FAIL));
+  LOCK(mutex_fhandle,_rootdata_counter_inc(filetypedata_for_ext(VP(),ZPR()),zip->za?ZIP_OPEN_SUCCESS:ZIP_OPEN_FAIL));
 }
 /* ================================================================================ */
 #define A ASYNC_STAT
@@ -206,10 +206,10 @@ static bool async_stat(const int opt_filldir_findrp, zpath_t *zpath){
 
 #if WITH_TIMEOUT_OPENFILE
 static inline bool async_periodically_openfile(root_t *r){
-  char path[PATH_MAX+1];
+  char path[PATH_MAX];
   int flags;
   //log_entered_function("'%s' G:%d",rootpath(r),G);
-  SET_PICKED(strncpy(path,r->async_openfile_path,PATH_MAX);  assert(*path);    flags=r->async_openfile_flags);
+  SET_PICKED(cg_strncpy0(path,r->async_openfile_path,PATH_MAX-1);  assert(*path);    flags=r->async_openfile_flags);
   const int fd=open(path,flags);
   bool timeout=false;
   OK_OR_TIMEOUT(r->async_openfile_fd=fd,timeout=true);
@@ -342,13 +342,13 @@ static bool readdir_async(directory_t *dir){
 /******************************/
 /* Thread and Infinity loops  */
 /******************************/
-static void root_start_thread(root_t *r,const enum enum_root_thread t,const bool evenIfAlreadyStarted){
+static void root_start_thread(root_t *r,const enum_root_thread_t t,const bool evenIfAlreadyStarted){
   if (!r) return;
       lock(mutex_start_thread);
       if (!r->thread_already_started[t] ||evenIfAlreadyStarted){
         log_verbose("Going to start thread %s / %s",r->rootpath,enum_root_thread_S[t]);
     #define C(T)  t==T?infloop_##T:
-        void *(*f)(void *)=C(PTHREAD_PRELOAD) C(PTHREAD_ASYNC) C(PTHREAD_MISC) C(PTHREAD_DIRCACHE) NULL;
+        void *(*f)(void *)=C(PTHREAD_PRELOAD) C(PTHREAD_ASYNC) C(PTHREAD_MISC) C(PTHREAD_DIRCACHE) IF1(WITH_FUSE_INVALIDATE_PATH,C(PTHREAD_INVALIDATE_PATH))  NULL;
     #undef C
         if (f){
           const int count=r->thread_count_started[t]++;
@@ -363,11 +363,13 @@ static void root_start_thread(root_t *r,const enum enum_root_thread t,const bool
       }
   unlock(mutex_start_thread);
 }
-static void log_infinity_loop(const root_t *r, const enum enum_root_thread t){
+static void log_infinity_loop(const root_t *r, const enum_root_thread_t t){
   const int flag=
     t==PTHREAD_PRELOAD?LOG_INFINITY_LOOP_PRELOADRAM:
     t==PTHREAD_ASYNC?LOG_INFINITY_LOOP_DIRCACHE:
-    t==PTHREAD_MISC?LOG_INFINITY_LOOP_MISC: 0;
+    t==PTHREAD_MISC?LOG_INFINITY_LOOP_MISC:
+    t==PTHREAD_INVALIDATE_PATH?LOG_INFINITY_LOOP_INVALIDATE_PATH:
+    0;
   IF_LOG_FLAG(flag) log_verbose("Thread: %s  Root: %s ",enum_root_thread_S[t],rootpath(r));
 }
 
@@ -380,7 +382,27 @@ static void root_update_time(root_t *r, int thread,time_t now){
   atomic_store(r->thread_when+thread,now);
 }
 
-
+#if WITH_FUSE_INVALIDATE_PATH
+static void *infloop_PTHREAD_INVALIDATE_PATH(void *arg){
+  root_t *r=arg;
+  assert(r!=NULL);
+  init_infloop(r,PTHREAD_INVALIDATE_PATH);
+  while(1){
+    char *vp=NULL;
+    LOCK(mutex_fhandle,FOREACH_FHANDLE(id,d) if((d->flags&FHANDLE_NEED_INVALIDATE_PATH)){vp=D_VP(d);break;});
+    if (vp){
+      log_verbose("Going to call fuse_invalidate_path %s ...",vp);
+      fuse_invalidate_path(_fuse, vp);
+      log_verbose("Going to call fuse_invalidate_path "GREEN_DONE);
+      const ht_hash_t h=hash_value_strg(vp);
+      LOCK(mutex_fhandle, foreach_fhandle_including_pending_destruct(id,d) if (D_VP_HASH(d)==h && !strcmp(vp,D_VP(d))) d->flags&=~FHANDLE_NEED_INVALIDATE_PATH);
+      usleep(1e6);
+    }
+    usleep(1e4);
+    //fputc('%',stderr);
+  }
+}
+#endif //WITH_FUSE_INVALIDATE_PATH
 static void *infloop_PTHREAD_ASYNC(void *arg){
   root_t *r=arg;
   assert(r!=NULL);
@@ -416,10 +438,12 @@ static bool _cleanup_running;
 static void *_cleanup_files_runnable(void *arg){
   _cleanup_running=true;
   //const pid_t pid0=getpid();
+  const char *path=_specialfiles[SFILE_CLEANUP_SH].rp;
+  if (!path) return NULL;
   if (fork()){
-    perror(_cleanup_script);
+    perror(path);
   }else{
-    execlp("bash","bash",_cleanup_script,(char*)0);
+    execlp("bash","bash",path,(char*)0);
     exit(errno);
   }
   _cleanup_running=false;
@@ -438,9 +462,10 @@ static void *infloop_PTHREAD_MISC(void *arg){
     usleep(1000*1000);
     LOCK_NCANCEL(mutex_fhandle, FHANDLE_DESTROY_LATER_ALL());
 #if WITH_FILECONVERSION||WITH_PRELOADDISK
-    if (_writable_path_l && (j&0xFff)==256){
+    if ((j&0xFff)==256){
       static pthread_t t;
-      if (!_cleanup_running && cg_file_exists(_cleanup_script)) pthread_create(&t,NULL,&_cleanup_files_runnable,NULL);
+      const char *path=_specialfiles[SFILE_CLEANUP_SH].rp;
+      if (path && !_cleanup_running && cg_file_exists(path)) pthread_create(&t,NULL,&_cleanup_files_runnable,NULL);
     }
 #endif //WITH_FILECONVERSION||WITH_PRELOADDISK
     if (!(j&3)){
@@ -478,18 +503,20 @@ static void *infloop_PTHREAD_PRELOAD(void *arg){
           IF1(WITH_PRELOADRAM,
               if ((e->flags&FHANDLE_PRELOADRAM_MASTER)) assert(e->preloadram);
               if ((e->flags&FHANDLE_PRELOADRAM_MASTER) && e->preloadram && e->preloadram->preloadram_status==PRELOADRAM_QUEUED && e->preloadram->m_zpath.root==r) dm=e);
-          if (e->zpath.root==r && e->flags&FHANDLE_PRELOADFILE_QUEUE) dl=e; // cppcheck-suppress unreadVariable
+          if (e->zpath.root==r && (e->flags&FHANDLE_PRELOADDISK_QUEUE)) {
+            dl=e; // cppcheck-suppress unreadVariable
+          }
         }
         unlock(mutex_fhandle);
     if ((dl||dm) && wait_for_root_timeout(r)){
           lock(mutex_fhandle);
-
           if (dm){
             ASSERT(dm->flags&FHANDLE_PRELOADRAM_MASTER);
             if (r!=D_ROOT(dm)) dm=NULL; /* After timeout root in d might change in preloadram_wait() */
           }
           IF1(WITH_PRELOADRAM,  if (dm && PRELOADRAM_QUEUED!=preloadram_get_status(dm)) dm=NULL);
-          IF1(WITH_PRELOADDISK, if (dl && !(dl->flags&FHANDLE_PRELOADFILE_QUEUE))  dl=NULL; if (dl) { dl->flags|=FHANDLE_PRELOADFILE_RUN; dl->flags&=~FHANDLE_PRELOADFILE_QUEUE;});
+
+          IF1(WITH_PRELOADDISK, if (dl && !(dl->flags&FHANDLE_PRELOADDISK_QUEUE))  dl=NULL; if (dl) { dl->flags|=FHANDLE_PRELOADDISK_RUN; dl->flags&=~FHANDLE_PRELOADDISK_QUEUE;});
           unlock(mutex_fhandle);
       IF1(WITH_PRELOADRAM, if (dm){
           LOCK_N(mutex_fhandle,preloadram_set_status(dm,PRELOADRAM_READING); const uint64_t fhandle_fh=dm->fhandle_fh);
@@ -531,7 +558,7 @@ static bool preloadfile_time_exceeded(const char *func, const fHandle_t *d,const
 /// /proc- file system                      ///
 ///////////////////////////////////////////////
 // cppcheck-suppress constParameterPointer
-static void init_infloop(root_t *r, const enum enum_root_thread ithread){
+static void init_infloop(root_t *r, const enum_root_thread_t  ithread){
   IF_LOG_FLAG(LOG_INFINITY_LOOP_RESPONSE)log_entered_function("Thread: %s  Root: %s ",enum_root_thread_S[ithread],rootpath(r));
   IF1(WITH_CANCEL_BLOCKED_THREADS,
       pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,&_unused_int);

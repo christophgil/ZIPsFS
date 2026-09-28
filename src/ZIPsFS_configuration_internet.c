@@ -24,7 +24,7 @@ static bool config_internet_hardlink_filename(char *lnk_name, char *additional_l
   const int url_l=strlen(url);
   const char *url_e=url+url_l;
   char txt[999];*txt=0;
-  const bool isFasta=!strcmp(".fasta",url_e-6) || !strcmp(".fasta.gz",url_e-9);
+  const bool isFasta=url_l>10 && (!strcmp(".fasta",url_e-6) || !strcmp(".fasta.gz",url_e-9));
 #define R "/uniprot/current_release/"
   char *shorter=strstr(url,R);  if (shorter) shorter+=sizeof(R)-1;
 #undef R
@@ -47,7 +47,7 @@ static bool config_internet_hardlink_filename(char *lnk_name, char *additional_l
   }
   *d++='_';
   const char *s=shorter?shorter:url;
-  if (d+strlen(s)>lnk_name+max_l){
+  if (d+strlen(s)>=lnk_name+max_l-1){
     warning(WARN_NET,url,"Exceeding max path-length for hard link.");
     *lnk_name=0;
   }else{
@@ -87,7 +87,7 @@ static bool config_internet_must_not_delete(const char *filename, const int file
 
 int main(int argc,char *argv[]){
 #define A "knowledgebase/reference_proteomes/Eukaryota/UP000005640/UP000005640_9606.fasta"
-  char hardlink[PATH_MAX+1];
+  char hardlink[PATH_MAX];
   char *uu[]={
       "https://ftp.uniprot.org/pub/databases/uniprot/current_release/"A,
       "ftp://ftp.expasy.org/databases/uniprot/CURRENT_RELEASE/"A,
@@ -104,10 +104,4 @@ int main(int argc,char *argv[]){
   }
   return 0;
 }
-// ST_MTIMESPEC ST_MTIME
-// #define ST_MTIME(st) strtok(ctime(&(st)->st_mtime),"\n")
-
-
-
-
 #endif

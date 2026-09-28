@@ -30,7 +30,7 @@ typedef struct{
 } textbuffer_t;
 #define  textbuffer_first_segment(b)  b->_onstack_segment[0]
 
-enum enum_exec_on_file{EXECF_MOUNTPOINT_USING_DF,EXECF_MOUNTPOINT_USING_FINDMNT, EXECF_NUM};
+typedef enum{EXECF_MOUNTPOINT_USING_DF,EXECF_MOUNTPOINT_USING_FINDMNT, EXECF_NUM}  enum_exec_on_file_t;
 enum {EXECF_SILENT=1<<1};
 
 //atomic_int _

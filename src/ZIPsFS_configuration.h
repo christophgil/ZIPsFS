@@ -21,7 +21,7 @@ enum{
 /* ---- */
 #define WITH_DEBUG_THROTTLE_DOWNLOAD 0
 #define WITH_ASSERT_LOCK     0 // Optional assertion
-#define WITH_EXTRA_ASSERT    0 // Optional assertion
+#define WITH_EXTRA_ASSERT    0// Optional assertion
 #define WITH_INEFFICIENT_ZIP_READING 0 // Without fi->direct_io=1
 #define WITH_TESTING_REALLOC 0 // Smaller initial size, earlier realloc
 #define WITH_TESTING_UNBLOCK 0
@@ -29,7 +29,7 @@ enum{
 /********************************/
 /* symbolic links i.e. symlinks */
 /********************************/
-#define WITH_FOLLOW_SYMLINK  1 /* Or set  @follow-symlinks=0 per root.    Symlink dereference can be denied in config_allow_expand_symlink() */
+#define WITH_FOLLOW_SYMLINK_ALL_ROOTS  1  /* Or set  @follow-symlinks=0 per root.    Symlink dereference can be denied in config_allow_expand_symlink() */
 
 /*******************************************************************************************************************************************************************/
 /* Avoid blocking        0 deactivated    1 activated                                                                                                              */
@@ -57,9 +57,6 @@ enum{
 
 
 enum{ASYNC_SLEEP_USECONDS=5000};    /* Sleep microseconds after checking again.  Low values increase idle CPU consumption.  Related: WITH_TIMEOUT_xxxx  */
-
-
-
 
 /***********************************************************************************************************/
 /* With the following switches, optional features like caches can be (de)activated. Active: 1 Incactive: 0 */
@@ -143,7 +140,7 @@ enum{
 #else
 enum{
   PROBE_PATH_RESPONSE_TTL_SECONDS=9,   /* Root paths which have responded within that time are considered active. */
-  PROBE_PATH_TIMEOUT_SECONDS=30,   /* Give up waiting for this root path after this time. */
+  PROBE_PATH_TIMEOUT_SECONDS=50,   /* Give up waiting for this root path after this time. */
   STAT_TIMEOUT_SECONDS=30, // Give up waiting for stat() result
   READDIR_TIMEOUT_SECONDS=30, // Give up waiting for opendir()  and readdir()
   OPENFILE_TIMEOUT_SECONDS=30,
@@ -185,6 +182,7 @@ enum{UNBLOCK_AFTER_SECONDS_THREAD_ASYNC=300, UNBLOCK_AFTER_SECONDS_THREAD_PRELOA
 #define WITH_CCODE             1 /* Generate files by C-code */
 #define WITH_INTERNET_DOWNLOAD 1 /* Access to internet files like <mount-point>/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README */
 #define WITH_PRELOADDISK       1 /* Files are preloadoed to fst branch for root paths preceded by --preload at CLI. Or for  virtual paths starting with /ZIPsFS/lr/, /ZIPsFS/lrc/, /ZIPsFS/lrz/. */
+#define WITH_FUSE_INVALIDATE_PATH 1 /* A size underestimate for generated files would lead to truncated files. */
 #define WITH_PRELOADDISK_DECOMPRESS 1
 
 

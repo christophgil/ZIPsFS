@@ -60,7 +60,7 @@ static void info_table_description(FILE *file,char *txt, const int txt_max, cons
     txt[txt_l]=0;
     P("<UL>");P(txt);P("</UL>\n");
   }else{
-    warning(WARN_FLAG_ERROR,SFILE_NAMES[SFILE_INFO],"String variable '<I>describe</I>' too small");
+    warning(WARN_FLAG_ERROR,_specialfiles[SFILE_INFO].name,"String variable '<I>describe</I>' too small");
   }
 }
 static bool isKnownExt(const char *path, int len){
@@ -92,7 +92,7 @@ static void counts_by_filetype(FILE *file, root_t *r){
           C(00,ZIP_READ_CACHE_SUCCESS)+C(12,ZIP_READ_CACHE_FAIL)+
           C(14,ZIP_READ_CACHE_CRC32_SUCCESS)+C(00,ZIP_READ_CACHE_CRC32_FAIL)+
           C(00,COUNT_RETRY_PRELOADRAM)+
-          (isKnownExt(d->ext,0)?(1L<<28):0);
+          (isKnownExt(d->ext,0)?(1ULL<<28):0);
 #undef C
       }else if (!x || d->rank>x->rank){
         x=d;
@@ -137,7 +137,7 @@ static long counter_getattr_rank(const ht_entry_t *e){
     ((vv[COUNTER_STAT_FAIL]+vv[COUNTER_OPENDIR_SUCCESS])<<10L)+
     vv[COUNTER_GETATTR_SUCCESS]+vv[COUNTER_READDIR_SUCCESS]+
     vv[COUNTER_STAT_SUCCESS]+vv[COUNTER_OPENDIR_SUCCESS]+
-    (isKnownExt(e->key,e->keylen_hash>>HT_KEYLEN_SHIFT)?(1L<<30):0);
+    (isKnownExt(e->key,e->keylen_hash>>HT_KEYLEN_SHIFT)?(1ULL<<30):0);
 }
 static void info_counts_by_filetype(FILE *file){
   const int c=_ht_count_by_ext.capacity;
@@ -250,8 +250,11 @@ static void info_malloc(FILE *file){
   H1("Global counters");
   BEGIN_PRE();
   int header=0;
-  const char *diffMarker=IS_HTML()?"<font color=\"#FF0000\">x</font>":ANSI_FG_RED"X"ANSI_RESET;
   FOR(i,1,enum_mallocid_N){
+    const char *diffMarker=
+      _malloc_free_mismatch_allowed[i]?
+      (IS_HTML()?"<FONT color=\"#00FF00\">*</FONT>":ANSI_FG_GREEN"*"ANSI_RESET):
+      (IS_HTML()?"<FONT color=\"#FF0000\">!</FONT>":ANSI_FG_RED"!"ANSI_RESET);
     if (i==COUNT_PAIRS_END){
       header=0;
       continue;
@@ -260,7 +263,8 @@ static void info_malloc(FILE *file){
     const long xB=_countersB1[i],yB=i<COUNT_PAIRS_END?_countersB2[i]:0;
     if (x||y){
       if (i<COUNT_PAIRS_END){
-        const char *mark=(x==y||x-y==1&&(i==COUNT_MALLOC_PRELOADRAM_TXTBUF||i==COUNT_FHANDLE_CONSTRUCT||i==COUNTm_FHANDLE_ARRAY_MALLOC))?" ":diffMarker;
+
+        const char *mark=(x==y||x-y==1&&(i==COUNT_MALLOC_PRELOADRAM_TXTBUF||i==COUNT_FHANDLE_CONSTRUCT||i==COUNT_FHANDLE_ARRAY_MALLOC))?" ":diffMarker;
         if (!header++) F("\n%s%44s %14s %14s %s %20s %20s %s %s\n",IS_HTML()?"<u>":ANSI_UNDERLINE,"ID", "Count","Count release","&#916;","Bytes","Bytes released","&#916;",IS_HTML()?"</u>":ANSI_RESET);
         F("%44s %'14ld %'14ld %s %'20ld %'20ld %s\n", enum_mallocid_S[i], x,y,mark,xB,yB,xB==yB?" ":diffMarker);
       }else{
@@ -286,7 +290,7 @@ static void info_print_open_files(FILE *file, int *fd_count){
       for(int i=0;(dp=readdir(dir));i++){
         if (fd_count) (*fd_count)++;
         if (!IS_HTML() || atoi(dp->d_name)<4) continue;
-        static char proc_path[PATH_MAX+1];
+        static char proc_path[PATH_MAX];
         snprintf(proc_path,PATH_MAX,"/proc/%d/fd/%s",getpid(),dp->d_name);
         const int l=readlink(proc_path,path,255);path[MAX(l,0)]=0;
         if (!strncmp(path,"/dev/",5)|| !strncmp(path,"/proc/",6) || !strncmp(path,"pipe:",5)) continue;
@@ -315,11 +319,13 @@ static void print_maps(FILE *file){
     int headerDone=0;
     char describe[999];int dc=0;
     while(!feof(f)) {
-      char buf[PATH_MAX+100],perm[5],dev[6],mapname[PATH_MAX+1]={0};
-      unsigned long long begin,end,inode,foo;
+      char buf[PATH_MAX+100],perm[5],dev[6],mapname[PATH_MAX]={0};
+      //      unsigned long long begin,end,inode,foo;
+      uintmax_t begin,end,inode,foo;
       if(fgets(buf,sizeof(buf),f)==0) break;
       *mapname=0;
-      const int k=sscanf(buf, "%llx-%llx %4s %llx %5s %llu %100s",&begin,&end,perm,&foo,dev, &inode,mapname);
+      //      const int k=sscanf(buf, "%llx-%llx %4s %llx %5s %llu %100s",&begin,&end,perm,&foo,dev, &inode,mapname);
+      const int k=sscanf(buf, "%jx-%jx %4s %jx %5s %ju %100s",&begin,&end,perm,&foo,dev, &inode,mapname);
       if (k>=6){
         const int64_t size=end-begin;
         total+=size;
@@ -327,9 +333,9 @@ static void print_maps(FILE *file){
           RLOOP(isHeader,(!headerDone++?2:1)){
             if (isHeader) P("<TABLE border=\"1\">\n<THEAD>\n");
             P("<TR>\n");
-            R(true,"Addr&gt;&gt;12", "Address divided by 4096", "%08llx",LLU(begin>>12));
+            R(true,"Addr&gt;&gt;12", "Address divided by 4096", "%08jx",UIM(begin>>12));
             R(true,"Name",           "Name of map",             "%s",mapname);
-            R(true,"kB",             "Size of map (kB)",        "%'lld",LLD(size>>10));
+            R(true,"kB",             "Size of map (kB)",        "%'jd",IM(size>>10));
             //repeat_chars_info(file,'-',MIN_int(L,(int)(3*log(size))));
             END_HR();
           }
@@ -361,7 +367,7 @@ static void info_print_memory(FILE *file){
 #if ! defined(HAS_RLIMIT) || HAS_RLIMIT
     struct rlimit rl={0}; getrlimit(RLIMIT_AS,&rl);
     const bool rlset=rl.rlim_cur!=-1;
-    if(rlset) F(" / rlimit %lld MB<BR>\n",LLD(rl.rlim_cur>>20));
+    if(rlset) F(" / rlimit %jd MB<BR>\n",IM(rl.rlim_cur>>20));
 #endif
   }
 #if IS_LINUX
@@ -371,7 +377,7 @@ static void info_print_memory(FILE *file){
 #else
 #define MALLINFO() mallinfo()
 #endif
-  F("uordblks: %'lld bytes\n",LLD(MALLINFO().uordblks));
+  F("uordblks: %'jd bytes\n",IM(MALLINFO().uordblks));
 #endif // IS_LINUX
   if (has_proc_fs()){
     int val; print_proc_status(file,"VmRSS:|VmHWM:|VmSize:|VmPeak:",&val);
@@ -380,7 +386,7 @@ static void info_print_memory(FILE *file){
   {
     struct rlimit rl={0};
     getrlimit(RLIMIT_AS,&rl);
-    if (rl.rlim_cur!=-1) F("Rlim soft: %llx MB   hard: %llx MB\n",LLD(rl.rlim_cur>>20),LLD(rl.rlim_max>>20));
+    if (rl.rlim_cur!=-1) F("Rlim soft: %jx MB   hard: %jx MB\n",UIM(rl.rlim_cur>>20),UIM(rl.rlim_max>>20));
   }
 #endif
 }
@@ -402,10 +408,10 @@ static void print_fhandle(FILE *file,const char *title){
       if (!d->flags) {log_verbose("fhandle_try_destroy success");continue;}
     }
     P("<TR>\n");
-    R(true,"Seqid","","%llu",LLU(d->fhandle_fh));
+    R(true,"Seqid","","%ju",UIM(d->fhandle_fh));
     R(true,"Path","","%s",!d?"Null":D_VP(d));
-    R(true,"Last-access","How many s ago","%'lld s",!d?0:LLD(d->accesstime?(t0-d->accesstime):-1));
-    R(true,"PID","PID of calling process","%lld",LLD(d->pid));
+    R(true,"Last-access","How many s ago","%'jd s",!d?0:IM(d->accesstime?(t0-d->accesstime):-1));
+    R(true,"PID","PID of calling process","%jd",IM(d->pid));
 
 
       *tmp=0;
@@ -416,9 +422,9 @@ static void print_fhandle(FILE *file,const char *title){
     const struct preloadram *m=d?d->preloadram:NULL;
     const textbuffer_t *tb=m?m->txtbuf:NULL; // cppcheck-suppress unreadVariable
     R(tb!=NULL,"preloadram->ID",        "",                                                     "%05x",!m?0:m->id);
-    R(tb!=NULL,"Read",     "Bytes already read into cache",                        "%'lld",!m?0:LLD(m->preloadram_already));
-    R(tb!=NULL,"Bytes",    "Total size",                                           "%'lld",!m?0:LLD(m->preloadram_l));
-    R(tb!=NULL,"Millisec", "How long did it take to read file content into cache.","%'lld",!m?0:LLD(m->preloadram_took_mseconds));
+    R(tb!=NULL,"Read",     "Bytes already read into cache",                        "%'jd",!m?0:IM(m->preloadram_already));
+    R(tb!=NULL,"Bytes",    "Total size",                                           "%'jd",!m?0:IM(m->preloadram_l));
+    R(tb!=NULL,"Millisec", "How long did it take to read file content into cache.","%'jd",!m?0:IM(m->preloadram_took_mseconds));
 #endif //WITH_PRELOADRAM
     const bool locked=d && fhandle_mutex_initialized(0,d) && pthread_mutex_trylock(&d->mutex[0]);
     if (d && !locked) pthread_mutex_unlock(&d->mutex[0]);
@@ -496,7 +502,7 @@ static void print_info(const int flags,FILE *file){
   LOCK(mutex_fhandle,_print_info(flags,file));
 }
 static const char *print_info_file(){
-  const char *rp=SFILE_REAL_PATHS[SFILE_INFO];
+  const char *rp=_specialfiles[SFILE_INFO].rp;
   FILE *file=fopen(rp,"w");
   if (!file){ warning(WARN_OPEN|WARN_FLAG_ERRNO,rp,"fopen(\"w\")"); return NULL;}
   print_info(0,file);
@@ -539,7 +545,7 @@ static void fhandle_log_cache(const fHandle_t *d){
   if (!d){ log_char('\n');return;}
   ASSERT_LOCKED_FHANDLE();
   const struct preloadram *m=d->preloadram;
-  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %lld/%lld   hasc: %s\n",d,D_VP(d),yes_no(m && m->txtbuf),!m?0:enum_preloadram_status_S[m->preloadram_status],LLD(!m?-1:m->preloadram_already),LLD(!m?-1:m->preloadram_l),yes_no(m && m->preloadram_l>0));
+  log_msg("log_cache: d: %p path: %s cache: %s,%s cache_l: %jd/%jd   hasc: %s\n",d,D_VP(d),yes_no(m && m->txtbuf),!m?0:enum_preloadram_status_S[m->preloadram_status],IM(!m?-1:m->preloadram_already),IM(!m?-1:m->preloadram_l),yes_no(m && m->preloadram_l>0));
 }
 #endif //0
 #undef R

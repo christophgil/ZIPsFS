@@ -100,7 +100,8 @@ static void cg_print_stat(struct stat *st,FILE *f){
   if (!st){
     fputs(" struct stat is NULL. ",f);
   }else{
-    fprintf(f," struct stat = ino:%llu size:%'llu mtime:%s ",LLU(st->st_ino),LLU(st->st_size),ST_MTIME(st)); cg_print_file_mode(st->st_mode,f);
+    DATETIME_BUF();
+    fprintf(f," struct stat = ino:%ju size:%'ju mtime:%s ",UIM(st->st_ino),UIM(st->st_size),DATETIME_COLON(st->st_mtime)); cg_print_file_mode(st->st_mode,f);
   }
 }
 
@@ -111,19 +112,19 @@ static void cg_print_stat(struct stat *st,FILE *f){
 #if 0
 static int functions_count[functions_l];
 static int64_t functions_time[functions_l];
-static const char *function_name(enum enum_functions f){
+static const char *function_name(enum_functions_t f){
 #define C(x) f==x ## _ ? #x :
   return C(xmp_open) C(xmp_access) C(xmp_getattr) C(xmp_read) C(xmp_readdir) C(mcze) "null";
 #undef C
 }
-static void _log_count_b(enum enum_functions f){
+static void _log_count_b(enum_functions_t f){
   functions_time[f]=currentTimeMillis();
   log(" >>%s%d ",function_name(f),functions_count[f]);
   pthread_mutex_lock(mutex+mutex_log_count);
   functions_count[f]++;
   pthread_mutex_unlock(mutex+mutex_log_count);
 }
-static void _log_count_e(enum enum_functions f,const char *path){
+static void _log_count_e(enum_functions_t f,const char *path){
   const int64_t ms=currentTimeMillis()-functions_time[f];
   pthread_mutex_lock(mutex+mutex_log_count);
   --functions_count[f];

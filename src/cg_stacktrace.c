@@ -74,9 +74,9 @@ static void cg_print_stacktrace_using_debugger(void){
 static const char *this_executable(void){
   if (_thisPrg && *_thisPrg=='/') return _thisPrg;
   static bool already;
-  static char thisPrgRP[PATH_MAX+1]={0};
+  static char thisPrgRP[PATH_MAX]={0};
   if (!already){
-static char tmp[PATH_MAX+1];
+static char tmp[PATH_MAX];
     if (!has_proc_fs()){
       static int reported;
       if (!reported++) log_error("For symbolizing the stack trace, please call the program %s with absolute path.\n", snull(_thisPrg));
@@ -280,7 +280,7 @@ static void init_sighandler(const char* main_argv_0, uint64_t signals,FILE *out)
 #if 0
   set_signal_handler(my_signal_handler,signals);
 #else
-  if (signals==0) signals=(1L<<SIGABRT)|(1L<<SIGFPE)|(1L<<SIGILL)|(1L<<SIGINT)|(1L<<SIGSEGV)|(1L<<SIGTERM);
+  if (signals==0) signals=(1ULL<<SIGABRT)|(1ULL<<SIGFPE)|(1ULL<<SIGILL)|(1ULL<<SIGINT)|(1ULL<<SIGSEGV)|(1ULL<<SIGTERM);
   for(int sig=64,already=0;--sig>=0;){
     if ((1LU<<sig)&signals){
       struct sigaction act={0};
@@ -313,7 +313,7 @@ int main(int argc, char *argv[]){
     assert(stckOut()!=NULL);
 
   _thisPrg=argv[0];
-  init_sighandler(argv[0],(1L<<SIGABRT)|(1L<<SIGFPE)|(1L<<SIGILL)|(1L<<SIGINT)|(1L<<SIGSEGV)|(1L<<SIGTERM),stderr);
+  init_sighandler(argv[0],(1ULL<<SIGABRT)|(1ULL<<SIGFPE)|(1ULL<<SIGILL)|(1ULL<<SIGINT)|(1ULL<<SIGSEGV)|(1ULL<<SIGTERM),stderr);
 
 
   //  cg_print_stacktrace_test(1);

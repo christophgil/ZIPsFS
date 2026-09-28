@@ -45,7 +45,7 @@ static yes_zero_no_t find_realpath_try_zipflat_rules(zpath_t *zpath, root_t *r){
     const yes_zero_no_t ok=find_realpath_try_zipflat_rule(zpath,r,rule);
     if (ok==ZERO) break;
     if (ok==YES){ ret=YES;break;}
-    if (zpath->flags&ZP_OVERFLOW){ ret=NO;break;}
+    if (ZPF(ZP_OVERFLOW)){ ret=NO;break;}
   }
   return ret;
 }
@@ -56,10 +56,12 @@ static yes_zero_no_t find_realpath_try_zipflat_rules(zpath_t *zpath, root_t *r){
 /* Initially folders .Zip.Content are shown.                                 */
 /* With the time these folders get replaced by the inlined zipentries.       */
 /*****************************************************************************/
-static bool readdir_zipflat_from_cache(const int opt, const zpath_t *zpath_parentdir, const char *zipfilename, void *buf, fuse_fill_dir_t filler,ht_t *no_dups){
+static bool readdir_zipflat_from_cache(const zpath_t *zpath_parentdir, const char *zipfilename, void *buf, fuse_fill_dir_t filler,ht_t *no_dups, directory_t *dir_generated){
   directory_t dir={0};
   directory_init_zpath(&dir,NULL);
-  zpath_init_vp(&dir.dir_zpath,ZP_VP(zpath_parentdir),zpath_parentdir->virtualpath_l, zipfilename);
+  const int vfolder_l=VFOLDER_PATH_L(zpath_parentdir);
+  zpath_init_vp(&dir.dir_zpath,ZP_VP(zpath_parentdir)+vfolder_l,zpath_parentdir->vp_l-vfolder_l, zipfilename);
+
   bool ok=test_realpath(0,0,&dir.dir_zpath,zpath_parentdir->root);
   if (ok){ LOCK(mutex_dircache,  ok=dircache_directory_from_cache(&dir));}
   if (!ok){
@@ -70,15 +72,19 @@ static bool readdir_zipflat_from_cache(const int opt, const zpath_t *zpath_paren
       const char *n2=dir.core.fname[j];
       if (n2 && !strchr(n2,'/')){
         stat_init(&st,(Nth0(dir.core.fflags,j)&DIRENT_ISDIR)?-1:Nth0(dir.core.fsize,j),&zpath_parentdir->stat_rp);
-        //st.st_ino=make_inode(zpath_parentdir->stat_rp.st_ino,zpath_parentdir->root,Nth(dir.core.finode,j,j),RP());
-        st.st_ino=zpath_make_inode(zpath_parentdir,Nth(dir.core.finode,j,j));
+        //log_debug_now(" Nth(dir.core.finode,j,j) %lu ",Nth(dir.core.finode,j,j));
+        st.st_ino=ZPATH_MAKE_INODE(zpath_parentdir,Nth(dir.core.finode,j,j)+INODE_OFFSET_ENTRY);
         char n[MAX_PATHLEN+1];
         const int n_l=zipentry_placeholder_expand(n,n2,zipfilename,NULL);
-        if (config_containing_zipfile_of_virtual_file(0,n,n_l,NULL)>=0) filler_add(opt,filler,buf,n,n_l,ZPATH_FILLDIR_SFX(zpath_parentdir),&st,no_dups);
+        if (config_containing_zipfile_of_virtual_file(0,n,n_l,NULL)>=0){
+          filler_add(filler,buf,n,n_l,&st,no_dups);
+          IF1(WITH_FILECONVERSION,fileconversion_add_to_dir(buf,n,n_l,no_dups,dir_generated));
+        }
       }
     }
     directory_destroy(&dir);
   }
+  //log_entered_function("zipfilename %s %s",zipfilename,success_or_fail(ok));
   return ok;
 }
 #if WITH_ZIPFLATCACHE
@@ -110,13 +116,13 @@ static int _what_rule_matches_zipfile_name(const char *ext, const char *ext_rp, 
 static void zipflatcache_store_allentries_of_dir(directory_t *dir){
   if (dir->cached_vp_to_zip++) return; /* Only once */
   const zpath_t *zpath=&dir->dir_zpath;
-  if (VP_L() && zpath->root && DIR_IS_ZIP() && config_skip_zipfile_show_zipentries_instead(RP(),RP_L())){ // USED_TO_BE DIR_IS_TRY_ZIP
+  if (VP_L() && ZPR() && DIR_IS_ZIP() && config_skip_zipfile_show_zipentries_instead(RP(),RP_L())){
     cg_thread_assert_locked(mutex_dircache);
     const char *ext_rp=strchr(RP()+cg_last_slash(RP())+1,'.'); /* For example ".wiff.Zip" */
     if (!ext_rp) return;
     const int ext_rp_l=strlen(ext_rp);
     //log_debug_now(" RP:%s dot:%s",RP(),rp_ext);
-    static char u[PATH_MAX+1], vp[PATH_MAX+1];
+    static char u[PATH_MAX], vp[PATH_MAX];
     const int vp0_l=VP_L()-EP_L(); /* Virtual length without Zipentry */
     //log_debug_now("VP: %s %d EP: %s %d   vp0_l: %d    ",VP(),VP_L(), EP(),EP_L(),  vp0_l);
     ASSERT(vp0_l>0);
@@ -129,7 +135,7 @@ static void zipflatcache_store_allentries_of_dir(directory_t *dir){
       const int u_l=zipentry_placeholder_expand(u,n,RP(),dir), vp_l=vp0_l+u_l;
       memcpy(vp+vp0_l,u,u_l);  vp[vp_l]=0;
       //log_debug_now(ANSI_FG_MAGENTA"u=%s   vp: %s rule:%ld"ANSI_RESET,u,vp,rule);
-      ht_numkey_set(&zpath->root->ht_zipflatcache_vpath_to_rule,hash32(vp,vp_l),vp_l,(const void*)(rule+1));
+      ht_numkey_set(&ZPR()->ht_zipflatcache_vpath_to_rule,hash32(vp,vp_l),vp_l,(const void*)(rule+1));
     } /* Note: We are not storing vp. We rely on its hash value and accept collisions. */
   }
 }
@@ -150,6 +156,6 @@ static bool zipflatcache_find_realpath(zpath_t *zpath,const long which_roots){
 
 
 static void zipflatcache_drop(zpath_t *zpath){
-  if (zpath->root) ht_numkey_set(&zpath->root->ht_zipflatcache_vpath_to_rule,hash32(VP(),VP_L()),VP_L(),NULL);
+  if (ZPR()) ht_numkey_set(&ZPR()->ht_zipflatcache_vpath_to_rule,hash32(VP(),VP_L()),VP_L(),NULL);
 }
 #endif //WITH_ZIPFLATCACHE

@@ -11,7 +11,7 @@ static char *ctrl_file_end(){
   static char s[222]={0};
   if (!*s){
     #if 1
-    sprintf(s,"%llx",LLD(hash64(_mnt,strlen(_mnt))));
+    sprintf(s,"%jx",UIM(hash64(_mnt,strlen(_mnt))));
     #else
     struct timespec t;
     timespec_get(&t,TIME_UTC);
@@ -20,7 +20,7 @@ static char *ctrl_file_end(){
     srand(t.tv_nsec);
     int r2=rand();
     srand(getpid());
-    sprintf(s,"%x%x%x%lx%llx",r1,r2,rand(),t.tv_nsec,LLD(t.tv_sec));
+    sprintf(s,"%x%x%x%lx%jx",r1,r2,rand(),t.tv_nsec,IM(t.tv_sec));
     #endif
   }
   return s;
@@ -47,7 +47,7 @@ static bool trigger_files(const char *path,const int path_l){
           IF1(WITH_CLEAR_CACHE, if (0<=para && para<enum_clear_cache_N) dircache_clear_if_reached_limit_all(true,para?(1<<para):0xFFFF));
           return true;
         case ACT_KILL_ZIPSFS:
-          //LOCK(mutex_special_file,make_info(0);if (_info) fputs(_info,stderr));
+          //LOCK(mutex_specialfile,make_info(0);if (_info) fputs(_info,stderr));
           IF1(WITH_PROFILER,print_profile());
           DIE("Killed due to  ACT_KILL_ZIPSFS");
           break;

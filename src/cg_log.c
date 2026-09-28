@@ -30,16 +30,15 @@ static void _viamacro_warning(const char *fn,int line,const uint32_t channel,con
   static int written;
   if (!channel){
     assert(_fWarnErr[0]!=NULL);
-        assert(_fWarnErr[1]!=NULL);
-
+    assert(_fWarnErr[1]!=NULL);
     initialized=true;
     pthread_mutex_init(&mutex,NULL);
     HT_INIT(&_ht_warning,7);
     return;
   }
   const int i=channel&((1<<WARN_SHIFT_MAX)-1);
-  if (!initialized){ log_error("Initialization  with warning(0,NULL) required.\n");EXIT(1);}
-  if (!_warning_channel_name[i]){ log_error("_log_channels not initialized:\n");EXIT(1);}
+  if (!initialized){ log_error("Initialization  with warning(0,NULL) required.\n"); EXIT(1);}
+  if (!_warning_channel_name[i]){ log_error("_log_channel_not_initialized: %d\n",i); cg_print_stacktrace(0);  IF1(WITH_EXTRA_ASSERT, EXIT(1));}
   const int mx=(channel>>WARN_SHIFT_MAX)&0xFFff;
   const char *p=path?path:"";
   bool toFile=true;
@@ -63,9 +62,7 @@ static void _viamacro_warning(const char *fn,int line,const uint32_t channel,con
         if (!(channel&WARN_FLAG_WITHOUT_NL)) fputc('\n',f);
         if (iserror){
           time_t t=time(NULL);
-          char tmp[32];
-          strftime(tmp,31,"%Y%m%d_%H:%M:%S ",gmtime(&t));
-          fputs(tmp,f);
+          DATETIME_BUF(); fputs(DATETIME_COLON(t),f);
         }
     fprintf(f,"%d\t%s%s"ANSI_RESET"\t%s():%d\t%s\t",_warning_count[i],color?color:ANSI_FG_RED,pfx?pfx:"ERROR",fn,line,p);
     va_list argptr; va_start(argptr,format);vfprintf(f,format,argptr);va_end(argptr);

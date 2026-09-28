@@ -100,8 +100,9 @@ go(){
 probe_path_response_ttl=4
 probe_path_timeout=44
 preload=1
+preload_entire_zip=1
 path_prefix=/db
-decompression=gz,bz2
+decompression=gz,bz2,Z
 EOF
         [[ -n $exclude ]] && echo "path_deny=$exclude"
     } >$root.ZIPsFS.properties
@@ -155,11 +156,11 @@ if false; then
 fi
 go massive-ftp.ucsd.edu                            massive
 go ftp.pride.ebi.ac.uk/pride/data/archive          pride
-go ftp.uniprot.org                                 uniprot
+# go ftp.uniprot.org                                 uniprot
 
 # ## The folder /pub/ebi/databases/pdb/data/structures/all contains all PDB entries and reading this huge directory needs to be avoided.
 go ftp.ebi.ac.uk/pub                               ebi  '::/db/ebi/databases/pdb/data/structures/all:/Note/that/you/can/exclude/several/paths:/colon/separates/paths::'
-go ftp.pdbj.org/pub                                pdbj '::/db/pdbj/pdb/data/structures/all'
+# go ftp.pdbj.org/pub                                pdbj '::/db/pdbj/pdb/data/structures/all'
 
 if ((DO_UMOUNT)); then
     pids=$(pgrep -u $USER -f "\\brclone\\b.*$PARENT/";  pgrep -u $USER -f "\\bcurlftpfs\\b.*$PARENT/")

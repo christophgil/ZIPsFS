@@ -64,11 +64,11 @@ static const int config_virtual_dirpath_to_zipfile(const char *b, const char *e,
 #include "ZIPsFS_configuration_zipfile.c"
 #endif //WITH_ZIPFLAT
 
- /************************************************************************************************/
- /* When a cached struct stat is found the the cache, is it still valid and how many seconds?    */
- /* Unlimited for remote branches and files that are read-only files.                            */
- /* st_or_null is NULL for getting from cache.                                                   */
- /************************************************************************************************/
+/************************************************************************************************/
+/* When a cached struct stat is found the the cache, is it still valid and how many seconds?    */
+/* Unlimited for remote branches and files that are read-only files.                            */
+/* st_or_null is NULL for getting from cache.                                                   */
+/************************************************************************************************/
 
 
 #if WITH_STATCACHE
@@ -77,7 +77,7 @@ static long config_file_attribute_cache_TTL(const int flags, const char *rootpat
   /* Available Flags:
      (flags&STATCACHE_ROOT_IS_WRITABLE)
      (flags&STATCACHE_ROOT_IS_REMOTE)
-     (flags&STATCACHE_ROOT_IS_PRELOADING)
+     (flags&STATCACHE_IS_PRELOADDISK)
      (flags&STATCACHE_ROOT_WITH_TIMEOUT)
      (flags&STATCACHE_IS_PFXPLAIN))
      (flags&STATCACHE_ROOT_IS_WORM))
@@ -98,10 +98,10 @@ static long config_file_attribute_cache_TTL(const int flags, const char *rootpat
 }
 #endif //WITH_STATCACHE
 
- /*****************************************************/
- /* A ZIP file is shown as a folder.                  */
- /* Convert the ZIP filename to a virtual folder name */
- /*****************************************************/
+/*****************************************************/
+/* A ZIP file is shown as a folder.                  */
+/* Convert the ZIP filename to a virtual folder name */
+/*****************************************************/
 
 
 
@@ -159,9 +159,8 @@ static bool config_not_report_stat_error(const char *path,const int path_l){
 ///   > 0: Cache is advised and requires n bytes         ///
 ////////////////////////////////////////////////////////////
 static off_t config_advise_preload_file_ram(const int flags,const char *virtualpath, const int vp_l, const char *rootpath,const off_t filesize){
-
   if (_not_run_suggestions){
-  /* You may want to make it dependent on the caller.  On some computer systems, the  command name  can be obtained.*/
+    /* You may want to make it dependent on the caller.  On some computer systems, the  command name  can be obtained.*/
     const  pid_t pid=get_request_pid();
     char exe[256];
     pid_to_exe(pid,exe,256);
@@ -171,27 +170,28 @@ static off_t config_advise_preload_file_ram(const int flags,const char *virtualp
   if (flags&ADVISE_CACHE_BY_POLICY) return filesize;
   //  if (ENDSWITH(virtualpath,vp_l,".raw")  || ENDSWITH(virtualpath,vp_l,".rawIdx")  || ENDSWITH(virtualpath,vp_l,".wiff")) return filesize;
   off_t need=filesize;
-  bool cache=((flags&ADVISE_CACHE_IS_COMPRESSEDZIPENTRY)&&(flags&ADVISE_CACHE_IS_SEEK_BW))
-    || ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin");
+  bool cache=((flags&ADVISE_CACHE_IS_COMPRESSEDZIPENTRY)&&(flags&ADVISE_CACHE_IS_SEEK_BW))    || ENDSWITH(virtualpath,vp_l,"analysis.tdf_bin");
 
   //	|| ENDSWITH(virtualpath,vp_l,".raw") && STARTSWITH(cg_strrchr_null(virtualpath,'/'),"/20")
-    /*  Thermo raw files: Not applicable to FragPipe because raw file opened and closed multiple times. */
+  /*  Thermo raw files: Not applicable to FragPipe because raw file opened and closed multiple times. */
 
   if (!cache && ENDSWITH(virtualpath,vp_l,"analysis.tdf") && vp_l+4<MAX_PATHLEN){ /* Note: timsdata.dll opens analysis.tdf first  and then analysis.tdf_bin */
     cache=true;
     char tdf_bin[MAX_PATHLEN+1]; stpcpy(stpcpy(tdf_bin,virtualpath),"_bin");
     struct stat st_tdf_bin;
-    if (!statForVirtualpathAndRootpath(&st_tdf_bin,tdf_bin,rootpath)){
-      //log_warn("%s:%d Warning: Missing file %s\n",__func__,__LINE__,tdf_bin);
-      return false;
-    }
-    need+=st_tdf_bin.st_size;
+    if (statForVirtualpathAndRootpath(&st_tdf_bin,tdf_bin,rootpath)) need+=st_tdf_bin.st_size;  else log_warn("%s:%d Warning: Missing file %s\n",__func__,__LINE__,tdf_bin);
+
   }
   return cache?need:-1;
 }
 #endif //WITH_PRELOADRAM
 
 
+
+/*******************************/
+/* Remove data from page cache */
+/* Same as /usr/bin/vmtouch -e */
+/*******************************/
 static bool config_advise_evict_from_filecache(const char *realpath,const int realpath_l, const char *zipentryOrNull, const off_t filesize){
   if (strstr(realpath,"/TIMS2/Data/30-0028/") ||
       strstr(realpath,"/20230612_PRO3_") ||
@@ -199,7 +199,20 @@ static bool config_advise_evict_from_filecache(const char *realpath,const int re
       strstr(realpath,"/Data/30-0051/") ||
       strstr(realpath,"/PRO3/Data/30-0106")
       ) return false;
-  return _is_tdf_or_tdf_bin(zipentryOrNull) || _is_tdf_or_tdf_bin(realpath);
+  if (_is_tdf_or_tdf_bin(zipentryOrNull) || _is_tdf_or_tdf_bin(realpath)){
+    const char *exe="/home/cgille/compiled/rawfile_vmtouch_e";
+    /* In our specific case, the file is in a FUSE bind.
+       posix_fadvise() will be  applied to the mounted fs, but not to the source fs of the FUSE.
+       Therefore we use an  external app in addition.
+       Normally, this is not required. */
+    if (strstr(realpath,"/f-cc02-ag_ralser") && cg_file_exists(exe)){
+      const char *cmd[]={exe,realpath,(char*)0};
+      cg_fork_exec(cmd,NULL,0,0,0);
+    }
+    return true;
+  }
+  return false;
+
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Lots of stupid redundand FS requests while tdf and tdf_bin files are read.                              ///
@@ -239,8 +252,8 @@ static bool config_not_overwrite(const char *path,const int path_l){
 ////////////////////////////////////////////////////////////
 #if WITH_DIRCACHE
 static bool config_advise_cache_directory_listing(const int flags,const char *path,const int path_l,const struct timespec mtime){
-  //log_debug_now("mtime.tv_sec=%ld  ADVISE_DIRCACHE_IS_DIRPLAIN=%d  ADVISE_DIRCACHE_IS_ZIP:%d  ADVISE_DIRCACHE_IS_REMOTE:%d",
-  // mtime.tv_sec, flags&ADVISE_DIRCACHE_IS_DIRPLAIN,  flags&ADVISE_DIRCACHE_IS_ZIP, flags&ADVISE_DIRCACHE_IS_REMOTE);
+  //log_debug_now("mtime.tv_sec=%ld  ADVISE_DIRCACHE_IS_AS_IS=%d  ADVISE_DIRCACHE_IS_ZIP:%d  ADVISE_DIRCACHE_IS_REMOTE:%d",
+  // mtime.tv_sec, flags&ADVISE_DIRCACHE_IS_AS_IS,  flags&ADVISE_DIRCACHE_IS_ZIP, flags&ADVISE_DIRCACHE_IS_REMOTE);
   if ((flags&ADVISE_DIRCACHE_IS_ZIP)) return true;
   if (flags&ADVISE_DIRCACHE_IS_REMOTE){
     struct timeval tv={0};
@@ -347,7 +360,7 @@ static void config_exclude_files(const char *path, const int path_l, const int n
 ///     No space left on device                                                  ///
 ////////////////////////////////////////////////////////////////////////////////////
 static bool config_has_sufficient_storage_space(const char *realpath, const long availableBytes, const long totalBytes){
-  return availableBytes*16>totalBytes;
+  return totalBytes-availableBytes>1e9;
 }
 //////////////////////////////////////////////////////////////////////
 /// Data files downloaded from the internet                        ///
@@ -365,11 +378,11 @@ static int config_internet_try_compressed(const char *vp,const int vp_l){
 
 
 
- /*************************************************************************************************************************/
- /* Symlinks are not expanded by ZIPsFS and  are shown as symlinks, unless for root-paths marked with @follow-symlinks.   */
- /* Then all symlinks are expanded that stay within the file trees.                                                       */
- /* Outgoing symlinks are expanded only if this function returns true.                                                    */
- /*************************************************************************************************************************/
+/*************************************************************************************************************************/
+/* Symlinks are not expanded by ZIPsFS and  are shown as symlinks, unless for root-paths marked with @follow-symlinks.   */
+/* Then all symlinks are expanded that stay within the file trees.                                                       */
+/* Outgoing symlinks are expanded only if this function returns true.                                                    */
+/*************************************************************************************************************************/
 static bool config_allow_expand_symlink(const char *orig, const char *target,const char *target_absolute_path){
   /* The following could be used to include FTP sites from avfs */
   bool allow=!strchr(target,'/');

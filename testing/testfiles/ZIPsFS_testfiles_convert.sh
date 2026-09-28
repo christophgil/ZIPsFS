@@ -3,8 +3,7 @@ set -u
 
 # cargo install csv2parquet
 
-src=${BASH_SOURCE[0]}
-source ${src%/*}/ZIPsFS_testfiles_inc.sh
+source ${BASH_SOURCE%/*}/ZIPsFS_testfiles_inc.sh
 
 EE='png jpg gif'
 
@@ -58,19 +57,11 @@ mk_pdf(){
 
 
 main(){
-    ask_remove_converted
-    if false; then
-        read -r -p "Remove $REMOTE1/test_fileconvert? [y/N] "
-        if [[ ${REPLY,,} == *y*  ]]; then
-            rm -v -r "$REMOTE1/test_fileconvert";
-            sleep 1
-        fi
-    fi
     mkdir -p  {$MNT,$REMOTE1}/test_fileconvert
     ls -l -t  {$MNT,$REMOTE1}/test_fileconvert
 
     echo "${ANSI_INVERSE}pdf 2 txt$ANSI_RESET"
-    local f=$MNT/zipsfs/c/$(mk_pdf)
+    local f=$MNT/zipsfs/c/-/$(mk_pdf)
     ! ls -l  $f && prompt_error
 
     echo "Going to type $f.txt ..." >&2
@@ -82,14 +73,14 @@ main(){
     echo "${ANSI_INVERSE}Scale images$ANSI_RESET"
     local ext base=$(mk_test_img)
     for ext in $EE; do
-        local f=$MNT/zipsfs/c$base.scale25%.$ext
+        local f=$MNT/zipsfs/c/-$base.scale25%.$ext
         set -x; rm $f  2>/dev/null; set +x
         ! picterm $f && prompt_error
         ! picterm $f && prompt_error
     done
 
     echo "${ANSI_INVERSE}ocr$ANSI_RESET"
-    local f=$MNT/zipsfs/c$base.png.ocr.eng.txt
+    local f=$MNT/zipsfs/c/-$base.png.ocr.eng.txt
 
     set -x; rm $f  2>/dev/null; set +x
     ! head -v $f && prompt_error
@@ -97,12 +88,11 @@ main(){
 
     echo "${ANSI_INVERSE}parquet$ANSI_RESET"
     local vp=$(mk_parquet)
-    local f=$MNT/zipsfs/c$vp.tsv
+    local f=$MNT/zipsfs/c/-$vp.tsv
     set -x; rm $f 2>/dev/null; set +x
     ! ls -l $f && prompt_error
     ! head -v $f && prompt_error
     ! head -v $f && prompt_error
-
 }
 
 
@@ -110,5 +100,5 @@ main(){
 
 
 main "$@"
-# echo "${ANSI_INVERSE}Second Pass ${ANSI_RESET}"
-# main "$@"
+
+ask_remove_converted && main "$@"

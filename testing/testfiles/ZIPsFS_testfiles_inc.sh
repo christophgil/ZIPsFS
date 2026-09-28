@@ -22,7 +22,9 @@ Enter(){
 test_is_in_listing(){
     local vp=$1
     [[ $vp == *@SOURCE.TXT ]] && return
+    #set -x
     find ${vp%/*} | grep  -F /${vp##*/} |sed 's|^|test_is_in_listing |1' || echo -e "\n${ANSI_FG_RED} MISSING   find ${vp%/*} | grep -q -F /${vp##*/}    $ANSI_RESET\n"
+    #set +x
 }
 
 test_checksum(){
@@ -93,18 +95,26 @@ prompt_error(){
 
 
 
+
+askRemoveYn(){
+    WITH_REMOVE=0
+    read -r -p "Remove ${1:-preload} files? [Y/n] "
+    [[ ${REPLY,,} != *n*  ]] &&  WITH_REMOVE=1 && return 0
+    return 1
+}
+
 ask_remove_converted(){
-    read -r -p "Remove $MODI/zipsfs/c? [Y/n] "
-    if [[ -z $REPLY || ${REPLY,,} == *y*  ]]; then
+    if askRemoveYn converted; then
         rm -v -r "$MODI/zipsfs/c/test_fileconvert";
-        sleep 1
+        return 0
     fi
+    return true
 }
 
 
 assure_mountpoint_db(){
     local m=~/.ZIPsFS/db/$1
-    mountpoint $m && ls -d $MNT/zipsfs/~1/db  && return 0
+    mountpoint $m && ls -d $MNT/zipsfs/-1/-/db  && return 0
     echo "${ANSI_FG_RED}Error:${ANSI_RESET}   ZIPsFS_testfiles_start_ZIPsFS.sh needs to be run without option -f to mount the databases"
     return 1
 }

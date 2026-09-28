@@ -88,7 +88,6 @@ typedef enum { NO=-1,ZERO,YES} yes_zero_no_t;
 #define ST_MTIMESPEC st_mtim
 #endif
 #define CG_TIMESPEC_EQ(a,b) ((a).tv_sec==(b).tv_sec && (a).tv_nsec==(b).tv_nsec)
-#define ST_MTIME(st) time_as_strg((st)->st_mtime)
 ////////////////////////////////////////
 #define FOR(var,from,to) for(int var=from;var<(to);var++)
 #define RLOOP(var,from) for(int var=from;--var>=0;)
@@ -174,7 +173,7 @@ M(MAX,long)
 #define FREE_NULL_MALLOC_ID(b) cg_free_null(b?b->malloc_id:0,b)
 
 
-#define PRINT_PFX_FUNC_MSG(pfx1,pfx2,sfx,...)  fprintf(stderr,pfx1"%lld %s():%i "pfx2,LLD(time(NULL)-_whenStarted),__func__,__LINE__),fprintf(stderr,__VA_ARGS__),puts_stderr(sfx)
+#define PRINT_PFX_FUNC_MSG(pfx1,pfx2,sfx,...)  fprintf(stderr,pfx1"%jd %s():%i "pfx2,IM(time(NULL)-_whenStarted),__func__,__LINE__),fprintf(stderr,__VA_ARGS__),puts_stderr(sfx)
 
 #define log_entered_function(...)     PRINT_PFX_FUNC_MSG(ANSI_INVERSE" > > > "ANSI_RESET," ","\n",__VA_ARGS__)
 #define log_exited_function(...)      PRINT_PFX_FUNC_MSG(ANSI_INVERSE" < < < "ANSI_RESET," ","\n",__VA_ARGS__)
@@ -228,11 +227,10 @@ M(MAX,long)
 //////////////////////////
 ///  Printf format     ///
 //////////////////////////
-#define LLU(x) ((unsigned long long)(x))
-#define LLD(x) ((long long)(x))
+#define IM(x)  ((intmax_t)(x))
+#define UIM(x) ((uintmax_t)(x))
 
-
-enum enum_validchars{VALIDCHARS_DIGITS,VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHARS_NUM};
+typedef enum {VALIDCHARS_DIGITS,VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUOTE,VALIDCHARS_NUM} enum_validchars_t;
 
 
 
@@ -249,6 +247,8 @@ enum enum_validchars{VALIDCHARS_DIGITS,VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHAR
 #define STRLEN(ending) ((int)sizeof(ending)-1)
 #define ENDSWITH(s,s_l,ending)  (((s_l)>=STRLEN(ending)) && (s)[(s_l)-1]==LASTCHAR(ending) && (!memcmp((s)+(s_l)-STRLEN(ending),ending,STRLEN(ending))))
 #define ENDSWITHI(s,s_l,ending) (((s_l)>=STRLEN(ending)) && ((s)[(s_l)-1]|32)==(32|LASTCHAR(ending)) && (!strcasecmp((s)+(s_l)-STRLEN(ending),ending)))
+
+
 
 
 #define STARTSWITH(s,pfx) (!strncmp(s,pfx,STRLEN(pfx)))
@@ -281,12 +281,13 @@ enum {ENDSWITH_FLAG_IC=1<<1,ENDSWITH_FLAG_PRECEED_SLASH=1<<2};
 enum { MMAP_FD=-1};   // FreeBSD MAP_ANONYMOUS requires -1 rather than 0
 
 #define WITH_POPEN_NOSHELL 0
-enum { COMPRESSION_MASK=7, COMPRESSION_EXT_MAX_LEN=7, COMPRESS_EXT_MAXLEN=13};
-#define XMACRO_COMPRESSION() X(gz,)\
+enum { COMPRESSION_EXT_MAX_LEN=7, COMPRESS_EXT_MAXLEN=13};
+#define XMACRO_COMPRESSION()\
+  X(gz,)\
     X(bz2,{C("bzip2");C("-dc");S()})\
     X(xz, {C("xz");C("-dc");S()})\
-    X(lrz,{C("lrzip");C("-df");C("-o");C("-");S()})\
-    X(Z,  {C("uncompress");C("-c");S()})
+    X(Z,  {C("uncompress");C("-c");S()})\
+    X(lrz,{C("lrzip");C("-df");C("-o");C("-");S()})
 #define X(x,d) _Static_assert(sizeof(#x)<COMPRESSION_EXT_MAX_LEN,"");
     XMACRO_COMPRESSION();
 #undef X
@@ -294,9 +295,22 @@ enum { COMPRESSION_MASK=7, COMPRESSION_EXT_MAX_LEN=7, COMPRESS_EXT_MAXLEN=13};
 #define X(x,d) COMPRESSION_##x,
 enum {COMPRESSION_NIL,XMACRO_COMPRESSION() COMPRESSION_NUM};
 #undef X
+#define COMPRESSION_MASK    ((1<<COMPRESSION_NUM)-1)
 
-_Static_assert((COMPRESSION_NUM&COMPRESSION_MASK)==COMPRESSION_NUM,"COMPRESSION_MASK");
 
+
+_Static_assert(COMPRESSION_NUM==6,"COMPRESSION_NUM");
+_Static_assert(COMPRESSION_MASK==63,"COMPRESSION_MASK");
+//_Static_assert((COMPRESSION_NUM&COMPRESSION_MASK)==COMPRESSION_NUM,"COMPRESSION_MASK");
+
+
+
+
+/***********/
+/* Time    */
+/***********/
+#define DATETIME_BUF() char timebuf[32]
+#define DATETIME_COLON(time) (char*)(strftime(timebuf,31,"%Y-%m-%d_%H:%M:%S",gmtime(&(time))),timebuf)
 
 /***********/
 /* Network */

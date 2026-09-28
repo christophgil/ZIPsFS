@@ -7,15 +7,15 @@
 // cppcheck-suppress-file variableScope
 #define P(txt) fputs(txt,file)
 
-static void _rootdata_counter_inc(counter_rootdata_t *c, enum enum_counter_rootdata f){
+static void _rootdata_counter_inc(counter_rootdata_t *c, enum_counter_rootdata_t f){
   if (c&&c->counts[f]<UINT32_MAX) atomic_fetch_add(c->counts+f,1);
 }
-static void fhandle_counter_inc( fHandle_t* d, enum enum_counter_rootdata f){
+static void fhandle_counter_inc( fHandle_t* d, enum_counter_rootdata_t f){
   if (!d->filetypedata) d->filetypedata=filetypedata_for_ext(D_VP(d),D_ROOT(d));
   _rootdata_counter_inc(d->filetypedata,f);
 
 }
-/* static void rootdata_counter_inc(const char *path, enum enum_counter_rootdata f, root_t* r){ */
+/* static void rootdata_counter_inc(const char *path, enum_counter_rootdata_t f, root_t* r){ */
 /*   _rootdata_counter_inc(filetypedata_for_ext(path,r),f); */
 /* } */
 
@@ -119,7 +119,8 @@ Feature flags: W=Writable (First path) C=Immutable  R=Remote (Path starts with t
                T=Supports timeout (Path starts with three slashes and activated WITH_TIMEOUT_xxxx macros)  I=immutable WORM=Write-once-read-many\n\
                gz xz bz2 lrz Z: decompression on preloading to disk\n    B=Blocked (frozen)");
 
-  root_property_print(IS_HTML(),-1,file);
+  char buf[4096];
+  root_property_print(IS_HTML()?OUTPUT_HTML:OUTPUT_ANSI,NULL,buf,4096); fputs(buf,file);
   P(IS_HTML()?"\n</PRE>":ANSI_RESET"\n\n");
 
 #undef C
@@ -147,9 +148,9 @@ static void __viamacro_log_zpath(const char *fn,const int line,const char *msg, 
   log_msg("    %p   VP0="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,VP0(),  snull(VP0()));
   log_msg("    %p entry="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,EP(), snull(EP()));
   log_msg("    %p    RP="ANSI_FG_BLUE"'%s' "ANSI_RESET,RP(), snull(RP())); cg_log_file_stat("",&zpath->stat_rp);
-  log_msg("    %p  root="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,zpath->root,rootpath(zpath->root));
+  log_msg("    %p  root="ANSI_FG_BLUE"'%s'\n"ANSI_RESET,ZPR(),ZPRP());
 #define C(f) ((ZPF(f))?#f:"")
-  log_msg("       flags="ANSI_FG_BLUE"%s %s dir:%s\n"ANSI_RESET,C(ZP_DOES_NOT_EXIST),C(ZP_IS_COMPRESSEDZIPENTRY),zpath->dir);
+  log_msg("       flags="ANSI_FG_BLUE"%s %s dir:%s\n"ANSI_RESET,C(ZP_DOES_NOT_EXIST),C(ZP_IS_COMPRESSEDZIPENTRY),VFOLDER_PATH(zpath));
 #undef C
 }
 #define log_zpath(...) __viamacro_log_zpath(__func__,__LINE__,__VA_ARGS__) /*TO_HEADER*/
@@ -253,7 +254,7 @@ static void log_flags_update(){
 /**********************/
 /* logs per file type */
 /**********************/
-static void inc_count_by_ext(const char *path,enum enum_count_getattr field){
+static void inc_count_by_ext(const char *path,enum_count_getattr_t field){
   lock(mutex_fhandle);
   if (path && _ht_count_by_ext.length<1024){
     const char *ext=strrchr(path+cg_last_slash(path)+1,'.');
@@ -311,8 +312,8 @@ static counter_rootdata_t *filetypedata_for_ext(const char *vp,root_t *r){
 ////////////////////////////////////////////////////////////
 static int log_fuse_function_fd(){
   static int fd,count;
-  const char *outpath=SFILE_REAL_PATHS[SFILE_LOG_FUNCTION_CALLS];
-  char outpath_old[PATH_MAX+1];
+  const char *outpath=_specialfiles[SFILE_LOG_FUNCTION_CALLS].rp;
+  char outpath_old[PATH_MAX];
   if (!count++){
     stpcpy(stpcpy(outpath_old,outpath)-3,"1.txt");
     unlink(outpath_old);
@@ -346,7 +347,7 @@ static int log_fuse_function_fd(){
 }
 static void log_fuse_function(const char *func, const virtualpath_t *vipa,int num){
   IF_LOG_FLAG(LOG_FUSE_METHODS_ENTER)log_exited_function("%s res:%d",vipa->vp,num);
-  if (vipa->dir!=DIR_LOGGED  || vipa->special_file_id || !vipa->vp_l) return;
+  if (VFOLDER_PATH(vipa)!=DIR_LOGGED  || vipa->specialfile_id || !vipa->vp_l) return;
   if (*func=='_') func++;
   if (memcmp(func,"xmp_",4)) func+=4;
   if (*func=='_') func++;

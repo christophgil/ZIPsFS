@@ -25,7 +25,7 @@ typedef textbuffer_t** c_read_handle_t;
 #undef C
 #undef X
 
-#define C_FLAGS_FROM_ZPATH(zpath)   (ZPATH_IS_FILECONVERSION(zpath)?ZIPSFS_C_IS_DIR_A:0)
+#define C_FLAGS_FROM_ZPATH(zpath)   (ZPATH_IS_FILECONVERSION()?ZIPSFS_C_IS_DIR_A:0)
 static int c_from_exec_output(textbuffer_t **bb,const uint8_t flags,const char *cmd[],const char *env[]){
   return textbuffer_from_exec_output((flags&ZIPSFS_C_MMAP)?TXTBUFSGMT_MUNMAP:0,
                                      _zipsfs_c_init_tb(bb),
@@ -48,7 +48,7 @@ static textbuffer_t *_zipsfs_c_init_tb(textbuffer_t **bb){
 static bool c_getattr(struct stat *st, const virtualpath_t *vipa){
   stat_init(st,0,NULL);
   st->st_mtime=time(NULL);
-  if (!config_c_getattr((vipa->dir==DIR_FILECONVERSION)?ZIPSFS_C_IS_DIR_A:0,vipa->vp,vipa->vp_l,st)){
+    if (!config_c_getattr(VFOLDER_HAS_FLAG(vipa,VIEWMOD_FILECONVERSION)?ZIPSFS_C_IS_DIR_A:0,vipa->vp,vipa->vp_l,st)){
     return false;
   }
   if (st->st_mode&S_IFDIR) stat_set_dir(st);
@@ -75,7 +75,7 @@ static bool c_readdir(const zpath_t *zpath,void *buf, fuse_fill_dir_t filler,ht_
       struct stat st={0};
       stat_init(&st,*isDirectory?-1:0,NULL);
       st.st_ino=inode_from_virtualpath(VP(),VP_L());
-      filler_add(0,filler,buf, fname,0,ZPATH_FILLDIR_SFX(zpath) ,&st,NULL /*no_dups*/);
+      filler_add(filler,buf, fname,0,&st,NULL /*no_dups*/);
     }
   }
   return ok;

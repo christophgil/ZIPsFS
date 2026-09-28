@@ -92,6 +92,10 @@ To get the real storage place of the file, append ``@SOURCE.TXT``
 
     cat ~/test/ZIPsFS/mnt/my_file.txt@SOURCE.TXT
 
+More information is available with suffix ``@PROPRERTIES.TXT``
+
+    cat ~/test/ZIPsFS/mnt/my_file.txt@PROPRERTIES.TXT
+
 ### Access web resources as regular files (Not fully tested yet)
 Make sure the UNIX tool curl is installed.
 
@@ -131,7 +135,8 @@ Above method allows to access any remote file. The disadvantage over the method 
 
 
 
-</details>
+
+
 
 
 
@@ -144,7 +149,7 @@ If using curlftpfs, consider to add timeout like  ``curl_easy_setopt(easy,CURLOP
 There is also a similar script for AVFS.
 
 
-### Browsing FTP sites using nested Curlftpfs
+### Browsing FTP sites using nested FUSE file systems
 
 The script file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) creates folders like ``~/.ZIPsFS/db/pride``
 and mounts the respective FTP sites.
@@ -160,6 +165,16 @@ Now the repositories are available
 GZ compressed files are transparently de-compressed. Files with the ending ``.gz`` also  appear in the file listing without gz suffix.
 Initially, they have an estimated file size. After reading the virtual file, the exact length of the
 decompressed data is known.
+
+But wait, there is a major problem.  Before decompression, ZIPsFS can only communicate an estimate of the file size of the decompressed file.
+Consequently, programs that depend on file sizes will not work initially. Please try
+
+
+    tail  ~/test/ZIPsFS/mnt/mnt/db/pride/2005/08/PRD000004/PRIDE_Exp_Complete_Ac_369.xml
+
+The first time this command is run, there is no  output. This is because tail sees the wrong file size.
+On the second time, tail works as expected.
+
 
 
 
@@ -257,8 +272,8 @@ File content larger than this will not be cached. When memory usage is high, cac
  Execution in background (Not recommended). We recommend running ZIPsFS in foreground in *tmux*.
 
 
-Irrespectively of these settings, if files are fetched from the prefices ``/zipsfs/m/`` and ``/zipsfs/~m/``,
-ZIP entries will allways or never be cached in RAM, respectively.
+These rules can be overridden by using the subdirectories ``/zipsfs/-/m/`` and ``/zipsfs/-/-m/``. Please see enclosed README files.
+
 
 ## FUSE Options
 
@@ -273,25 +288,47 @@ Other users are granted access.
 The last argument is the mount point which is an empty folder.
 
 
-## Special directory prefixes
-Note: The original mixed case directory prefix  caused problems for  MS-Windows clients.
-The directory prefix is now  ``/zipsfs/``.
-  - <mount-point>/zipsfs/p   Rapid navigation and file name searching without time consuming ZIP file expansion.
-  - <mount-point>/zipsfs/n   Internet files. Take URL and replace colon and slashes by comma. See above tutorial.
-  - <mount-point>/zipsfs/v   Logging, to identify misbehaving software which should rather be used with preloading of remote or compressed files.
+## Special directory  <mount-point>``/zipsfs/``
+
+The folder <mount-point>``/zipsfs/`` provides alternative view options and altered prefetch behaviour.
+It contains log files and scripts.
+Note: The original mixed case directory name has been changed to lower case only ``/zipsfs/``.
+Upper case letters in folder paths may cause problems when mounted as network path in  MS-Windows.
+The file tree can be accessed in a modified way via
+
+    /zipsfs/<view-option>/<file preload-option>[/<preload-selector>]
+
+### /zipsfs/<view-option>/
+The 1st level subdirictory specifies view options. Directives are single letters. They can be combined.
+A preceding dash '-' negates.
+  - <mount-point>/zipsfs/-     Default view.
+  - <mount-point>/zipsfs/z     Rapid navigation and file name searching without time consuming ZIP file expansion.
+  - <mount-point>/zipsfs/n     Internet files. Take URL and replace colon and slashes by comma. See above tutorial.
+  - <mount-point>/zipsfs/d     For bz2, xz, gz, .Z and lrz compressed files also generate the decompressed file.
+  - <mount-point>/zipsfs/1    Files of the first branch only. This includes all files ever written or generated or modified.
+  - <mount-point>/zipsfs/~1   Files except from first branch.
+  - <mount-point>/zipsfs/c    Show convert files along the original files. Example:
+        - Raw mass spectrometry to mgf or mzML files or tsv
+        - Parquet to tsv
+  - <mount-point>/zipsfs/log   Logging, to identify very busy software which should rather be used with preloading of remote or compressed files.
        - Excessive requests of file attributes
        - Multiple open/close
        - Backward seek
        - Upper/lower case conversion of file names
- - <mount-point>/zipsfs/l..  Prefetched before reading. The letters following the l denote the condition (z) In zip Archive (c) In zip and compressed   (r) Remote. For FragPipe, load raw files from  lrz.
- - <mount-point>/zipsfs/c   Show convert files along the original files. Example:
-        - Raw mass spectrometry to mgf or mzML files or tsv
-        - Parquet to tsv
- - <mount-point>/zipsfs/1   Files of the first branch only. This includes all files ever written or generated or modified.
- - <mount-point>/zipsfs/~1   Files except from first branch.
 
 
 Details are found in the contained readme files.
+
+### /zipsfs/<view-option>/<prefetch option>
+The follwing path component may instruct preloading of files. Files are preloaded just before the first byte is read.
+  - /-/ Apply  default preload rules defined in ``ZIPsFS_configuration.c`` and ``ZIPsFS_configuration.h`` and specified by root properties.
+  - /m/ Prefetch to RAM
+  - /-m/ Do not prefetch to RAM
+  - /l/ Prefetch to the local file system
+  - /-l/ Do not prefetch to the local file system
+
+The /m/ and /l/ folder have a subfolder with selectors: (a) all, (r) remote and (z) ZIP-entry.
+
 
 ## Properties of upstream file trees
 
@@ -332,13 +369,20 @@ opened and closed multiple times during computation such that the large files wo
 All remote (r) or compressed (c) or zippded (z) files
 accessed through the following folders will be first copied to local disk:
 
-    <mount-point>/zipsfs/lr/
-    <mount-point>/zipsfs/lrc/
-    <mount-point>/zipsfs/lrz/
+    <mount-point>/zipsfs/-/l/r/
+    <mount-point>/zipsfs/-/l/z/
+    <mount-point>/zipsfs/-/l/rz/
 
 The Readme in these folders provide further information.
 Alternatively, the entire root-path can be marked for preloading with the property ``@preload``.
-Decompression is enabled with properties like ``@preload=1`` of for specific compression suffixes like  ``@preload=gz,xz``
+
+### Decompression
+
+Decompression is enabled with properties like ``@preload=1`` of for specific compression suffixes like  ``@preload=gz,xz``.
+Irrespectively of root attributes, decompression is  active for the file tree
+
+    <mount-point>/zipsfs/d/
+
 
 </details>
 
@@ -353,6 +397,28 @@ Author: Christoph Gille
 If ZIPsFS crashes, please send the stack-trace together with the source code you were using.
 
 </details>
+
+
+
+## End ZIPsFS
+
+ZIPsFS can be killed like any UNIX command by typing  Ctrl-C.
+Sometimes this does not work. Assuming mnt is your mount-point, the following might work:
+
+    fusermount -u mnt
+    sudo umount mnt
+
+If ZIPsFS still hangs, the following will kill all FUSE file systems of the current user.
+Those of other users won't be affected:
+
+    echo 1 | sudo tee /sys/fs/fuse/connections/*/abort
+
+
+## Changelog
+
+- 202610
+   - Re-organized the <mount-point>/zipsfs file branch.
+   - Solved problem of file truncation due to underestimated file size
 
 
 <details><summary>Configuration</summary>

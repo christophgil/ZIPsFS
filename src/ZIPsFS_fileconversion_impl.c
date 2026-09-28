@@ -60,7 +60,8 @@ static void fc_wait_concurrent(const struct fileconversion_rule *ac, const int i
 //////////////////////////////////////////////////////////////////////
 static void fc_init(void){
   //  if (!_writable_path_l) return;
-  if (_writable_path_l) stpcpy(stpcpy(_fileconversion_rp=malloc_untracked(1+DIR_FILECONVERSION_L+_writable_path_l),_writable_path),DIR_FILECONVERSION);
+  if (_writable_path_l) stpcpy(stpcpy(_fileconversion_rp=malloc_untracked(sizeof(DIR_CONVERTED)+_writable_path_l),_writable_path),DIR_CONVERTED);
+
   FOREACH_FILECONVERSION_RULE(idx,ac){
     assert(idx<FILECONVERSION_MAX_RULES);
     ac->_seqnum=idx;
@@ -136,7 +137,7 @@ static bool _fc_matches(const char *vp, const int vp_l,const struct fileconversi
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// What files can be computed from given virtual path                                                 ///
 /// return values:  0: failed   1: OK   2: OK and has more. I.e. will be run again with iDependency+1. ///
-/// Used by  fileconversion_filldir()                                                                         ///
+/// Used by  fileconversion_add_to_dir()                                                                         ///
 /// Opposite of config_fileconversion_estimate_filesize(), fileconversion_realinfiles()                              ///
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void fc_vgenerated_from_vinfile(char *generated,const char *vp,const int vp_l, const struct fileconversion_rule *ac){
@@ -191,9 +192,9 @@ static int _fileconversion_realinfiles(struct fileconversion_files *ff,const str
       }
       NEW_VIRTUALPATH(vin);
       NEW_ZIPPATH(&vipa);
-      //if (find_realpath(0,zpath,NULL) || (zpath_init(zpath,vin+DIR_FILECONVERSION_L),find_realpath(0,zpath,NULL))){
+      //if (find_realpath(0,zpath,NULL) || (zpath_init(zpath,vin+DIR_CONVERTED_L),find_realpath(0,zpath,NULL))){
       if (!find_realpath(0,zpath)) return 0; //goto end;
-      //if ((ZPF(ZP_IS_ZIP))) strcpy(stpcpy(ff->rinfiles[i],_mnt) ,VP());     /* TODO entry size */
+      //if ((ZPF(ZP_IS_ZIPENTRY))) strcpy(stpcpy(ff->rinfiles[i],_mnt) ,VP());     /* TODO entry size */
       //      else strcpy(ff->rinfiles[i],RP());                                                                       /* TODO recursion? */
       strcpy(stpcpy(ff->rinfiles[i],_mnt),VP());
       ff->infiles_size_sum+=(ff->infiles_stat[i]=zpath->stat_vp).st_size;
@@ -223,7 +224,7 @@ static int fileconversion_realinfiles(struct fileconversion_files *ff){
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void fc_maybe_reset_atime_in_future(const fHandle_t *d){
   //if (d && d->zpath.flags&ZP_FILECONVERSION){
-  if (d && d->zpath.dir==DIR_FILECONVERSION){
+    if (d && VFOLDER_HAS_FLAG_d(VIEWMOD_FILECONVERSION)){
     const struct stat *st=&d->zpath.stat_rp;
     if (st->st_atime>currentTimeMillis()/1000+(3600*24)){ /* future + one day */
       IF_LOG_FLAG(LOG_FILECONVERSION) log_verbose("Reset atime for %s atime",D_RP(d));
@@ -262,7 +263,7 @@ static int fc_run(struct fileconversion_files *ff){
       if (isOUTF && !stat(ff->grealpath,&st_out) && CG_STAT_B_BEFORE_A(st_fail,st_out)  || ff->rinfiles[0] && CG_STAT_B_BEFORE_A(st_fail,ff->infiles_stat[0])) return EPIPE;
     }
   }
-  IF_LOG_FLAG(LOG_FILECONVERSION) log_verbose("ff->rinfiles[0]: %s size: %lld  ac->out:%d ff->out:%d",snull(ff->rinfiles[0]), LLD(ff->infiles_stat[0].st_size),ac->out,ff->out);
+  IF_LOG_FLAG(LOG_FILECONVERSION) log_verbose("ff->rinfiles[0]: %s size: %jd  ac->out:%d ff->out:%d",snull(ff->rinfiles[0]), IM(ff->infiles_stat[0].st_size),ac->out,ff->out);
   cg_unlink(ff->log);
   cg_unlink(ff->fail);
   fc_wait_concurrent_begin(ac);
