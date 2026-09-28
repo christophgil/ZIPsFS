@@ -143,15 +143,16 @@ Above method allows to access any remote file. The disadvantage over the method 
 
 
 
-<details><summary>Browsing  public repositories (Pride, Genomes, PDB, Swissprot)</summary>
 
 
-This requires ***curl***. Please also install  ***rclone*** (or curlftpfs).
 
 ### Browsing FTP sites using nested FUSE file systems
 
+
+
 The script file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) creates folders like ``~/.ZIPsFS/db/pride``
-and mounts the respective FTP sites.
+and mounts the respective FTP sites. This requires ***curl***. Please also install  ***rclone*** (or curlftpfs).
+
 
 Its standard output serves as CLI parameters for the command line of  ZIPsFS.
 
@@ -180,7 +181,7 @@ You can remove the preloaded file and again ``tail`` will fail once.
 
 
 
-</details>
+
 
 
 # DESCRIPTION

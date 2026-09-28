@@ -193,14 +193,12 @@ head \[ti]/test/ZIPsFS/mnt/zipsfs/n/http,,,ftp.gnu.org,gnu,gawk,gawk-4.0.2.tar  
 Above method allows to access any remote file.
 The disadvantage over the method below is, that repositories are not
 browsable.
-Browsing public repositories (Pride, Genomes, PDB, Swissprot)
-.PP
-This requires \f[B]\f[BI]curl\f[B]\f[R].
-Please also install \f[B]\f[BI]rclone\f[B]\f[R] (or curlftpfs).
 .SS Browsing FTP sites using nested FUSE file systems
 .PP
 The script file ZIPsFS_prepare_branch_for_ftp.sh creates folders like
 \f[V]\[ti]/.ZIPsFS/db/pride\f[R] and mounts the respective FTP sites.
+This requires \f[B]\f[BI]curl\f[B]\f[R].
+Please also install \f[B]\f[BI]rclone\f[B]\f[R] (or curlftpfs).
 .PP
 Its standard output serves as CLI parameters for the command line of
 ZIPsFS.
