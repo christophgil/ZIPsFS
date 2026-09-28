@@ -1,6 +1,6 @@
 # ZIPsFS: Access ZIP files transparently as if they were regular folders
 
-# FUSE-based  overlay file system which expands  ZIP files
+# Overlay file system which expands  ZIP files
 
  - [Installation](./INSTALL.md)
 
