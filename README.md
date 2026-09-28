@@ -298,7 +298,7 @@ The file tree can be accessed in a modified way via
 
     /zipsfs/<view-option>/<file preload-option>[/<preload-selector>]
 
-### Folder ``/zipsfs/<view-option>/``
+### Folder ``/zipsfs/<View-Option>/``
 The 1st level subdirictory specifies view options. Directives are single letters. They can be combined.
 A preceding dash '-' negates.
   - <mount-point>/zipsfs/-     Default view.
