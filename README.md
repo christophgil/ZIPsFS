@@ -146,36 +146,36 @@ Above method allows to access any remote file. The disadvantage over the method 
 <details><summary>Browsing  public repositories (Pride, Genomes, PDB, Swissprot)</summary>
 
 
-This requires curl. Please also install  rclone or  curlftpfs (https://curlftpfs.sourceforge.net/).
-If using curlftpfs, consider to add timeout like  ``curl_easy_setopt(easy,CURLOPT_TIMEOUT,3600);`` into the ``main()`` function in ``ftpfs.c``.
-There is also a similar script for AVFS.
-
+This requires ***curl***. Please also install  ***rclone*** (or curlftpfs).
 
 ### Browsing FTP sites using nested FUSE file systems
 
 The script file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) creates folders like ``~/.ZIPsFS/db/pride``
 and mounts the respective FTP sites.
 
-Its standard output is used as CLI parameters for the command line of  ZIPsFS.
+Its standard output serves as CLI parameters for the command line of  ZIPsFS.
 
     ZIPsFS   $b1 $b2 $b3 $b4  $(./ZIPsFS_prepare_branch_for_ftp.sh)   :  ~/test/ZIPsFS/mnt
 
-Now the repositories are available
+Check  the repositories:
 
     ls ~/test/ZIPsFS/mnt/db
 
 GZ compressed files are transparently de-compressed. Files with the ending ``.gz`` also  appear in the file listing without gz suffix.
-Initially, they have an estimated file size. After reading the virtual file, the exact length of the
-decompressed data is known.
 
-But wait, there is a major problem.  Before decompression, ZIPsFS can only communicate an estimate of the file size of the decompressed file.
-Consequently, programs that depend on file sizes will not work initially. Please try
+But wait, there is a major problem.  Before decompression, ZIPsFS can only communicate an estimated file size of the decompressed file.
+Consequently, programs that depend on exact file sizes will not work. The command ``/usr/bin/tail`` requires the length of the file to find the last lines.  Please try
 
 
     tail  ~/test/ZIPsFS/mnt/mnt/db/pride/2005/08/PRD000004/PRIDE_Exp_Complete_Ac_369.xml
 
 The first time this command is run, there is no  output. This is because tail sees the wrong file size.
-On the second time, tail works as expected.
+Subsequently, ``tail`` works nicely.
+
+You can remove the preloaded file and again ``tail`` will fail once.
+
+    rm  ~/test/ZIPsFS/mnt/mnt/db/pride/2005/08/PRD000004/PRIDE_Exp_Complete_Ac_369.xml
+
 
 
 
@@ -203,8 +203,8 @@ Run the following command:
 
     cat ~/test/ZIPsFS/mnt/1.txt@SOURCE.TXT
 
-If a remote upstream file system stops responding, the current file access is blocked (Unless the options ``WITH_ASYNC_READDIR`` ... are activated).
-After some time, unresponsive upstream file trees will be skipped to prevent that file accesses get blocked.
+If a remote  file branch system stops responding, the current file access is blocked (Unless the options ``WITH_ASYNC_READDIR`` ... are activated).
+After some time, unresponsive  file trees will be skipped to prevent that file accesses get blocked.
 
 
 ## ZIPsFS expands ZIP file entries
@@ -333,7 +333,7 @@ The following path component may instruct preloading of files. Files are preload
 The /m/ and /l/ folder have a subfolder with selectors: (a) all, (r) remote and (z) ZIP-entry.
 
 
-## Properties of upstream file trees
+## Properties of file branches
 
 In the command line, root file paths  can be followed by expressions like @immutable=1 to set specific properties.
 Alternatively, properties can be given in a file ``<root-path>.ZIPsFS.properties``. This is demonstrated in   [ZIPsFS_prepare_branch_for_ftp.sh](ZIPsFS_prepare_branch_for_ftp.sh).

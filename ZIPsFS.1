@@ -195,19 +195,14 @@ The disadvantage over the method below is, that repositories are not
 browsable.
 Browsing public repositories (Pride, Genomes, PDB, Swissprot)
 .PP
-This requires curl.
-Please also install rclone or curlftpfs
-(https://curlftpfs.sourceforge.net/).
-If using curlftpfs, consider to add timeout like
-\f[V]curl_easy_setopt(easy,CURLOPT_TIMEOUT,3600);\f[R] into the
-\f[V]main()\f[R] function in \f[V]ftpfs.c\f[R].
-There is also a similar script for AVFS.
+This requires \f[B]\f[BI]curl\f[B]\f[R].
+Please also install \f[B]\f[BI]rclone\f[B]\f[R] (or curlftpfs).
 .SS Browsing FTP sites using nested FUSE file systems
 .PP
 The script file ZIPsFS_prepare_branch_for_ftp.sh creates folders like
 \f[V]\[ti]/.ZIPsFS/db/pride\f[R] and mounts the respective FTP sites.
 .PP
-Its standard output is used as CLI parameters for the command line of
+Its standard output serves as CLI parameters for the command line of
 ZIPsFS.
 .IP
 .nf
@@ -216,7 +211,7 @@ ZIPsFS   $b1 $b2 $b3 $b4  $(./ZIPsFS_prepare_branch_for_ftp.sh)   :  \[ti]/test/
 \f[R]
 .fi
 .PP
-Now the repositories are available
+Check the repositories:
 .IP
 .nf
 \f[C]
@@ -227,15 +222,13 @@ ls \[ti]/test/ZIPsFS/mnt/db
 GZ compressed files are transparently de-compressed.
 Files with the ending \f[V].gz\f[R] also appear in the file listing
 without gz suffix.
-Initially, they have an estimated file size.
-After reading the virtual file, the exact length of the decompressed
-data is known.
 .PP
 But wait, there is a major problem.
-Before decompression, ZIPsFS can only communicate an estimate of the
-file size of the decompressed file.
-Consequently, programs that depend on file sizes will not work
-initially.
+Before decompression, ZIPsFS can only communicate an estimated file size
+of the decompressed file.
+Consequently, programs that depend on exact file sizes will not work.
+The command \f[V]/usr/bin/tail\f[R] requires the length of the file to
+find the last lines.
 Please try
 .IP
 .nf
@@ -246,7 +239,16 @@ tail  \[ti]/test/ZIPsFS/mnt/mnt/db/pride/2005/08/PRD000004/PRIDE_Exp_Complete_Ac
 .PP
 The first time this command is run, there is no output.
 This is because tail sees the wrong file size.
-On the second time, tail works as expected.
+Subsequently, \f[V]tail\f[R] works nicely.
+.PP
+You can remove the preloaded file and again \f[V]tail\f[R] will fail
+once.
+.IP
+.nf
+\f[C]
+rm  \[ti]/test/ZIPsFS/mnt/mnt/db/pride/2005/08/PRD000004/PRIDE_Exp_Complete_Ac_369.xml
+\f[R]
+.fi
 .SH DESCRIPTION
 .SS ZIPsFS is a Union / overlay file system
 .PP
@@ -270,11 +272,11 @@ cat \[ti]/test/ZIPsFS/mnt/1.txt\[at]SOURCE.TXT
 \f[R]
 .fi
 .PP
-If a remote upstream file system stops responding, the current file
-access is blocked (Unless the options \f[V]WITH_ASYNC_READDIR\f[R] \&...
+If a remote file branch system stops responding, the current file access
+is blocked (Unless the options \f[V]WITH_ASYNC_READDIR\f[R] \&...
 are activated).
-After some time, unresponsive upstream file trees will be skipped to
-prevent that file accesses get blocked.
+After some time, unresponsive file trees will be skipped to prevent that
+file accesses get blocked.
 .SS ZIPsFS expands ZIP file entries
 .PP
 By default, ZIP files are displayed as folders with the suffix
@@ -458,7 +460,7 @@ In the later, z is the selector \[lq]If-in-ZIP\[rq].
 .PP
 The /m/ and /l/ folder have a subfolder with selectors: (a) all, (r)
 remote and (z) ZIP-entry.
-.SS Properties of upstream file trees
+.SS Properties of file branches
 .PP
 In the command line, root file paths can be followed by expressions like
 \[at]immutable=1 to set specific properties.

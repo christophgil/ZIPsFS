@@ -646,8 +646,7 @@ static const fHandle_t FHANDLE_EMPTY;
 // lock
 // cppcheck     -suppress-macro nullPointerRedundantCheck
 
-#define REQUIRES_1(x) "Requires "#x"=1. Is "STRINGIZE(x)"."
-
+#define REQUIRES_1(x) IF01(x,"Inactive because "#x" is 0.", "Usable because "#x" is 1")
 #define RP_HELP(x,type) _root_property_example=x;_root_property_type=type
 #define RP_PRINT(code)
 #define RP_GET(code)

@@ -29,6 +29,11 @@ if [[ -z ${METHOD:-} ]]; then
         exit 1
     fi
 fi
+
+if ((METHOD==METHOD_CURLFTP)); then
+    echo 'If using curlftpfs, consider to add timeout like curl_easy_setopt(easy,CURLOPT_TIMEOUT,3600);' >&2
+    echo 'into the main() function in ftpfs.c. There is also a similar script for AVFS. ' >&2
+fi
 #####################
 # END CONFIGURATION #
 #####################

@@ -192,8 +192,8 @@ Options and arguments before the colon are interpreted by ZIPsFS.  Those after t
       -l Limit memory usage for caching ZIP entries.\n\
          Without caching, moving read positions backwards for an non-seek-able ZIP-stream would require closing, reopening and skipping.\n\
          To avoid this, the limit is multiplied with factor 1.5 in such cases.\n\n\
-      -T 0 or -T 1 or -T 2  Generate a stack trace to check whether ZIPsFS can produce stack traces with line numbers.\n\
-         This requires /usr/bin/addr2line (package binutils) or atos (MacOSx).\n\n");
+      -T 0 or -T 1 or -T 2  Probe  stack trace generation.\n\
+          Requires /usr/bin/addr2line (package binutils) or atos (MacOSx).\n\n");
   puts_stderr(ANSI_UNDERLINE"Fuse options:"ANSI_RESET"These options are given after a colon.\n\n\
       -d Debug information\n\n\
       -f File system should not detach from the controlling terminal and run in the foreground.\n\n\
