@@ -1,6 +1,6 @@
-# Access ZIP files transparently as if they were regular folders
+# ZIPsFS: Access ZIP files transparently as if they were regular folders
 
-# ZIPsFS - FUSE-based  overlay file system which expands  ZIP files
+# FUSE-based  overlay file system which expands  ZIP files
 
  - [Installation](./INSTALL.md)
 
@@ -233,7 +233,7 @@ Zip files contain a record of the CRC32 checksum of each zip entry. This can be 
 This checksum can be obtained from ZIPsFS by appending ``@ARCHIVECRC32.TXT`` to a file path.
 
 
-## ZIPsFS Options
+## Command line Options
 
 
 **-h**
@@ -277,7 +277,7 @@ File content larger than this will not be cached. When memory usage is high, cac
 These rules can be overridden by using the subdirectories ``/zipsfs/-/m/`` and ``/zipsfs/-/-m/``. Please see enclosed README files.
 
 
-## FUSE Options
+## FUSE command line options
 
 
 Options for the FUSE system  come after the **colon** in the command line.
@@ -292,15 +292,13 @@ The last argument is the mount point which is an empty folder.
 
 ## Special directory  <mount-point>``/zipsfs/``
 
-The folder <mount-point>``/zipsfs/`` provides alternative view options and altered prefetch behaviour.
+The folder <mount-point>``/zipsfs/`` provides alternative views and file prefetch.
 It contains log files and scripts.
-Note: The original mixed case directory name has been changed to lower case only ``/zipsfs/``.
-Upper case letters in folder paths may cause problems when mounted as network path in  MS-Windows.
 The file tree can be accessed in a modified way via
 
     /zipsfs/<view-option>/<file preload-option>[/<preload-selector>]
 
-### /zipsfs/<view-option>/
+### Folder ``/zipsfs/<view-option>/``
 The 1st level subdirictory specifies view options. Directives are single letters. They can be combined.
 A preceding dash '-' negates.
   - <mount-point>/zipsfs/-     Default view.
@@ -418,6 +416,8 @@ Those of other users won't be affected:
 
 ## Changelog
 
+- 202601
+   - Changing ZIPsFS to lower-case in <mount-point>/zipsfs. This was necessary to export  ZIPsFS as a Samba Share to Windows
 - 202610
    - Re-organized the <mount-point>/zipsfs file branch.
    - Solved problem of file truncation due to underestimated file size

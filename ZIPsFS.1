@@ -320,7 +320,7 @@ This can be used for integrity checks to detect data decay or problems
 with data transfer.
 This checksum can be obtained from ZIPsFS by appending
 \f[V]\[at]ARCHIVECRC32.TXT\f[R] to a file path.
-.SS ZIPsFS Options
+.SS Command line Options
 .PP
 \f[B]-h\f[R]
 .PP
@@ -396,7 +396,7 @@ We recommend running ZIPsFS in foreground in \f[I]tmux\f[R].
 These rules can be overridden by using the subdirectories
 \f[V]/zipsfs/-/m/\f[R] and \f[V]/zipsfs/-/-m/\f[R].
 Please see enclosed README files.
-.SS FUSE Options
+.SS FUSE command line options
 .PP
 Options for the FUSE system come after the \f[B]colon\f[R] in the
 command line.
@@ -408,13 +408,9 @@ command line.
 The last argument is the mount point which is an empty folder.
 .SS Special directory \f[V]/zipsfs/\f[R]
 .PP
-The folder \f[V]/zipsfs/\f[R] provides alternative view options and
-altered prefetch behaviour.
+The folder \f[V]/zipsfs/\f[R] provides alternative views and file
+prefetch.
 It contains log files and scripts.
-Note: The original mixed case directory name has been changed to lower
-case only \f[V]/zipsfs/\f[R].
-Upper case letters in folder paths may cause problems when mounted as
-network path in MS-Windows.
 The file tree can be accessed in a modified way via
 .IP
 .nf
@@ -422,7 +418,7 @@ The file tree can be accessed in a modified way via
 /zipsfs/<view-option>/<file preload-option>[/<preload-selector>]
 \f[R]
 .fi
-.SS /zipsfs//
+.SS Folder \f[V]/zipsfs/<view-option>/\f[R]
 .PP
 The 1st level subdirictory specifies view options.
 Directives are single letters.
@@ -566,6 +562,13 @@ echo 1 | sudo tee /sys/fs/fuse/connections/*/abort
 \f[R]
 .fi
 .SS Changelog
+.IP \[bu] 2
+202601
+.RS 2
+.IP \[bu] 2
+Changing ZIPsFS to lower-case in /zipsfs.
+This was necessary to export ZIPsFS as a Samba Share to Windows
+.RE
 .IP \[bu] 2
 202610
 .RS 2
