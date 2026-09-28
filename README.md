@@ -274,7 +274,7 @@ File content larger than this will not be cached. When memory usage is high, cac
  Execution in background (Not recommended). We recommend running ZIPsFS in foreground in *tmux*.
 
 
-These rules can be overridden by using the subdirectories ``/zipsfs/-/m/`` and ``/zipsfs/-/-m/``. Please see enclosed README files.
+These rules can be overridden by using the sub-directories ``/zipsfs/-/m/`` and ``/zipsfs/-/-m/``. Please see enclosed README files.
 
 
 ## FUSE command line options
@@ -301,7 +301,7 @@ The file tree can be accessed in a modified way via
 These three folders contain single letter directives which take precedence over root-folder settings at the command line.
 
 ### Folder ``/zipsfs/<view-option>/``
-The 1st level subdirictory specifies view options. Directives are single letters. They can be combined.
+The 1st level sub-directories specifies view options. Directives are single letters. They can be combined.
 A preceding dash '-' negates.
   - <mount-point>/zipsfs/-     Default view.
   - <mount-point>/zipsfs/z     Rapid navigation and file name searching without time consuming ZIP file expansion.
@@ -309,7 +309,7 @@ A preceding dash '-' negates.
   - <mount-point>/zipsfs/d     For bz2, xz, gz, .Z and lrz compressed files also generate the decompressed file.
   - <mount-point>/zipsfs/1    Files of the first branch only. This includes all files ever written or generated or modified.
   - <mount-point>/zipsfs/~1   Files except from first branch.
-  - <mount-point>/zipsfs/c    Show convert files along the original files. Example:
+  - <mount-point>/zipsfs/c    Show converted files along the original files. Example:
         - Raw mass spectrometry to mgf or mzML files or tsv
         - Parquet to tsv
   - <mount-point>/zipsfs/log   Logging, to identify very busy software which should rather be used with preloading of remote or compressed files.
@@ -322,11 +322,12 @@ A preceding dash '-' negates.
 Details are found in the contained readme files.
 
 ### Folder ``/zipsfs/<view-option>/<prefetch option>``
-The follwing path component may instruct preloading of files. Files are preloaded just before the first byte is read.
+The following path component may instruct preloading of files. Files are preloaded just before the first byte is read.
   - /-/ Apply  default preload rules defined in ``ZIPsFS_configuration.c`` and ``ZIPsFS_configuration.h`` and specified by root properties.
   - /m/ Prefetch to RAM
   - /-m/ Do not prefetch to RAM
   - /l/ Prefetch to the local file system
+  - /lz/ Prefetch to the local file system. Load entire ZIP files not their entries.  Do not mix up with /l/z. In the later, z is the selector "If-in-ZIP".
   - /-l/ Do not prefetch to the local file system
 
 The /m/ and /l/ folder have a subfolder with selectors: (a) all, (r) remote and (z) ZIP-entry.
@@ -423,7 +424,7 @@ like ``@preload=gz,xz`` or for the file tree
 
 Author: Christoph Gille
 
-**Current status**: Testing and Bug fixing. Already running very busy for several weeks without interruption.
+**Current status**: Testing and Bug fixing. Occasionally improving concepts. Already running very busy for several weeks without interruption.
 
 
 If ZIPsFS crashes, please send the stack-trace together with the source code you were using.
