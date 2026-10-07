@@ -248,13 +248,14 @@ static void info_mutex_locks(FILE *file){
 }
 static void info_malloc(FILE *file){
   H1("Global counters");
+  F("Imbalanced malloc/free marked by * (If expected) or ! (If unexpected)<BR><BR>\n");
   BEGIN_PRE();
   int header=0;
   FOR(i,1,enum_mallocid_N){
     const char *diffMarker=
       _malloc_free_mismatch_allowed[i]?
-      (IS_HTML()?"<FONT color=\"#00FF00\">*</FONT>":ANSI_FG_GREEN"*"ANSI_RESET):
-      (IS_HTML()?"<FONT color=\"#FF0000\">!</FONT>":ANSI_FG_RED"!"ANSI_RESET);
+      (IS_HTML()?"*":ANSI_FG_GREEN"*"ANSI_RESET):
+      (IS_HTML()?"!":ANSI_FG_RED"!"ANSI_RESET);
     if (i==COUNT_PAIRS_END){
       header=0;
       continue;

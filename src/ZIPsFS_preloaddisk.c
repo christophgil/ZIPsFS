@@ -7,34 +7,6 @@
 _Static_assert(WITH_PRELOADDISK,"");
 #define  NOT_PRELOADDISK_ZPATH_FOR_DIR(zpath) (zpath->root==_root_writable && !zpath->is_decompressed || !_writable_path_l || VFOLDER_HAS_FLAG2(zpath,PRELOADDISK_NOT,PRELOAD_UPDATE))
 
-/***********************************************************/
-/* Given a virtual file within DIR_PRELOADDISK_XXX.    */
-/* Construct the path of the preloaded file                    */
-/* Return true if this file exists.                        */
-/***********************************************************/
-
-static bool preloaddisk_test_realpath_preloaded_strcat_rp(const bool isUpdate, zpath_t *zpath){
-  //log_entered_function("RP:%s",RP());
-  char rp[PATH_MAX]; *rp=0;
-  struct stat st={0};
-  if(isUpdate){
-    int rp_l=snprintf(rp,PATH_MAX,"%s%s%s",_writable_path,DIR_PRELOADED,VFOLDER_PATH_L(zpath)+VP());
-    if (ENDSWITH(rp,rp_l,SFX_UPDATE)) rp[(rp_l-=SFX_UPDATE_L)]=0;
-    //log_debug_now("isUpdate %s rp:%s  stat:%s",VP(),rp,success_or_fail(!stat(rp,&st)));
-    if (stat(rp,&st)) return false;
-  }else{
-    if (NOT_PRELOADDISK_ZPATH_FOR_DIR(zpath)) return false;
-    char dst[PATH_MAX];
-    realpath_writable_folder(dst,zpath,DIR_PRELOADED);
-    if (stat(rp,&st) || !(st.st_mode&S_IFREG)) return false;
-  }
-  zpath_set_realpath(zpath,rp,NULL,NULL);
-  if (isUpdate)    zpath->stat_rp=st;
-  zpath_stat(0,zpath);
-  zpath->root=_root_writable;
-  //log_exited_function("RP:%s",RP());
-  return true;
-}
 
 static bool _preloaddisk_now(const char *dst,fHandle_t *d){
   zpath_t *zpath=&d->zpath;
@@ -121,14 +93,16 @@ static bool preloaddisk_now(const char *dst,fHandle_t *d){
 
 
 static bool fHandle_preloadfile_now(fHandle_t *d){
-  //log_entered_function("fHandle_preloadfile_now %s %s   %d %d ",D_VP(d),D_RP(d), d!=NULL,  PRELOADDISK_WRITABLE_REALPATH(dst, &d->zpath));
-  const zpath_t *zpath=&d->zpath;
-  if (d && !NOT_PRELOADDISK_ZPATH_FOR_DIR(zpath)){
-    char dst[MAX_PATHLEN+1];
-    realpath_writable_folder(dst,zpath,DIR_PRELOADED);
-    if (preloaddisk_now(dst,d)){
-      D_ROOT(d)=_root_writable;
-      return true;
+  if (d){
+    log_entered_function("vp:%s rp:%s",D_VP(d),D_RP(d));
+    const zpath_t *zpath=&d->zpath;
+    if (!NOT_PRELOADDISK_ZPATH_FOR_DIR(zpath)){
+      char dst[MAX_PATHLEN+1];
+      realpath_writable_folder(dst,zpath,DIR_PRELOADED);
+      if (preloaddisk_now(dst,d)){
+        D_ROOT(d)=_root_writable;
+        return true;
+      }
     }
   }
   return false;
@@ -156,8 +130,7 @@ static fHandle_t *preloaddisk_fhandle(const fHandle_t *d){
 /* Note:  (!zpath->is_decompressed) means uninitialized. Once initialized in path_with_compress_sfx_exists(zpath) at least (1<<COMPRESSION_NIL) is set. */
 /**********************************************************************************************************************************/
 static bool is_preloaddisk_zpath(zpath_t *zpath){
-  if (NOT_PRELOADDISK_ZPATH_FOR_DIR(zpath)) return false;
-  assert(ZPR());
+  if (!ZPR() || NOT_PRELOADDISK_ZPATH_FOR_DIR(zpath)) return false;
   const bool yes=(ZPR()->preload ||
                   zpath->is_decompressed ||
                   ((ZPR()->decompress_mask&(1<<zpath->is_decompressed)) || VFOLDER_HAS_FLAG(zpath,VIEWMOD_DECOMPRESS)) &&  path_with_compress_sfx_exists(zpath) ||
@@ -272,7 +245,7 @@ static void preloaddisk_uptodate_or_update(fHandle_t *d){
   IF1(WITH_PRELOADRAM,html_is_uptodate(d,updateSuccess, D_RP(d), &d->zpath.stat_rp, found?RP():"No source file found", &zpath->stat_rp,VP()));
 }
 /*
-static int preloaddisk_filename_for_updatedir(char *u, int u_l, const char *vparent){
+  static int preloaddisk_filename_for_updatedir(char *u, int u_l, const char *vparent){
   //log_entered_function(ANSI_MAGENTA"u:%s vparent:%s"ANSI_RESET,u,vparent);
   const char *pp[]={_writable_path,DIR_PRELOADED,vparent,"/",u,NULL};
   struct stat st;
@@ -280,5 +253,5 @@ static int preloaddisk_filename_for_updatedir(char *u, int u_l, const char *vpar
   if (st.st_mode&(S_IFDIR)) return u_l;
   strcpy(u+u_l,SFX_UPDATE);
   return (S_IFREG==(st.st_mode&(S_ISVTX|S_IFREG)))?0:SFX_UPDATE_L+u_l;
-}
+  }
 */

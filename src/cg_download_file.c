@@ -77,7 +77,7 @@ static bool cg_download_url(const int opt_and_compress, const char *url, const c
   int fdout=0;
   if (outfile && (fdout=open(tmp,O_WRONLY|O_CREAT|O_TRUNC,0644))==-1){ log_errno("open(%s)",outfile); return false;}
   bool ok=true;
-  if (iCompress){
+  if (iCompress && !(opt_and_compress&COPY_HEADER)){
     const char *decomp[DECOMPRESS_CMD_MAX+1]={0};
     if (iCompress!=COMPRESSION_gz) cg_cmd_decompress(iCompress,decomp,NULL);
     ok=cg_exec_pipe(cmd,NULL,

@@ -55,7 +55,11 @@ test_pattern(){
         echo  "grep -m 1 '$pattern'  $ANSI_FG_BLUE$rp$ANSI_RESET"
         [[ $rp == *SOURCE.TXT ]] && strings $rp
         local result="${ANSI_FG_RED}FAILED"
-        grep -a -m 1 "$pattern" "$rp" && result="${ANSI_FG_GREEN}OK"
+        local ZGREP=grep
+        [[ $rp == *.gz ]] &&  ZGREP='gzip'
+        set -x
+        $ZGREP -a -m 1 "$pattern" $rp && result="${ANSI_FG_GREEN}OK"
+        set +x
         echo "$result$ANSI_RESET"
         test_is_in_listing $rp
     done

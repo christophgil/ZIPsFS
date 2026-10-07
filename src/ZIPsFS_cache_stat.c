@@ -61,7 +61,7 @@ static bool zpath_stat_from_cache(const int opt_filldir_findrp, zpath_t *zpath){
       ok=_stat_from_cache(opt_filldir_findrp,st,gz,VP_L()+ext_l,0,zpath);
       if (ok){
         st->st_size=nextRepdigitFileSize(st->st_size*64);
-        st->st_ino=make_inode(st->st_ino,r,PSEUDO_ENTRYIDX_FOR_DECOMPRESS,RP());
+        st->st_ino=make_inode(st->st_ino,zpath,PSEUDO_ENTRYIDX_FOR_DECOMPRESS,RP());
       }
     }
   }

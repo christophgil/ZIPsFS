@@ -387,15 +387,54 @@ static void *infloop_PTHREAD_INVALIDATE_PATH(void *arg){
   root_t *r=arg;
   assert(r!=NULL);
   init_infloop(r,PTHREAD_INVALIDATE_PATH);
+  struct stat  st={0};
   while(1){
-    char *vp=NULL;
-    LOCK(mutex_fhandle,FOREACH_FHANDLE(id,d) if((d->flags&FHANDLE_NEED_INVALIDATE_PATH)){vp=D_VP(d);break;});
-    if (vp){
-      log_verbose("Going to call fuse_invalidate_path %s ...",vp);
-      fuse_invalidate_path(_fuse, vp);
-      log_verbose("Going to call fuse_invalidate_path "GREEN_DONE);
+    char vp[MAX_PATHLEN+1];*vp=0;
+        lock(mutex_fhandle);
+        FOREACH_FHANDLE(id,d){
+          if((d->flags&FHANDLE_INVALIDATEPATH_REQUIRED)){
+            d->flags|=FHANDLE_INVALIDATEPATH_PROCESSING;
+            d->flags&=~FHANDLE_INVALIDATEPATH_REQUIRED;
+            cg_strncpy0(vp,D_VP(d),MAX_PATHLEN);
+            st=d->zpath.stat_vp;
+            break;
+          }
+        }
+        unlock(mutex_fhandle);
+    if (*vp){
+      int res=0;
+      switch(3){
+      case 1: /* This occasionally freezes everything.  Better low level */
+        fuse_invalidate_path(_fuse,vp);
+        break;
+      case 2:{ /* No effect */
+        const int slash=cg_last_slash(vp);
+        if (!slash) continue;
+        vp[slash]=0;
+        const char *name=vp+slash+1, *parent=vp;
+        virtualpath_t vipa;
+        char buffer[MAX_PATHLEN+1];
+        virtualpath_init(&vipa, parent,buffer);
+        bool found;FIND_REALPATH(&vipa);
+        if (!found){ log_warn("Could not find %s",parent);continue;}
+        const ino_t ino=zpath->stat_vp.st_ino;
+        log_verbose("Going fuse_lowlevel_notify_inval_entry(_fuse_session, parent=%s inode=%jd name=%s ...",VP(),UIM(ino),name);
+        res=fuse_lowlevel_notify_inval_entry(_fuse_session,ino,name,strlen(name));
+        /* res is -2 */
+        if (res == -ENOSYS) {
+          // Fallback or log warning if the operating system kernel doesn't support live invalidations
+        }
+      };break;
+      case 3:{ /* No effect */
+        log_verbose("%s Going fuse_lowlevel_notify_inval_inode(_fuse_session, %jd,0,0)",D_VP(d),UIM(st.st_ino));
+        res=fuse_lowlevel_notify_inval_inode(_fuse_session, st.st_ino, 0,0);
+        /* res is -2 */
+      }break;
+      }
+      log_verbose("fuse_invalidate_path errno=%d"GREEN_DONE,res);
+      fprint_strerror(stderr,-res);
       const ht_hash_t h=hash_value_strg(vp);
-      LOCK(mutex_fhandle, foreach_fhandle_including_pending_destruct(id,d) if (D_VP_HASH(d)==h && !strcmp(vp,D_VP(d))) d->flags&=~FHANDLE_NEED_INVALIDATE_PATH);
+      LOCK(mutex_fhandle, foreach_fhandle_including_pending_destruct(id,d) if (D_VP_HASH(d)==h && !strcmp(vp,D_VP(d))) d->flags&=~FHANDLE_INVALIDATEPATH_PROCESSING);
       usleep(1e6);
     }
     usleep(1e4);
@@ -494,7 +533,7 @@ static void *infloop_PTHREAD_PRELOAD(void *arg){
 #if WITH_PRELOADRAM || WITH_PRELOADDISK
   root_t *r=arg;
   init_infloop(r,PTHREAD_PRELOAD);
-  /* pthread_cleanup_push(infloop_preloadfile_start,r); Does not work because pthread_cancel not working when root blocked. */
+  /* pthread_cleanup_push(infloop_preloadfile_start,r); Does notwork because pthread_cancel not working when root blocked. */
   ASSERT(atomic_load(&r->test1)==0);  atomic_fetch_add(&r->test1,1);
   for(int i=0;;i++){
     fHandle_t *dm=NULL,*dl=NULL; // cppcheck-suppress constVariablePointer

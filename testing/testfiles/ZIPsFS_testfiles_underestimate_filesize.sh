@@ -43,6 +43,7 @@ EOF
     mk_files
     ls -l $path
     local success="${ANSI_FG_RED}failed"
+
     grep -a --color LAST_LINE $path && success="${ANSI_FG_GREEN}OK"
     echo $success$ANSI_RESET
 

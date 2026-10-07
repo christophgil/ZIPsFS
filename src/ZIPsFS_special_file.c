@@ -5,8 +5,16 @@
 /************************************************************************/
 _Static_assert(WITH_PRELOADRAM,"");
 #define C(txt) textbuffer_add_segment(TXTBUFSGMT_NO_FREE,b,txt,0)
-#define SF_HTML_HEADER()     C("<!DOCTYPE html>\n<HTML>\n<HEAD><TITLE>ZIPsFS</TITLE>\n<STYLE> .ms{font-family: monospace;} </STYLE>\n</HEAD>\n<BODY>\n");isHTML=true;
-#define SF_HTML_END()        C("\n</BODY>\n</HTML>\n")
+
+static void sf_html_header(textbuffer_t *b){
+  C("<!DOCTYPE html>\n<HTML>\n<HEAD><TITLE>ZIPsFS</TITLE>\n<STYLE> .ms{font-family: monospace;} </STYLE>\n</HEAD>\n<BODY>\n");
+}
+
+static void sf_html_end(textbuffer_t *b){
+  C("\n</BODY>\n</HTML>\n");
+}
+#define SF_HTML_HEADER()     if (!_print_doc) sf_html_header(b);isHTML=true
+#define SF_HTML_END()        if (!_print_doc) sf_html_end(b)
 #define SF_BR()              C("<BR>\n")
 #define SF_SYMBOL_B()        C("<TT><FONT color=\"#FF00FF\">")
 #define SF_SYMBOL_E()        C("</FONT></TT>")
@@ -18,11 +26,11 @@ _Static_assert(WITH_PRELOADRAM,"");
 #define SF_PRINTF(...)  snprintf(tmp,sizeof(tmp)-1,__VA_ARGS__),textbuffer_add_segment(TXTBUFSGMT_DUP,b,tmp,0)
 
 
+#define SF_H1(headline)   C("\n<H1>"); C(headline);C("</H1>\n");
 #define SF_TELL_DIRFLAG(dirflag) if (id==ID_(dirflag)) sf_tell_dirflag(b,ID_(dirflag),#dirflag)
-#define CASE_ID1(id) case ID_(id):SF_HTML_HEADER();SF_TELL_DIRFLAG(id)
-#define CASE_ID2(id1,id2) case ID_(id1):case ID_(id2):SF_HTML_HEADER();SF_TELL_DIRFLAG(id1);SF_TELL_DIRFLAG(id2)
-#define CASE_ID3(id1,id2,id3) case ID_(id1):case ID_(id2):case ID_(id3):SF_HTML_HEADER();SF_TELL_DIRFLAG(id1);SF_TELL_DIRFLAG(id2);SF_TELL_DIRFLAG(id3)
-
+#define CASE_ID1(id,headline) case ID_(id):SF_HTML_HEADER();SF_H1(headline);SF_TELL_DIRFLAG(id)
+#define CASE_ID2(id1,id2,headline) case ID_(id1):case ID_(id2):                  if(_print_doc&&id!=ID_(id1)) break; SF_HTML_HEADER();SF_H1(headline);SF_TELL_DIRFLAG(id1);SF_TELL_DIRFLAG(id2)
+#define CASE_ID3(id1,id2,id3,headline) case ID_(id1):case ID_(id2):case ID_(id3):if(_print_doc&&id!=ID_(id1)) break; SF_HTML_HEADER();SF_H1(headline);SF_TELL_DIRFLAG(id1);SF_TELL_DIRFLAG(id2);SF_TELL_DIRFLAG(id3)
 static const char *sf_equivalent_root_property(const int id){
   const int p=
     id==ID_(PRELOADDISK) || id==ID_(PRELOADDISK_NOT)?ROOT_PROPERTY_preload:
@@ -32,12 +40,22 @@ static const char *sf_equivalent_root_property(const int id){
 }
 
 static void sf_tell_dirflag(textbuffer_t *b,const int id, const char *name){
-  if (_specialfiles[id].name) return;
-  C("The property ");SF_VALUE(name); C(" is activated with the flag ");SF_VALUE(_virtualfolder_dirflags[id]);
-  if (id==ID_(PRELOADDISK) || id==ID_(PRELOADDISK_ENTIRE_ZIP) || id==ID_(VIEWMOD_1)){
-    C(" and deactivated with ");SF_VALUE_B();C("-");SF_VALUE(_virtualfolder_dirflags[id]);SF_VALUE_E();
+  //if (_specialfiles[id].name) return;
+  if (id>=VFOLDER_NUM || id==ID_(PRELOAD_UPDATE) || id==ID_(VIEWMOD_NIL) || id==ID_(VIEWMOD_INTERNET)) return;
+  const int category=
+    num_in_range(id,ID_RANGE_VIEWMOD)?1:
+    num_in_range(id,ID_RANGE_PRELOAD)?2:
+    num_in_range(id,ID_RANGE_PRELOAD_SELECT)?3:0;
+  assert(category);
+
+  C("The "); C(category==1?"view option ":category==2?"preload option ":"preload selector ");SF_VALUE(name); C(" is activated with the flag ");SF_VALUE(_virtualfolder_dirflags[id]);
+  C(" in the ");
+  SF_VALUE(category==1?"first":category==2?"second":"third");
+  C(" subfolder in "DIR_ZIPsFS"/.");
+  if (id==ID_(PRELOADDISK)||id==ID_(PRELOADDISK_ENTIRE_ZIP)||id==ID_(VIEWMOD_1)){
+    C("It can be deactivated with ");SF_VALUE_B();C("-");SF_VALUE(_virtualfolder_dirflags[id]);SF_VALUE_E();
+    C(".\n");
   }
-  C(" in the folder name.\n");
   const char *rp=sf_equivalent_root_property(id),*flag=_virtualfolder_dirflags[id];
   const char *stronger=id==ID_(PRELOADRAM)?"configuration.\n":NULL;
   if (rp){
@@ -45,7 +63,7 @@ static void sf_tell_dirflag(textbuffer_t *b,const int id, const char *name){
     SF_VALUE_B();C(rp); if (flag && *flag=='-') C("=0"); SF_VALUE_E(); C(" ");
     stronger="file tree properties.\n";
   }
-  if (stronger) {C("Flags take precedence over ");C(stronger);C(".");}
+  if (stronger) {C(" Flags take precedence over ");C(stronger);C(".");}
   C("<BR><BR>\n");
 }
 
@@ -95,7 +113,7 @@ static void  sf_src(textbuffer_t *b, const enum_sourcefiles_t  id){
 
 #define SF_SRC_SH(id) sf_src(b,id##_dot_sh)
 static void sf_ref5(textbuffer_t *b, const char *path1, const char *path2, const char *path3, const char *path4, const char *path5){
-#define A()  if (cg_path_equals_or_is_parent(DIR_ZIPsFS,sizeof(DIR_ZIPsFS)-1,path1,strlen(path1))) C(_mnt_apparent); C(path1); C(path2);C(path3);C(path4);C(path5);
+#define A()  if (cg_path_equals_or_is_parent(DIR_ZIPsFS,sizeof(DIR_ZIPsFS)-1,path1,cg_strlen(path1))) C(_mnt_apparent); C(path1); C(path2);C(path3);C(path4);C(path5);
   C("\n<A href=\"");A();C("\">");A();C("</A>\n");
 #undef A
 }
@@ -108,7 +126,6 @@ static void _sf_ref_special_file(textbuffer_t *b,const int id, const bool withNa
   if (sf->name && sf->parent){
     sf_ref5(b,sf->parent,sf->name,NULL,NULL,NULL);
   }else{
-
     const char *parent2=NULL, *parent1=
       num_in_range(id,ID_RANGE_VIEWMOD)?DIR_ZIPsFS"/":
       num_in_range(id,ID_RANGE_PRELOAD)?DIR_ZIPsFS"/-/":
@@ -120,12 +137,18 @@ static void _sf_ref_special_file(textbuffer_t *b,const int id, const bool withNa
 }
 #define SF_REQUIRES(id) _sf_requires(b,id,#id)
 static void _sf_requires(textbuffer_t *b,const int val,const char *name){
+  if (_print_doc){ C("This feature is activated with the macro ");SF_VALUE(name);C(".<BR>\n"); return;}
   C("This feature is "); C(val?"enabled":"disabled"); C(" because the macro ");
   SF_SYMBOL(name);  C(" has the value  ");SF_VALUE(val?"1.<BR>\n":"0.<BR>\n");
 }
-static void sf_requires_rw(textbuffer_t *b){
-  C("Furthermore, the first root-path must be writable.\nCurrent: ");
-  SF_VALUE(_writable_path_l?_writable_path:"None");
+#define SF_REQUIRES_W()  sf_requires_w(b);
+static void sf_requires_w(textbuffer_t *b){
+  if (_print_doc){ C("This feature requires the writable file tree. ");return;}
+  if (_writable_path_l){
+    C("Furthermore, a writable path tree is provided: "); SF_VALUE(_writable_path); C(". ");
+  }else{
+    C("This feature is inactive because no  writable path tree is provided.");
+  }
   SF_BR();
 }
 static void sf_cleanup(textbuffer_t *b){
@@ -133,7 +156,7 @@ static void sf_cleanup(textbuffer_t *b){
   C("<H2>Removing old files</H2>\nPreloaded and generated files may be cleaned-up after heaving not been used for a while.\n\
 The following script is periodically executed if it exists:<BR>\n");
   SF_VALUE_B();
-  if (sf->rp){ C(sf->rp); }else { C("<writable root>/");C(sf->parent);C(sf->name); }
+  if (sf->rp){ C(sf->rp); }else { C("&lt;writable root&gt;/");C(sf->parent);C(sf->name); }
   SF_VALUE_E();
   C("\n<BR>Currently, it does ");
   if (!cg_file_exists(sf->rp)) C(" not ");
@@ -146,7 +169,7 @@ Deletion of files can be delayed by setting the <U>last-access-time</U> to the c
 
 //static void sf_bat_starts_ps1(textbuffer_t *b, const int specialFileId){  C("CLS\n@powershell %~dp0\\");  C(_specialfiles[specialFileId].name);}
 static void sf_update(textbuffer_t *b){
-  C("<H2>Update</H2>\nPreloaded files can be updated by reading the content of the corresponding html files in the "); SF_VALUE(DIRNAME_PRELOADDISK_UPDATE);C(" folder. <BR>");
+  C("<H2>Update</H2>\nPreloaded files can be updated by reading the content of the corresponding HTML files in the "); SF_VALUE(DIRNAME_PRELOADDISK_UPDATE);C(" folder. <BR>");
   SF_BR();
 }
 static off_t specialfile_size(const int i){
@@ -156,7 +179,6 @@ static off_t specialfile_size(const int i){
       if (!_special_file_size[i]){
         textbuffer_t b={0};
         specialfile_content(&b,i);
-        //        fprintf(stderr,"\n=======================================================================\n");        textbuffer_write_fd(&b,STDERR_FILENO);                fprintf(stderr,"\n=======================================================================\n");
         _special_file_size[i]=textbuffer_length(&b);
         textbuffer_destroy(&b);
         if (!_special_file_size[i]) _special_file_size[i]=-1;
@@ -202,15 +224,15 @@ static uint64_t specialfile_content_to_fhandle(zpath_t *zpath,const int id){
   }else{
     specialfile_content(b,id);
   }
-        lock(mutex_fhandle);
-        if (!fhandle_set_text(d,b)){
-          FREE_NULL_MALLOC_ID(b);
-        }else{
-          preloadram_set_status(d,PRELOADRAM_DONE);
-          d->flags|=FHANDLE_PRELOADRAM_COMPLETE;
-        }
-        unlock(mutex_fhandle);
-        //log_exited_function("%s id=%d  '%s'  fh=%jd  length:%ld",VP(),id,_specialfiles[id].name, IM(fh), textbuffer_length(b));
+      lock(mutex_fhandle);
+      if (!fhandle_set_text(d,b)){
+        FREE_NULL_MALLOC_ID(b);
+      }else{
+        preloadram_set_status(d,PRELOADRAM_DONE);
+        d->flags|=FHANDLE_PRELOADRAM_COMPLETE;
+      }
+  unlock(mutex_fhandle);
+  //log_exited_function("%s id=%d  '%s'  fh=%jd  length:%ld",VP(),id,_specialfiles[id].name, IM(fh), textbuffer_length(b));
   return fh;
 }
 
@@ -350,7 +372,7 @@ echo Copy the selected files to the clipboard.  Ctrl-C or Command-C.\n";
       ;C(c);}
     break;
   case SF_README_FOR_DIR(DIR_ZIPsFS): SF_HTML_HEADER();
-    C("<H2>This folder</H2>\nThe special folder ");
+    C("<H1>This folder</H1>\nThe special folder ");
     SF_VALUE_B();C(_mnt_apparent); C(DIR_ZIPsFS); SF_VALUE_E();
     C(" of the fuse file system ZIPsFS contains logs and file system information. Furthermore there are folders to display  file trees in a different way.\n\
 <H2>Main features of the fuse file system ZIPsFS</H2>\n\
@@ -373,8 +395,8 @@ echo Copy the selected files to the clipboard.  Ctrl-C or Command-C.\n";
 </UL></LI>\n</UL>\n");
     SF_REF(HOMEPAGE);
     break;
-    CASE_ID3(PRELOAD_SELECT_ALL,PRELOAD_SELECT_REMOTE,PRELOAD_SELECT_ZIP);
-    C("<H2>Selectors for preloading</H2><UL>\n");
+    CASE_ID3(PRELOAD_SELECT_ALL,PRELOAD_SELECT_REMOTE,PRELOAD_SELECT_ZIP,"Selectors for preloading");
+    C("<UL>\n");
     C("<LI>Subfolder ");SF_VALUE("/a/");C(" All files</LI>");
     C("<LI>Subfolder ");SF_VALUE("/r/");C(" Remote files</LI>");
     C("<LI>Subfolder ");SF_VALUE("/z/");C(" Files that are ZIP items</LI>");
@@ -383,9 +405,8 @@ echo Copy the selected files to the clipboard.  Ctrl-C or Command-C.\n";
 #define L(d) C("Files will be copied into "ANSI_FG_BLUE);C(_mnt_apparent); C(_writable_path);C(d ANSI_RESET".\n")
 #define HEADLINE_PRELOAD() C("<H1>Preloading files improves efficiency of file reading</H1>\nZIPsFS can cache file content on the (l) local disk  or in the (m) RAM.\nThis  improves non-sequential  reading from a file.<BR>\n");
 
-#define TAIL_PRELOAD(dir)    C("<H2>Special directories</H2>\nAnother way to force preloading of files is to access the files through dedicated paths such as ");SF_REF(dir)
-    CASE_ID2(PRELOADDISK_ENTIRE_ZIP,PRELOADDISK_ENTIRE_ZIP_NOT);
-    C("<BR><BR>For remote paths, entire ZIP files will be cached on local disk.\n\
+    CASE_ID2(PRELOADDISK_ENTIRE_ZIP,PRELOADDISK_ENTIRE_ZIP_NOT,"Preloading the entire ZIP");
+    C("For remote paths, entire ZIP files will be cached on local disk.\n\
 Consider the following two example files that are available when ZIPsFS is started with "); SF_SRC_SH(ZIPsFS_testfiles_start_ZIPsFS);C(".<BR><BR>\n\
 <UL><LI><TT>head  mnt/db/pride/2022/12/PXD036786/20220121_Z1_ZW_001_30-0043_K562_SWATH_3.91ng_3.wiff2</TT></LI>\
 <LI><TT>head mnt/db/pride/2026/07/PXD062492/20231031_PRO3_KTT_174_50-0121_AstraZeneca-PROTAC_P07_B09.d/analysis.tdf</TT></LI></UL>\n\
@@ -396,22 +417,21 @@ Whether ZIPsFS internally saves the ZIP entry as a file or not depends on whethe
 Only in the first example, the ZIP entry is extracted and cached as a separate file.\n\
 With the second example, files with the ending .tdf are  preloaded into RAM.");
     break;
-    CASE_ID2(PRELOAD_UPDATE,INTERNET_UPDATE);
-    C("<H1>Updating the local copy of remote or compressed files</H1>\n\
-A HTML report is generated for each pre-loaded file found on the local HD.\
+    CASE_ID3(PRELOAD_UPDATE,INTERNET_UPDATE,INTERNET_HEADER,"Updating the local copy of remote or compressed files");
+    C("A HTML report is generated for each pre-loaded file found on the local HD.\
 The paths of the pre-loaded file and the original source will displayed.\n\
-Reading the HTML files in this folder, triggers the update process of the corresponding file.\n\
-If the local copy is out-of-date,  the original file will be (down-) loaded again.\n\
+Reading the HTML files in this folder, triggers the update process of the corresponding file.\n");
+    C(id==ID_(INTERNET_UPDATE)?"The HTTP or FTP header data will be evaluated.\n":"The last-modified file attributes of the remote and local files will be compared.\n");
+    C("If the local copy is out-of-date, it will be refreshed.\n\
 On success, the copy on the local disk will be replaced. Success or failure will be reported in HTML.\n");
     break;
-    CASE_ID1(PRELOADRAM);SF_REQUIRES(WITH_PRELOADDISK);
-    C("Preloading to RAM does not use and wears out the disk. It is not good for files with long transfer times which are used more than once.");
-    C("PRELOADRAM can be activated  by file name based rules in "); SF_SRC_C(ZIPsFS_configuration);C(". The flags in the folder name take precedence.\n");
-    TAIL_PRELOAD(DIR_ZIPsFS"/-/m");
+    CASE_ID1(PRELOADRAM,"Preloading to RAM");SF_REQUIRES(WITH_PRELOADDISK);
+    C("Preloading to RAM is fast and does not use the local  disk. It is not good for files with long transfer times which are used more than once.\n\
+PRELOADRAM can be activated  by file name based rules in "); SF_SRC_C(ZIPsFS_configuration);C(". The flags in the folder name take precedence.\n");
     break;
-    CASE_ID2(PRELOADDISK_NOT,PRELOADDISK);SF_REQUIRES(WITH_PRELOADDISK);
-    C("Caching on local disk is prefered over RAM in case of long transfer times.  File  used multiple times are  transfered only once.\n");
-    sf_requires_rw(b);
+    CASE_ID2(PRELOADDISK_NOT,PRELOADDISK,"Preload files to local disk");SF_REQUIRES(WITH_PRELOADDISK);
+    C("Caching on local disk is preferred over RAM in case of long transfer times.  File  used multiple times are transferred only once.\n");
+    SF_REQUIRES_W();
     C("<H2>Mark entire file branch</H2>\nIn the command line to start  ZIPsFS, root paths can be followed by the property "); C(ROOT_PROPERTY[ROOT_PROPERTY_preload]);
     SF_SYMBOL_B();
     FOR(iCompress,COMPRESSION_NIL+1,COMPRESSION_NUM){ C(" &nbsp;  @"); C(ROOT_PROPERTY[ROOT_PROPERTY_preload]);C(cg_compression_file_ext(iCompress,NULL));}
@@ -419,23 +439,21 @@ On success, the copy on the local disk will be replaced. Success or failure will
     SF_BR();
     sf_update(b);
     sf_cleanup(b);
-    TAIL_PRELOAD(DIR_ZIPsFS"/-/l");
 #undef D
 #undef L
     break;
-    CASE_ID1(VIEWMOD_DECOMPRESS);SF_REQUIRES(WITH_PRELOADDISK);
-    C("<H2>Decompression of compressed files</H2>For all upstream compressed (bz2, gz, lrz, xz) files, decompressed virtual files will be presented.\
+    CASE_ID1(VIEWMOD_DECOMPRESS,"Decompression of compressed files");SF_REQUIRES(WITH_PRELOADDISK);
+    C("For all upstream compressed (bz2, gz, lrz, xz) files, decompressed virtual files will be presented.\n\
 Upon first usage they will be downloaded. Once downloaded, the file sizes will be correctly displayed.");
     break;
-    CASE_ID1(VIEWMOD_KEEP_ZIP);
+    CASE_ID1(VIEWMOD_KEEP_ZIP,"Not expanding ZIP files");
     C("This directory provides  access to all files without expanding ZIP files.<BR>This also accelerates navigation and searching.\n\n");
     break;
-    CASE_ID2(VIEWMOD_1,VIEWMOD_1_NOT);
-    C("<H1>The first file branch</H1>");
+    CASE_ID2(VIEWMOD_1,VIEWMOD_1_NOT,"The first file branch");
     C("The first root is writable and contains modified, generated or downloaded files. This file tree contains only those files that reside ");
     if (id==ID_(VIEWMOD_1_NOT)){ SF_SYMBOL_B();C("NOT ");SF_SYMBOL_E();}
     C("in the first root.\n");
-    sf_requires_rw(b);
+    SF_REQUIRES_W();
     break;
     //triggers
   case SF_README_FOR_DIR(DIR_LOGGED):
@@ -464,13 +482,12 @@ echo -e \"Options:\n   $0 -p  Display in pager\n   $0 -l  Continuous logging\"\n
 ");
   }break;
 
-    CASE_ID1(VIEWMOD_INTERNET);SF_REQUIRES(WITH_INTERNET_DOWNLOAD);
-    C("<H1>Accessing files from the internet</H1>\n");
-    sf_requires_rw(b);
+    CASE_ID1(VIEWMOD_INTERNET,"Accessing files from the internet");SF_REQUIRES(WITH_INTERNET_DOWNLOAD);
+    SF_REQUIRES_W();
     C("The directory "); SF_REF(DIR_INTERNET);
     C("provides access to internet files.\n\
 The file names are formed from URLs by replacing the colon and slashes by comma.\n\
-The times of documents are taken from the http or ftp headers which are stored in separate files.\n\
+The time attributes are taken from the http or ftp headers. The headers are stored in separate files.\n\
 The utility curl must be installed on the computer.\n\n\
 <U>Examples:</U><UL>\n\
 <LI>");SF_REF_DIR_NET("ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE");C("</LI>\n\
@@ -482,7 +499,12 @@ The utility curl must be installed on the computer.\n\n\
 In the last case, the file is only available as a gz compressed file. When the '<TT>.gz</TT>' suffix is omitted, the file will be decompressed during data transfer.\n\
 Before, the files size is unknown and estimated.\n\
 To update already downloaded files see folder"); SF_VALUE(DIRNAME_INTERNET_UPDATE);
+    C("\n<BR><BR>The function config_internet_hardlink_filename() may return an additional file path where the downloaded file is copied to as well.\n");
+    char additional_link[PATH_MAX];config_internet_hardlink_filename(NULL,additional_link,PATH_MAX,NULL,0);
+    C("The current file location is "); SF_VALUE(additional_link);
+
     break;
+
   case SFILE_NET_FETCH_PS:{
     C(common_begin_net_fetch);
     static const char *s=
@@ -496,21 +518,22 @@ To update already downloaded files see folder"); SF_VALUE(DIRNAME_INTERNET_UPDAT
 #include "tmp/include_net_fetch.sh.c"
       C(c);
   }	break;
-    CASE_ID1(VIEWMOD_NIL);C("Subfolder ");SF_VALUE("/-/");C("Provides default view on file tree.");break;
-    CASE_ID1(VIEWMOD_FILECONVERSION);SF_REQUIRES(WITH_FILECONVERSION);
-    C("<H1>File-conversion - Files generated automatically from other files</H1>\n");
-    sf_requires_rw(b);
-    C("<BR>The file tree "); sf_ref_special_dir(b,ID_(VIEWMOD_FILECONVERSION));
-    C(" replicates the virtual file tree. and it presents dynamically generated files. The files come into existence only when used.\n\
-They will be created using comands specified in "); SF_SRC_C(ZIPsFS_configuration_fileconversion); C(".<BR>\n\
+    CASE_ID1(VIEWMOD_NIL,"No operation");
+    C("Subfolder ");SF_VALUE("/-/");C(" provides default view on the file tree. ");
+    break;
+    CASE_ID1(VIEWMOD_FILECONVERSION,"File-conversion - Files generated automatically from other files");SF_REQUIRES(WITH_FILECONVERSION);
+    SF_REQUIRES_W();
+    C("<BR>The file tree ");
+    sf_ref_special_dir(b,ID_(VIEWMOD_FILECONVERSION));
+    C("contains all files along with dynamically generated files. The files come into existence only when used.\n\
+They will be created using commands specified in ");
+    SF_SRC_C(ZIPsFS_configuration_fileconversion);
+    C(".<BR>\n\
 <H2>Initiate file generation</H2>\n\
-To force file generation, it is sufficient to read at least one byte of the file.  UNIX commands like like the following can be used:\n<PRE>\n\n\
-    head * | strings\n\n\
-</PRE>\
-For Windows, the  script "); sf_ref_special_dir(b,SFILE_READ_BEGINNING_OF_FILES_BAT); C(" is available.<BR>\n\
+To force file generation, it is sufficient to read at least one byte of the file.  UNIX commands <TT>head</TT> can be used.\n\
+For Windows, the  script "); sf_ref_special_dir(b,SFILE_READ_BEGINNING_OF_FILES_BAT); C(" is convenient.<BR>\n\
 <H2>Unknown file size</H2>\n\
-As long as the file content has not been  generated, the file size is guessed. \n\
-It should be an overestimation to avoid premature end-of-file.<BR>\n");
+As long as the file content has not been  generated, the reported file size is incorrect which might be a problem for some software.\n");
     sf_cleanup(b);
     C("Also See "); SF_SRC_C(ZIPsFS_configuration_c);
     break;

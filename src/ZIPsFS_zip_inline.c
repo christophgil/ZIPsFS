@@ -31,7 +31,8 @@ static yes_zero_no_t find_realpath_try_zipflat_rule(zpath_t *zpath, root_t *r, c
   if (!ZPATH_STRCAT(VP()+cg_last_slash(VP())+1)) return ZERO;
   //EP_L()=zpath_commit(zpath);
   ZPATH_COMMIT(entry_path);
-  const bool ok=test_realpath(0,ZP_TRY_ZIP|ZP_RESET_IF_NEXISTS,zpath,r);
+  zpath->flags|=ZP_TRY_ZIP;
+  const bool ok=test_realpath(FINDRP_OR_RESET_ZPATH,zpath,r);
   IF_LOG_FLAG(LOG_ZIPFLAT) if (cg_is_regular_file(RP()))log_exited_function("rp: %s vp: %s ep: %s ok: %s",RP(),VP(),EP(),yes_no(ok));
   return ok?YES:NO;
 }
@@ -56,13 +57,13 @@ static yes_zero_no_t find_realpath_try_zipflat_rules(zpath_t *zpath, root_t *r){
 /* Initially folders .Zip.Content are shown.                                 */
 /* With the time these folders get replaced by the inlined zipentries.       */
 /*****************************************************************************/
-static bool readdir_zipflat_from_cache(const zpath_t *zpath_parentdir, const char *zipfilename, void *buf, fuse_fill_dir_t filler,ht_t *no_dups, directory_t *dir_generated){
+static bool readdir_zipflat_from_cache(zpath_t *zpath_parentdir, const char *zipfilename, void *buf, fuse_fill_dir_t filler,ht_t *no_dups, directory_t *dir_generated){
   directory_t dir={0};
   directory_init_zpath(&dir,NULL);
   const int vfolder_l=VFOLDER_PATH_L(zpath_parentdir);
   zpath_init_vp(&dir.dir_zpath,ZP_VP(zpath_parentdir)+vfolder_l,zpath_parentdir->vp_l-vfolder_l, zipfilename);
 
-  bool ok=test_realpath(0,0,&dir.dir_zpath,zpath_parentdir->root);
+  bool ok=test_realpath(0,&dir.dir_zpath,zpath_parentdir->root);
   if (ok){ LOCK(mutex_dircache,  ok=dircache_directory_from_cache(&dir));}
   if (!ok){
     directory_to_queue(&dir);

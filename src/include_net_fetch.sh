@@ -29,19 +29,15 @@ main(){
         done
         echo -e "\nurl=$url"
         [[ $url == *.gz &&  $url != *.tar.gz ]] && echo && read -r -p "$XGZ" && [[ ${REPLY,,} != *y* ]] && url=${url%.gz}
-        local html=${url//:/,}.html
-        html=$DIR/_UPDATE_/${html//\//,}
-        if [[ -s $html ]]; then
-            XHTML
-            local out="$(grep -a $'\t' $html |sed 's|<[^>]\+>||g')"
-            echo "$out"  |column -ts $'\t'
-            echo
-            local path=$DIR/$(grep -i  $'\tRelative' <<< "$out" |cut -f 1|sed 's|.*/||1')
-            echo "path=$path"
-            [[ -s $path ]] && stat -c "$ANSI_GREEN%n   %s Bytes$ANSI_RESET" $path
-        else
-            echo "${ANSI_FG_RED}File $html does not exist.$ANSI_RESET"
-        fi
+        local fn=${url//:/,}
+        fn=${fn//\//,}
+        local vp="$DIR/$fn"
+        echo "Going to display beginning of $vp. This will trigger the download process" 2>&1
+        gunzip='cat'
+        [[ $fn == *.gz ]] && gunzip='gunzip -c '
+        set -x
+        $gunzip $vp | head
+        set +x
         read -r -p "Done. $XRST"
     done
 }

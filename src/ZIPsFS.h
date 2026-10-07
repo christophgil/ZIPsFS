@@ -90,18 +90,23 @@ enum{
 #define DIR_PRELOADED                DIR_ZIPsFS"/preloaded"
 #define DIR_CONVERTED                DIR_ZIPsFS"/converted"
 #define DIR_INTERNET                 DIR_ZIPsFS"/n"
+#define DIR_INTERNET_HEADER          DIR_INTERNET"/"DIRNAME_INTERNET_HEADER
+#define DIR_INTERNET_UPDATE          DIR_INTERNET"/"DIRNAME_INTERNET_UPDATE
+
 #define DIR_LOGGED                   DIR_ZIPsFS"/log"
 
 
 
-#define SFX_UPDATE     "._update_.htmL"
+#define SFX_UPDATE               ".html"
 #define SFX_UPDATE_L            (sizeof(SFX_UPDATE)-1)
 #define DIR_INTERNET_L          (sizeof(DIR_INTERNET)-1)
-#define NET_SFX_HEADER "._Header_.TXT"
+#define DIR_INTERNET_HEADER_L   (sizeof(DIR_INTERNET_HEADER)-1)
+#define NET_SFX_HEADER ".txt"
 #define NET_SFX_HEADER_L (sizeof(NET_SFX_HEADER)-1)
 #define NET_SFX_FAIL   "._Failed_.TXT"
 #define DIRNAME_PRELOADDISK_UPDATE "UPDATE"
 #define DIRNAME_INTERNET_UPDATE "_UPDATE_"
+#define DIRNAME_INTERNET_HEADER "_HEADER_"
 
 
 static const char *_vfolders_in_zipsfs[]={DIR_ZIPsFS,DIR_SCRIPTS,DIR_SCRIPTS_WINDOWS,DIR_SCRIPTS_UNIX,DIR_LOGGED,DIR_PRELOADED,DIR_CONVERTED,DIR_INTERNET,NULL};
@@ -129,6 +134,7 @@ static const char *_vfolders_in_zipsfs[]={DIR_ZIPsFS,DIR_SCRIPTS,DIR_SCRIPTS_WIN
   X(NULL,                  NULL,                  SFILE_INTERNET_UPDATE_GO)\
   _SF_README(DIR_ZIPsFS)\
   _SF_README(DIR_LOGGED)
+  //  X(NULL,                  NULL,                  SFILE_INTERNET_HEADER)\
 
 
 
@@ -144,7 +150,7 @@ typedef struct { const char *name,*parent,*rp; int id,name_l;} specialfile_t;
 
 
 #define XMACRO_DIRFLAGS()   X(VIEWMOD_NOTHING,NULL)\
-    X(VIEWMOD_NIL,"-") X(PRELOAD_UPDATE,"") X(INTERNET_UPDATE,"")\
+    X(VIEWMOD_NIL,"-") X(PRELOAD_UPDATE,"") X(INTERNET_UPDATE,"") X(INTERNET_HEADER,"")\
     X(VIEWMOD_INTERNET,"n") X(VIEWMOD_KEEP_ZIP,"z") X(VIEWMOD_DECOMPRESS,"d") X(VIEWMOD_1,"1") X(VIEWMOD_1_NOT,"-1") X(VIEWMOD_FILECONVERSION,"c")\
     X(PRELOADRAM,"m") X(PRELOADDISK,"l")  X(PRELOADDISK_ENTIRE_ZIP,"z") X(PRELOADDISK_ENTIRE_ZIP_NOT,"-z")  X(PRELOADRAM_NOT,"-m") X(PRELOADDISK_NOT,"-l")\
     X(PRELOAD_SELECT_ALL,"a") X(PRELOAD_SELECT_REMOTE,"r") X(PRELOAD_SELECT_ZIP,"z")
@@ -168,7 +174,7 @@ enum{
 #define X(id,...) ID_(id),
   XMACRO_DIRFLAGS()
 #undef X
-  VFOLDER_FLAG_NUM,
+  VFOLDER_NUM,
 #define X(filename,parent,id) id,
   XMACRO_SPECIALFILES()
 #undef X
@@ -179,7 +185,7 @@ enum{
 static const char *_virtualfolder_dirflags[SFILE_NUM]={XMACRO_DIRFLAGS()};
 #undef X
 
-_Static_assert(VFOLDER_FLAG_NUM<30,"VFOLDER_FLAG_NUM Too many flags");
+_Static_assert(VFOLDER_NUM<30,"VFOLDER_NUM Too many flags");
 
 typedef enum{xmp_open_,xmp_access_,xmp_getattr_,xmp_read_,xmp_readdir_,functions_l} enum_functions_t;
 typedef enum{
@@ -337,7 +343,7 @@ typedef struct{
 //////////////////////////////////////////////////////////////////////////
 
 enum{PSEUDO_ENTRYIDX_FOR_DECOMPRESS=1, PSEUDO_ENTRYIDX_FOR_UPDATE, PSEUDO_ENTRYIDX_FOR_ZIP_AS_DIR, INODE_OFFSET_ENTRY};
-#define ZPATH_MAKE_INODE(zpath,entryIdx) make_inode((zpath)->stat_rp.st_ino,(zpath)->root,(entryIdx), ZP_RP(zpath))
+#define ZPATH_MAKE_INODE(zpath,entryIdx) make_inode((zpath)->stat_rp.st_ino,(zpath),(entryIdx), ZP_RP(zpath))
 enum {FILETYPEDATA_NUM=1024, FILETYPEDATA_FREQUENT_NUM=64};
 // #define foreach_fhandle_also_emty(id,d) int id=_fhandle_n;for(fHandle_t *d;--id>=0 && ((d=fhandle_at_index(id))||true);)
 
@@ -377,7 +383,7 @@ enum {STATCACHE_ROOT_IS_REMOTE=1<<3,STATCACHE_ROOT_IS_WRITABLE=1<<4,STATCACHE_IS
 
 #define foreach_root(r)    for(root_t *r=_root; r<_root+_root_n; r++)
 //FINDRP_FILECONVERSION_CUT=1<<13, FINDRP_FILECONVERSION_CUT_NOT=1<<14
-enum {  FINDRP_IN_OPEN=1<<12,  FINDRP_IS_PFXPLAIN=1<<16, FINDRP_STAT_TOCACHE_ALWAYS=1<<19, FINDRP_CACHE_ONLY=1<<20, FINDRP_CACHE_NOT=1<<21, FINDRP_DIR_PRELOADED_ONLY=1<<22};
+enum {  FINDRP_IN_OPEN=1<<12,  FINDRP_IS_PFXPLAIN=1<<16, FINDRP_STAT_TOCACHE_ALWAYS=1<<19, FINDRP_CACHE_ONLY=1<<20, FINDRP_CACHE_NOT=1<<21, FINDRP_DIR_PRELOADED_ONLY=1<<22, FINDRP_OR_RESET_ZPATH=1<<23};
 enum{FLAGS_FILLDIR_FINDRP_BEGIN=FINDRP_IN_OPEN};
 typedef struct{
   const char *rootpath, *rootpath_orig, *rootpath_mountpoint, *path_prefix, *pathpfx_slash_to_null;
@@ -460,7 +466,6 @@ typedef struct{
     ZP_IS_FROM_TRANSIENT_CACHE=1<<23,
     ZP_IS_ZIPENTRY=1<<24,                    /* Indicates a ZIP entry after realpath found */
     ZP_OVERFLOW=1<<25,                       /* The fixed size string buffer of zpath_t was too small. Path too long */
-    ZP_RESET_IF_NEXISTS=1<<27,               /* Instructs   test_realpath() to Reset  */
     ZP_TRY_ZIP=1<<28,                        /* Instructs   test_realpath() to consider Zip and DIR_IS_TRY_ZIP() */
     ZP_TRY_DECOMPRESS=1<<29,
     ZP_MASK_KEEP_NOT_RESET=(ZP_NOT_EXPAND_SYMLINKS|ZP_IS_IN_FHANDLE|VP_IS_ZIP_AS_DIR|ZP_TRY_DECOMPRESS)
@@ -615,7 +620,7 @@ typedef struct{
   zpath_t zpath;
   volatile time_t accesstime;
   volatile int errorno;
-  enum {FHANDLE_ACTIVE=1<<0,FHANDLE_DESTROY_LATER=1<<1,FHANDLE_PREPARE_ONCE_IN_RW=1<<2,FHANDLE_SEEK_FW_FAIL=1<<3,FHANDLE_SEEK_BW_FAIL=1<<4,FHANDLE_WITH_TRANSIENT_ZIPENTRY_CACHES=1<<5,FHANDLE_IS_FILECONVERSION=1<<6,FHANDLE_WITH_PRELOADRAM=1<<8,FHANDLE_PRELOADRAM_MASTER=1<<9, FHANDLE_PRELOADRAM_COMPLETE=1<<10,FHANDLE_SPECIAL_FILE=1<<11,FHANDLE_IS_CCODE=1<<12,FHANDLE_PRELOADDISK_QUEUE=1<<13,FHANDLE_PRELOADDISK_RUN=1<<14, FHANDLE_PRELOAD_ALREADY_QUEUED=1<<15, FHANDLE_IS_MUTEX_INITIALIZED_0=1<<16,FHANDLE_IS_MUTEX_INITIALIZED_1=1<<17,FHANDLE_SERIALIZED=1<<18, FHANDLE_NEED_INVALIDATE_PATH=1<<19,} flags;
+  enum {FHANDLE_ACTIVE=1<<0,FHANDLE_DESTROY_LATER=1<<1,FHANDLE_PREPARE_ONCE_IN_RW=1<<2,FHANDLE_SEEK_FW_FAIL=1<<3,FHANDLE_SEEK_BW_FAIL=1<<4,FHANDLE_WITH_TRANSIENT_ZIPENTRY_CACHES=1<<5,FHANDLE_IS_FILECONVERSION=1<<6,FHANDLE_WITH_PRELOADRAM=1<<8,FHANDLE_PRELOADRAM_MASTER=1<<9, FHANDLE_PRELOADRAM_COMPLETE=1<<10,FHANDLE_SPECIAL_FILE=1<<11,FHANDLE_IS_CCODE=1<<12,FHANDLE_PRELOADDISK_QUEUE=1<<13,FHANDLE_PRELOADDISK_RUN=1<<14, FHANDLE_PRELOAD_ALREADY_QUEUED=1<<15, FHANDLE_IS_MUTEX_INITIALIZED_0=1<<16,FHANDLE_IS_MUTEX_INITIALIZED_1=1<<17,FHANDLE_SERIALIZED=1<<18, FHANDLE_INVALIDATEPATH_REQUIRED=1<<19, FHANDLE_INVALIDATEPATH_PROCESSING=1<<20} flags;
 
   uint8_t already_logged;
   volatile int64_t offset,n_read;

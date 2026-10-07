@@ -8,6 +8,7 @@ main(){
     test_pattern    $MNT/zipsfs/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README ' warranties '
     test_pattern    $MNT/zipsfs/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,README ' warranties '
     test_pattern    $MNT/zipsfs/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE  ' License '
+#    test_pattern    $MNT/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz 'keywordList'
     test_pattern    $MNT/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml 'keywordList'
 }
 main "$@"

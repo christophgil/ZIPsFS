@@ -195,13 +195,23 @@ The disadvantage over the method below is, that repositories are not
 browsable.
 .SS Browsing FTP sites using nested FUSE file systems
 .PP
-The script file ZIPsFS_prepare_branch_for_ftp.sh creates folders like
-\f[V]\[ti]/.ZIPsFS/db/pride\f[R] and mounts the respective FTP sites.
+There are 3 FUSE file systems that could be nested into ZIPsFS to access
+remote FTP sites: curlftpfs, rclone and avfs.
+All of them are great for file browsing of the remote files.
+However, downloading very large files seems to be problematic.
+As a workaround, ZIPsFS can use \f[B]\f[BI]curl\f[B]\f[R] which is a
+very robust and efficient at loading remote files.
+It should be installed.
+ZIPsFS needs the equivalent URL.
+For convenience we provide the script file
+ZIPsFS_prepare_branch_for_ftp.sh which takes care of this.
+It creates folders like \f[V]\[ti]/.ZIPsFS/db/pride\f[R] and mounts the
+respective FTP sites.
 This requires \f[B]\f[BI]curl\f[B]\f[R].
 Please also install \f[B]\f[BI]rclone\f[B]\f[R] (or curlftpfs).
 .PP
-Its standard output serves as CLI parameters for the command line of
-ZIPsFS.
+The standard output of the script can be used as command line parameters
+for ZIPsFS:
 .IP
 .nf
 \f[C]
@@ -209,7 +219,7 @@ ZIPsFS   $b1 $b2 $b3 $b4  $(./ZIPsFS_prepare_branch_for_ftp.sh)   :  \[ti]/test/
 \f[R]
 .fi
 .PP
-Check the repositories:
+In case of success, there will be a directory:
 .IP
 .nf
 \f[C]
@@ -217,7 +227,6 @@ ls \[ti]/test/ZIPsFS/mnt/db
 \f[R]
 .fi
 .PP
-GZ compressed files are transparently de-compressed.
 Files with the ending \f[V].gz\f[R] also appear in the file listing
 without gz suffix.
 .PP
@@ -225,8 +234,10 @@ But wait, there is a major problem.
 Before decompression, ZIPsFS can only communicate an estimated file size
 of the decompressed file.
 Consequently, programs that depend on exact file sizes will not work.
-The command \f[V]/usr/bin/tail\f[R] requires the length of the file to
-find the last lines.
+Most UNIX tools do not need the file size.
+A text book example of a UNIX tool that does require the size of the
+file is \f[V]/usr/bin/tail\f[R].
+Lets see what happens if ZIPsFS tells a wrong size.
 Please try
 .IP
 .nf
@@ -235,12 +246,12 @@ tail  \[ti]/test/ZIPsFS/mnt/mnt/db/pride/2005/08/PRD000004/PRIDE_Exp_Complete_Ac
 \f[R]
 .fi
 .PP
-The first time this command is run, there is no output.
-This is because tail sees the wrong file size.
-Subsequently, \f[V]tail\f[R] works nicely.
+The first time the \f[V]tail\f[R] command is run, there will be no
+output.
+Subsequently, \f[V]tail\f[R] works nicely, because now the file size is
+known.
 .PP
-You can remove the preloaded file and again \f[V]tail\f[R] will fail
-once.
+To repeat the test, the preloaded file can be removed
 .IP
 .nf
 \f[C]
@@ -391,7 +402,7 @@ We recommend running ZIPsFS in foreground in \f[I]tmux\f[R].
 .PP
 These rules can be overridden by using the sub-directories
 \f[V]/zipsfs/-/m/\f[R] and \f[V]/zipsfs/-/-m/\f[R].
-Please see enclosed README files.
+Please see the README files in these folders.
 .SS FUSE command line options
 .PP
 Options for the FUSE system come after the \f[B]colon\f[R] in the
@@ -417,47 +428,47 @@ The file tree can be accessed in a modified way via
 .PP
 These three folders contain single letter directives which take
 precedence over root-folder settings at the command line.
-.SS Folder \f[V]/zipsfs/<view-option>/\f[R]
+Directives are negated when preceded by dash.
+Detailed descriptions are found in the README files in these folders and
+here.
+.SS View-option
 .PP
-The 1st level sub-directories specifies view options.
-Directives are single letters.
-They can be combined.
-A preceding dash `-' negates.
-- /zipsfs/- Default view.
-- /zipsfs/z Rapid navigation and file name searching without time
-consuming ZIP file expansion.
-- /zipsfs/n Internet files.
-Take URL and replace colon and slashes by comma.
-See above tutorial.
-- /zipsfs/d For bz2, xz, gz, .Z and lrz compressed files also generate
-the decompressed file.
-- /zipsfs/1 Files of the first branch only.
-This includes all files ever written or generated or modified.
-- /zipsfs/\[ti]1 Files except from first branch.
-- /zipsfs/c Show converted files along the original files.
-Example: - Raw mass spectrometry to mgf or mzML files or tsv - Parquet
-to tsv - /zipsfs/log Logging, to identify very busy software which
-should rather be used with preloading of remote or compressed files.
-- Excessive requests of file attributes - Multiple open/close - Backward
-seek - Upper/lower case conversion of file names
+The first subfolder contains directive to specify
+.IP \[bu] 2
+Whether the 1st root / the other roots are included / excluded.
+.IP \[bu] 2
+Whether ZIP files are expanded.
+.IP \[bu] 2
+Whether converted files are presented along with the original files.
+Implemented examples: OCR generated texts from image files and mzML
+files from proprietary mass-spectrometry files.
+.IP \[bu] 2
+Whether decompressed files are generated for gz, bz2, Z, xz and lrz
+compressed files.
 .PP
-Details are found in the contained readme files.
-.SS Folder \f[V]/zipsfs/<view-option>/<prefetch option>\f[R]
+The folder \f[V]/n/\f[R] allows access to internet files.
+The file name is formed from URLs by replacing the colon and the slashes
+by comma.
+.SS Preload option
 .PP
-The following path component may instruct preloading of files.
-Files are preloaded just before the first byte is read.
+The 2nd subfolder contains preload options.
 - /-/ Apply default preload rules defined in
 \f[V]ZIPsFS_configuration.c\f[R] and \f[V]ZIPsFS_configuration.h\f[R]
 and specified by root properties.
-- /m/ Prefetch to RAM - /-m/ Do not prefetch to RAM - /l/ Prefetch to
-the local file system - /lz/ Prefetch to the local file system.
-Load entire ZIP files not their entries.
-Do not mix up with /l/z.
-In the later, z is the selector \[lq]If-in-ZIP\[rq].
-- /-l/ Do not prefetch to the local file system
+- /m/ Prefetch to RAM - /l/ Prefetch to the local file system - /lz/
+Prefetch to the local file system.
+Instead of single entries, load entire ZIP files to local disk.
+The directive \f[V]z\f[R] is different from a \f[V]z\f[R] in the 3rd
+folder where it acts as a selector.
+How the ZIP entries are read from that locally cached ZIP file depends
+entirely on rules in the config files.
+ZIP entries may be read directly or with preloading into RAM.
+The later case represents a combination of preload to disk and RAM.
+.SS Preload selector
 .PP
-The /m/ and /l/ folder have a subfolder with selectors: (a) all, (r)
-remote and (z) ZIP-entry.
+If the 2nd subfolder declares file preload, then the 3rd subfolder gives
+the condition.
+- a all - r remote - z ZIP-entry.
 .SS Properties of file branches
 .PP
 In the command line, root file paths can be followed by expressions like
@@ -484,7 +495,7 @@ Vendor specific mass-spectrometry files are loaded from varying file
 positions.
 Apparently, this mode of file access is inefficient for remote or
 ZIP-compressed data.
-.SS File content pre-load
+.SS File content preload
 .PP
 Data preloading can help to provide file data out-of-order.
 Remote or compressed files can be preloaded in two different ways: (I)
@@ -509,48 +520,11 @@ This is for example necessary for Thermo mass-spectrometry raw files
 analyzed in FragPipe.
 Above method of preloading into RAM is here inappropriate because each
 raw file is opened and closed multiple times during computation such
-that the large files would be transfered over the net several times.
-.PP
-All remote (r) or compressed (c) or zippded (z) files accessed through
-the following folders will be first copied to local disk:
-.IP
-.nf
-\f[C]
-<mount-point>/zipsfs/-/l/r/
-<mount-point>/zipsfs/-/l/z/
-<mount-point>/zipsfs/-/l/rz/
-\f[R]
-.fi
-.PP
-The Readme in these folders provide further information.
-Alternatively, the entire root-path can be marked for preloading with
-the property \f[V]\[at]preload\f[R].
-.SS Preloading complete ZIP files to the local disk - a combination of both
-.PP
-With the branch
-.IP
-.nf
-\f[C]
-<mount-point>/zipsfs/-/l/r/
-\f[R]
-.fi
-.PP
-each ZIP entry would be preloaded separately.
-.PP
-However, with
-.IP
-.nf
-\f[C]
-<mount-point>/zipsfs/-/lz/r/
-\f[R]
-.fi
-.PP
-the ZIP file will be preloaded.
-Depending on the settings, the ZIP entries might be preloaded to RAM.
+that the large files would be transferred over the net several times.
 .SS Transiently caching file attributes and directory listings
 .PP
 When loading Bruker mass spectrometry files with the Bruker DLLs, The
-file system is asked douzens of times per second to provide one and the
+file system is asked dozens of times per second to provide one and the
 same file listing and the same file attributes.
 While this is no problem for local files, remote file systems get
 overloaded.
@@ -559,17 +533,6 @@ ZIP file is used.
 .PP
 This cache is distinct from a persistent cache of directory listing that
 may last for ever for root branches with the property \[at]immutable.
-.SS Decompression
-.PP
-Decompression is enabled with properties like \f[V]\[at]preload=1\f[R]
-of for specific compression suffixes like \f[V]\[at]preload=gz,xz\f[R]
-or for the file tree
-.IP
-.nf
-\f[C]
-<mount-point>/zipsfs/d/
-\f[R]
-.fi
 Project status
 .PP
 Author: Christoph Gille
@@ -602,7 +565,20 @@ Those of other users won\[cq]t be affected:
 echo 1 | sudo tee /sys/fs/fuse/connections/*/abort
 \f[R]
 .fi
-.SS Changelog
+.PP
+To kill only the specific fuse mount you need to put the minor device
+number instead of the asterisk.
+Look at the third column of the command output containing the
+major:minor device number, e.g., 0:42.
+The minor number (42) matches the folder name in
+/sys/fs/fuse/connections/42/.
+.IP
+.nf
+\f[C]
+grep fuse /proc/self/mountinfo
+\f[R]
+.fi
+.SS Change-log
 .IP \[bu] 2
 202601
 .RS 2

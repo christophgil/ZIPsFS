@@ -320,7 +320,7 @@ static const void *ht_sintern(ht_t *ht,const char *key){
 /***************************************************************** */
 static ht_entry_t *ht_numkey_get_entry(ht_t *ht, ht_keylen_hash_t key_high_variability, uint64_t const key2,bool create){
 #define E() _ht_get_entry_maybe_empty(ht,(char*)(uint64_t)(key2),(key_high_variability));
-  ASSERT(0!=(ht->flags&HT_FLAG_NUMKEY));
+  ASSERT(ht);  ASSERT(0!=(ht->flags&HT_FLAG_NUMKEY));
   CG_THREAD_OBJECT_ASSERT_LOCK(ht);
   ASSERT(HT_ENTRIES(ht)!=NULL);
   if (!key_high_variability && !key2) return &ht->entry_zero;

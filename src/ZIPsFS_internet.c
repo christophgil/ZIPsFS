@@ -8,17 +8,23 @@ _Static_assert(WITH_INTERNET_DOWNLOAD,"");
 
 
 enum {MAX_LEN_COMPRESS_EXT=5};
-#define net_estimate_filepath_l(vp,vp_l) (_writable_path_l+vp_l+(NET_SFX_HEADER_L+MAX_LEN_COMPRESS_EXT+1))
-#define net_filepath(rp,vp,vp_l) stpcpy(stpcpy(rp,_writable_path),vp)
-#define net_filepath_header(rp,vp,vp_l,ext) stpcpy(stpcpy(cg_stpncpy0(stpcpy(rp,_writable_path),vp,vp_l),ext),NET_SFX_HEADER)
 #define net_is_internetfile(vp,vp_l) (net_internet_file_colon(vp,vp_l)>0)
 #define _NET_FOREACH_COMPRESSION_LOOP(i,vp,vp_l)   if (url_e) FOR(i,0,compress_id?1:COMPRESSION_NUM) if (!i || ((1<<i)&(i==1?(mask=config_internet_try_compressed(vp,vp_l)):mask)))
 
 
 enum {_NET_DL_AS_FILE=1<<1,_NET_DL_EVEN_IF_EXISTS=1<<2};
 
+static int net_filepath_header(char *rp,const char *vp,const int vp_l,const char *ext){
+  if (!ext) ext="";
+  if (_writable_path_l+vp_l+DIR_INTERNET_HEADER_L+sizeof(NET_SFX_HEADER)>=PATH_MAX) return 0;
+  const char *e=stpcpy(stpcpy(cg_stpncpy0(stpcpy(stpcpy(rp,_writable_path),DIR_INTERNET_HEADER),vp,vp_l),ext), vp_l>1?NET_SFX_HEADER:"");
+  //log_debug_now("vp=%s  rp=%s",vp,rp);
+  return e-rp;
+}
+
 static int net_internet_filename_colon(const char *name,const int name_l){
-  const int colon= !ENDSWITH(name,name_l,NET_SFX_HEADER) && !ENDSWITH(name,name_l,NET_SFX_FAIL) && !cg_starts_digits_char(name,8,'_') ? cg_str_str(name,",,,") : 0;
+  const int colon=// !ENDSWITH(name,name_l,NET_SFX_HEADER) &&
+    !ENDSWITH(name,name_l,NET_SFX_FAIL) && !cg_starts_digits_char(name,8,'_') ? cg_str_str(name,",,,") : 0;
   return colon<0?0:colon;
 }
 static int net_internet_file_colon(const char *vp,const int vp_l){
@@ -82,16 +88,17 @@ static bool net_maybe_download(const int opt,const char *vp, const int vp_l,cons
 
 
 static bool net_maybe_download_header(const int opt, cg_httpheader_t *h, char *url, const char *vp, int vp_l){
+  log_entered_function("%s -> %s",url,vp);
   const int compress_id=cg_compression_for_filename(vp,vp_l);
   char *url_e=net_url_for_file(url,vp,vp_l);
-  char rph_buf[(opt&_NET_DL_AS_FILE)?net_estimate_filepath_l(vp,vp_l):0];
+  char rph_buf[PATH_MAX];
   char *rph=(opt&_NET_DL_AS_FILE)?rph_buf:NULL;
   const bool asFileUnlessExists=(opt&(_NET_DL_AS_FILE|_NET_DL_EVEN_IF_EXISTS))==_NET_DL_AS_FILE;
   /* Check whether http header had already been downloaded as file */
   bool ok=false;
   if (asFileUnlessExists  && !compress_id){ /* If no compress suffix */
     FOR(iCompress,1,COMPRESSION_NUM){
-      net_filepath_header(rph,vp,vp_l,cg_compression_file_ext(iCompress,NULL));
+      if (!net_filepath_header(rph,vp+DIR_INTERNET_L,vp_l-DIR_INTERNET_L,cg_compression_file_ext(iCompress,NULL))) return false;
       if ((ok=cg_is_executable(rph) && net_parse_header(h,rph,iCompress))){ /*  Header files with compress suffix  can serve only if executable flag. */
         h->compress_sfx=iCompress;
         break;
@@ -103,7 +110,7 @@ static bool net_maybe_download_header(const int opt, cg_httpheader_t *h, char *u
     int mask=0;
     _NET_FOREACH_COMPRESSION_LOOP(iCompress,vp,vp_l){
       const char *ext=cg_compression_file_ext(iCompress,NULL);
-      if (rph) net_filepath_header(rph,vp,vp_l,ext);
+      if (rph && !net_filepath_header(rph,vp+DIR_INTERNET_L,vp_l-DIR_INTERNET_L,ext)) return false;
       strcpy(url_e,ext);
       if (!rph && cg_httpheader_load(h,url)) return true;
       if (asFileUnlessExists && cg_file_size(rph)>0 || cg_download_url(COPY_HEADER,url,rph,NULL,rph?NULL:h)){// cppcheck-suppress nullPointerRedundantCheck
@@ -125,10 +132,10 @@ static bool net_maybe_download_header(const int opt, cg_httpheader_t *h, char *u
   }
   return ok;
 }
-static bool net_getattr(struct stat *st, char *url,const char *vp, const int vp_l){
+static bool net_getattr(const bool even_if_exist, struct stat *st, char *url,const char *vp, const int vp_l){
   if (!net_is_internetfile(vp,vp_l)) return false;
   cg_httpheader_t h={0};
-  const bool ok=net_maybe_download_header(_NET_DL_AS_FILE,&h,url,vp,vp_l);
+  const bool ok=net_maybe_download_header(_NET_DL_AS_FILE|(even_if_exist?_NET_DL_EVEN_IF_EXISTS:0),&h,url,vp,vp_l);
   if (ok){
     stat_init(st,h.size,NULL);
     st->st_mtime=h.mtime;
@@ -166,38 +173,36 @@ static bool net_update(fHandle_t *d){
   char *vp=D_VP(d);
   int vp_l=net_no_sfx(vp,D_VP_L(d));
   char vp_buf[vp_l+1], url[vp_l+11];
-
   if (VFOLDER_HAS_FLAG_d(INTERNET_UPDATE)){
     const int vfolder_l=VFOLDER_PATH_L(&d->zpath);
-    vp_l+=DIR_INTERNET_L-vfolder_l;
-    cg_stpncpy0(stpcpy(vp_buf,DIR_INTERNET),vp+vfolder_l,vp_l-DIR_INTERNET_L);
+    cg_stpncpy0(stpcpy(vp_buf,DIR_INTERNET),vp+vfolder_l,vp_l-vfolder_l);
     vp=vp_buf;
+    vp_l=strlen(vp_buf);
+
   }
-   ASSERT(vp_l==strlen(vp));
+
+  ASSERT(vp_l==strlen(vp));
   struct stat st={0},sth={0};
-  net_getattr(&sth,url,vp,vp_l);
-log_debug_now("vp:%s url:%s",vp, url);
+  net_getattr(true,&sth,url,vp,vp_l);
   const int rp_l=_writable_path_l+vp_l;
   char rp[rp_l+1];stpcpy(stpcpy(rp,_writable_path),vp);
   if (stat(rp,&st)) warning(WARN_NET|WARN_FLAG_ERRNO,rp,"stat()");
   const yes_zero_no_t updateSuccess=st.st_mtime && sth.st_mtime && sth.st_mtime<=st.st_mtime? ZERO:
     net_maybe_download(_NET_DL_AS_FILE|_NET_DL_EVEN_IF_EXISTS,vp,vp_l,rp)? YES:
     NO;
-log_debug_now("updateSuccess=%d",updateSuccess);
   char lnk[PATH_MAX]={0};
   if (st.st_ino) net_mk_hardlink(false,lnk,url,sth.st_mtime,rp);
-
   //log_debug_now("url=%s",url);
-  //DIE_DEBUG_NOW("updateSuccess=%d  lnk=%s  vp=%s rp=%s",updateSuccess,lnk, (*lnk?lnk:rp)+_writable_path_l,rp);
+  //log_exited_function("updateSuccess=%d  lnk=%s  vp=%s rp=%s",updateSuccess,lnk, (*lnk?lnk:rp)+_writable_path_l,rp);
   IF1(WITH_PRELOADRAM, html_is_uptodate(d,updateSuccess,rp,&st, url,&sth,   (*lnk?lnk:rp)+_writable_path_l));
   return true;
 }
 
 
-
 static void net_mk_hardlink(const bool overwrite,char *lnk, const char *url, const time_t mtime,const char *rp){
   char additional_link[PATH_MAX]={0}, *lnk_fn=stpcpy(stpcpy(lnk,_writable_path),DIR_INTERNET);  *lnk_fn++='/';
   const bool ro=config_internet_hardlink_filename(lnk_fn, additional_link, PATH_MAX, url,mtime);
+  //log_debug_now("lnk_fn: %s  additional_link: %s",lnk_fn,additional_link);
 #define W() warning(WARN_NET|WARN_FLAG_ERRNO,lnk,"failed create hardlink for %s",rp);
   if (*lnk_fn){
     if (overwrite || !cg_file_exists(lnk)){
@@ -205,7 +210,10 @@ static void net_mk_hardlink(const bool overwrite,char *lnk, const char *url, con
       if (link(rp,lnk)) W();
       if (ro) cg_set_readonly(lnk); // cppcheck-suppress knownConditionTrueFalse
     }
-    if (*additional_link && !cg_file_exists(strcat(additional_link,lnk_fn-1)) && link(rp,additional_link)) W();
+    if (*additional_link && !cg_file_exists(additional_link)){
+      cg_recursive_mk_parentdir(additional_link);
+      if (link(rp,additional_link)) cg_copy_file_content(rp,additional_link);
+    }
   }
 #undef W
 }
@@ -217,11 +225,13 @@ static void net_mk_hardlink(const bool overwrite,char *lnk, const char *url, con
 
 
 static int net_direntry(const zpath_t  *zpath, char *u, int u_l){
-  if (!ENDSWITH(u,u_l,NET_SFX_HEADER)) return 0;
+  const bool h=ENDSWITH(u,u_l,NET_SFX_HEADER);
   if (VFOLDER_HAS_FLAG(zpath,INTERNET_UPDATE)){
+    if (!h) return false;
     strcpy(u+u_l-NET_SFX_HEADER_L,SFX_UPDATE);
     return SFX_UPDATE_L-NET_SFX_HEADER_L+u_l;
   }
+  if (!h) return u_l;
   u[u_l-NET_SFX_HEADER_L]=0;
   return u_l-NET_SFX_HEADER_L;
 }

@@ -276,9 +276,9 @@ static int cg_empty_dot_dotdot(const char *s){
 }
 #define STRGS_OVERLAP(dst,src,n) (dst<=src && dst+n>=src || src<=dst && src+n>=dst)
 //#define  ASSERT_STRGS_NO_OVERLAP(dst,src,n) {assert(!(dst<=src && dst+n>=src)); assert(!(src<=dst && src+n>=dst));}
-#define cg_strncpy0(...) _cg_strncpy(false,__VA_ARGS__)
-#define cg_stpncpy0(...) _cg_strncpy(true,__VA_ARGS__)
-static char *_cg_strncpy(const bool stpcpy,char *dst,const char *src,const int num){
+#define cg_strncpy0(...) _cg_strncpy(STRNCPY_ADD_TERMINAL_0,__VA_ARGS__)
+#define cg_stpncpy0(...) _cg_strncpy(STRNCPY_ADD_TERMINAL_0|STRNCPY_RETURN_END,__VA_ARGS__)
+static char *_cg_strncpy(const int opt,char *dst,const char *src,const int num){
   const int n=src?strnlen(src,num):0;
   if (n){
     if (STRGS_OVERLAP(dst,src,n)){
@@ -290,8 +290,8 @@ static char *_cg_strncpy(const bool stpcpy,char *dst,const char *src,const int n
       memcpy(dst,src,n);
     }
   }
-  dst[n]=0;
-  return dst+(stpcpy?n:0);
+  if (opt&STRNCPY_ADD_TERMINAL_0) dst[n]=0;
+  return dst+((opt&STRNCPY_RETURN_END)?n:0);
 }
 #define SNPRINTF(dest,max,...)   (max<=snprintf(dest,max,__VA_ARGS__) && (log_error("Exceed snprintf "),true))
 static uint32_t cg_strlen(const char *s){

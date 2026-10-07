@@ -239,7 +239,7 @@ typedef enum {VALIDCHARS_DIGITS,VALIDCHARS_PATH,VALIDCHARS_FILE,VALIDCHARS_NOQUO
 ///  String            ///
 //////////////////////////
 #define COPY_TO_HEAP(counter_id,bytes,size)         memcpy(cg_malloc(counter_id,size),bytes,size)
-
+enum{STRNCPY_ADD_TERMINAL_0=1<<1,STRNCPY_RETURN_END=1<<2};
 
 
 

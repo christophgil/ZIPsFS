@@ -19,12 +19,14 @@ enum{
 /// Debugging ///
 /////////////////
 /* ---- */
+#define WITH_DEBUG_SEQUENTIAL_INODES 0
 #define WITH_DEBUG_THROTTLE_DOWNLOAD 0
 #define WITH_ASSERT_LOCK     0 // Optional assertion
 #define WITH_EXTRA_ASSERT    0// Optional assertion
 #define WITH_INEFFICIENT_ZIP_READING 0 // Without fi->direct_io=1
 #define WITH_TESTING_REALLOC 0 // Smaller initial size, earlier realloc
 #define WITH_TESTING_UNBLOCK 0
+
 
 /********************************/
 /* symbolic links i.e. symlinks */
@@ -182,7 +184,7 @@ enum{UNBLOCK_AFTER_SECONDS_THREAD_ASYNC=300, UNBLOCK_AFTER_SECONDS_THREAD_PRELOA
 #define WITH_CCODE             1 /* Generate files by C-code */
 #define WITH_INTERNET_DOWNLOAD 1 /* Access to internet files like <mount-point>/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README */
 #define WITH_PRELOADDISK       1 /* Files are preloadoed to fst branch for root paths preceded by --preload at CLI. Or for  virtual paths starting with /ZIPsFS/lr/, /ZIPsFS/lrc/, /ZIPsFS/lrz/. */
-#define WITH_FUSE_INVALIDATE_PATH 1 /* A size underestimate for generated files would lead to truncated files. */
+#define WITH_FUSE_INVALIDATE_PATH 0 /* A size underestimate for generated files would lead to truncated files. */
 #define WITH_PRELOADDISK_DECOMPRESS 1
 
 
