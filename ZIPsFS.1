@@ -55,6 +55,9 @@ conversions\f[R] and performance optimizations tailored for efficiently
 storing and accessing \f[B]large-scale mass spectrometry\f[R] data.
 It manages non-sequential file reading from varying positions (so-called
 file seek) efficiently to improve reading of remote and zipped files.
+With file-preload-to-disk, it manages files in remote FTP repositories
+as if they were normal local files.
+Compressed (gz,xz,bz2,lrz,Z) can be transparently decompressed.
 It has a programming interface to create synthetic file content
 programmatically.
 .PP
@@ -106,6 +109,7 @@ Open a file browser or another terminal and browse the files in
 \[ti]/test/ZIPsFS/mnt/
 \f[R]
 .fi
+.SH Tutorial on further features
 .SS Create a file in the virtual tree
 .PP
 The first file tree stores files.
@@ -205,13 +209,16 @@ It should be installed.
 ZIPsFS needs the equivalent URL.
 For convenience we provide the script file
 ZIPsFS_prepare_branch_for_ftp.sh which takes care of this.
+It may be used as a template.
 It creates folders like \f[V]\[ti]/.ZIPsFS/db/pride\f[R] and mounts the
 respective FTP sites.
 This requires \f[B]\f[BI]curl\f[B]\f[R].
 Please also install \f[B]\f[BI]rclone\f[B]\f[R] (or curlftpfs).
 .PP
 The standard output of the script can be used as command line parameters
-for ZIPsFS:
+for ZIPsFS.
+The expression \f[V]$(...)\f[R] denotes Command
+substitution (https://en.wikipedia.org/wiki/Command_substitution).
 .IP
 .nf
 \f[C]
@@ -526,8 +533,8 @@ that the large files would be transferred over the net several times.
 When loading Bruker mass spectrometry files with the Bruker DLLs, The
 file system is asked dozens of times per second to provide one and the
 same file listing and the same file attributes.
-While this is no problem for local files, remote file systems get
-overloaded.
+While this so-called stat-spamming is fine for local files, remote file
+systems and decompressing file reading get overloaded.
 ZIPsFS implements a transient cache, that lives as long as the specific
 ZIP file is used.
 .PP

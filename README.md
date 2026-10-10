@@ -41,7 +41,9 @@ More flexibility provides the property ``@path-prefix=...``.
 ZIPsFS includes specialized features like **automatic file conversions** and performance
 optimizations tailored for efficiently storing and accessing **large-scale mass spectrometry** data.
 It manages non-sequential file reading from varying positions (so-called file seek) efficiently to
-improve reading of remote and zipped files. It has a programming interface to create synthetic file
+improve reading of remote and zipped files. With file-preload-to-disk, it manages files in remote FTP repositories as if they were normal local files.
+Compressed (gz,xz,bz2,lrz,Z)  can be transparently decompressed.
+It has a programming interface to create synthetic file
 content programmatically.
 
 ZIPsFS is best run in a **tmux** session.
@@ -82,6 +84,9 @@ In production, it is recommended to start ZIPsFS in *tmux*. For testing, just us
 Open a file browser or another terminal and  browse the files in
 
     ~/test/ZIPsFS/mnt/
+
+
+# Tutorial on further features
 
 ### Create a file in the virtual tree
 The first file tree stores files. All others are read-only.
@@ -145,12 +150,13 @@ There are 3 FUSE file systems that could be nested into ZIPsFS to access remote 
 All of them are great for file browsing of the remote files. However, downloading very large files seems to be problematic.
 As a workaround, ZIPsFS can use ***curl*** which is a very robust and  efficient at loading remote files. It should be installed.
 ZIPsFS needs the equivalent URL.  For convenience we provide the script
-file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) which takes care of this.
+file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) which takes care of this. It may be used as a template.
 It creates folders like ``~/.ZIPsFS/db/pride``
 and mounts the respective FTP sites. This requires ***curl***. Please also install  ***rclone*** (or curlftpfs).
 
 
-The  standard output of the script can be used  as command line  parameters for ZIPsFS:
+The  standard output of the script can be used  as command line  parameters for ZIPsFS.
+The expression ``$(...)`` denotes [Command substitution](https://en.wikipedia.org/wiki/Command_substitution).
 
     ZIPsFS   $b1 $b2 $b3 $b4  $(./ZIPsFS_prepare_branch_for_ftp.sh)   :  ~/test/ZIPsFS/mnt
 
@@ -373,7 +379,7 @@ opened and closed multiple times during computation such that the large files wo
 
 When loading Bruker mass spectrometry files with the Bruker DLLs, The file system is asked
 dozens of times per second to provide one and the same file listing and the same file
-attributes.  While this is no problem for local files, remote file systems get overloaded.
+attributes.  While this so-called stat-spamming is fine for local files, remote file systems and decompressing file reading  get overloaded.
 ZIPsFS  implements a transient cache, that lives as long as the specific ZIP file is used.
 
 This cache is distinct from a persistent cache of directory listing that may last for ever for root
