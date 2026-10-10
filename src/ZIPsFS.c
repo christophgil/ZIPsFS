@@ -1284,7 +1284,6 @@ static uint64_t next_fh(){
   return fh;
 }
 static fHandle_t* fhandle_create(const int flags, uint64_t *fh, const zpath_t *zpath){
-
   cg_thread_assert_not_locked(mutex_fhandle);
   LOCK(mutex_fhandle,*fh=next_fh());
   while(true){
@@ -1303,6 +1302,7 @@ static void fhandle_try_destroy(fHandle_t *d){
   ASSERT_LOCKED_FHANDLE();
   //log_entered_function("%s  FHANDLE_INVALIDATEPATH_REQUIRED: %s", D_VP(d),yes_no(d->flags&FHANDLE_INVALIDATEPATH_REQUIRED));
   if (fhandle_active_readers_writers(d)){  warning(WARN_FLAG_ERROR,D_VP(d),"fhandle_active_readers_writers() %p",d);return;}
+  IF1(WITH_PRELOADDISK, if (d->flags&FHANDLE_PRELOADDISK_RUN) return);
   IF1(WITH_PRELOADRAM,if (d->preloadram && (d->flags&FHANDLE_PRELOADRAM_MASTER) && !preloadram_try_destroy(d)) return);
   IF1(WITH_FILECONVERSION, const int fd=d->fd_real; d->fd_real=0;if (fd) close(fd));
   IF1(WITH_TRANSIENT_ZIPENTRY_CACHES,transient_cache_destroy(d));
@@ -1360,6 +1360,7 @@ static ino_t make_inode(const ino_t inode0, zpath_t *zpath, const int entryIdx,c
     return inod;
   }
 }
+
 static ino_t inode_from_virtualpath(const char *vp,const int vp_l){
       lock(mutex_dircache);
       ht_entry_t *e=ht_get_entry(&_ht_inodes_vp,vp,vp_l,0,true);
@@ -1436,7 +1437,6 @@ static int filler_readdir_zip(const int opts_findrp,zpath_t *zpath,void *buf, fu
       struct stat stbuf,*st=filler?&stbuf:&zpath->stat_vp;
       stat_init(st,isdir?-1:Nth0(dc.fsize,i),&zpath->stat_rp);
       st->st_ino=ZPATH_MAKE_INODE(zpath,idx+INODE_OFFSET_ENTRY);
-      //log_debug_now("ZZZZZ iiiiiiiiiiiii  %s %lu",u,st->st_ino);
       st->st_mtime=Nth0(dc.fmtime,i);
       if (!filler){  /* ---  Called from test_realpath_or_reset() to set zpath->stat_vp --- */
         zpath->stat_vp.st_ino=st->st_ino;
@@ -1565,7 +1565,6 @@ static int realpath_mk_parent(char *rp, const virtualpath_t *vip){
   assert(_writable_path_l+vip->vp_l<MAX_PATHLEN);
   const int slash=cg_last_slash(vip->vp);
   REALPATH_WRITABLE_FOLDER(rp,vip,"");
-  // See realpath_writable_folder // DEBUG_NOW
   if (slash<=0) return 0;
   char parent[slash+1]; cg_strncpy0(parent,vip->vp,slash);
   NEW_VIRTUALPATH(parent);
@@ -1584,7 +1583,6 @@ static pid_t get_request_pid(void){
 }
 
 static void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_config *cfg)){
-  //void *x=fuse_apply_conn_info_opts;  //cfg-async_read=1;
 #if WITH_FUSE_3
   cfg->use_ino=1;
   IF1(WITH_LIBFUSE_CACHE_STAT,cfg->entry_timeout=cfg->attr_timeout=200;cfg->negative_timeout=20);
@@ -1602,6 +1600,8 @@ static void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_c
   _fuse=fuse_get_context()->fuse;
   _fuse_session=fuse_get_session(_fuse);
   _fuse_max_write=conn->max_write;
+  IF1(WITH_FUSE_INVALIDATE_PATH,conn->want&=~FUSE_CAP_WRITEBACK_CACHE;conn->want|=FUSE_CAP_EXPLICIT_INVAL_DATA);
+  //    if (conn->capable & FUSE_CAP_EXPLICIT_INVAL_DATA)      fuse_set_feature_flag(conn,FUSE_CAP_EXPLICIT_INVAL_DATA);
   return NULL;
 }
 
@@ -1979,10 +1979,10 @@ static int _xmp_getattr(const virtualpath_t *vipa, struct stat *st){ /* NOT_TO_H
 }/*xmp_getattr*/
 static int xmp_getattr(const char *vpath, struct stat *st IF1(WITH_XMP_GETATTR_FUSE_FILE_INFO,,struct fuse_file_info *fi_or_null)){
   FUSE_PREAMBLE(vpath);
-  if (!er) er=_xmp_getattr(&vipa ,st);
+  if (!er) er=_xmp_getattr(&vipa,st);
   if (!er) st->st_mode|=((st->st_mode&S_IFDIR)?0777:(st->st_mode&S_IFREG)?0666:0);
   log_fuse_function(__func__,&vipa,er);
-  //log_exited_function("vpath: %s %s ino: %lu  ",vpath, success_or_fail(er==0),st->st_ino);
+  //if (ENDSWITH(vpath,strlen(vpath),"big_file.txt")) log_exited_function("vpath: %s %s ino: %lu  ",vpath, success_or_fail(er==0),st->st_ino);
   return er;
 }
 
@@ -2043,7 +2043,7 @@ static int open_for_reading(const virtualpath_t *vipa, struct fuse_file_info *fi
   NEW_ZIPPATH(vipa);
   IF1(WITH_SPECIAL_FILE,fh=specialfile_content_to_fhandle(zpath,id)); /* Only case where file content is generated in xmp_open() */
   if (!fh){ /* ID for fHandle_t  */
-    int ff=IF1(WITH_CCODE, config_c_open(C_FLAGS_FROM_ZPATH(zpath),VP(),VP_L())?FHANDLE_PREPARE_ONCE_IN_RW|FHANDLE_IS_CCODE:)0;
+    int ff=IF1(WITH_CCODE, config_c_open(C_FLAGS_FROM_ZPATH(zpath),VP(),VP_L())?FHANDLE_IS_CCODE:)0;
     //IF1(WITH_INTERNET_DOWNLOAD,  if (!ff && VFOLDER_HAS_FLAG(vipa,INTERNET_UPDATE)) ff=FHANDLE_PREPARE_ONCE_IN_RW);
     if (!ff && find_realpath(FINDRP_IN_OPEN,zpath) IF1(WITH_FILECONVERSION, &&!fileconversion_remove_if_not_uptodate(zpath))){
       if (IS_UPDATE_GO(vipa))  ff=FHANDLE_PREPARE_ONCE_IN_RW; /* after find_realpath() */
@@ -2051,10 +2051,21 @@ static int open_for_reading(const virtualpath_t *vipa, struct fuse_file_info *fi
       IF1(WITH_PRELOADRAM,       if (preloadram_advise(zpath,0)) ff=FHANDLE_WITH_PRELOADRAM);
       if (ZPF(ZP_IS_ZIPENTRY))  { ff|=FHANDLE_PREPARE_ONCE_IN_RW; IF0(WITH_INEFFICIENT_ZIP_READING,fi->direct_io=1);}  /*Without direct_io,  multithreaded unordered read.*/
     }else{
-      IF1(WITH_INTERNET_DOWNLOAD,if (!ff && net_is_internetfile(VP(),VP_L())) ff=FHANDLE_PREPARE_ONCE_IN_RW);
-      IF1(WITH_FILECONVERSION,   if (!ff && fileconversion_check_infiles_exist(vipa)){ LOCK(mutex_fhandle,set_realpath_to_writable_folder(zpath,DIR_CONVERTED)); ff=FHANDLE_PREPARE_ONCE_IN_RW|FHANDLE_IS_FILECONVERSION;});
+      IF1(WITH_INTERNET_DOWNLOAD,if (!ff && net_is_internetfile(VP(),VP_L())) ff=FHANDLE_UNKNOWN_FILESIZE);
+      IF1(WITH_FILECONVERSION,   if (!ff && fileconversion_check_infiles_exist(vipa)){ LOCK(mutex_fhandle,set_realpath_to_writable_folder(zpath,DIR_CONVERTED)); ff=FHANDLE_IS_FILECONVERSION|FHANDLE_UNKNOWN_FILESIZE;});
     }
-    if (ff) fhandle_create(ff|FHANDLE_PREPARE_ONCE_IN_RW,&fh,zpath);
+    if (ff){
+#if WITH_FUSE_INVALIDATE_PATH || WITH_DIRECT_IO
+      if ((ff&FHANDLE_UNKNOWN_FILESIZE) || (is_preloaddisk_zpath(zpath) || path_with_compress_sfx_exists(zpath)) ){
+        ff|=FHANDLE_UNKNOWN_FILESIZE;
+        IF1(WITH_DIRECT_IO, fi->keep_cache=0;fi->direct_io=1; log_verbose("Opening %s with "ANSI_BLUE ANSI_FG_WHITE"direct_io"ANSI_RESET,vipa->vp));
+      }
+#endif
+
+
+      fHandle_t *d=fhandle_create(ff|FHANDLE_PREPARE_ONCE_IN_RW,&fh,zpath);
+      //log_debug_now("%s FHANDLE_UNKNOWN_FILESIZE %s  %d %d ",vipa->vp, yes_no(ff&FHANDLE_UNKNOWN_FILESIZE),is_preloaddisk_zpath(zpath),path_with_compress_sfx_exists(zpath));
+    }
   }
   if (fh){ fi->fh=fh; return 0;}
   zpath_set_atime(zpath);
@@ -2071,6 +2082,7 @@ static int xmp_open(const char *vpath, struct fuse_file_info *fi){
   if (!er)	er=_xmp_open(&vipa,fi);
   if (fi->fh>2 && fi->fh<COUNT_BACKWARD_SEEK) _count_backward_seek[fi->fh]=0;
   //  IF_LOG_FLAG_OR(LOG_OPEN,er!=0)log_exited_function("%s res: %d  "ANSI_YELLOW"%ju"ANSI_RESET,vpath,er,UIM(fi->fh));
+  IF1(WITH_DEBUG_ALWAYS_DIRECT_IO, fi->keep_cache=0;fi->direct_io=1);
   return -er;
 }
 
@@ -2433,23 +2445,23 @@ static off_t fhandle_read_zip(char *buf, const off_t size, const off_t offset,fH
 #if WITH_FUSE_INVALIDATE_PATH
 static void fHandle_wait_little_while_need_invalidate_path(const fHandle_t *d, const int us){
   if (!(d->flags&FHANDLE_INVALIDATEPATH_REQUIRED)) return;
+  //log_entered_function("%s",D_VP(d));
   const int wait=1e5;
-  for(int i=us/wait;--i>=0       &&  (d->flags&FHANDLE_INVALIDATEPATH_REQUIRED);  i++){ if (!(i%20)) fputs(" Still  FHANDLE_INVALIDATEPATH_REQUIRED ",stderr); usleep(wait);}
-  for(int i=us/wait;--i>=0       &&  (d->flags&FHANDLE_INVALIDATEPATH_PROCESSING);i++){ if (!(i%20)) fputs(" Still  FHANDLE_INVALIDATEPATH_PROCESSING ",stderr); usleep(wait);}
-
-
-  log_verbose(ANSI_FG_MAGENTA "Waiting while FHANDLE_INVALIDATEPATH_REQUIRED %s FHANDLE_INVALIDATEPATH_PROCESSING %s "ANSI_RESET,
+  for(int i=us/wait;--i>=0       &&  (d->flags&FHANDLE_INVALIDATEPATH_REQUIRED);  i++){ if (!(i%8)) fputs(" Still  FHANDLE_INVALIDATEPATH_REQUIRED ",stderr); usleep(wait);}
+  for(int i=us/wait;--i>=0       &&  (d->flags&FHANDLE_INVALIDATEPATH_PROCESSING);i++){ if (!(i%8)) fputs(" Still  FHANDLE_INVALIDATEPATH_PROCESSING ",stderr); usleep(wait);}
+  log_exited_function(ANSI_FG_MAGENTA "Waiting while FHANDLE_INVALIDATEPATH_REQUIRED %s FHANDLE_INVALIDATEPATH_PROCESSING %s "ANSI_RESET,
               success_or_fail(!(d->flags&FHANDLE_INVALIDATEPATH_REQUIRED)),
               success_or_fail(!(d->flags&FHANDLE_INVALIDATEPATH_PROCESSING)));
+  usleep(1e6);
 }
 #endif //WITH_FUSE_INVALIDATE_PATH
 static void fhandle_prepare_in_fuse_read_or_write(fHandle_t *d,const int open_flags){
   zpath_t *zpath=&d->zpath;
-  log_entered_function("%s  %p",VP(),d);
+  //log_entered_function("%s  %p",VP(),d);
   {
     LOCK_N(mutex_fhandle, const bool go=(d->flags&FHANDLE_PREPARE_ONCE_IN_RW);   d->flags&=~FHANDLE_PREPARE_ONCE_IN_RW);
     if (!go){
-      IF1(WITH_FUSE_INVALIDATE_PATH,fHandle_wait_little_while_need_invalidate_path(d,1e7));
+      IF1(WITH_FUSE_INVALIDATE_PATH,  if (d->flags&FHANDLE_UNKNOWN_FILESIZE) fHandle_wait_little_while_need_invalidate_path(d,1e7));
       return;
     }
   }
@@ -2473,18 +2485,14 @@ static void fhandle_prepare_in_fuse_read_or_write(fHandle_t *d,const int open_fl
 #endif //WITH_PRELOADDISK
     }
 #if WITH_FUSE_INVALIDATE_PATH
-    if (!d->errorno && d->zpath.stat_vp.st_size>size && ((d->flags&FHANDLE_WITH_PRELOADRAM)||do_open)){
+    //    if (!d->errorno && d->zpath.stat_vp.st_size>size && ((d->flags&FHANDLE_WITH_PRELOADRAM)||do_open)){
+    //    if (!d->errorno && d->zpath.stat_vp.st_size>size && (d->flags&FHANDLE_UNKNOWN_FILESIZE)){
+    if (d->flags&FHANDLE_UNKNOWN_FILESIZE){
       root_start_thread(D_ROOT(d),PTHREAD_INVALIDATE_PATH,false);
-      log_verbose(ANSI_FG_MAGENTA "Set FHANDLE_INVALIDATEPATH_REQUIRED to %s d=%p"ANSI_RESET,VP(),d);
       d->flags|=FHANDLE_INVALIDATEPATH_REQUIRED;
-
-      //if (DEBUG_NOW==DEBUG_NOW) usleep(2E6);
       fHandle_wait_little_while_need_invalidate_path(d,1e6);
-      //usleep(1e5);
     }
 #endif //WITH_FUSE_INVALIDATE_PATH
-    //if (DEBUG_NOW==DEBUG_NOW)        log_debug_now("fuse_lowlevel_nfuse_lowlevel_notify_inval_inode: %d",fuse_lowlevel_notify_inval_inode(_fuse_session, d->zpath.stat_vp.st_ino, 0, 0));
-    //if (DEBUG_NOW==DEBUG_NOW) usleep(2E6);
     if (do_open){
       //log_debug_now("Going open %s",RP());
       if (!RP_L() || !zpath_stat(0,zpath)){
@@ -2833,3 +2841,5 @@ int main(const int argc,const char *argv[]){
 // head  mnt/zipsfs/d/-/6600-tof2/Data/50-0055/_associatedFiles/20201215_TOF1_LS_100_50-0055_Kurth-Covid19-Dexa_P2_A1.wiff
 // filler_readdir( cg_download_url  FINDRP_DIR_PRELOADED_ONLY
 // https://music.apple.com/de/new
+// cg_copy_url_or_file
+// LEAK COUNT_ZIP_FOPEN          27919          27918 x

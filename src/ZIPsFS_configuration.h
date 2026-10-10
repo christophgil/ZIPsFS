@@ -19,6 +19,7 @@ enum{
 /// Debugging ///
 /////////////////
 /* ---- */
+#define WITH_DEBUG_ALWAYS_DIRECT_IO 0 // The fuse option direct_io is normally only be used for unknown file size. With this flag we check whether it has negative impact
 #define WITH_DEBUG_SEQUENTIAL_INODES 0
 #define WITH_DEBUG_THROTTLE_DOWNLOAD 0
 #define WITH_ASSERT_LOCK     0 // Optional assertion
@@ -184,9 +185,11 @@ enum{UNBLOCK_AFTER_SECONDS_THREAD_ASYNC=300, UNBLOCK_AFTER_SECONDS_THREAD_PRELOA
 #define WITH_CCODE             1 /* Generate files by C-code */
 #define WITH_INTERNET_DOWNLOAD 1 /* Access to internet files like <mount-point>/ZIPsFS/n/https,,,ftp.uniprot.org,pub,databases,uniprot,README */
 #define WITH_PRELOADDISK       1 /* Files are preloadoed to fst branch for root paths preceded by --preload at CLI. Or for  virtual paths starting with /ZIPsFS/lr/, /ZIPsFS/lrc/, /ZIPsFS/lrz/. */
-#define WITH_FUSE_INVALIDATE_PATH 0 /* A size underestimate for generated files would lead to truncated files. */
 #define WITH_PRELOADDISK_DECOMPRESS 1
 
+
+#define WITH_FUSE_INVALIDATE_PATH 1 /* A size underestimate for generated files would lead to truncated files. */
+#define WITH_DIRECT_IO 1            /* For unknown file size */
 
 
 #define WITH_FILECONVERSION_HIDDEN 0  /* Hide the directory c in ZIPsFS to avoid recursive searches. However, it breaks export to Windows */

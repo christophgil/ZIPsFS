@@ -69,7 +69,6 @@ static void log_print_roots(FILE *file){ /* n==0 for UNIX console with UTF8 else
 #define S(...) snprintf(line+pos,sizeof(line)-pos,__VA_ARGS__)
   int width[33]={0};
   char line[1024], colsep[9];
-  //const bool html=file!=stderr && DEBUG_NOW!=DEBUG_NOW;
   if (IS_HTML()) fputs("If the table appears misaligned in MS-Edge, it can be  copied in MS-Notepad.\n\n<PRE>",file);
   cg_unicode(colsep,BD_HEAVY_VERTICAL,IS_HTML());
   FOR(print,0,2){

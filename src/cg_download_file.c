@@ -204,8 +204,7 @@ static bool cg_copy_url_or_file(const int iCompress_or_minus_1,const char *src_p
     iCompress=cg_compression_for_filename(src_path,0);
     if (iCompress==cg_compression_for_filename(dst,0)) iCompress=COMPRESSION_NIL;
   }
-
-  log_entered_function("src_path:%s dst:%s  iCompress=%d ",src_path,dst,iCompress);
+  //log_entered_function("src_path:%s dst:%s  iCompress=%d ",src_path,dst,iCompress);
   const bool ok=_cg_copy_url_or_file(iCompress,src_path,dst,progress,progress_para);
   log_exited_function("dst:%s   %s",dst,success_or_fail(ok));
   return ok;

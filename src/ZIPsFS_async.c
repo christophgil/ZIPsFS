@@ -382,14 +382,18 @@ static void root_update_time(root_t *r, int thread,time_t now){
   atomic_store(r->thread_when+thread,now);
 }
 
+
+/******************************************/
+/* Unknown file size e.g. decompressed gz */
+/******************************************/
 #if WITH_FUSE_INVALIDATE_PATH
 static void *infloop_PTHREAD_INVALIDATE_PATH(void *arg){
   root_t *r=arg;
   assert(r!=NULL);
   init_infloop(r,PTHREAD_INVALIDATE_PATH);
-  struct stat  st={0};
   while(1){
     char vp[MAX_PATHLEN+1];*vp=0;
+    struct stat  st={0};
         lock(mutex_fhandle);
         FOREACH_FHANDLE(id,d){
           if((d->flags&FHANDLE_INVALIDATEPATH_REQUIRED)){
@@ -402,43 +406,15 @@ static void *infloop_PTHREAD_INVALIDATE_PATH(void *arg){
         }
         unlock(mutex_fhandle);
     if (*vp){
-      int res=0;
-      switch(3){
-      case 1: /* This occasionally freezes everything.  Better low level */
-        fuse_invalidate_path(_fuse,vp);
-        break;
-      case 2:{ /* No effect */
-        const int slash=cg_last_slash(vp);
-        if (!slash) continue;
-        vp[slash]=0;
-        const char *name=vp+slash+1, *parent=vp;
-        virtualpath_t vipa;
-        char buffer[MAX_PATHLEN+1];
-        virtualpath_init(&vipa, parent,buffer);
-        bool found;FIND_REALPATH(&vipa);
-        if (!found){ log_warn("Could not find %s",parent);continue;}
-        const ino_t ino=zpath->stat_vp.st_ino;
-        log_verbose("Going fuse_lowlevel_notify_inval_entry(_fuse_session, parent=%s inode=%jd name=%s ...",VP(),UIM(ino),name);
-        res=fuse_lowlevel_notify_inval_entry(_fuse_session,ino,name,strlen(name));
-        /* res is -2 */
-        if (res == -ENOSYS) {
-          // Fallback or log warning if the operating system kernel doesn't support live invalidations
-        }
-      };break;
-      case 3:{ /* No effect */
-        log_verbose("%s Going fuse_lowlevel_notify_inval_inode(_fuse_session, %jd,0,0)",D_VP(d),UIM(st.st_ino));
-        res=fuse_lowlevel_notify_inval_inode(_fuse_session, st.st_ino, 0,0);
-        /* res is -2 */
-      }break;
-      }
-      log_verbose("fuse_invalidate_path errno=%d"GREEN_DONE,res);
-      fprint_strerror(stderr,-res);
+      //log_debug_now(ANSI_RED"Going to call fuse_invalidate_path( %s )",vp);
+      const int res=fuse_invalidate_path(_fuse,vp);  /* This occasionally freezes everything unless fi->direct_io=1;.  */
+      //log_verbose("fuse_invalidate_path errno=%d"GREEN_DONE,res);
+      if (res) fprint_strerror(stderr,-res);
       const ht_hash_t h=hash_value_strg(vp);
-      LOCK(mutex_fhandle, foreach_fhandle_including_pending_destruct(id,d) if (D_VP_HASH(d)==h && !strcmp(vp,D_VP(d))) d->flags&=~FHANDLE_INVALIDATEPATH_PROCESSING);
-      usleep(1e6);
+      LOCK(mutex_fhandle,      foreach_fhandle_including_pending_destruct(id,d) if (D_VP_HASH(d)==h && !strcmp(vp,D_VP(d))) d->flags&=~FHANDLE_INVALIDATEPATH_PROCESSING);
     }
     usleep(1e4);
-    //fputc('%',stderr);
+    //static int count; if (!(count%16)) fputc('%',stderr);
   }
 }
 #endif //WITH_FUSE_INVALIDATE_PATH
@@ -554,21 +530,25 @@ static void *infloop_PTHREAD_PRELOAD(void *arg){
             if (r!=D_ROOT(dm)) dm=NULL; /* After timeout root in d might change in preloadram_wait() */
           }
           IF1(WITH_PRELOADRAM,  if (dm && PRELOADRAM_QUEUED!=preloadram_get_status(dm)) dm=NULL);
-
-          IF1(WITH_PRELOADDISK, if (dl && !(dl->flags&FHANDLE_PRELOADDISK_QUEUE))  dl=NULL; if (dl) { dl->flags|=FHANDLE_PRELOADDISK_RUN; dl->flags&=~FHANDLE_PRELOADDISK_QUEUE;});
+          IF1(WITH_PRELOADDISK, if (dl && !(dl->flags&FHANDLE_PRELOADDISK_QUEUE))  dl=NULL; if (dl) {dl->flags|=FHANDLE_PRELOADDISK_RUN; dl->flags&=~FHANDLE_PRELOADDISK_QUEUE;});
           unlock(mutex_fhandle);
       IF1(WITH_PRELOADRAM, if (dm){
           LOCK_N(mutex_fhandle,preloadram_set_status(dm,PRELOADRAM_READING); const uint64_t fhandle_fh=dm->fhandle_fh);
-
           preloadram_now(dm,r);
           assert(dm->fhandle_fh==fhandle_fh);
           LOCK(mutex_fhandle,preloadram_set_status(dm,PRELOADRAM_DONE));
         });
       //IF1(WITH_PRELOADDISK, if (dl){ char dst[MAX_PATHLEN+1];if (preloaddisk_writable_realpath(&dl->zpath,dst)) preloaddisk_now(dst,NULL,dl);});
-      IF1(WITH_PRELOADDISK, fHandle_preloadfile_now(dl));
+#if WITH_PRELOADDISK
+      if (dl){
+        fHandle_preloadfile_now(dl);
+        LOCK(mutex_fhandle, dl->flags&=~FHANDLE_PRELOADDISK_RUN);
+      }
+#endif //WITH_PRELOADDISK
     }/* if (d) */
     root_update_time(r,-PTHREAD_PRELOAD,0);
     usleep(500*1000);
+    //log_debug_now("iiiiiiiiiiiiiii=%d",i++);
   }
 #endif //WITH_PRELOADRAM || WITH_PRELOADDISK
 }

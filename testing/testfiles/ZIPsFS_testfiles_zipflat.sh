@@ -24,6 +24,7 @@ test_zipinline(){
 
 main(){
     assure_mountpoint_db pride || return 1
+    echo 'Instead of seeing ZIP entries within a folder, the entries are shown flat. This is required for Sciex Mass-spectrometrie instruments'
     echo 'Running for the first time, you will soon see a file listing where the Zip files are not yet expanded'
     echo 'This will take some time because the files are remote'
     time test_zipinline /db/pride/2025/07/PXD063487

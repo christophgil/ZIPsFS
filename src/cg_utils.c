@@ -1485,6 +1485,12 @@ static bool cg_pid_exists_proc(const pid_t pid){
 
 
 int main(int argc, char *argv[]){
+  {
+    char *ee[]={".wiff",".wiff2",".rawIdx",".raw","",".d",NULL};
+  FOREACH_CSTRING(e,ee) puts(*e);
+  return 0;
+  }
+
 
   {
     char *symlink_path=argv[1];

@@ -82,9 +82,8 @@ static bool _preloaddisk_now(const char *dst,fHandle_t *d){
 } /* _preloaddisk_now */
 static bool preloaddisk_now(const char *dst,fHandle_t *d){
   const zpath_t *zpath=&d->zpath;
-  log_entered_function("VP:%s \n    %s "ANSI_YELLOW"==>"ANSI_RESET"  \n    %s",VP(),RP(),dst);
+  log_entered_function(ANSI_FG_MAGENTA"VP:%s \n    %s "ANSI_YELLOW"==>"ANSI_RESET"  \n    %s d=%p"ANSI_RESET,VP(),RP(),dst,d);
   assert(_writable_path_l);
-  LOCK(mutex_fhandle, d->flags=(d->flags&~FHANDLE_PRELOADDISK_QUEUE)|FHANDLE_PRELOADDISK_RUN);
   const bool success=_preloaddisk_now(dst,d);
   LOCK(mutex_fhandle, d->flags&=~(FHANDLE_PRELOADDISK_RUN|FHANDLE_PRELOADDISK_QUEUE));
   log_exited_function(ANSI_YELLOW"==>"ANSI_RESET" %s %s",RP(),success_or_fail(success));
@@ -94,7 +93,7 @@ static bool preloaddisk_now(const char *dst,fHandle_t *d){
 
 static bool fHandle_preloadfile_now(fHandle_t *d){
   if (d){
-    log_entered_function("vp:%s rp:%s",D_VP(d),D_RP(d));
+    //log_entered_function("vp:%s rp:%s",D_VP(d),D_RP(d));
     const zpath_t *zpath=&d->zpath;
     if (!NOT_PRELOADDISK_ZPATH_FOR_DIR(zpath)){
       char dst[MAX_PATHLEN+1];
@@ -140,6 +139,7 @@ static bool is_preloaddisk_zpath(zpath_t *zpath){
 }
 
 static int preloaddisk(fHandle_t *d){
+
   zpath_t *zpath=&d->zpath;
   root_t *r=ZPR();
   struct stat st={0};
@@ -149,13 +149,13 @@ static int preloaddisk(fHandle_t *d){
     realpath_writable_folder(dst,zpath,DIR_PRELOADED);
     ok=cg_is_regular_file(dst);
   }
-  //log_entered_function("%s   root:%s already:%d",D_VP(d),rootpath(r),ok);
+  //log_entered_function(ANSI_FG_MAGENTA"%s   root:%s already:%d  d=%p"ANSI_RESET,D_VP(d),rootpath(r),ok,d);
   if (!ok){
     root_start_thread(ZPR(),PTHREAD_PRELOAD,false);
   again_with_other_root:
     while(true){
 #define FHQ_FHAQ FHANDLE_PRELOADDISK_QUEUE|FHANDLE_PRELOAD_ALREADY_QUEUED
-      LOCK_N(mutex_fhandle,fHandle_t *g=preloaddisk_fhandle(d);if (!g && !(d->flags&(FHQ_FHAQ|FHANDLE_PRELOADDISK_RUN))) d->flags|=FHQ_FHAQ);
+      LOCK_N(mutex_fhandle,fHandle_t *g=preloaddisk_fhandle(d);if (!g && !(d->flags&(FHQ_FHAQ|FHANDLE_PRELOADDISK_RUN))){d->flags|=FHQ_FHAQ;});
       PRELOADFILE_ROOT_UPDATE_TIME(d,NULL,false);
       for(int i=0;;i++){
         LOCK(mutex_fhandle, ok=!((g?g:d)->flags&(FHANDLE_PRELOADDISK_QUEUE|FHANDLE_PRELOADDISK_RUN)));
@@ -176,7 +176,9 @@ static int preloaddisk(fHandle_t *d){
   if (ok){
         lock(mutex_fhandle);
         //if (!ZPF(ZP_IS_PRELOADED_ZIPFILE_BUT_NOT_ZIPENTRY)) zpath_set_realpath(zpath,dst,NULL,NULL);
-        zpath->stat_rp=zpath->stat_vp=st;
+        zpath->stat_rp=st;
+        zpath_stat(0,zpath);
+        //DIE_DEBUG_NOW("");
         ZPR()=_root_writable;
         unlock(mutex_fhandle);
   }
