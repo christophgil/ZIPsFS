@@ -174,7 +174,7 @@ the size of the file is  ``/usr/bin/tail``. Lets see what happens if ZIPsFS tell
     tail  ~/test/ZIPsFS/mnt/mnt/db/pride/2005/08/PRD000004/PRIDE_Exp_Complete_Ac_369.xml
 
 The first time the ``tail`` command is run, there will be no  output.
-Subsequently, ``tail`` works nicely, because now the file size is known.
+Subsequently, ``tail`` works nicely, because then the file size is known.
 
 To repeat the test,  the preloaded file can be removed
 
@@ -300,7 +300,7 @@ The file tree can be accessed in a modified way via
 
 These three folders contain single letter directives which take precedence over root-folder settings at the command line.
 Directives are negated when preceded by dash. Detailed descriptions are found in the README files in these folders
-and [here](./special_folders.html).
+and [here](./special_folders).
 
 
 ### View-option
