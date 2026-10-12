@@ -353,7 +353,7 @@ For example
 \f[C]
 /zipsfs/z/l/r/...
         \[br] \[br] \[br]
-        \[br] \[br] \[u2514]\[u2500]\[u2500] Selector: When files are from remote sites
+        \[br] \[br] \[u2514]\[u2500]\[u2500] Selector: Apply to files from remote sites
         \[br] \[u2514]\[u2500]\[u2500]\[u2500]\[u2500] Preload option: Preload to disk
         \[u2514]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500] View option: Do not expand ZIP files. Show ZIP files as ZIP files.
 \f[R]
@@ -366,30 +366,45 @@ Detailed descriptions are found in the README files in these folders and
 here.
 .SS Choosing the access path
 .PP
-To chose the optimal access path for a particular software you need to
-consider
+To chose the optimal access path for a particular software software and
+data storage features need to be considered.
 .IP \[bu] 2
-Are the files remote and does transfer of file data take long?
+Are the files remote?
+How long does file transfer take?
 .IP \[bu] 2
-Is the application opening each file several times?
+Is the application opening each file several times or just once?
 .IP \[bu] 2
 Are the files
 .RS 2
 .IP \[bu] 2
-Flat files
+Regular
 .IP \[bu] 2
 Compressed or uncompressed ZIP entries
 .IP \[bu] 2
-gz, bz2, xz compressed files that need inflation
+Compressed files (gz, bz2, xz, Z, lrz) which the software does not
+support
 .RE
 .IP \[bu] 2
 Does the software read files sequentially or from varying positions
 .IP \[bu] 2
-Is there stat-spamming i.e.\ highly repeated request of file attributes
-and folder listings
+Does the software repeatedly request file attributes and folder listings
+at a high frequency - so-called stat-spamming?
+This has been observed in software using SQLite databases as file
+format.
+Severe NAS performance problems may occur when SQLite databases are read
+without prefetch to RAM.
 .PP
-The help text (\f[V]ZIPsFS -h\f[R]) lists access paths for some use
-cases in mass-spectrometry.
+The following suggest access paths for specific applications in
+mass-spectrometry:
+.IP
+.nf
+\f[C]
+- \[ga]\[ga]/\[ga]\[ga]                Default  options are appropriate for Diann. No view prefix necessary.
+- \[ga]\[ga]/zipsfs/d/lz/r/\[ga]\[ga]  Fragpipe, Maxquant,   Diann on far remote files (Pride-DB, Massive-DB, cloud storage)
+- \[ga]\[ga]/zipsfs/z/l/r/\[ga]\[ga]   Upload to Pride. Before starting Pride, read the beginning of all files to force local caching of NAS files.
+- \[ga]\[ga]/zipsfs/z/-/\[ga]\[ga]     Upload to Massive, fast file browsing (Windows explorer)
+\f[R]
+.fi
 .SS View-option
 .PP
 The flags in the first subfolder specify

@@ -245,7 +245,7 @@ For example
 
     /zipsfs/z/l/r/...
             │ │ │
-            │ │ └── Selector: When files are from remote sites
+            │ │ └── Selector: Apply to files from remote sites
             │ └──── Preload option: Preload to disk
             └────── View option: Do not expand ZIP files. Show ZIP files as ZIP files.
 
@@ -258,18 +258,27 @@ and [here](./special_folders.md).
 
 ### Choosing the access path
 
-To chose the optimal access path for a particular software you need to consider
+To chose the optimal access path for a particular software software and data storage features need to be considered.
 
- - Are the files remote and does transfer of file data take long?
- - Is the application opening each file several times?
+ - Are the files remote? How long  does file transfer take?
+ - Is the application opening each file several times or just once?
  - Are the files
-    - Flat files
+    - Regular
     - Compressed or uncompressed ZIP entries
-    - gz, bz2, xz  compressed files that need inflation
+    - Compressed files (gz, bz2, xz, Z, lrz) which the software does not support
  - Does the software read files sequentially or from varying positions
- - Is there stat-spamming i.e. highly repeated request of file attributes and folder listings
+ - Does the software repeatedly request file attributes and folder listings at a high frequency - so-called  stat-spamming?
+   This has been observed in software using SQLite databases as file format.
+   Severe NAS performance problems may occur when  SQLite databases are read without prefetch to RAM.
 
-The help text (``ZIPsFS -h``) lists access paths for some use cases in mass-spectrometry.
+
+
+The following suggest access paths for specific applications in mass-spectrometry:
+
+    - ``/``                Default  options are appropriate for Diann. No view prefix necessary.
+    - ``/zipsfs/d/lz/r/``  Fragpipe, Maxquant,   Diann on far remote files (Pride-DB, Massive-DB, cloud storage)
+    - ``/zipsfs/z/l/r/``   Upload to Pride. Before starting Pride, read the beginning of all files to force local caching of NAS files.
+    - ``/zipsfs/z/-/``     Upload to Massive, fast file browsing (Windows explorer)
 
 
 ### View-option
