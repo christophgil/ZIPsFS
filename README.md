@@ -274,7 +274,7 @@ The help text (``ZIPsFS -h``) lists access paths for some use cases in mass-spec
 
 ### View-option
 
-The first subfolder contains directive to specify
+The flags in the first subfolder  specify
 
  - Whether the 1st source tree / the other source trees are included / excluded.
  - Whether ZIP files are expanded.
@@ -287,7 +287,7 @@ The folder ``/zipsfs/n/`` allows access to internet files.  File names are forme
 ### Preload option
 
 The 2nd subfolder contains preload options.
-  - ``/-/`` Apply  default preload rules defined in ``ZIPsFS_configuration.c`` and ``ZIPsFS_configuration.h`` and specified by source tree properties.
+  - ``/-/`` Apply  default preload rules specified in ``ZIPsFS_configuration.c``,  ``ZIPsFS_configuration.h`` and  source tree properties.
   - ``/m/`` Prefetch to RAM
   - ``/l/`` Prefetch to the local file system
   - ``/lz/`` Prefetch to the local file system. Instead of single entries, load entire ZIP files to local disk. Whether and how the entries are preloaded

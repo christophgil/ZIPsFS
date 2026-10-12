@@ -392,7 +392,7 @@ The help text (\f[V]ZIPsFS -h\f[R]) lists access paths for some use
 cases in mass-spectrometry.
 .SS View-option
 .PP
-The first subfolder contains directive to specify
+The flags in the first subfolder specify
 .IP \[bu] 2
 Whether the 1st source tree / the other source trees are included /
 excluded.
@@ -412,9 +412,9 @@ comma.
 .SS Preload option
 .PP
 The 2nd subfolder contains preload options.
-- \f[V]/-/\f[R] Apply default preload rules defined in
-\f[V]ZIPsFS_configuration.c\f[R] and \f[V]ZIPsFS_configuration.h\f[R]
-and specified by source tree properties.
+- \f[V]/-/\f[R] Apply default preload rules specified in
+\f[V]ZIPsFS_configuration.c\f[R], \f[V]ZIPsFS_configuration.h\f[R] and
+source tree properties.
 - \f[V]/m/\f[R] Prefetch to RAM - \f[V]/l/\f[R] Prefetch to the local
 file system - \f[V]/lz/\f[R] Prefetch to the local file system.
 Instead of single entries, load entire ZIP files to local disk.
