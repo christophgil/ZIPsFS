@@ -32,7 +32,7 @@
 //#include <malloc.h>
 #include <unistd.h>
 #include <stdatomic.h>
-
+#include <pwd.h>
 #include <dirent.h>
 
 #include <sys/mman.h>
@@ -50,30 +50,6 @@
 #endif
 ////////////////////////////////////////
 
-#if IS_LINUX && WITH_EXTRA_ASSERT
-#include <pwd.h>
-
-
-static const char *cg_get_user_name(){
- static bool ok;
- static char n[LOGIN_NAME_MAX];
-  if (!ok){
-   struct passwd *pw=getpwuid(getuid());
-    if (pw) strcpy(n,pw->pw_name);
-    else perror("getpwuid(getuid())");
-    ok=true;
-  }
-  return n;
-}
-
-static bool cg_uid_is_developer(){
-  static int ok;
-  if (!ok)  ok=strcmp("cgille",cg_get_user_name())?-1:1;
-  return ok==1;
-}
-#else
-#define cg_uid_is_developer() false
-#endif
 
 /**********/
 /* Memory */
@@ -1324,6 +1300,22 @@ static char *cg_ctime(time_t t){
 /////////////
 ////  id  ///
 /////////////
+static bool cg_uid_is_developer(){
+  static int ok;
+  if (!ok)  ok=strcmp("cgille",cg_get_user_name())?-1:1;
+  return ok==1;
+}
+static const char *cg_get_user_name(){
+ static bool ok;
+ static char n[LOGIN_NAME_MAX];
+  if (!ok){
+   struct passwd *pw=getpwuid(getuid());
+    if (pw) strcpy(n,pw->pw_name);
+    else perror("getpwuid(getuid())");
+    ok=true;
+  }
+  return n;
+}
 static bool cg_is_member_of_group(char *group){
   int size=getgroups(0,NULL);
   gid_t gg[size];
@@ -1332,7 +1324,6 @@ static bool cg_is_member_of_group(char *group){
     struct group *g=getgrgid(i<0?getegid():gg[i]);
     if (!strcmp(group,g->gr_name)) return true;
   }
-
   return false;
 }
 #define HINT_GRP_DOCKER "The current user is not member of group 'docker'. Docker based auto-generation will not work.\nIf you do not need auto-generation, then ignore this message.\nConsider to run 'newgrp docker' before starting ZIPsFS.\n"
@@ -1341,12 +1332,10 @@ static bool cg_is_member_of_group_docker(void){
   if (!r) r=cg_is_member_of_group("docker")?1:-1;
   return r==1;
 }
-
 ///////////////////
 ///  process    ///
 ///////////////////
 //static bool cg_log_exec_fd(const int fd, char const * const * const cmd, char const * const * const env){
-
 static bool cg_log_exec_fd(const int fd, const char *cmd[], const char  *env[]){
   bool compact=cmd && !env;
   if (compact){
@@ -1355,7 +1344,6 @@ static bool cg_log_exec_fd(const int fd, const char *cmd[], const char  *env[]){
     FOREACH_CSTRING(a,cmd) len+=cg_strlen(*a);
     if (len<60) compact=true;
   }
-
   RLOOP(j,2){
     char **s=(char**)(j?env:cmd);
     if (s){
@@ -1372,7 +1360,6 @@ static bool cg_log_exec_fd(const int fd, const char *cmd[], const char  *env[]){
       cg_fd_write_str(fd,"\n");
       if (!j && *cmd && !strcmp(*cmd,"docker") && !cg_is_member_of_group_docker()) cg_fd_write_str(fd,HINT_GRP_DOCKER);
     }
-
   }
   cg_fd_write_str(fd,"\n");
   return true;
@@ -1401,7 +1388,6 @@ static bool cg_log_waitpid_status(FILE *f,const unsigned int status,const char *
   }
   return logged;
 }
-
 #define cg_log_waitpid(...) _viamacro_cg_log_waitpid(__VA_ARGS__,__func__)
 //static int _cg_log_waitpid(const int pid, const int status, const char *err,const bool append, char const * const cmd[],char const * const env[], const char *func){
 static int _viamacro_cg_log_waitpid(const int pid, const int status, const char *err,const bool append, const char  *cmd[], const char *env[], const char *func){
