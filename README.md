@@ -22,7 +22,6 @@ pip install grip
 
 # Example usage
 
-
     ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse-options] mount-point
 
     ZIPsFS -h
@@ -30,7 +29,7 @@ pip install grip
 
 
 ZIPsFS functions as a **union or overlay** file system, merging multiple file structures into a unified directory.
-This directory presents the underlying files and sub-directories from the specified sources (branches) as a single, cohesive structure.
+This directory presents the underlying files and sub-directories from the specified source trees (branches) as a single, cohesive structure.
 Any newly created or modified files are stored in the first file location, while all other sources remain read-only, ensuring that their files are never altered.
 ZIPsFS treats **ZIP files as expandable folders**, typically naming them by appending ``.Contents/`` to the original ZIP file name.
 However, this behavior can be customized using filename-based rules. Extensive configuration options allow adjustments. Changes can be applied without disrupting the file system.
@@ -192,7 +191,7 @@ To repeat the test,  the preloaded file can be removed
 
 ZIPsFS functions as a union (overlay) file system.
 When files are created or modified, they are stored in the first file tree.
-If a file exists in multiple source locations, the version from the leftmost source (the first one listed) takes precedence.
+If a file exists in multiple source trees, the version from the leftmost source (the first one listed) takes precedence.
 With an empty string as the first source,  the ZIPsFS file system read-only and file creation and modification is disabled.
 
 The physical file path, i.e., the actual storage location of a file, can be retrieved from a
@@ -203,7 +202,7 @@ Run the following command:
 
     cat ~/test/ZIPsFS/mnt/1.txt@SOURCE.TXT
 
-If a remote  file branch system stops responding, the current file access is blocked (Unless the options ``WITH_ASYNC_READDIR`` ... are activated).
+If a remote  source tree  stops responding, the current file access is blocked (Unless the options ``WITH_ASYNC_READDIR`` ... are activated).
 After some time, unresponsive  file trees will be skipped to prevent that file accesses get blocked.
 
 
@@ -235,53 +234,76 @@ This checksum can be obtained from ZIPsFS by appending ``@ARCHIVECRC32.TXT`` to 
 
 
 
-## Special directory  <mount-point>``/zipsfs/``
+## Path encoded options
 
-The folder <mount-point>``/zipsfs/`` provides alternative views and file prefetch.
-It contains log files and scripts.
-The file tree can be accessed in a modified way via
+The folder <mount-point>``/zipsfs/`` provides alternative access paths to alter the view of the file tree and the file preload modes
 
     /zipsfs/<view-option>/<file preload-option>[/<preload-selector>]
 
-These three folders contain single letter directives which take precedence over root-folder settings at the command line.
+These three folders contain single letter directives.
+For example
+
+    /zipsfs/z/l/r/...
+            │ │ │
+            │ │ └── Selector: When files are from remote sites
+            │ └──── Preload option: Preload to disk
+            └────── View option: Do not expand ZIP files. Show ZIP files as ZIP files.
+
+
+Path encoded options take precedence over source tree settings which are specified at the command line or in a special file.
 Directives are negated when preceded by dash. Detailed descriptions are found in the README files in these folders
 and [here](./special_folders.md).
+
+
+
+### Choosing the access path
+
+To chose the optimal access path for a particular software you need to consider
+
+ - Are the files remote and does transfer of file data take long?
+ - Is the application opening each file several times?
+ - Are the files
+    - Flat files
+    - Compressed or uncompressed ZIP entries
+    - gz, bz2, xz  compressed files that need inflation
+ - Does the software read files sequentially or from varying positions
+ - Is there stat-spamming i.e. highly repeated request of file attributes and folder listings
+
+The help text (``ZIPsFS -h``) lists access paths for some use cases in mass-spectrometry.
 
 
 ### View-option
 
 The first subfolder contains directive to specify
 
- - Whether  the 1st root / the other roots are included / excluded.
+ - Whether the 1st source tree / the other source trees are included / excluded.
  - Whether ZIP files are expanded.
  - Whether converted files are presented along with the original files.
    Implemented examples:  OCR generated texts from image files and  mzML files from proprietary mass-spectrometry files.
  - Whether decompressed files are generated for gz, bz2, Z,  xz and lrz compressed files.
 
-The folder ``/n/`` allows access to internet files.  File names are formed from URLs by replacing the colon and slashes by comma.
+The folder ``/zipsfs/n/`` allows access to internet files.  File names are formed from URLs by replacing the colon and slashes by comma.
 
 ### Preload option
 
 The 2nd subfolder contains preload options.
-  - /-/ Apply  default preload rules defined in ``ZIPsFS_configuration.c`` and ``ZIPsFS_configuration.h`` and specified by root properties.
-  - /m/ Prefetch to RAM
-  - /l/ Prefetch to the local file system
-  - /lz/ Prefetch to the local file system. Instead of single entries, load entire ZIP files to local disk.
-    The directive ``z`` is different from a ``z`` in the 3rd folder where it acts as a selector. How the ZIP entries are read from that locally cached ZIP file
-    depends entirely on rules in the config files.  ZIP entries may be read directly or with preloading into RAM.  The later case represents a combination of
-    preload to disk and RAM.
+  - ``/-/`` Apply  default preload rules defined in ``ZIPsFS_configuration.c`` and ``ZIPsFS_configuration.h`` and specified by source tree properties.
+  - ``/m/`` Prefetch to RAM
+  - ``/l/`` Prefetch to the local file system
+  - ``/lz/`` Prefetch to the local file system. Instead of single entries, load entire ZIP files to local disk. Whether and how the entries are preloaded
+    would be specified in the 2nd subfolder. E.g.  ``/lz/m/a``  cache all entries in RAM.
 
 ### Preload selector
 
-If the 2nd subfolder declares file preload to RAM or disk, then the 3rd subfolder gives the condition.
- - a all
- - r remote
- - z ZIP-entry.
+If the 2nd subfolder declares file preload to RAM or disk, then the 3rd subfolder gives the condition. Combinations are  combined with logic or.
+ - ``a`` all
+ - ``r`` remote
+ - ``z`` ZIP-entry
 
 
-## Properties of file branches
+## Properties of source trees
 
-In the command line, root file paths  can be followed by expressions like @immutable=1 to set specific properties.
+In the command line, source trees are specified by their root paths. They  can be followed by expressions like @immutable=1 to set specific properties.
 Alternatively, properties can be given in a file ``<root-path>.ZIPsFS.properties``. This is demonstrated in   [ZIPsFS_prepare_branch_for_ftp.sh](ZIPsFS_prepare_branch_for_ftp.sh).
 
 For a  list of properties  run
@@ -327,9 +349,7 @@ dozens of times per second to provide one and the same file listing and the same
 attributes.  While this so-called stat-spamming is fine for local files, remote file systems and decompressing file reading  get overloaded.
 ZIPsFS  implements a transient cache, that lives as long as the specific ZIP file is used.
 
-This cache is distinct from a persistent cache of directory listing that may last for ever for root
-branches with the property @immutable.
-
+This cache is distinct from a persistent cache of directory listing.
 
 </details>
 

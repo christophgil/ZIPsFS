@@ -36,7 +36,7 @@ ZIPsFS -h
 ZIPsFS functions as a \f[B]union or overlay\f[R] file system, merging
 multiple file structures into a unified directory.
 This directory presents the underlying files and sub-directories from
-the specified sources (branches) as a single, cohesive structure.
+the specified source trees (branches) as a single, cohesive structure.
 Any newly created or modified files are stored in the first file
 location, while all other sources remain read-only, ensuring that their
 files are never altered.
@@ -272,8 +272,8 @@ rm  \[ti]/test/ZIPsFS/mnt/mnt/db/pride/2005/08/PRD000004/PRIDE_Exp_Complete_Ac_3
 ZIPsFS functions as a union (overlay) file system.
 When files are created or modified, they are stored in the first file
 tree.
-If a file exists in multiple source locations, the version from the
-leftmost source (the first one listed) takes precedence.
+If a file exists in multiple source trees, the version from the leftmost
+source (the first one listed) takes precedence.
 With an empty string as the first source, the ZIPsFS file system
 read-only and file creation and modification is disabled.
 .PP
@@ -289,8 +289,8 @@ cat \[ti]/test/ZIPsFS/mnt/1.txt\[at]SOURCE.TXT
 \f[R]
 .fi
 .PP
-If a remote file branch system stops responding, the current file access
-is blocked (Unless the options \f[V]WITH_ASYNC_READDIR\f[R] \&...
+If a remote source tree stops responding, the current file access is
+blocked (Unless the options \f[V]WITH_ASYNC_READDIR\f[R] \&...
 are activated).
 After some time, unresponsive file trees will be skipped to prevent that
 file accesses get blocked.
@@ -335,12 +335,10 @@ This can be used for integrity checks to detect data decay or problems
 with data transfer.
 This checksum can be obtained from ZIPsFS by appending
 \f[V]\[at]ARCHIVECRC32.TXT\f[R] to a file path.
-.SS Special directory \f[V]/zipsfs/\f[R]
+.SS Path encoded options
 .PP
-The folder \f[V]/zipsfs/\f[R] provides alternative views and file
-prefetch.
-It contains log files and scripts.
-The file tree can be accessed in a modified way via
+The folder \f[V]/zipsfs/\f[R] provides alternative access paths to alter
+the view of the file tree and the file preload modes
 .IP
 .nf
 \f[C]
@@ -348,16 +346,56 @@ The file tree can be accessed in a modified way via
 \f[R]
 .fi
 .PP
-These three folders contain single letter directives which take
-precedence over root-folder settings at the command line.
+These three folders contain single letter directives.
+For example
+.IP
+.nf
+\f[C]
+/zipsfs/z/l/r/...
+        \[br] \[br] \[br]
+        \[br] \[br] \[u2514]\[u2500]\[u2500] Selector: When files are from remote sites
+        \[br] \[u2514]\[u2500]\[u2500]\[u2500]\[u2500] Preload option: Preload to disk
+        \[u2514]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500] View option: Do not expand ZIP files. Show ZIP files as ZIP files.
+\f[R]
+.fi
+.PP
+Path encoded options take precedence over source tree settings which are
+specified at the command line or in a special file.
 Directives are negated when preceded by dash.
 Detailed descriptions are found in the README files in these folders and
 here.
+.SS Choosing the access path
+.PP
+To chose the optimal access path for a particular software you need to
+consider
+.IP \[bu] 2
+Are the files remote and does transfer of file data take long?
+.IP \[bu] 2
+Is the application opening each file several times?
+.IP \[bu] 2
+Are the files
+.RS 2
+.IP \[bu] 2
+Flat files
+.IP \[bu] 2
+Compressed or uncompressed ZIP entries
+.IP \[bu] 2
+gz, bz2, xz compressed files that need inflation
+.RE
+.IP \[bu] 2
+Does the software read files sequentially or from varying positions
+.IP \[bu] 2
+Is there stat-spamming i.e.\ highly repeated request of file attributes
+and folder listings
+.PP
+The help text (\f[V]ZIPsFS -h\f[R]) lists access paths for some use
+cases in mass-spectrometry.
 .SS View-option
 .PP
 The first subfolder contains directive to specify
 .IP \[bu] 2
-Whether the 1st root / the other roots are included / excluded.
+Whether the 1st source tree / the other source trees are included /
+excluded.
 .IP \[bu] 2
 Whether ZIP files are expanded.
 .IP \[bu] 2
@@ -368,33 +406,33 @@ files from proprietary mass-spectrometry files.
 Whether decompressed files are generated for gz, bz2, Z, xz and lrz
 compressed files.
 .PP
-The folder \f[V]/n/\f[R] allows access to internet files.
+The folder \f[V]/zipsfs/n/\f[R] allows access to internet files.
 File names are formed from URLs by replacing the colon and slashes by
 comma.
 .SS Preload option
 .PP
 The 2nd subfolder contains preload options.
-- /-/ Apply default preload rules defined in
+- \f[V]/-/\f[R] Apply default preload rules defined in
 \f[V]ZIPsFS_configuration.c\f[R] and \f[V]ZIPsFS_configuration.h\f[R]
-and specified by root properties.
-- /m/ Prefetch to RAM - /l/ Prefetch to the local file system - /lz/
-Prefetch to the local file system.
+and specified by source tree properties.
+- \f[V]/m/\f[R] Prefetch to RAM - \f[V]/l/\f[R] Prefetch to the local
+file system - \f[V]/lz/\f[R] Prefetch to the local file system.
 Instead of single entries, load entire ZIP files to local disk.
-The directive \f[V]z\f[R] is different from a \f[V]z\f[R] in the 3rd
-folder where it acts as a selector.
-How the ZIP entries are read from that locally cached ZIP file depends
-entirely on rules in the config files.
-ZIP entries may be read directly or with preloading into RAM.
-The later case represents a combination of preload to disk and RAM.
+Whether and how the entries are preloaded would be specified in the 2nd
+subfolder.
+E.g.
+\f[V]/lz/m/a\f[R] cache all entries in RAM.
 .SS Preload selector
 .PP
 If the 2nd subfolder declares file preload to RAM or disk, then the 3rd
 subfolder gives the condition.
-- a all - r remote - z ZIP-entry.
-.SS Properties of file branches
+Combinations are combined with logic or.
+- \f[V]a\f[R] all - \f[V]r\f[R] remote - \f[V]z\f[R] ZIP-entry
+.SS Properties of source trees
 .PP
-In the command line, root file paths can be followed by expressions like
-\[at]immutable=1 to set specific properties.
+In the command line, source trees are specified by their root paths.
+They can be followed by expressions like \[at]immutable=1 to set
+specific properties.
 Alternatively, properties can be given in a file
 \f[V]<root-path>.ZIPsFS.properties\f[R].
 This is demonstrated in ZIPsFS_prepare_branch_for_ftp.sh.
@@ -453,8 +491,7 @@ systems and decompressing file reading get overloaded.
 ZIPsFS implements a transient cache, that lives as long as the specific
 ZIP file is used.
 .PP
-This cache is distinct from a persistent cache of directory listing that
-may last for ever for root branches with the property \[at]immutable.
+This cache is distinct from a persistent cache of directory listing.
 Project status
 .PP
 Author: Christoph Gille

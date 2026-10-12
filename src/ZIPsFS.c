@@ -12,6 +12,7 @@
 // cppcheck-suppress-file knownConditionTrueFalse
 // #define ewlog(x) cg_endsWith(0,x,cg_strlen(x),".log",4)
 // (search-forward-regexp "VFOLDER_PATH(vipa)=\\w")
+// view_pfx_l  size_t view_prefix_l
 #define VFILE_SFX_SOURCE "@SOURCE.TXT"
 #define VFILE_SFX_ZIPCRC32 "@ARCHIVECRC32.TXT"
 #define VFILE_SFX_PROPERTIES "@PROPERTIES.TXT"
@@ -691,7 +692,7 @@ static void  zpath_set_atime(const zpath_t *zpath){
   }
 }
 
-#define vp_vfolder_l(zpath) (IS_VFOLDER_ROOT((zpath)->vfolder)?VFOLDER_PATH_L(zpath):0)
+#define view_pfx_l(zpath) (IS_VIEW_PFX((zpath)->vfolder)?VFOLDER_PATH_L(zpath):0)
 
 
 static int zpath_newstr(zpath_t *zpath){
@@ -968,19 +969,19 @@ static bool readir_from_filesystem(directory_t *dir){
 /*  for a given virtual path,                                   */
 /*  Returns true on success                                     */
 /****************************************************************/
-//IS_VFOLDER_ROOT DIR_PRELOADED WITH_PRELOADDISK SFX_UPDATE compre
+//IS_VIEW_PFX DIR_PRELOADED WITH_PRELOADDISK SFX_UPDATE compre
 static bool test_realpath_pfx(const bool dirFileconversion,  int opts, zpath_t *zpath, root_t *r){
   //bool debug=strstr(VP(),"db") && r && strstr(rootpath(r),"db");
   //bool debug=r && strstr(rootpath(r),"massive");
   //  bool debug=strstr(VP(),"pride");
   //if (strstr(VP(),"pride"))log_entered_function("%s",VP());
   const bool isInternetUD=VFOLDER_HAS_FLAG(zpath,INTERNET_UPDATE), isPreloadUD=VFOLDER_HAS_FLAG(zpath,PRELOAD_UPDATE);
-  //const int vfolder_l=IS_VFOLDER_ROOT(zpath->vfolder)?VFOLDER_PATH_L(zpath):0;
-  const int vfolder_l=vp_vfolder_l(zpath);
-  //if (isInternetUD)log_entered_function("%s  root:%s  %d vfolder_l:%d",VP(),rootpath(r),IS_UPDATE_GO(zpath),vfolder_l);
-  const char *vp=VP()+vfolder_l, *vp0=VP0_L()?VP0()+vfolder_l:vp;
+  //const int view_pfx_l=IS_VIEW_PFX(zpath->vfolder)?VFOLDER_PATH_L(zpath):0;
+  const int view_pfx_l=view_pfx_l(zpath);
+  //if (isInternetUD)log_entered_function("%s  root:%s  %d view_pfx_l:%d",VP(),rootpath(r),IS_UPDATE_GO(zpath),view_pfx_l);
+  const char *vp=VP()+view_pfx_l, *vp0=VP0_L()?VP0()+view_pfx_l:vp;
   if ((r!=_root_writable) && VFOLDER_PATH(zpath)==DIR_INTERNET) return false;
-  const int vp_l=VP_L()-vfolder_l, vp0_l=(VP0_L()?VP0_L():VP_L())-vfolder_l;
+  const int vp_l=VP_L()-view_pfx_l, vp0_l=(VP0_L()?VP0_L():VP_L())-view_pfx_l;
   if (r->path_allow){
     FOREACH_CSTRING(t,r->path_allow) if (cg_path_equals_or_is_parent(*t,strlen(*t),vp,vp_l)) goto allow;
     return false;
@@ -1789,7 +1790,7 @@ static void debug_print_virtual_folders(){
     virtualfolders_print_dirflags(buf,4096,f->flags);
     fputs(buf,stderr);
     fputs(ANSI_FG_BLUE,stderr);FOREACH_CSTRING(subdir,f->childs) fprintf(stderr," %s",*subdir);
-    fprintf(stderr,ANSI_FG_GREEN"%s"ANSI_RESET"\n",IS_VFOLDER_ROOT(f)?"ROOT": "");
+    fprintf(stderr,ANSI_FG_GREEN"%s"ANSI_RESET"\n",IS_VIEW_PFX(f)?"ROOT": "");
   }
   if (cg_file_exists(__FILE__)){
     fprintf(stderr,ANSI_INVERSE"Checking names of configuration files ..."ANSI_RESET"\n");
@@ -1800,7 +1801,7 @@ static void debug_print_virtual_folders(){
   }
   fprintf(stderr,"Done %s\n",__func__);exit(0);
 }
-// _specialfiles
+
 static bool specialfile_set_stat(struct stat *st, const virtualpath_t *vipa){
   const int id=vipa->specialfile_id;
   bool ok=false;
@@ -1943,10 +1944,10 @@ static bool vp_is_part_of_path_prefix(const zpath_t *zpath){
     }
   }else{
     assert(initialized);
-    const int vfolder_l=vp_vfolder_l(zpath);
+    const int view_pfx_l=view_pfx_l(zpath);
     static int ll[ROOTS];
     for(int i=0;dd[i];i++){
-      if (cg_path_equals_or_is_parent(dd[i], dd_l[i], VP()+vfolder_l,VP_L()-vfolder_l)) return true;
+      if (cg_path_equals_or_is_parent(dd[i], dd_l[i], VP()+view_pfx_l,VP_L()-view_pfx_l)) return true;
     }
   }
   return false;
@@ -2146,9 +2147,9 @@ static int xmp_readdir(const char *vpath, void *buf, fuse_fill_dir_t filler,off_
 // WITH_PRELOADDISK
 
 static int _xmp_readdir(const virtualpath_t *vipa, void *buf, fuse_fill_dir_t filler,off_t offset, struct fuse_file_info *fi){
-  const int vfolder_l=vp_vfolder_l(vipa);
-  const char *vp0=vipa->vp+vfolder_l;
-  const int vp0_l=vipa->vp_l-vp_vfolder_l(vipa);
+  const int view_pfx_l=view_pfx_l(vipa);
+  const char *vp0=vipa->vp+view_pfx_l;
+  const int vp0_l=vipa->vp_l-view_pfx_l(vipa);
   (void)offset;(void)fi;
   ht_t no_dups={0}; HT_INIT_WITH_KEYSTORE_DIM(&no_dups,8,4096); ht_set_id(HT_MALLOC_without_dups,&no_dups);
   no_dups.keystore->mstore_counter_mmap=COUNT_MSTORE_MMAP_NODUPS;
