@@ -396,15 +396,19 @@ without prefetch to RAM.
 .PP
 The following suggest access paths for specific applications in
 mass-spectrometry:
-.IP
-.nf
-\f[C]
-- \[ga]\[ga]/\[ga]\[ga]                Default  options are appropriate for Diann. No view prefix necessary.
-- \[ga]\[ga]/zipsfs/d/lz/r/\[ga]\[ga]  Fragpipe, Maxquant,   Diann on far remote files (Pride-DB, Massive-DB, cloud storage)
-- \[ga]\[ga]/zipsfs/z/l/r/\[ga]\[ga]   Upload to Pride. Before starting Pride, read the beginning of all files to force local caching of NAS files.
-- \[ga]\[ga]/zipsfs/z/-/\[ga]\[ga]     Upload to Massive, fast file browsing (Windows explorer)
-\f[R]
-.fi
+.IP \[bu] 2
+\f[V]/\f[R] Default options are appropriate for Diann.
+No view prefix necessary.
+.IP \[bu] 2
+\f[V]/zipsfs/d/lz/r/\f[R] Fragpipe, Maxquant, Diann on far remote files
+(Pride-DB, Massive-DB, cloud storage)
+.IP \[bu] 2
+\f[V]/zipsfs/z/l/r/\f[R] Upload to Pride.
+Before starting Pride, read the beginning of all files to force local
+caching of NAS files.
+.IP \[bu] 2
+\f[V]/zipsfs/z/-/\f[R] Upload to Massive, fast file browsing (Windows
+explorer)
 .SS View-option
 .PP
 The flags in the first subfolder specify
