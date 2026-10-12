@@ -393,14 +393,12 @@ static void *infloop_PTHREAD_INVALIDATE_PATH(void *arg){
   init_infloop(r,PTHREAD_INVALIDATE_PATH);
   while(1){
     char vp[MAX_PATHLEN+1];*vp=0;
-    struct stat  st={0};
         lock(mutex_fhandle);
         FOREACH_FHANDLE(id,d){
           if((d->flags&FHANDLE_INVALIDATEPATH_REQUIRED)){
             d->flags|=FHANDLE_INVALIDATEPATH_PROCESSING;
             d->flags&=~FHANDLE_INVALIDATEPATH_REQUIRED;
             cg_strncpy0(vp,D_VP(d),MAX_PATHLEN);
-            st=d->zpath.stat_vp;
             break;
           }
         }

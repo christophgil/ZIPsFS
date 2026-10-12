@@ -14,11 +14,11 @@ ulimit -c 0
 
 inc=ZIPsFS_testfiles_inc.sh
 source ${BASH_SOURCE%/*}/$inc
-#STORE=//s-mcpb-ms03.charite.de/fulnas1/1/
 STORE=''
 
 FTP_DIRS=''
-((WITH_FTP_DIRS)) && FTP_DIRS=$(~/git_projects/ZIPsFS/ZIPsFS_prepare_branch_for_ftp.sh)
+
+((WITH_FTP_DIRS)) && FTP_DIRS=$(/home/cgille/git_projects/ZIPsFS/ZIPsFS_prepare_branch_for_ftp.sh)
 
 
 [[ -n ${TMUX:-} ]] && tmux set-environment LANG en_US.UTF-8
@@ -42,7 +42,7 @@ run_ZIPsFS(){
         # ~/git_projects/ZIPsFS/ZIPsFS  "$@" -k -l 33GB  -c rule  "" /$REMOTE1/  $FTP_DIRS $STORE : -o 'allow_other,attr_timeout=13,entry_timeout=13,negative_timeout=13,ac_attr_timeout=13'    $MNT
 }
 
-EXE="$HOME/git_projects/ZIPsFS/ZIPsFS"
+EXE="/home/cgille/git_projects/ZIPsFS/ZIPsFS"
 while getopts 'x' o; do
     case $o in
         x) EXE=$OPTARG;;

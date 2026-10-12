@@ -179,28 +179,33 @@ Root directories starting with double slash (here //computer/pub) are regarded a
 Options and arguments before the colon are interpreted by ZIPsFS.  Those after the colon are passed to fuse_main(...).\n\n");
   puts_stderr(ANSI_UNDERLINE"ZIPsFS options:"ANSI_RESET"\n\n\
       -h Print usage.\n\n\
-      -q quiet, no debug messages to stdout\n\
-         Without the option -f (foreground) all logs are suppressed anyway.\n\n\
       -c  ");
-  IF1(WITH_PRELOADRAM,FOR(i,0,enum_when_preloadram_zip_N){ if (i) putc('|',stderr);puts_stderr(enum_when_preloadram_zip_S[i]);});
+
+  int i=0;
+  FOREACH_CSTRING(s,enum_when_preloadram_zip_S){
+    if (i++) putc('|',stderr);
+    puts_stderr(rm_pfx_us(*s));
+  }
   puts_stderr("    When to read zip entries into RAM\n\
+         rule: (Default) According to rules based on the file name encoded in configuration.h\n\
          seek: When the data is not read continuously\n\
-         rule: According to rules based on the file name encoded in configuration.h\n\
-         The default is when backward seeking would be requires otherwise\n\n\
+         The default is rule and when backward seeking on ZIP compressed data. Directory flags take precedence over rules and CLI options.\n\n\
       -k Kill on error. For debugging only.\n\n\
       -l Limit memory usage for caching ZIP entries.\n\
          Without caching, moving read positions backwards for an non-seek-able ZIP-stream would require closing, reopening and skipping.\n\
          To avoid this, the limit is multiplied with factor 1.5 in such cases.\n\n\
-      -T 0 or -T 1 or -T 2  Probe  stack trace generation.\n\
-          Requires /usr/bin/addr2line (package binutils) or atos (MacOSx).\n\n");
-  puts_stderr(ANSI_UNDERLINE"Fuse options:"ANSI_RESET"These options are given after a colon.\n\n\
-      -d Debug information\n\n\
-      -f File system should not detach from the controlling terminal and run in the foreground.\n\n\
-      -s Single threaded mode. Maybe tried in case the default mode does not work properly.\n\n\
+      -i Interactive dialog. Debug information. Probe stack-trace generation ... \n\n\
+      -s Set apparent mount point.\n\n\
       -h Print usage information.\n\n\
-      -V Version\n\n");
+      -V Version\n\n\
+"ANSI_UNDERLINE"Fuse options  are given after a colon:"ANSI_RESET"\n\n\
+      -o allow_other\n\
+         Other users can use the file system.\n\n\
+");
   puts_stderr(ANSI_UNDERLINE"Reporting bugs:"ANSI_RESET"\n\n\
-If ZIPsFS crashes, please report the stack-trace and the ZIPsFS version.\n\n");
+If ZIPsFS crashes, please report the stack-trace and the ZIPsFS version.\n\
+Consider to recompile with  ZIPsFS.compile.sh with the sanitizer activated.\n\
+Consider to set WITH_EXTRA_ASSERT to 1.\n\n");
 }
 
 /**************************************/

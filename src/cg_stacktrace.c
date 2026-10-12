@@ -221,18 +221,25 @@ static void _cg_print_stacktrace_test1(void){
 static void _cg_print_stacktrace_test2(void){
   _cg_print_stacktrace_test1();
 }
+
+static const char *_cg_print_stacktrace_test_msg[]={
+  "sleep for 10s. You can press Ctrl-C to create SIGINT",
+  "print a stack trace. Press Enter to continue ",
+  "write to address 0. Press Enter to continue ",
+  NULL};
+
+
 static void cg_print_stacktrace_test(int what){
+  if (what<0 || what>2) return;
+  fprintf(stderr,"Going to %s\n",_cg_print_stacktrace_test_msg[what]);
   switch(what){
   case 0:
-    log_msg("Going to sleep for 10s. You can press Ctrl-C to create SIGINT");
     usleep(1000*1000*10);break;
   case 1:
-    log_msg("Going to print a stack trace. Press Enter to continue "); cg_getc_tty();
     _cg_print_stacktrace_test2();
     break;
   case 2:{
 #ifndef __cppcheck__
-    log_msg("Going to write to address 0. Press Enter to continue "); cg_getc_tty();
     char *s=NULL;
     strcpy(s,"Force nullPointer dereference");
 #endif

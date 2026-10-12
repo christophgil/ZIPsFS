@@ -691,7 +691,7 @@ enum {XMACRO_ROOT_PROPERTY()ROOT_PROPERTY_NUM};
 const char *ROOT_PROPERTY[]={XMACRO_ROOT_PROPERTY()NULL};
 #undef X
 
-#define IS_VP_IN_ROOT_PFX(r,vipa) (r->path_prefix_l && r->path_prefix_l>=(vipa)->vp_l && cg_path_equals_or_is_parent((vipa)->vp,(vipa)->vp_l, r->path_prefix,r->path_prefix_l))
+
 ///////////////
 /// Logging ///
 ///////////////

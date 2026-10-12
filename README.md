@@ -25,7 +25,7 @@ pip install grip
 
     ZIPsFS [ZIPsFS-options] path-of-branch1/  branch2/  branch3/  branch4/  :  [fuse-options] mount-point
 
-
+    ZIPsFS -h
 # Summary
 
 
@@ -77,7 +77,7 @@ Virtual file paths in that branch will start with *mount point*``/branch3/``.
 In production, it is recommended to start ZIPsFS in *tmux*. For testing, just use your regular command line.
 
 
-    ZIPsFS   $b1 $b2 $b3 $b4  :  ~/test/ZIPsFS/mnt
+    ZIPsFS   $b1 $b2 $b3 $b4  : -o allow_other  ~/test/ZIPsFS/mnt
 
 ### Browse the virtual file tree
 
@@ -158,7 +158,7 @@ and mounts the respective FTP sites. This requires ***curl***. Please also insta
 The  standard output of the script can be used  as command line  parameters for ZIPsFS.
 The expression ``$(...)`` denotes [Command substitution](https://en.wikipedia.org/wiki/Command_substitution).
 
-    ZIPsFS   $b1 $b2 $b3 $b4  $(./ZIPsFS_prepare_branch_for_ftp.sh)   :  ~/test/ZIPsFS/mnt
+    ZIPsFS   $b1 $b2 $b3 $b4  $(./ZIPsFS_prepare_branch_for_ftp.sh)   : -o allow_other  ~/test/ZIPsFS/mnt
 
 In case of success, there will be a directory:
 
@@ -233,61 +233,6 @@ Zip files contain a record of the CRC32 checksum of each zip entry. This can be 
 This checksum can be obtained from ZIPsFS by appending ``@ARCHIVECRC32.TXT`` to a file path.
 
 
-## Command line Options
-
-
-**-h**
-
-Prints brief usage information.
-
-
-
-**-s *path-of-symbolic-link**
-This is discussed in section Configuration.
-
-
-**-c \[NEVER,SEEK,RULE,COMPRESSED,ALWAYS\]**
-
-Policy when ZIP entries and file content is cached in RAM.
-
-
-
-|           |                                                                                       |
-|:---------:|---------------------------------------------------------------------------------------|
-|   NEVER   | ZIP entries are never cached, even not in case of backward seek.                      |
-|           |                                                                                       |
-|   SEEK    | ZIP entries are cached when the file position jumps backward.                         |
-|           |                                                                                       |
-|   RULE    | ZIP entries are cached according to customizable rules or on backward seed. (DEFAULT) |
-|           |                                                                                       |
-|COMPRESSED | All compressed ZIP entries are cached.                                                |
-|           |                                                                                       |
-|  ALWAYS   | All ZIP entries are cached.                                                           |
-|           |                                                                                       |
-
-**-l  *Maximum memory for caching ZIP-entries in the RAM***
-
-Specifies a limit for the cache.  For example *-l  8G* would limit the size of the cache to 8 Gigabyte.
-File content larger than this will not be cached. When memory usage is high, cached file access waits until it drops below this value.
-
-**-b**
- Execution in background (Not recommended). We recommend running ZIPsFS in foreground in *tmux*.
-
-
-These rules can be overridden by using the sub-directories ``/zipsfs/-/m/`` and ``/zipsfs/-/-m/``. Please see the README files in these folders.
-
-
-## FUSE command line options
-
-
-Options for the FUSE system  come after the **colon** in the command line.
-
-**-o *comma separated Options***
-
-**-o allow_other**
-Other users are granted access.
-
-The last argument is the mount point which is an empty folder.
 
 
 ## Special directory  <mount-point>``/zipsfs/``
@@ -300,7 +245,7 @@ The file tree can be accessed in a modified way via
 
 These three folders contain single letter directives which take precedence over root-folder settings at the command line.
 Directives are negated when preceded by dash. Detailed descriptions are found in the README files in these folders
-and [here](./special_folders).
+and [here](./special_folders.md).
 
 
 ### View-option
@@ -313,7 +258,7 @@ The first subfolder contains directive to specify
    Implemented examples:  OCR generated texts from image files and  mzML files from proprietary mass-spectrometry files.
  - Whether decompressed files are generated for gz, bz2, Z,  xz and lrz compressed files.
 
-The folder ``/n/`` allows access to internet files. The file name is formed from URLs by replacing the colon and the slashes by comma.
+The folder ``/n/`` allows access to internet files.  File names are formed from URLs by replacing the colon and slashes by comma.
 
 ### Preload option
 
@@ -328,7 +273,7 @@ The 2nd subfolder contains preload options.
 
 ### Preload selector
 
-If the 2nd subfolder declares file preload, then the 3rd subfolder gives the condition.
+If the 2nd subfolder declares file preload to RAM or disk, then the 3rd subfolder gives the condition.
  - a all
  - r remote
  - z ZIP-entry.

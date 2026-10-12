@@ -2,26 +2,31 @@
 ### Software needed for the tests        ###
 ############################################
 
+### Install via  cargo ###
+
+cargo install csv2parquet picterm
+
+
 ### Compression ###
-		bzip2
-		lrzip
-		zip
-		xz
-		ncompress
+        bzip2
+        lrzip
+        zip
+        xz
+        ncompress
 
 
 ### Image ###
-		imagemagick
-		picterm
+        imagemagick
+        picterm
 
 
 ### Text ###
-		pdflatex    ## package tetex
-		pdftotext   ## package poppler-utils
-		tesseract   ## package tesseract-ocr-eng
+        pdflatex    ## package tetex
+        pdftotext   ## package poppler-utils
+        tesseract   ## package tesseract-ocr-eng
 
 ### File System
-		curlftpfs
+        curlftpfs
 
 ### Container ###
-		docker
+        docker

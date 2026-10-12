@@ -52,12 +52,23 @@
 
 #if IS_LINUX && WITH_EXTRA_ASSERT
 #include <pwd.h>
+
+
+static const char *cg_get_user_name(){
+ static bool ok;
+ static char n[LOGIN_NAME_MAX];
+  if (!ok){
+   struct passwd *pw=getpwuid(getuid());
+    if (pw) strcpy(n,pw->pw_name);
+    else perror("getpwuid(getuid())");
+    ok=true;
+  }
+  return n;
+}
+
 static bool cg_uid_is_developer(){
   static int ok;
-  if (!ok){
-    struct passwd *pw=getpwuid(getuid());
-    ok=(!pw || strcmp("cgille",pw->pw_name))?-1:1;
-  }
+  if (!ok)  ok=strcmp("cgille",cg_get_user_name())?-1:1;
   return ok==1;
 }
 #else
@@ -320,12 +331,12 @@ static int cg_idx_of_pointer(void **aa, const int n, const void *a){
 
 static int cg_idx_of_strg(const char **aa, const char *needle){
   int i=0;
-    FOREACH_CSTRING(a,aa){
-      if (!strcmp(needle,*a)){
-        return i;
-      }
-      i++;
+  FOREACH_CSTRING(a,aa){
+    if (!strcmp(needle,*a)){
+      return i;
     }
+    i++;
+  }
   return -1;
 }
 enum{ADD_TO_STRG_UNIQUE=1<<0,ADD_TO_STRG_STRDUP=1<<1};
@@ -606,7 +617,7 @@ static int cg_readlink_absolute(const bool resolve,const char *symlink_path, cha
   const int len=readlink(symlink_path,link_target,PATH_MAX);
   if (len==-1){ log_errno("readlink '%s'",symlink_path); return errno; }
   link_target[len]=0;
-  if (*link_target=='/') {
+  if (*link_target=='/'){
     cg_strncpy0(absolute_tmp,link_target,PATH_MAX-1);
   }else{
     // Relative target → resolve against symlink directory
@@ -617,7 +628,7 @@ static int cg_readlink_absolute(const bool resolve,const char *symlink_path, cha
   if (!resolve){
     strcpy(absolute_target,absolute_tmp);
   }else{
-    if (!realpath(absolute_tmp,absolute_target)) {
+    if (!realpath(absolute_tmp,absolute_target)){
       log_errno("Resolve '%s' \n",absolute_tmp);
       return errno;
     }
@@ -779,7 +790,7 @@ static off_t nextRepdigit(const off_t num){
     n/=10;
     count++;
   }
-off_t ret=n;RLOOP(i,count) ret=10*ret+n;
+  off_t ret=n;RLOOP(i,count) ret=10*ret+n;
   //fprintf(stderr,"num: %ld  ret=%ld n: %ld\n\n",num,ret,n);
   if (num>ret){
     ret=++n; RLOOP(i,count) ret=10*ret+n;
@@ -1001,12 +1012,40 @@ static mode_t cg_stat_mode(const char *path){
 }
 
 static bool _cg_is_none_interactive;
-static int cg_getc_tty(void){
+static int cg_getc_tty_or_enter(void){
   if (_cg_is_none_interactive) return EOF;
   static FILE *tty;
   if (!tty && !(tty=fopen("/dev/tty","r"))) tty=stdin;
   return getc(tty);
 }
+
+static int cg_getc_tty(void){
+  int c;
+  while ((c=cg_getc_tty_or_enter())=='\n');
+  return c;
+}
+static void cg_press_enter(){
+  fprintf(stderr,"Press enter\n");
+  cg_getc_tty_or_enter();
+}
+static void cg_press_enter_or_ctrl_c(){
+  fprintf(stderr,"Press enter or Ctrl-C\n");
+  cg_getc_tty_or_enter();
+}
+
+
+#if 0
+static char* cg_gets_tty(char *s, const int s_l){
+  *s=0;
+  if (_cg_is_none_interactive) return s;
+  static FILE *tty;
+  if (!tty && !(tty=fopen("/dev/tty","r"))) tty=stdin;
+  char *ret=fgets(s,s_l,tty);
+  if (!ret) return s;
+  while(*ret && *ret==' ') ret++;
+  return ret;
+}
+#endif
 
 /* write() may be write only part of the data */
 static bool cg_fd_write(const int fd,const char *t,const off_t t_l){
@@ -1166,8 +1205,8 @@ static void debug_pid_to_exe(pid_t pid){
   char buf[128];
   pid_to_exe(pid,buf,128);
   log_verbose("HAS_PID2EXE_MACOSX: "STRINGIZE(HAS_PID2EXE_MACOSX)
-                " HAS_PID2EXE_FREEBSD: "STRINGIZE(HAS_PID2EXE_FREEBSD)
-                "  has_proc_fs: %d  _pid: %jd pid_to_exe:%s\n",has_proc_fs(), IM(pid),buf);
+              " HAS_PID2EXE_FREEBSD: "STRINGIZE(HAS_PID2EXE_FREEBSD)
+              "  has_proc_fs: %d  _pid: %jd pid_to_exe:%s\n",has_proc_fs(), IM(pid),buf);
 }
 
 
@@ -1185,7 +1224,7 @@ static char* cg_path_expand_tilde(char *dst,  const int dst_max, const char *pat
           if (hl+path_l>=dst_max-1){
             log_warn("h:%s %d  path:%s %d  dst_max:%d",h,hl,path,path_l,dst_max);
             //cg_print_stacktrace(0);
-          assert(hl+path_l<dst_max-1);
+            assert(hl+path_l<dst_max-1);
           }
           memmove(dst+hl-1,path,path_l+1); /* Overlapping allowed. dst and path may be identical*/
           memcpy(dst,h,hl);
@@ -1411,6 +1450,17 @@ static int cg_exec(const char *cmd[], const char *env[],const int fd_in,const in
   return errno;
 }
 
+static bool cg_is_user_in_group(const char *name){
+    const struct group *gr=getgrnam(name);
+    int n=getgroups(0,NULL);
+    if (!n) return getgid()==gr->gr_gid;
+    if (gr && n>0){
+      gid_t groups[n];
+      n=getgroups(n,groups);
+      FOR(i,0,n) if (groups[i]==gr->gr_gid) return true;
+    }
+    return false;
+}
 static bool cg_fork_exec(const char *cmd[], const char *env[],const int fd_in,const int fd_out,const int fd_err){
   //log_entered_function("cmd: %s",cmd[0]);
   const pid_t pid=fork(); /* Make real file by running external prg */
@@ -1441,9 +1491,9 @@ static bool is_installed_curl(){ I("curl");}
 static char *cg_compression_file_ext(const int i,int *ext_l){
   if (i) switch(i){
 #define X(x,d) case COMPRESSION_##x: if (ext_l) *ext_l=sizeof(#x);  return "."#x;
-    XMACRO_COMPRESSION();
+      XMACRO_COMPRESSION();
 #undef X
-  }
+    }
   return "";
 }
 static int cg_compression_for_filename(const char *s, const int len_or_0){
@@ -1487,8 +1537,8 @@ static bool cg_pid_exists_proc(const pid_t pid){
 int main(int argc, char *argv[]){
   {
     char *ee[]={".wiff",".wiff2",".rawIdx",".raw","",".d",NULL};
-  FOREACH_CSTRING(e,ee) puts(*e);
-  return 0;
+    FOREACH_CSTRING(e,ee) puts(*e);
+    return 0;
   }
 
 
@@ -1508,7 +1558,7 @@ int main(int argc, char *argv[]){
   /* Solaris	/proc/<pid>/psinfo */
   /* macOS	sysctl(KERN_PROC_PID) */
   /* FreeBSD	sysctl(KERN_PROC_PID) */
-  /* OpenBSD	sysctl(KERN_PROC,KERN_PROC_PID, ...) */
+  /* OpenBSD	sysctl(KERN_PROC,KERN_PROC_PID,...) */
   /* NetBSD	sysctl(KERN_PROC2,...) */
 
 
@@ -1648,17 +1698,17 @@ int main(int argc, char *argv[]){
     log_verbose("size %ld",st.st_size);
   } break;
 
-    #if 0
+#if 0
   case 19:{
     char buf[TO_BINARY_BUFSIZE];
 
-    FOR(i,1,argc){ to_binary_strg(TO_BINARY_GROUP_4,buf,atol(argv[i]));fprintf(stderr,"%lu '%s'\n",atol(argv[i]), buf);}
+    FOR(i,1,argc){ to_binary_strg(TO_BINARY_GROUP_4,buf,atol(argv[i]));fprintf(stderr,"%lu '%s'\n",atol(argv[i]),buf);}
   } break;
-    #endif
+#endif
 
   case 20:{
     const char *aa[99]={0};
-    FOR(i,1,argc) cg_add_to_strg_array(ADD_TO_STRG_UNIQUE|ADD_TO_STRG_STRDUP,aa, argc,argv[i]);
+    FOR(i,1,argc) cg_add_to_strg_array(ADD_TO_STRG_UNIQUE|ADD_TO_STRG_STRDUP,aa,argc,argv[i]);
     for(int i=0;aa[i];i++) fprintf(stderr,"(%d) '%s'\n",i,aa[i]);
   }
 

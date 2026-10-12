@@ -23,7 +23,7 @@ enum{
 #define WITH_DEBUG_SEQUENTIAL_INODES 0
 #define WITH_DEBUG_THROTTLE_DOWNLOAD 0
 #define WITH_ASSERT_LOCK     0 // Optional assertion
-#define WITH_EXTRA_ASSERT    0// Optional assertion
+#define WITH_EXTRA_ASSERT    0 // Optional assertion
 #define WITH_INEFFICIENT_ZIP_READING 0 // Without fi->direct_io=1
 #define WITH_TESTING_REALLOC 0 // Smaller initial size, earlier realloc
 #define WITH_TESTING_UNBLOCK 0

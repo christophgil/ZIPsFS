@@ -233,5 +233,6 @@ static bool fileconversion_check_infiles_exist(const virtualpath_t *vipa){
     if (fileconversion_realinfiles(&FF)>0) ok=true;
     struct_fileconversion_files_destroy(&FF);
   }
+  //log_exited_function("%s %s",vipa->vp, success_or_fail(ok));
   return ok;
 }
