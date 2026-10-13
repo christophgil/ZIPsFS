@@ -236,18 +236,25 @@ This checksum can be obtained from ZIPsFS by appending ``@ARCHIVECRC32.TXT`` to 
 
 ## Path encoded options
 
+
+
+
 The folder <mount-point>``/zipsfs/`` provides alternative access paths to alter the view of the file tree and the file preload modes
 
     /zipsfs/<view-option>/<file preload-option>[/<preload-selector>]
 
 These three folders contain single letter directives.
-For example
+For example a file
 
-    /zipsfs/z/l/r/...
-            │ │ │
-            │ │ └── Selector: Apply to files from remote sites
-            │ └──── Preload option: Preload to disk
-            └────── View option: Do not expand ZIP files. Show ZIP files as ZIP files.
+     <mountpoint>/foo/bar.txt
+
+can also be accessed from
+
+    <mountpoint>/zipsfs/z/l/r/foo/bar.txt
+                        │ │ │
+                        │ │ └── Selector: Apply to files from remote sites
+                        │ └──── Preload option: Preload to disk
+                        └────── View option: Do not expand ZIP files. Show ZIP files as ZIP files.
 
 
 Path encoded options take precedence over source tree settings which are specified at the command line or in a special file.

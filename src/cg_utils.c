@@ -1300,11 +1300,6 @@ static char *cg_ctime(time_t t){
 /////////////
 ////  id  ///
 /////////////
-static bool cg_uid_is_developer(){
-  static int ok;
-  if (!ok)  ok=strcmp("cgille",cg_get_user_name())?-1:1;
-  return ok==1;
-}
 static const char *cg_get_user_name(){
  static bool ok;
  static char n[LOGIN_NAME_MAX];
@@ -1315,6 +1310,11 @@ static const char *cg_get_user_name(){
     ok=true;
   }
   return n;
+}
+static bool cg_uid_is_developer(){
+  static int ok;
+  if (!ok)  ok=strcmp("cgille",cg_get_user_name())?-1:1;
+  return ok==1;
 }
 static bool cg_is_member_of_group(char *group){
   int size=getgroups(0,NULL);

@@ -347,15 +347,23 @@ the view of the file tree and the file preload modes
 .fi
 .PP
 These three folders contain single letter directives.
-For example
+For example a file
 .IP
 .nf
 \f[C]
-/zipsfs/z/l/r/...
-        \[br] \[br] \[br]
-        \[br] \[br] \[u2514]\[u2500]\[u2500] Selector: Apply to files from remote sites
-        \[br] \[u2514]\[u2500]\[u2500]\[u2500]\[u2500] Preload option: Preload to disk
-        \[u2514]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500] View option: Do not expand ZIP files. Show ZIP files as ZIP files.
+ <mountpoint>/foo/bar.txt
+\f[R]
+.fi
+.PP
+can also be accessed from
+.IP
+.nf
+\f[C]
+<mountpoint>/zipsfs/z/l/r/foo/bar.txt
+                    \[br] \[br] \[br]
+                    \[br] \[br] \[u2514]\[u2500]\[u2500] Selector: Apply to files from remote sites
+                    \[br] \[u2514]\[u2500]\[u2500]\[u2500]\[u2500] Preload option: Preload to disk
+                    \[u2514]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500] View option: Do not expand ZIP files. Show ZIP files as ZIP files.
 \f[R]
 .fi
 .PP
