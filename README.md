@@ -257,7 +257,7 @@ can also be accessed from
                         └────── View option: Do not expand ZIP files. Show ZIP files as ZIP files.
 
 
-Path encoded options take precedence over source tree settings which are specified at the command line or in a special file.
+Path encoded options take precedence over source tree settings.
 Directives are negated when preceded by dash. Detailed descriptions are found in the README files in these folders
 and [here](./special_folders.md).
 
