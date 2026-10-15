@@ -74,7 +74,7 @@ static bool c_readdir(const zpath_t *zpath,void *buf, fuse_fill_dir_t filler,ht_
       ok=true;
       struct stat st={0};
       stat_init(&st,*isDirectory?-1:0,NULL);
-      st.st_ino=inode_from_virtualpath(VP(),VP_L());
+      st.st_ino=INODE_FROM_ZPATH(zpath);
       filler_add(filler,buf, fname,0,&st,NULL /*no_dups*/);
     }
   }

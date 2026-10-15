@@ -190,7 +190,7 @@ static off_t specialfile_size(const int i){
 
 static int specialfile_print_pathinfo(zpath_t *zpath,textbuffer_t *b_or_null){
   zpath_stat(0,zpath);
-  if (zpath->vfile_sfx) log_entered_function("%s %ld",VP(),zpath->stat_rp.st_ino);
+  if (zpath->vfile_sfx) log_entered_function("%s %ju",VP(),UIM(zpath->stat_rp.st_ino));
   if (!zpath->vfile_sfx || !zpath->stat_rp.st_ino && !find_realpath(0,zpath)) return 0;
   const int tmp_max=zpath->vfile_sfx==VFILE_SFX_ZIPCRC32?9:zpath->vfile_sfx==VFILE_SFX_SOURCE? RP_L()+EP_L()+2:4096;
   char tmp[tmp_max];

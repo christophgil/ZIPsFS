@@ -215,12 +215,14 @@ static void fileconversion_free_argv(const char **cmd,const char **cmd_orig){
   }
 }
 
-static bool fileconversion_getattr(struct stat *stbuf,const zpath_t *zpath,const virtualpath_t *vipa){
+static bool fileconversion_getattr(struct stat *st,const zpath_t *zpath,const virtualpath_t *vipa){
   if (!VFOLDER_HAS_FLAG(zpath,VIEWMOD_FILECONVERSION)) return false;
   const long size=fileconversion_estimate_filesize(vipa->vp,vipa->vp_l,0);
   if (size<=0) return false;
-  stat_init(stbuf,size,&zpath->stat_rp);
-  stbuf->st_ino=inode_from_virtualpath(vipa->vp,vipa->vp_l);
+  stat_init(st,size,&zpath->stat_rp);
+  st->st_ino=INODE_FROM_VP(vipa);
+  //log_debug_now("%s isDir=%d",VP(),S_ISDIR(st->st_mode));
+
   return true;
 }
 

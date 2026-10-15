@@ -781,3 +781,8 @@ enum {CACHE_TAKES_PRECEDENCE_TTL=600};
 #ifdef TEST_COMPILATION_ISOLATED
 int main(const int argc,const char *argv[]){}
 #endif
+
+
+#define view_pfx_l(zpath) (IS_VIEW_PFX((zpath)->vfolder)?VFOLDER_PATH_L(zpath):0)
+#define  INODE_FROM_VP(vipa)   inode_from_virtualpath((vipa)->vp+view_pfx_l(vipa),(vipa)->vp_l-view_pfx_l(vipa))
+#define  INODE_FROM_ZPATH(zp)  inode_from_virtualpath((zp)->strgs+(zp)->vp+view_pfx_l(zp),(zp)->vp_l-view_pfx_l(zp))

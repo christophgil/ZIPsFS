@@ -1302,7 +1302,7 @@ static char *cg_ctime(time_t t){
 /////////////
 static const char *cg_get_user_name(){
  static bool ok;
- static char n[LOGIN_NAME_MAX];
+ static char n[256];
   if (!ok){
    struct passwd *pw=getpwuid(getuid());
     if (pw) strcpy(n,pw->pw_name);

@@ -239,7 +239,7 @@ This checksum can be obtained from ZIPsFS by appending ``@ARCHIVECRC32.TXT`` to 
 
 
 
-The folder <mount-point>``/zipsfs/`` provides alternative access paths to alter the view of the file tree and the file preload modes
+The folder <mount-point>``/zipsfs/`` provides alternative access paths to alter the view of the file tree and  file content  preload
 
     /zipsfs/<view-option>/<file preload-option>[/<preload-selector>]
 

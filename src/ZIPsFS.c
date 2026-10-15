@@ -692,7 +692,7 @@ static void  zpath_set_atime(const zpath_t *zpath){
   }
 }
 
-#define view_pfx_l(zpath) (IS_VIEW_PFX((zpath)->vfolder)?VFOLDER_PATH_L(zpath):0)
+
 
 
 static int zpath_newstr(zpath_t *zpath){
@@ -1350,7 +1350,7 @@ static ino_t next_inode(void){
 
 static ino_t make_inode(const ino_t inode0, zpath_t *zpath, const int entryIdx,const char *for_err_msg){
   root_t *r=ZPR();
-  if (WITH_DEBUG_SEQUENTIAL_INODES || !r)  return inode_from_virtualpath(VP(),VP_L());
+  if (WITH_DEBUG_SEQUENTIAL_INODES || !r)  return INODE_FROM_ZPATH(zpath);
   const static int SHIFT_FSID=42,SHIFT_ENTRY=(SHIFT_FSID+LOG2_FILESYSTEMS);
   const ino_t fsid=r?r->seq_fsid:LOG2_FILESYSTEMS; /* Better than rootindex(r) */
   if (!inode0) warning(WARN_INODE|WARN_FLAG_ONCE_PER_PATH|WARN_FLAG_MAYBE_EXIT,"","for_err_msg='%s' inode0 is zero",for_err_msg);
@@ -1477,7 +1477,7 @@ static void filler_from_dir_generated(fuse_fill_dir_t filler,const directory_t *
   }
 }
 static void filler_readdir(zpath_t *zpath, void *buf, fuse_fill_dir_t filler,ht_t *no_dups,directory_t *dir_generated){
-  log_entered_function("VP=%s  RP:%s    dir_generated:%d",VP(),RP(),dir_generated->core.files_l);
+  //log_entered_function("VP=%s  RP:%s    dir_generated:%d",VP(),RP(),dir_generated->core.files_l);
   if (zpath->zipfile_l && ZPF(ZP_TRY_ZIP) && filler_readdir_zip(0,zpath,buf,filler,no_dups)) return;
   ASSERT(zpath->stat_rp.st_ino);
   if (!zpath->stat_rp.st_ino) return;
@@ -1609,7 +1609,9 @@ static void *xmp_init(struct fuse_conn_info *conn IF1(WITH_FUSE_3,,struct fuse_c
   _fuse=fuse_get_context()->fuse;
   _fuse_session=fuse_get_session(_fuse);
   _fuse_max_write=conn->max_write;
+#if FUSE_MAJOR_VERSION>3 || (FUSE_MAJOR_VERSION==3 && FUSE_MINOR_VERSION>=14)
   IF1(WITH_FUSE_INVALIDATE_PATH,conn->want&=~FUSE_CAP_WRITEBACK_CACHE;conn->want|=FUSE_CAP_EXPLICIT_INVAL_DATA);
+#endif
   //    if (conn->capable & FUSE_CAP_EXPLICIT_INVAL_DATA)      fuse_set_feature_flag(conn,FUSE_CAP_EXPLICIT_INVAL_DATA);
   return NULL;
 }
@@ -1817,7 +1819,7 @@ static bool specialfile_set_stat(struct stat *st, const virtualpath_t *vipa){
     stat_init(st,IF01(WITH_PRELOADRAM,0,SFILE_IS_IMMUTABLE(id)?specialfile_size(id):4096),NULL);
     time(&st->st_mtime);
     st->st_mode&=~(S_IWOTH|S_IWUSR|S_IWGRP);
-    st->st_ino=inode_from_virtualpath(vipa->vp,vipa->vp_l);
+    st->st_ino=INODE_FROM_VP(vipa);
     ok=true;
   }else if (sf->rp){
     ok=!lstat(sf->rp,st);
@@ -1924,48 +1926,26 @@ static int virtualpath_error(const virtualpath_t *vipa,const int create_or_del){
 /* Consider a root tree with r->path_prefix "/db/pride"                         */
 /* The parrents like "/db/" need to be captured and accepted as a valid folder. */
 /********************************************************************************/
-static bool vp_is_part_of_path_prefix(const zpath_t *zpath){
-  static const char *dd[ROOTS+1];
-  static int dd_l[ROOTS+1];
-  static bool initialized;
-  if (!zpath){
-    assert(!initialized);
-    initialized=true;
-    foreach_root(r){
-      if (!r->path_prefix_l) continue;
-      char d[r->path_prefix_l+1]; strcpy(d,r->path_prefix);
-      RLOOP(i,r->path_prefix_l){
-        if (i && d[i]=='/'){
-          d[i]=0;
-          const int j=cg_add_to_strg_array(ADD_TO_STRG_UNIQUE|ADD_TO_STRG_STRDUP,dd,ROOTS,d);
-          if (j>=0) dd_l[j]=strlen(d);
-        }
-      }
-    }
-  }else{
-    assert(initialized);
-    const int view_pfx_l=view_pfx_l(zpath);
-    static int ll[ROOTS];
-    for(int i=0;dd[i];i++){
-      if (cg_path_equals_or_is_parent(dd[i], dd_l[i], VP()+view_pfx_l,VP_L()-view_pfx_l)) return true;
-    }
-  }
-  return false;
-}
-// WITH_PRELOADDISK
+
+
 
 // specialfile_set_stat specialfile_id
 static int _xmp_getattr(const virtualpath_t *vipa, struct stat *st){ /* NOT_TO_HEADER */
   //if (ENDSWITH(vipa->vp,vipa->vp_l,"htmL"))
   //log_entered_function("vipa->vp: %s   vdir=%s       specialfile=%d",vipa->vp, VFOLDER_PATH(vipa),  vipa->specialfile_id);
   //if (strstr(vipa->vp,"pride"))log_entered_function("%s",vipa->vp);
-#define D() {stat_init(st,-1,NULL);    st->st_ino=inode_from_virtualpath(vipa->vp,vipa->vp_l); return 0;}
-  if (vipa->vp_l==VFOLDER_PATH_L(vipa)) D();
+  const int view_pfx_l=view_pfx_l(vipa), vp1_l=vipa->vp_l-view_pfx_l;
+  const char *vp1=vipa->vp+view_pfx_l;
+  if (vipa->vp_l==VFOLDER_PATH_L(vipa)) goto set_is_dir;
+  foreach_root(r){
+    if (r->path_prefix_l && cg_path_equals_or_is_parent(vp1, vp1_l, r->path_prefix,r->path_prefix_l)) goto set_is_dir;
+  }
+
   if (specialfile_set_stat(st,vipa)) return 0;
   IF1(WITH_CCODE, if (c_getattr(st,vipa)) return 0);
   if (VFOLDER_HAS_FLAG2(vipa,PRELOAD_UPDATE,INTERNET_UPDATE) && !IS_UPDATE_GO(vipa)){
     stat_init(st,vipa->specialfile_id?4096:-1,NULL);
-    st->st_ino=inode_from_virtualpath(vipa->vp,vipa->vp_l);
+    st->st_ino=INODE_FROM_VP(vipa);
     time(&st->st_mtime);
     return 0;
   }
@@ -1976,7 +1956,6 @@ static int _xmp_getattr(const virtualpath_t *vipa, struct stat *st){ /* NOT_TO_H
     *st=zpath->stat_vp;
     return 0;
   }else{
-    if (vp_is_part_of_path_prefix(zpath)) D();
     IF1(WITH_INTERNET_DOWNLOAD, char buf[vipa->vp_l+1]; if (net_getattr(false,st,buf,vipa->vp, vipa->vp_l)) return 0);
     IF1(WITH_FILECONVERSION,    if (fileconversion_getattr(st,zpath,vipa)) return 0);
   }
@@ -1985,7 +1964,10 @@ static int _xmp_getattr(const virtualpath_t *vipa, struct stat *st){ /* NOT_TO_H
   IF1(WITH_DEBUG_TRACK_FALSE_GETATTR_ERRORS, if (er) debug_track_false_getattr_errors(vipa->vp,vipa->vp_l));
   if (config_file_is_readonly(vipa->vp,vipa->vp_l)) st->st_mode&=~(S_IWOTH|S_IWUSR|S_IWGRP); /* Does not improve performance */
   return -er;
-#undef D
+ set_is_dir:;
+  stat_init(st,-1,NULL);
+  st->st_ino=INODE_FROM_VP(vipa);
+  return 0;
 }/*xmp_getattr*/
 static int xmp_getattr(const char *vpath, struct stat *st IF1(WITH_XMP_GETATTR_FUSE_FILE_INFO,,struct fuse_file_info *fi_or_null)){
   //if (strstr(vpath,"pride"))log_entered_function("%s",vpath);
@@ -1993,7 +1975,8 @@ static int xmp_getattr(const char *vpath, struct stat *st IF1(WITH_XMP_GETATTR_F
   if (!er) er=_xmp_getattr(&vipa,st);
   if (!er) st->st_mode|=((st->st_mode&S_IFDIR)?0777:(st->st_mode&S_IFREG)?0666:0);
   log_fuse_function(__func__,&vipa,er);
-  //if (ENDSWITH(vpath,strlen(vpath),"big_file.txt")) log_exited_function("vpath: %s %s ino: %lu  ",vpath, success_or_fail(er==0),st->st_ino);
+  //  if (ENDSWITH(vpath,strlen(vpath),"db"))
+  //if (strstr(vpath,"/db")) log_exited_function("vpath: %s %s ino: %lu  ",vpath, success_or_fail(er==0),st->st_ino);
   return er;
 }
 
@@ -2159,6 +2142,7 @@ static int _xmp_readdir(const virtualpath_t *vipa, void *buf, fuse_fill_dir_t fi
   {
     directory_t dir_generated={0};
     int opt_rp=0;
+
     foreach_root(r){ /* FINDRP_FILECONVERSION_CUT_NOT means only without cut.  Giving 0 means cut and not cut. */
       if (r!=_root_writable && IS_VFOLDER_SKIP_READONLY_ROOT(vipa)) continue;
       if (vp0_l<r->path_prefix_l && cg_path_equals_or_is_parent(vp0,vp0_l, r->path_prefix,r->path_prefix_l)){
@@ -2661,7 +2645,7 @@ static void zipsfs_interactive(){
 Choice ? ");
   switch(cg_getc_tty()){
   case '1':{
-    IF1(IS_MACOSX, fputs("Requires /usr/bin/addr2line (package binutils) or atos.\n\n"));
+    IF1(IS_MACOSX, fputs("Requires /usr/bin/addr2line (package binutils) or atos.\n\n",stderr));
     int i=0;
     FOREACH_CSTRING(m,_cg_print_stacktrace_test_msg) fprintf(stderr,"%d)  %s\n",++i,*m);
     cg_print_stacktrace_test(cg_getc_tty()-'1');break;
@@ -2833,7 +2817,6 @@ int main(const int argc,const char *argv[]){
     assert(_dot_ZIPsFS); snprintf(tmp,MAX_PATHLEN,"%s/cachedir",_dot_ZIPsFS);  mstore_set_base_path(tmp);
   }
   root_property_read_all(NULL,NULL,0); /* free line */
-  vp_is_part_of_path_prefix(NULL);
   log_msg("\n\nMount point: "ANSI_FG_BLUE"'%s'"ANSI_RESET"\n\n",_mnt);
   if (!_root_n){ log_error("Missing root directories\n");return 1;}
   if (check_configuration(stderr,argv[argc-1]) && !cg_uid_is_developer() && !_isBackground) cg_press_enter();
