@@ -198,6 +198,7 @@ Options and arguments before the colon are interpreted by ZIPsFS.  Those after t
       -s Set apparent mount point.\n\n\
       -h Print usage information.\n\n\
       -V Version\n\n\
+      -b Run in background (not recommended). Better run ZIPsFS in foreground in a Tmux window to see the logs.\n\n\
 "ANSI_UNDERLINE"Fuse options  are given after a colon:"ANSI_RESET"\n\n\
       -o allow_other\n\
          Other users can use the file system.\n\n\

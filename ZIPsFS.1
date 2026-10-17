@@ -53,7 +53,7 @@ More flexibility provides the property \f[V]\[at]path-prefix=...\f[R].
 .PP
 ZIPsFS includes specialized features like \f[B]automatic file
 conversions\f[R] and performance optimizations tailored for efficiently
-storing and accessing \f[B]large-scale mass spectrometry\f[R] data.
+storing and accessing \f[B]large-scale\f[R] data.
 It manages non-sequential file reading from varying positions (so-called
 file seek) efficiently to improve reading of remote and zipped files.
 With file-preload-to-disk, it manages files in remote FTP repositories
@@ -61,8 +61,6 @@ as if they were normal local files.
 Compressed (gz,xz,bz2,lrz,Z) can be transparently decompressed.
 It has a programming interface to create synthetic file content
 programmatically.
-.PP
-ZIPsFS is best run in a \f[B]tmux\f[R] session.
 .SH Mini tutorial
 .PP
 Please Install ZIPsFS.
@@ -93,14 +91,16 @@ zip --fifo $b3/20250131_this_is_a_mass_spectrometry_folder.d.Zip   <(seq 10)
 .fi
 .SS Start ZIPsFS
 .PP
-In production, it is recommended to start ZIPsFS in \f[I]tmux\f[R].
-For testing, just use your regular command line.
+Run:
 .IP
 .nf
 \f[C]
 ZIPsFS   $b1 $b2 $b3 $b4  : -o allow_other  \[ti]/test/ZIPsFS/mnt
 \f[R]
 .fi
+.PP
+Note that Tmux is very robust and ZIPsFS can be run in a Tmux window for
+several month without interruption.
 .SS Browse the virtual file tree
 .PP
 Open a file browser or another terminal and browse the files in
@@ -180,7 +180,7 @@ head \[ti]/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,cu
 \f[R]
 .fi
 .PP
-From now on, the file size is known.
+After first access, the file size is known.
 .PP
 The gz compression is built-in using the zlib C library.
 The bz2, xz and lrz decompression work only if activated in the config
@@ -201,16 +201,15 @@ browsable.
 .SS Browsing FTP sites using nested FUSE file systems
 .PP
 There are 3 FUSE file systems that could be nested into ZIPsFS to access
-remote FTP sites: curlftpfs, rclone and avfs.
+remote FTP sites: Curlftpfs, Rclone and Avfs.
 All of them are great for file browsing of the remote files.
 However, downloading very large files seems to be problematic.
-As a workaround, ZIPsFS can use \f[B]\f[BI]curl\f[B]\f[R] which is a
-very robust and efficient at loading remote files.
-It should be installed.
-ZIPsFS needs the equivalent URL.
-For convenience we provide the script file
-ZIPsFS_prepare_branch_for_ftp.sh which takes care of this.
-It may be used as a template.
+As a workaround, ZIPsFS can use \f[B]\f[BI]curl\f[B]\f[R] which is
+robust and efficient.
+ZIPsFS obtains the equivalent URL from the file ~.URL~.
+We provide the script file ZIPsFS_prepare_branch_for_ftp.sh to set
+things up.
+It can be used as a template.
 It creates folders like \f[V]\[ti]/.ZIPsFS/db/pride\f[R] and mounts the
 respective FTP sites.
 This requires \f[B]\f[BI]curl\f[B]\f[R].
@@ -299,14 +298,15 @@ file accesses get blocked.
 By default, ZIP files are displayed as folders with the suffix
 \f[V].Content\f[R].
 This behavior can be customized.
-The default configuration includes a few exceptions tailored to specific
-use cases in Mass Spectrometry:
+The default rules are tailored to specific use cases in Mass
+Spectrometry:
 .IP \[bu] 2
 For ZIP files whose names end with \f[I].d.Zip\f[R], the virtual folder
 will end with \f[I].d\f[R].
 .IP \[bu] 2
-Flat file list: For Sciex instruments, each mass spectrometry record is
-stored in a set of files which are not organized in sub-folders.
+Flat file list (Try ZIPsFS_testfiles_zipflat.sh): For Sciex instruments,
+each mass spectrometry record is stored in a set of files which are not
+organized in sub-folders.
 For example the record
 \f[V]20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01\f[R] stored in
 \f[V]20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff2.Zip\f[R] may
@@ -321,12 +321,14 @@ consist of the following files
 .IP \[bu] 2
 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff.scan
 .PP
-These are contained with those of other entries in the file listing.
-To get the full list of files, all ZIP files need to be inspected.
-This is time consuming and performed in the background.
-Consequently, the file listing will be incomplete when requested for the
-first time.
-Only after some seconds, the file listing will be presented properly.
+These are contained with those of other entries in one long file
+listing.
+For ZIPsFS, it is time consuming to inspect all ZIP files to generate
+the full listing.
+This work is performed in a separate thread to not block the user
+thread.
+Initially, the file listing may still contain \f[V].Content\f[R] folders
+from ZIP files that are not yet expanded.
 .RE
 .PP
 A major advantage of using ZIP archives for storing files is that Zip
@@ -369,17 +371,18 @@ can also be accessed from
 .PP
 Path encoded options take precedence over source tree settings.
 Directives are negated when preceded by dash.
-Detailed descriptions are found in the README files in these folders and
-here.
+Detailed descriptions are found in the README files in these folders.
+here are all READMEs concatenated.
 .SS Choosing the access path
 .PP
-To chose the optimal access path for a particular software software and
-data storage features need to be considered.
+To chose the optimal access path for a particular software and data
+storage features need to be considered.
 .IP \[bu] 2
 Are the files remote?
-How long does file transfer take?
+Does file transfer take long?
 .IP \[bu] 2
-Is the application opening each file several times or just once?
+For long file transfers: Is the application opening each file several
+times or just once?
 .IP \[bu] 2
 Are the files
 .RS 2
@@ -398,8 +401,8 @@ Does the software repeatedly request file attributes and folder listings
 at a high frequency - so-called stat-spamming?
 This has been observed in software using SQLite databases as file
 format.
-Severe NAS performance problems may occur when SQLite databases are read
-without prefetch to RAM.
+Unless SQLite databases are preloaded, Severe NAS performance problems
+may occur.
 .PP
 The following suggest access paths for specific applications in
 mass-spectrometry:
@@ -420,7 +423,7 @@ explorer)
 .PP
 The flags in the first subfolder specify
 .IP \[bu] 2
-Whether the 1st source tree / the other source trees are included /
+Whether the 1st source tree or the other source trees are included or
 excluded.
 .IP \[bu] 2
 Whether ZIP files are expanded.
@@ -528,7 +531,7 @@ Already running very busy for several weeks without interruption.
 .PP
 If ZIPsFS crashes, please send the stack-trace together with the source
 code you were using.
-.SS End ZIPsFS
+.SS Kill ZIPsFS
 .PP
 ZIPsFS can be killed like any UNIX command by typing Ctrl-C.
 Sometimes this does not work.

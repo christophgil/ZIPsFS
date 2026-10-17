@@ -38,14 +38,12 @@ With a trailing slash, the folder name is not part of the virtual path, in accor
 More flexibility provides the property ``@path-prefix=...``.
 
 ZIPsFS includes specialized features like **automatic file conversions** and performance
-optimizations tailored for efficiently storing and accessing **large-scale mass spectrometry** data.
+optimizations tailored for efficiently storing and accessing **large-scale** data.
 It manages non-sequential file reading from varying positions (so-called file seek) efficiently to
 improve reading of remote and zipped files. With file-preload-to-disk, it manages files in remote FTP repositories as if they were normal local files.
 Compressed (gz,xz,bz2,lrz,Z)  can be transparently decompressed.
 It has a programming interface to create synthetic file
 content programmatically.
-
-ZIPsFS is best run in a **tmux** session.
 
 # Mini tutorial
 
@@ -73,10 +71,14 @@ Virtual file paths in that branch will start with *mount point*``/branch3/``.
 
 
 ### Start ZIPsFS
-In production, it is recommended to start ZIPsFS in *tmux*. For testing, just use your regular command line.
+Run:
 
 
     ZIPsFS   $b1 $b2 $b3 $b4  : -o allow_other  ~/test/ZIPsFS/mnt
+
+
+Note that Tmux is very robust and ZIPsFS can be run in a Tmux window for several month without interruption.
+
 
 ### Browse the virtual file tree
 
@@ -126,7 +128,7 @@ The decompressed file size is an estimate. It becomes exactly known after readin
 
     head ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
 
-From now on, the file size is known.
+After first access, the file size is known.
 
 The gz compression is built-in using the zlib C library. The bz2, xz and lrz
 decompression work only if activated in the config (default) and if the respective backends are installed on the
@@ -145,11 +147,11 @@ Above method allows to access any remote file. The disadvantage over the method 
 ### Browsing FTP sites using nested FUSE file systems
 
 
-There are 3 FUSE file systems that could be nested into ZIPsFS to access remote FTP sites: curlftpfs, rclone and avfs.
+There are 3 FUSE file systems that could be nested into ZIPsFS to access remote FTP sites: Curlftpfs, Rclone and Avfs.
 All of them are great for file browsing of the remote files. However, downloading very large files seems to be problematic.
-As a workaround, ZIPsFS can use ***curl*** which is a very robust and  efficient at loading remote files. It should be installed.
-ZIPsFS needs the equivalent URL.  For convenience we provide the script
-file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) which takes care of this. It may be used as a template.
+As a workaround, ZIPsFS can use ***curl*** which is  robust and  efficient.
+ZIPsFS obtains the equivalent URL from the file ~<mount-point>.URL~.   We provide the script
+file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) to set things up. It can be used as a template.
 It creates folders like ``~/.ZIPsFS/db/pride``
 and mounts the respective FTP sites. This requires ***curl***. Please also install  ***rclone*** (or curlftpfs).
 
@@ -210,11 +212,11 @@ After some time, unresponsive  file trees will be skipped to prevent that file a
 
 By default, ZIP files are displayed as folders with the suffix ``.Content``.
 This behavior can be customized.
-The default configuration includes a few exceptions tailored to specific use cases in Mass Spectrometry:
+The default rules are tailored to specific use cases in Mass Spectrometry:
 
   - For ZIP files whose names end with *.d.Zip*, the virtual folder will  end with *.d*.
 
-  - Flat file list: For  Sciex instruments, each mass spectrometry record  is stored in a set of files which are not organized in
+  - Flat file list (Try ZIPsFS_testfiles_zipflat.sh): For  Sciex instruments, each mass spectrometry record  is stored in a set of files which are not organized in
     sub-folders. For example the record ``20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01``  stored in ``20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff2.Zip`` may consist of the following files
 
      - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.timeseries.data
@@ -222,10 +224,9 @@ The default configuration includes a few exceptions tailored to specific use cas
      - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff2
      - 20231122_MA_HEK_QC_hiFlow_2ug_SWATH_rep01.wiff.scan
 
-    These are contained with those of other entries in the file listing.
-    To get the full list of files,  all ZIP files need to be inspected.
-    This is time consuming and performed in the background. Consequently, the file listing will be incomplete when requested for the first time.
-    Only after some seconds, the file listing will be presented properly.
+    These are contained with those of other entries in one long  file listing.
+    For ZIPsFS, it is time consuming to inspect all ZIP files to generate the full listing. This work is performed in a separate thread to not block the user thread.
+    Initially, the file listing may still contain ``.Content`` folders from ZIP files that are not yet expanded.
 
 A major advantage of using ZIP archives for storing files is that
 Zip files contain a record of the CRC32 checksum of each zip entry. This can be used for integrity checks to detect data decay or problems with data transfer.
@@ -258,25 +259,24 @@ can also be accessed from
 
 
 Path encoded options take precedence over source tree settings.
-Directives are negated when preceded by dash. Detailed descriptions are found in the README files in these folders
-and [here](./special_folders.md).
+Directives are negated when preceded by dash. Detailed descriptions are found in the README files in these folders.  [here](./special_folders.md) are all READMEs concatenated.
 
 
 
 ### Choosing the access path
 
-To chose the optimal access path for a particular software software and data storage features need to be considered.
+To chose the optimal access path for a particular software and data storage features need to be considered.
 
- - Are the files remote? How long  does file transfer take?
- - Is the application opening each file several times or just once?
+ - Are the files remote? Does  file transfer take long?
+ - For long file transfers: Is the application opening each file several times or just once?
  - Are the files
     - Regular
     - Compressed or uncompressed ZIP entries
     - Compressed files (gz, bz2, xz, Z, lrz) which the software does not support
  - Does the software read files sequentially or from varying positions
  - Does the software repeatedly request file attributes and folder listings at a high frequency - so-called  stat-spamming?
-   This has been observed in software using SQLite databases as file format.
-   Severe NAS performance problems may occur when  SQLite databases are read without prefetch to RAM.
+   This has been observed in software using SQLite databases as file format. Unless SQLite databases are preloaded,
+   Severe NAS performance problems may occur.
 
 
 
@@ -292,7 +292,7 @@ The following suggest access paths for specific applications in mass-spectrometr
 
 The flags in the first subfolder  specify
 
- - Whether the 1st source tree / the other source trees are included / excluded.
+ - Whether the 1st source tree or the other source trees are included or excluded.
  - Whether ZIP files are expanded.
  - Whether converted files are presented along with the original files.
    Implemented examples:  OCR generated texts from image files and  mzML files from proprietary mass-spectrometry files.
@@ -383,7 +383,7 @@ If ZIPsFS crashes, please send the stack-trace together with the source code you
 
 
 
-## End ZIPsFS
+## Kill ZIPsFS
 
 ZIPsFS can be killed like any UNIX command by typing  Ctrl-C.
 Sometimes this does not work. Assuming mnt is your mount-point, the following might work:
