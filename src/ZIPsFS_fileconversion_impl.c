@@ -61,7 +61,6 @@ static void fc_wait_concurrent(const struct fileconversion_rule *ac, const int i
 static void fc_init(void){
   //  if (!_writable_path_l) return;
   if (_writable_path_l) stpcpy(stpcpy(_fileconversion_rp=malloc_untracked(sizeof(DIR_CONVERTED)+_writable_path_l),_writable_path),DIR_CONVERTED);
-
   FOREACH_FILECONVERSION_RULE(idx,ac){
     assert(idx<FILECONVERSION_MAX_RULES);
     ac->_seqnum=idx;
@@ -169,11 +168,17 @@ static bool _fileconversion_rule_matches(struct fileconversion_files *ff){
   }
   if (g_l>x_l && !memcmp(ff->virtualpath+g_l-x_l,ac->ext,x_l) && _fc_matches(ff->virtualpath,ff->virtualpath_l-x_l,ac) &&
       (ac->generated_file_hasnot_infile_ext||ac->generated_file_inherits_infile_ext || fc_fileext(ff->virtualpath,g_l-x_l,ac))){
+    //log_debug_now("ff->virtualpath=%s   ends=%s ext=%s  cmd=%s",ff->virtualpath, ac->ends, ac->ext, ac->cmd[0]);
+
+
     char *e=cg_stpncpy0(ff->vinfiles[0],ff->virtualpath,g_l-ac->_ext_l);
     if (ac->generated_file_hasnot_infile_ext) strcpy(e,ac->ends);
     if (ext_inherit) strcpy(e,ext_inherit);
     ff->infiles_n=config_fileconversion_add_virtual_infiles(ff);
     *ff->vinfiles[ff->infiles_n]=0;
+
+
+    //    FOR(i,0,ff->infiles_n)   log_debug_now("%d  v=%s r=%s",i,ff->vinfiles[i], ff->rinfiles[i]);    DIE_DEBUG_NOW("fileconversion_files");
     return true;
   }
   return false;
@@ -209,10 +214,11 @@ static int _fileconversion_realinfiles(struct fileconversion_files *ff,const str
 /// Return the dependent files for generating this not yet existing file. ///
 /////////////////////////////////////////////////////////////////////////////
 static int fileconversion_realinfiles(struct fileconversion_files *ff){
-  if (!ff) return 0;
-  const FOREACH_FILECONVERSION_RULE(iac,ac){
-    int n=_fileconversion_realinfiles(ff,ac);
-    if (n) return n;
+  if (ff){
+    const FOREACH_FILECONVERSION_RULE(iac,ac){
+      int n=_fileconversion_realinfiles(ff,ac);
+      if (n) return n;
+    }
   }
   return 0;
 }
@@ -251,7 +257,6 @@ static int _fc_fd_open(const char *path, int *fd){
 static int fc_run(struct fileconversion_files *ff){
   const struct fileconversion_rule *ac=ff->rule;
   if (!ac || !ff->infiles_n) return -EIO;
-  int res=0;
   ff->out=ac->out;
 #define isMMAP (ff->out==STDOUT_TO_MMAP)
 #define isRAM  (ff->out==STDOUT_TO_MALLOC||isMMAP)
@@ -268,7 +273,8 @@ static int fc_run(struct fileconversion_files *ff){
   cg_unlink(ff->fail);
   fc_wait_concurrent_begin(ac);
   Assert(FILECONVERSION_RUN_SUCCESS==0); // cppcheck-suppress knownConditionTrueFalse
-  if (!res &&  (res=config_fileconversion_run(ff))==FILECONVERSION_RUN_NOT_APPLIED){
+  int res=config_fileconversion_run(ff);
+  if (res==FILECONVERSION_RUN_NOT_APPLIED){
     res=isOUTF?mk_parentdir_if_sufficient_storage_space(ff->grealpath):0;
     int fd_err=-1;
     if (_fileconversion_rp && !res && !ac->no_redirect) res=_fc_fd_open(ff->log,&fd_err);

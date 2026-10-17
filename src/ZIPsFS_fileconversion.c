@@ -47,7 +47,7 @@ static void fileconversion_mv_tmp_to_rp(const char *tmp, const char *rp){
 
 
 static void fileconversion_run(fHandle_t *d){
-  IF_LOG_FLAG(LOG_FILECONVERSION)log_entered_function("%s",D_VP(d));
+  IF_LOG_FLAG(LOG_FILECONVERSION)  log_entered_function("%s",D_VP(d));
   const char *rp=D_RP(d);
   struct fileconversion_files ff={0};
   struct_fileconversion_files_init(&ff,D_VP(d),D_VP_L(d));
@@ -143,7 +143,13 @@ static bool fileconversion_add_to_dir(void *buf, const char *name,const int name
 
 static char *fileconversion_apply_replacements_for_argv(char *dst_or_NULL,const char *orig,const struct fileconversion_files *ff){ /* NOT_TO_HEADER */
   if (!orig) return NULL;
+
+
+
   const char *rin=ff->rinfiles[0];
+
+
+
   char *c=(char*)orig;
   for(int len=strlen(c),capacity=len,i=0;PLACEHOLDERS[i];i++){
     const char *placeholder=PLACEHOLDERS[i];

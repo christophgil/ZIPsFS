@@ -46,7 +46,7 @@ static bool _stat_from_cache(const int opt_filldir_findrp,struct stat *stbuf, co
 }
 
 static bool zpath_stat_from_cache(const int opt_filldir_findrp, zpath_t *zpath){
-  root_t *r=ZPR();
+  const root_t *r=ZPR();
   ASSERT(r); if (!r || !VP0_L()) return false;
   struct stat *st=&zpath->stat_rp;
   st->st_ino=0;

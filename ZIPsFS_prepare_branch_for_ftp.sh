@@ -159,12 +159,12 @@ if false; then
     go ftp.ncbi.nlm.nih.gov                            ncbi
     go ftp.expasy.org                                 uniprot
 fi
-go massive-ftp.ucsd.edu                            massive
+# go massive-ftp.ucsd.edu                            massive
 go ftp.pride.ebi.ac.uk/pride/data/archive          pride
 
 
 # ## The folder /pub/ebi/databases/pdb/data/structures/all contains all PDB entries and reading this huge directory needs to be avoided.
-go ftp.ebi.ac.uk/pub                               ebi  '::/db/ebi/databases/pdb/data/structures/all:/Note/that/you/can/exclude/several/paths:/colon/separates/paths::'
+#go ftp.ebi.ac.uk/pub                               ebi  '::/db/ebi/databases/pdb/data/structures/all:/Note/that/you/can/exclude/several/paths:/colon/separates/paths::'
 
 #### go ftp.uniprot.org                                 uniprot
 ##### go ftp.pdbj.org/pub                                pdbj '::/db/pdbj/pdb/data/structures/all'

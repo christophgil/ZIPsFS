@@ -1304,7 +1304,7 @@ static const char *cg_get_user_name(){
  static bool ok;
  static char n[256];
   if (!ok){
-   struct passwd *pw=getpwuid(getuid());
+   const struct passwd *pw=getpwuid(getuid());
     if (pw) strcpy(n,pw->pw_name);
     else perror("getpwuid(getuid())");
     ok=true;

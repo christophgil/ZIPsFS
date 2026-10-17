@@ -50,7 +50,7 @@ _wiff_strings={.ends=".wiff",.estimated_filesize=99999,.ext=".strings",.cmd={"ba
 #define _MSCONVERT(formatOpt,extension,suffix,limit) .info="Requires Docker",.ext=extension,.ends=suffix,.estimated_filesize=limit,.cmd={DOCKER_MSCONVERT_CMD(formatOpt)}
   _msconvert_mzML={_MSCONVERT("--mzML",".mzML",".raw:.wiff",99999999999)},
   _msconvert_mgf={_MSCONVERT("--mgf",".mgf",".raw:.wiff",99999999999),.out=STDOUT_MERGE_WITH_STDERR},
-  _wiff_scan={.ext=".scan",.ends=".wiff",.estimated_filesize=99999999999,.no_redirect=true,.cmd={"bash","rawfile_mk_wiff_scan.sh",PLACEHOLDER_INFILE,PLACEHOLDER_TMP_DIR,PLACEHOLDER_OUTFILE}};
+_wiff_scan={.ext=".scan",.ends=".wiff",.estimated_filesize=99999999999,.no_redirect=true,.cmd={"bash","rawfile_mk_wiff_scan.sh",PLACEHOLDER_INFILE,PLACEHOLDER_TMP_DIR,PLACEHOLDER_OUTFILE}};
 /* https://github.com/ricoderks/MSConvert-docker?tab=readme-ov-file */
 //.out=STDOUT_TO_OUTFILE,
 ////////////////////////////////////////////////
@@ -66,7 +66,7 @@ static struct fileconversion_rule **config_fileconversion_rules(void){
     &_test_cmd_notexist,&_test_malloc_fail,
     &_test_malloc,
     &_wiff_strings,
-    &_wiff_scan,
+        &_wiff_scan,
     &_msconvert_mzML,
     &_msconvert_mgf,
     &_scale50,
