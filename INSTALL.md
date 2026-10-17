@@ -7,7 +7,7 @@
  - zlib
 
 
-<details><summary>Optional requirements</summary>
+## Optional requirements
 
  - binutils       (Provides /usr/bin/addr2line, which is used for debugging.  Back-traces show location in source code)
  - curl           Support for remote files
@@ -20,7 +20,7 @@ ZIPsFS allows transparent on-the-fly file conversion which requires the followin
  - imagemagick
  - poppler-utils
  - pdftotext
-</details><!--- Optional -->
+
 
 <details><summary>MS-Window</summary>
 
