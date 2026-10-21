@@ -367,7 +367,7 @@ static void log_fuse_function(const char *func, const virtualpath_t *vipa,int nu
     const bool vp_eq=!strcmp(vipa->vp,vp_1);
     const bool func_eq=func_1 && !strcmp(func,func_1);
 #define C(...) n+=snprintf(buf+n,sizeof(buf)-1-n,__VA_ARGS__)
-    char buf[PATH_MAX+1];
+    char buf[PATH_MAX];
     int n=0;
     C("%ld\t",time(NULL)-_whenStarted);
     //if (!(func_eq && vp_eq && num_1==num))

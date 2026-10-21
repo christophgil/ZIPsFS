@@ -156,7 +156,7 @@ static void sf_cleanup(textbuffer_t *b){
   C("<H2>Removing old files</H2>\nPreloaded and generated files may be cleaned-up after heaving not been used for a while.\n\
 The following script is periodically executed if it exists:<BR>\n");
   SF_VALUE_B();
-  if (sf->rp){ C(sf->rp); }else { C("&lt;writable root&gt;/");C(sf->parent);C(sf->name); }
+  if (sf->rp){ C(sf->rp); }else{ C("&lt;writable root&gt;/");C(sf->parent);C(sf->name); }
   SF_VALUE_E();
   C("\n<BR>Currently, it does ");
   if (!cg_file_exists(sf->rp)) C(" not ");

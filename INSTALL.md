@@ -9,9 +9,9 @@
 
 ## Optional requirements
 
- - binutils       (Provides /usr/bin/addr2line, which is used for debugging.  Back-traces show location in source code)
- - curl           Support for remote files
- - rclone         Accessing FTP sites
+ - binutils:       Provides /usr/bin/addr2line, which is used for debugging.  Back-traces show location in source code
+ - curl:           Support for remote files
+ - rclone:         Accessing FTP sites
 
 ZIPsFS allows transparent on-the-fly file conversion which requires the following:
 

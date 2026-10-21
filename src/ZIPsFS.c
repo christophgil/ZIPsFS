@@ -1780,7 +1780,6 @@ static int virtualfolders_print_dirflags(char *buf,const int buf_max, const vfol
   return l;
 }
 
-
 static void debug_print_virtual_folders(){
   assert(PATH_STARTS_WITH_DIR_ZIPsFS(DIR_ZIPsFS));
   fprintf(stderr,"SFILE_NUM=%d\n",SFILE_NUM);
@@ -2876,4 +2875,4 @@ int main(const int argc,const char *argv[]){
 // cg_copy_url_or_file
 // LEAK COUNT_ZIP_FOPEN          27919          27918 x docker
 // COMMAND-LINE   rawfile_mk_wiff_scan DEBUG_NOW
-// options
+// options @immutable
