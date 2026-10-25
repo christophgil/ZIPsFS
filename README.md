@@ -274,10 +274,12 @@ To chose the optimal access path for a particular software and data storage feat
 
 The following suggest access paths for specific applications in mass-spectrometry:
 
- - ``/``                Default  options are appropriate for Diann. No view prefix necessary.
- - ``/zipsfs/d/lz/r/``  Fragpipe, Maxquant,   Diann on far remote files (Pride-DB, Massive-DB, cloud storage)
- - ``/zipsfs/z/l/r/``   Upload to Pride. Before starting Pride, read the beginning of all files to force local caching of NAS files.
- - ``/zipsfs/z/-/``     Upload to Massive, fast file browsing (Windows explorer)
+| Entry point         | Feature                                                              | Purpose |
+|---------------------|----------------------------------------------------------------------|---------|
+| ``/``               | Default options. ``analysis.tdf`` and ``analysis.tdf_bin`` files are preloaded to RAM                        |               Diann          |
+| ``/zipsfs/d/lz/r/`` | Decompression. Preload to disk. ZIP files are preloaded entirely |  Fragpipe, Maxquant,   Diann on far remote files (Pride-DB, Massive-DB, cloud storage) |
+| ``/zipsfs/z/l/r/``  | ZIP files are not expanded. Preload to disk                      | Upload to Pride. |
+| ``/zipsfs/z/-/``    | ZIP files are not expanded.                                      | Upload to Massive, fast file browsing (Windows explorer) |
 
 
 ### View-option
