@@ -139,7 +139,7 @@ There are FUSE file systems  to access remote FTP sites: Curlftpfs, Rclone and A
 They can be nested into ZIPsFS.
 All of them are great for file browsing in FTP repositories. However, downloading very large files seems to be problematic.
 As a workaround, ZIPsFS can use the robust and fast utility ***curl***.
-ZIPsFS uses ***curl*** if there is a file ~<mount-point>.URL~  telling the equivalent URL.   Please find the
+ZIPsFS uses ***curl*** if there is a file ~mount-point.URL~  telling the equivalent URL.   Please find the
 file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh). It sets things up for a few example databases and  can be used as a template.
 It creates folders like ``~/.ZIPsFS/db/pride``
 
