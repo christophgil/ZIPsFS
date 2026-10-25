@@ -78,7 +78,7 @@ Run:
 
 
 Note that Tmux is very robust and ZIPsFS can be run in a Tmux window for several month without interruption.
-
+The advantage of running ZIPsFS in the foreground in Tmux is that the log output can be observed easily.
 
 ### Browse the virtual file tree
 
@@ -100,7 +100,7 @@ To get the real storage place of the file, append ``@SOURCE.TXT``
 
     cat ~/test/ZIPsFS/mnt/my_file.txt@SOURCE.TXT
 
-More information is available with suffix ``@PROPRERTIES.TXT``
+More information is available with suffix ``@PROPERTIES.TXT``
 
     cat ~/test/ZIPsFS/mnt/my_file.txt@PROPRERTIES.TXT
 
@@ -109,51 +109,40 @@ Make sure the UNIX tool curl is installed.
 
     curl --version
 
-Note that "//:" and all slashes in the URL are replaced by commas.
+Take an URL and replace  "//:" and all slashes by commas. Give it some time as the file needs to be downloaded to disk.
 
     less  ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
 
     gunzip -c ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz
 
-
-Even though the file is only available in compressed form on the server, you can directly access the decompressed file. Omit  the ``.gz`` extension.
-
-The decompressed file size is an estimate. It becomes exactly known after reading the file.
-
-    head ~/test/ZIPsFS/mnt/zipsfs/n/http,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
-    head ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,current_release,knowledgebase,reference_proteomes,Eukaryota,UP000005640,UP000005640_9606.fasta
+    gunzip -c  ftp,,,ftp.expasy.org,databases,uniprot,current_release,knowledgebase,reference_proteomes,Viruses,UP001733680,UP001733680_2006137.fasta.gz
 
 
-    ls -l ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
+Even though the file is stored as a  compressed file, you can directly access the decompressed file. Omit  the ``.gz`` extension and display the file with ``cat``.
 
-    head ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml
+Please note, that the size of the decompressed file is estimated. It becomes exactly known after
+reading the file.  While gz decompression works without external programs, bz2, xz, Z and lrz
+decompression require respective UNIX tools to be installed.
 
-After first access, the file size is known.
 
-The gz compression is built-in using the zlib C library. The bz2, xz and lrz
-decompression work only if activated in the config (default) and if the respective backends are installed on the
-computer. The following are test examples of files remotely stored as bz2 and xz, respectively.
+Examples of files remotely stored as bz2 and xz:
 
     head ~/test/ZIPsFS/mnt/zipsfs/n/http,,,ftp.gnu.org,gnu,binutils,binutils-2.23.1.tar   # Remote file is .tar.bz2
     head ~/test/ZIPsFS/mnt/zipsfs/n/http,,,ftp.gnu.org,gnu,gawk,gawk-4.0.2.tar            # Remote file is .tar.xz
 
 
-Above method allows to access any remote file. The disadvantage over the method below is, that repositories are not browsable.
-
-
-
-
-
 ### Browsing FTP sites using nested FUSE file systems
 
+Please install  ***curl*** and   ***rclone*** (or curlftpfs).
 
-There are 3 FUSE file systems that could be nested into ZIPsFS to access remote FTP sites: Curlftpfs, Rclone and Avfs.
-All of them are great for file browsing of the remote files. However, downloading very large files seems to be problematic.
-As a workaround, ZIPsFS can use ***curl*** which is  robust and  efficient.
-ZIPsFS obtains the equivalent URL from the file ~<mount-point>.URL~.   We provide the script
-file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh) to set things up. It can be used as a template.
+There are FUSE file systems  to access remote FTP sites: Curlftpfs, Rclone and Avfs.
+They can be nested into ZIPsFS.
+All of them are great for file browsing in FTP repositories. However, downloading very large files seems to be problematic.
+As a workaround, ZIPsFS can use the robust and fast utility ***curl***.
+ZIPsFS uses ***curl*** if there is a file ~<mount-point>.URL~  telling the equivalent URL.   Please find the
+file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh). It sets things up for a few example databases and  can be used as a template.
 It creates folders like ``~/.ZIPsFS/db/pride``
-and mounts the respective FTP sites. This requires ***curl***. Please also install  ***rclone*** (or curlftpfs).
+
 
 
 The  standard output of the script can be used  as command line  parameters for ZIPsFS.
@@ -165,11 +154,11 @@ In case of success, there will be a directory:
 
     ls ~/test/ZIPsFS/mnt/db
 
-Files with the ending ``.gz`` also  appear in the file listing without gz suffix.
+Files with the ending ``.gz`` also  appear in the file listing without gz suffix because the script adds the property ``decompression=gz,bz2,Z``.
 
 But wait, there is a major problem.  Before decompression, ZIPsFS can only communicate an estimated file size of the decompressed file.
-Consequently, programs that depend on exact file sizes will not work. Most UNIX tools do not need the file size. A text book example of a UNIX tool that does require
-the size of the file is  ``/usr/bin/tail``. Lets see what happens if ZIPsFS tells a wrong size.  Please try
+Consequently, programs that depend on exact file sizes will not work. Most UNIX tools do not need the file size. However,
+  ``/usr/bin/tail`` does. Lets see what happens if ZIPsFS provides a wrong size.  Please try
 
 
     tail  ~/test/ZIPsFS/mnt/mnt/db/pride/2005/08/PRD000004/PRIDE_Exp_Complete_Ac_369.xml
