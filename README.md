@@ -277,8 +277,8 @@ The following suggest access paths for specific applications in mass-spectrometr
 | Entry point         | Feature                                                              | Purpose |
 |---------------------|----------------------------------------------------------------------|---------|
 | ``/``               | Default options. ``analysis.tdf`` and ``analysis.tdf_bin`` files are preloaded to RAM                        |               Diann          |
-| ``/zipsfs/d/lz/r/`` | Decompression. Preload to disk. ZIP files are preloaded entirely |  Fragpipe, Maxquant,   Diann on far remote files (Pride-DB, Massive-DB, cloud storage) |
-| ``/zipsfs/z/l/r/``  | ZIP files are not expanded. Preload to disk                      | Upload to Pride. |
+| ``/zipsfs/d/lz/r/`` | Decompression. Preload to disk for remote files. ZIP files are preloaded entirely |  Fragpipe, Maxquant,   Diann on far remote files (Pride-DB, Massive-DB, cloud storage) |
+| ``/zipsfs/z/l/r/``  | ZIP files are not expanded. Preload to disk for remote files                      | Upload to Pride. |
 | ``/zipsfs/z/-/``    | ZIP files are not expanded.                                      | Upload to Massive, fast file browsing (Windows explorer) |
 
 
