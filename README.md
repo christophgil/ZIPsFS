@@ -274,7 +274,7 @@ To chose the optimal access path for a particular software and data storage feat
 
 The following suggest access paths for specific applications in mass-spectrometry:
 
-| Entry point         | Feature                                                              | Purpose |
+| Entry point         | Feature                                                              | Used for |
 |---------------------|----------------------------------------------------------------------|---------|
 | ``/``               | Default options. ``analysis.tdf`` and ``analysis.tdf_bin`` files are preloaded to RAM                        |               Diann          |
 | ``/zipsfs/d/lz/r/`` | Decompression. Preload to disk for remote files. ZIP files are preloaded entirely |  Fragpipe, Maxquant,   Diann on far remote files (Pride-DB, Massive-DB, cloud storage) |
@@ -297,18 +297,23 @@ The folder ``/zipsfs/n/`` allows access to internet files.  File names are forme
 ### Preload option
 
 The 2nd subfolder contains preload options.
-  - ``/-/`` Apply  default preload rules specified in ``ZIPsFS_configuration.c``,  ``ZIPsFS_configuration.h`` and  source tree properties.
-  - ``/m/`` Prefetch to RAM
-  - ``/l/`` Prefetch to the local file system
-  - ``/lz/`` Prefetch to the local file system. Instead of single entries, load entire ZIP files to local disk. Whether and how the entries are preloaded
-    would be specified in the 2nd subfolder. E.g.  ``/lz/m/a``  cache all entries in RAM.
+
+| 2nd subfolder | Type of preload |
+| --- | --- |
+| ``/-/`` | Apply  default preload rules specified in ``ZIPsFS_configuration.c``,  ``ZIPsFS_configuration.h`` and  source tree properties |
+| ``/m/`` | Prefetch to RAM |
+| ``/l/`` | Prefetch to the local file system |
+| ``/lz/``| Prefetch to the local file system. Instead of single entries, load entire ZIP files to local disk. |
 
 ### Preload selector
 
 If the 3rd subfolder declares file preload to RAM or disk, then the 3rd subfolder gives the condition. Combinations are  combined with logic or.
- - ``a`` all
- - ``r`` remote
- - ``z`` ZIP-entry
+
+| 3rd subfolder | Selector |
+| --- | --- |
+| ``a`` | all |
+| ``r`` | remote |
+| ``z`` | ZIP-entry |
 
 
 ## Properties of source trees

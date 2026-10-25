@@ -412,7 +412,7 @@ Entry point
 T}@T{
 Feature
 T}@T{
-Purpose
+Used for
 T}
 _
 T{
@@ -472,22 +472,71 @@ comma.
 .SS Preload option
 .PP
 The 2nd subfolder contains preload options.
-- \f[V]/-/\f[R] Apply default preload rules specified in
+.PP
+.TS
+tab(@);
+lw(35.0n) lw(35.0n).
+T{
+2nd subfolder
+T}@T{
+Type of preload
+T}
+_
+T{
+\f[V]/-/\f[R]
+T}@T{
+Apply default preload rules specified in
 \f[V]ZIPsFS_configuration.c\f[R], \f[V]ZIPsFS_configuration.h\f[R] and
-source tree properties.
-- \f[V]/m/\f[R] Prefetch to RAM - \f[V]/l/\f[R] Prefetch to the local
-file system - \f[V]/lz/\f[R] Prefetch to the local file system.
+source tree properties
+T}
+T{
+\f[V]/m/\f[R]
+T}@T{
+Prefetch to RAM
+T}
+T{
+\f[V]/l/\f[R]
+T}@T{
+Prefetch to the local file system
+T}
+T{
+\f[V]/lz/\f[R]
+T}@T{
+Prefetch to the local file system.
 Instead of single entries, load entire ZIP files to local disk.
-Whether and how the entries are preloaded would be specified in the 2nd
-subfolder.
-E.g.
-\f[V]/lz/m/a\f[R] cache all entries in RAM.
+T}
+.TE
 .SS Preload selector
 .PP
 If the 3rd subfolder declares file preload to RAM or disk, then the 3rd
 subfolder gives the condition.
 Combinations are combined with logic or.
-- \f[V]a\f[R] all - \f[V]r\f[R] remote - \f[V]z\f[R] ZIP-entry
+.PP
+.TS
+tab(@);
+l l.
+T{
+3rd subfolder
+T}@T{
+Selector
+T}
+_
+T{
+\f[V]a\f[R]
+T}@T{
+all
+T}
+T{
+\f[V]r\f[R]
+T}@T{
+remote
+T}
+T{
+\f[V]z\f[R]
+T}@T{
+ZIP-entry
+T}
+.TE
 .SS Properties of source trees
 .PP
 In the command line, source trees are specified by their root paths.
