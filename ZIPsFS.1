@@ -153,20 +153,26 @@ curl --version
 .fi
 .PP
 Take an URL and replace \[lq]//:\[rq] and all slashes by commas.
-Give it some time as the file needs to be downloaded to disk.
 .IP
 .nf
 \f[C]
 less  \[ti]/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
-
+\f[R]
+.fi
+.PP
+The first time, downloading takes a while.
+But subsequently, the file is available without delay.
+.IP
+.nf
+\f[C]
 gunzip -c \[ti]/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz
 
 gunzip -c  ftp,,,ftp.expasy.org,databases,uniprot,current_release,knowledgebase,reference_proteomes,Viruses,UP001733680,UP001733680_2006137.fasta.gz
 \f[R]
 .fi
 .PP
-Even though the file is stored as a compressed file, you can directly
-access the decompressed file.
+Even if a file is stored as a compressed file, you can directly access
+the decompressed file.
 Omit the \f[V].gz\f[R] extension and display the file with
 \f[V]cat\f[R].
 .PP
@@ -196,8 +202,8 @@ However, downloading very large files seems to be problematic.
 As a workaround, ZIPsFS can use the robust and fast utility
 \f[B]\f[BI]curl\f[B]\f[R].
 ZIPsFS uses \f[B]\f[BI]curl\f[B]\f[R] if there is a file
-\f[V]<mount-point>.URL\f[R] telling the equivalent URL.
-Please find the file ZIPsFS_prepare_branch_for_ftp.sh.
+\f[V]<mount-point>.URL\f[R] containing the FTP address.
+Please study the script ZIPsFS_prepare_branch_for_ftp.sh.
 It sets things up for a few example databases and can be used as a
 template.
 It creates folders like \f[V]\[ti]/.ZIPsFS/db/pride\f[R]

@@ -109,16 +109,18 @@ Make sure the UNIX tool curl is installed.
 
     curl --version
 
-Take an URL and replace  "//:" and all slashes by commas. Give it some time as the file needs to be downloaded to disk.
+Take an URL and replace  "//:" and all slashes by commas.
 
     less  ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.uniprot.org,pub,databases,uniprot,LICENSE
+
+The first time, downloading takes a while. But subsequently, the file is available without delay.
 
     gunzip -c ~/test/ZIPsFS/mnt/zipsfs/n/ftp,,,ftp.ebi.ac.uk,pub,databases,uniprot,current_release,knowledgebase,complete,docs,keywlist.xml.gz
 
     gunzip -c  ftp,,,ftp.expasy.org,databases,uniprot,current_release,knowledgebase,reference_proteomes,Viruses,UP001733680,UP001733680_2006137.fasta.gz
 
 
-Even though the file is stored as a  compressed file, you can directly access the decompressed file. Omit  the ``.gz`` extension and display the file with ``cat``.
+Even if a file is stored as a compressed file, you can directly access the decompressed file. Omit  the ``.gz`` extension and display the file with ``cat``.
 
 Please note, that the size of the decompressed file is estimated. It becomes exactly known after
 reading the file.  While gz decompression works without external programs, bz2, xz, Z and lrz
@@ -139,8 +141,8 @@ There are FUSE file systems  to access remote FTP sites: Curlftpfs, Rclone and A
 They can be nested into ZIPsFS.
 All of them are great for file browsing in FTP repositories. However, downloading very large files seems to be problematic.
 As a workaround, ZIPsFS can use the robust and fast utility ***curl***.
-ZIPsFS uses ***curl*** if there is a file ``<mount-point>.URL``  telling the equivalent URL.   Please find the
-file  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh). It sets things up for a few example databases and  can be used as a template.
+ZIPsFS uses ***curl*** if there is a file ``<mount-point>.URL`` containing the FTP address.   Please study  the
+script  [ZIPsFS_prepare_branch_for_ftp.sh](./ZIPsFS_prepare_branch_for_ftp.sh). It sets things up for a few example databases and  can be used as a template.
 It creates folders like ``~/.ZIPsFS/db/pride``
 
 
