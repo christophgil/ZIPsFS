@@ -102,7 +102,7 @@ To get the real storage place of the file, append ``@SOURCE.TXT``
 
 More information is available with suffix ``@PROPERTIES.TXT``
 
-    cat ~/test/ZIPsFS/mnt/my_file.txt@PROPRERTIES.TXT
+    cat ~/test/ZIPsFS/mnt/my_file.txt@PROPERTIES.TXT
 
 ### Access web resources as regular files (Not fully tested yet)
 Make sure the UNIX tool curl is installed.
