@@ -311,7 +311,7 @@ The 2nd subfolder contains preload options.
 
 ### Preload selector
 
-If the 2nd subfolder declares file preload to RAM or disk, then the 3rd subfolder gives the condition. Combinations are  combined with logic or.
+If the 3rd subfolder declares file preload to RAM or disk, then the 3rd subfolder gives the condition. Combinations are  combined with logic or.
  - ``a`` all
  - ``r`` remote
  - ``z`` ZIP-entry
