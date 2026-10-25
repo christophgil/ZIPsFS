@@ -475,7 +475,9 @@ static void *infloop_PTHREAD_MISC(void *arg){
     usleep(1000*1000);
     LOCK_NCANCEL(mutex_fhandle, FHANDLE_DESTROY_LATER_ALL());
 #if WITH_FILECONVERSION||WITH_PRELOADDISK
-    if ((j&0xFff)==256){
+    if ((j&0xFff)==256
+        //|| cg_uid_is_developer()
+        ){
       static pthread_t t;
       const char *path=_specialfiles[SFILE_CLEANUP_SH].rp;
       if (path && !_cleanup_running && cg_file_exists(path)) pthread_create(&t,NULL,&_cleanup_files_runnable,NULL);

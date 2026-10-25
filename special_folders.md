@@ -4,13 +4,16 @@ Subfolder /-/ provides default view on the file tree.
 
 # Updating the local copy of remote or compressed files
 
+The view option INTERNET_UPDATE is activated with the flag in the first
+subfolder in /zipsfs/.\
+\
 A HTML report is generated for each pre-loaded file found on the local
 HD.The paths of the pre-loaded file and the original source will
 displayed. Reading the HTML files in this folder, triggers the update
-process of the corresponding file. The last-modified file attributes of
-the remote and local files will be compared. If the local copy is
-out-of-date, it will be refreshed. On success, the copy on the local
-disk will be replaced. Success or failure will be reported in HTML.
+process of the corresponding file. The HTTP or FTP header data will be
+evaluated. If the local copy is out-of-date, it will be refreshed. On
+success, the copy on the local disk will be replaced. Success or failure
+will be reported in HTML.
 
 # Accessing files from the internet
 

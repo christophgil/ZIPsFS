@@ -4,7 +4,7 @@ SRC=${BASH_SOURCE[0]}
 DIR=${SRC%/*}
 while read a; do    eval "${a#$}"; done  <${SRC%/*}/include_net_fetch_common.ps1 #FILTER_OUT
 DIR=/var/Users/cgille/tmp/ZIPsFS/mnt/ZIPsFS/n                                    #FILTER_OUT
-cc=("$c0" "$c1" "$c2" "$c3")
+cc=("$c0" "$c1" "$c2" "$c3" "$c4")
 main(){
     while true; do
         echo

@@ -213,8 +213,8 @@ static int specialfile_print_pathinfo(zpath_t *zpath,textbuffer_t *b_or_null){
   return l;
 }
 static uint64_t specialfile_content_to_fhandle(zpath_t *zpath,const int id){
+  //log_entered_function("%s  SFILE_IS_IMMUTABLE=%d  zpath->vfile_sfx=%s",VP(),SFILE_IS_IMMUTABLE(id),zpath->vfile_sfx);
   if (!SFILE_IS_IMMUTABLE(id) && !zpath->vfile_sfx) return 0;
-  log_entered_function("%s",VP());
   uint64_t fh=0;
   fHandle_t *d=fhandle_create(FHANDLE_SPECIAL_FILE,&fh,zpath);
   cg_thread_assert_not_locked(mutex_fhandle);
@@ -294,6 +294,7 @@ static void html_is_uptodate(fHandle_t *d,const yes_zero_no_t updateSuccess,cons
 /// Generate virtual files with immutable content. ///
 //////////////////////////////////////////////////////
 static void specialfile_content(textbuffer_t *b,const int id){
+  //log_entered_function("id:%d",id);
   char tmp[333];
   if (id==SFILE_CLEAR_CACHE || id==SFILE_DEBUG_CTRL){
     shebang_bash(true,b);
@@ -417,7 +418,7 @@ Whether ZIPsFS internally saves the ZIP entry as a file or not depends on whethe
 Only in the first example, the ZIP entry is extracted and cached as a separate file.\n\
 With the second example, files with the ending .tdf are  preloaded into RAM.");
     break;
-    CASE_ID3(PRELOAD_UPDATE,INTERNET_UPDATE,INTERNET_HEADER,"Updating the local copy of remote or compressed files");
+    CASE_ID3(INTERNET_UPDATE,PRELOAD_UPDATE,INTERNET_HEADER,"Updating the local copy of remote or compressed files");
     C("A HTML report is generated for each pre-loaded file found on the local HD.\
 The paths of the pre-loaded file and the original source will displayed.\n\
 Reading the HTML files in this folder, triggers the update process of the corresponding file.\n");

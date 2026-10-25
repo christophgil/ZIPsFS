@@ -1,8 +1,7 @@
 /***********************************************************************/
 /* COMPILE_MAIN=ZIPsFS                                                 */
 /* D download to the local disk                                        */
-/* Downloaded files get the sticky bit S_ISVTX to facilitate cleanup.  */
-/*  find $M -type f  -perm -1000  */
+/*  first-branch/zipsfs/preloaded                                      */
 /***********************************************************************/
 _Static_assert(WITH_PRELOADDISK,"");
 #define  NOT_PRELOADDISK_ZPATH_FOR_DIR(zpath) (zpath->root==_root_writable && !zpath->is_decompressed || !_writable_path_l || VFOLDER_HAS_FLAG2(zpath,PRELOADDISK_NOT,PRELOAD_UPDATE))
@@ -68,14 +67,18 @@ static bool _preloaddisk_now(const char *dst,fHandle_t *d){
   }
   if (ok){
     struct stat st;
-    if (stat(dst,&st)) log_errno("fstat  %s",dst);   // !!!!!!!!!!!
-    else if (chmod(dst,st.st_mode|S_ISVTX)==-1) log_errno("fchmod  %s",dst);
+    if (stat(dst,&st)){
+      log_errno("fstat  %s",dst);
+      ok=false;
+    }else{
+    // else if (chmod(dst,st.st_mode|S_ISVTX)==-1) log_errno("fchmod  %s",dst);
     cg_file_set_mtime(dst,zpath->stat_vp.st_mtime); /* Note using same fd for futimes() fails*/
     zpath_set_realpath(zpath,dst,NULL,NULL);
     //DIE_DEBUG_NOW("zip  VP:%s RP:%s dst=%s",VP(),RP(),dst);
     zpath->root=_root_writable;
 
     IF1(WITH_ZIPFLATCACHE, LOCK(mutex_dircache, zipflatcache_drop(zpath))); // root
+    }
   }
   //log_exited_function("%s  %s",dst,success_or_fail(ok));
   return ok;

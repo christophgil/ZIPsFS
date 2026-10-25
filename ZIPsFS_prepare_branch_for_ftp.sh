@@ -159,7 +159,7 @@ if false; then
     go ftp.ncbi.nlm.nih.gov                            ncbi
     go ftp.expasy.org                                 uniprot
 fi
-# go massive-ftp.ucsd.edu                            massive
+go massive-ftp.ucsd.edu                            massive
 go ftp.pride.ebi.ac.uk/pride/data/archive            pride
 
 

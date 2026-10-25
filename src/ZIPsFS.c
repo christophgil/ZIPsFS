@@ -13,6 +13,7 @@
 // #define ewlog(x) cg_endsWith(0,x,cg_strlen(x),".log",4)
 // (search-forward-regexp "VFOLDER_PATH(vipa)=\\w")
 // view_pfx_l  size_t view_prefix_l
+#define FNAME_PFX_README "_README_"
 #define VFILE_SFX_SOURCE "@SOURCE.TXT"
 #define VFILE_SFX_ZIPCRC32 "@ARCHIVECRC32.TXT"
 #define VFILE_SFX_PROPERTIES "@PROPERTIES.TXT"
@@ -1635,6 +1636,7 @@ static void virtualfolder_new(virtualfolder_t *f, const vfolder_flags_t flags, c
 static char _dirOldLogs[MAX_PATHLEN+1];
 static void specialfile_init(const int id,  const char *filename,const char *parent){
   assert(id<SFILE_NUM);
+
   if (id==SFILE_CLEANUP_SH && !_writable_path) return;
   const bool has_real_path=filename && *filename=='/';
   specialfile_t *sf=_specialfiles+id;
@@ -1644,7 +1646,7 @@ static void specialfile_init(const int id,  const char *filename,const char *par
   if (has_real_path){
     char path[MAX_PATHLEN+1],tmp[MAX_PATHLEN+1];
     snprintf(path,MAX_PATHLEN,"%s/%s",_dot_ZIPsFS,sf->name);
-    if (id==SFILE_CLEANUP_SH && _writable_path) snprintf(path,MAX_PATHLEN,"%s%s/%s",_writable_path,sf->parent,sf->name);
+    if (id==SFILE_CLEANUP_SH) snprintf(path,MAX_PATHLEN,"%s"DIR_ZIPsFS"/%s",_writable_path,sf->name);
     sf->rp=strdup_untracked(path);
     struct stat st;
     if (id==SFILE_LOG_ERRORS||id==SFILE_LOG_WARNINGS){
@@ -1668,9 +1670,13 @@ static void specialfile_init(const int id,  const char *filename,const char *par
 }
 
 static void specialfiles_init(){
-#define X(id,...) specialfile_init(ID_##id,"_README_"#id".html",NULL);
+#define X(id,...) specialfile_init(ID_##id,FNAME_PFX_README#id".html",NULL);
   XMACRO_DIRFLAGS(); /* READMEs in each special folder */
+  X(INTERNET_UPDATE);
+  X(PRELOAD_UPDATE);
 #undef X
+
+  //DIE_DEBUG_NOW("INTERNET_UPDATE=%s",_specialfiles[ID_(INTERNET_UPDATE)].name);
   char path[MAX_PATHLEN+1],tmp[MAX_PATHLEN+1];
   assert(_mnt);
   {
@@ -1845,8 +1851,11 @@ static void vipa_setSpecialFile(virtualpath_t *vipa){
       if (sf->parent && sf->parent!=VFOLDER_PATH(vipa)) continue;
       if (vdir_l+1+sf->name_l==vipa->vp_l && !strcmp(sf->name,vipa->vp+vdir_l+1)) vipa->specialfile_id=sf->id;
     }
-    if (VFOLDER_HAS_FLAG(vipa,PRELOAD_UPDATE)  && ENDSWITH(vipa->vp,vipa->vp_l,SFX_UPDATE)) vipa->specialfile_id=SFILE_PRELOAD_UPDATE_GO;
-    if (VFOLDER_HAS_FLAG(vipa,INTERNET_UPDATE) && ENDSWITH(vipa->vp,vipa->vp_l,SFX_UPDATE)) vipa->specialfile_id=SFILE_INTERNET_UPDATE_GO;
+    if (VFOLDER_HAS_FLAG2(vipa,PRELOAD_UPDATE,INTERNET_UPDATE) && ENDSWITH(vipa->vp,vipa->vp_l,SFX_UPDATE) && !STARTSWITH(vipa->vp+cg_last_slash(vipa->vp)+1,FNAME_PFX_README)){
+      vipa->specialfile_id=VFOLDER_HAS_FLAG(vipa,PRELOAD_UPDATE)?
+        SFILE_PRELOAD_UPDATE_GO:
+        SFILE_INTERNET_UPDATE_GO;
+    }
   }
 }
 /****************************************************************************************************************************/
@@ -1929,9 +1938,7 @@ static int virtualpath_error(const virtualpath_t *vipa,const int create_or_del){
 
 
 static int _xmp_getattr(const virtualpath_t *vipa, struct stat *st){ /* NOT_TO_HEADER */
-  //log_entered_function("vipa->vp: %s   vdir=%s       specialfile=%d",vipa->vp, VFOLDER_PATH(vipa),  vipa->specialfile_id);
-
-
+  //  log_entered_function("vipa->vp: %s   vdir=%s       specialfile=%d",vipa->vp, VFOLDER_PATH(vipa),  vipa->specialfile_id);
   const int view_pfx_l=view_pfx_l(vipa), vp1_l=vipa->vp_l-view_pfx_l;
   const char *vp1=vipa->vp+view_pfx_l;
   if (vipa->vp_l==VFOLDER_PATH_L(vipa)) goto set_is_dir;
@@ -2023,6 +2030,7 @@ static int xmp_rmdir(const char *vpath){
 /***************************************************************************************************************/
 
 static int open_for_reading(const virtualpath_t *vipa, struct fuse_file_info *fi){
+  //log_entered_function("%s  ",vipa->vp);
   const int id=vipa->specialfile_id;
   const specialfile_t *sf=_specialfiles+id;
   uint64_t fh=0;
@@ -2875,4 +2883,4 @@ int main(const int argc,const char *argv[]){
 // cg_copy_url_or_file
 // LEAK COUNT_ZIP_FOPEN          27919          27918 x docker
 // COMMAND-LINE   rawfile_mk_wiff_scan DEBUG_NOW
-// options @immutable
+// options @immutable  S_ISVTX   ZIPsFS_cleanup SFILE_CLEANUP_SH

@@ -56,7 +56,7 @@ test_pattern(){
         [[ $rp == *SOURCE.TXT ]] && strings $rp
         local result="${ANSI_FG_RED}FAILED"
         local ZGREP=grep
-        [[ $rp == *.gz ]] &&  ZGREP='gzip'
+        [[ $rp == *.gz ]] &&  ZGREP='zgrep'
         set -x
         $ZGREP -a -m 1 "$pattern" $rp && result="${ANSI_FG_GREEN}OK"
         set +x

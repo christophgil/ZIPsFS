@@ -6,41 +6,57 @@ export ANSI_FG_GREEN=$'\e[32m' ANSI_FG_RED=$'\e[31m' ANSI_FG_MAGENTA=$'\e[35m' A
 export ANSI_INVERSE=$'\e[7m' ANSI_BOLD=$'\e[1m' ANSI_UNDERLINE=$'\e[4m' ANSI_RESET=$'\e[0m'
 
 
-readonly WANT_FREE_GIGABYTE=3000
-readonly DAYS_MAX=600
-readonly DAYS_MIN=10
+readonly WANT_FREE_GIGABYTE=555  # Continue until THAT much is free or until no files can be deleted
+readonly DAYS_MAX=666            # Do not keep files older than
+readonly DAYS_MIN=1              # Do not remove files younger than
 
 :<<EOF
-ZIPsFS periodically checks existence of the file ZIPsFS/ZIP_cleanup.sh within the first branch.
-This directory branch is also used for prefetched files and automatically generated files.
-If free HD capacity gets low, this script could remove files.
-This script should be placed into <root-path of first (i.e. writable) root>/ZIPsFS/
 
+ZIPsFS periodically checks existence of the file <path-of-first-file-tree>/zipsfs/ZIP_cleanup.sh.
+This script can be customized and copied to this location.
+
+If free HD capacity gets low, this script can remove prefetched files and automatically generated
+files that have not been accessed for a while.
 EOF
 
+
+
+IS_DF_GNU=0
+df --version 2>&1| grep -q '\bGNU\b' && IS_DF_GNU=1
+
 call_df(){
-    CAPACITY=0
+    #    CAPACITY=0
     AVAILABLE=0
-    local filesystem=0 used=0 remaining=0
-    read -r filesystem CAPACITY used AVAILABLE remaining< <(df -BG $PWD |tee /dev/stderr |tail -n 1| tr G ' ')
-    : $filesystem $remaining $used
+    #    local filesystem=0 used=0 remaining=0
+    #    read -r filesystem CAPACITY used AVAILABLE remaining< <(df -BG $PWD |tee /dev/stderr |tail -n 1| tr G ' ')
+    #    : $filesystem $remaining $used
+    if ((IS_DF_GNU)); then
+        AVAILABLE=$(df -BG  --output=avail $PWD |tee /dev/stderr |tail -n 1| tr G ' ')
+    else
+        AVAILABLE=$(df -g $PWD |grep -v '^Filesystem' | awk '{print $4"G"}')
+    fi
+
 }
 # find  /path -perm -1000
 del_old_files(){
-    local d="$1" cond="$2"
-
-    echo "${ANSI_INVERSE}${SRC##*/} $d  days:$ATIME$ANSI_RESET" >&2
-    [[ ${d%/*} != */ZIPsFS ]] && echo "${ANSI_FG_RED}This script is in the wrong directory. Abort"$ANSI_RESET >&2 && return
+    local d="$1" cond="${2:-}"  # cond is obsolete
     local action=-delete
     ((DRYRUN)) && action=''
-    set -x
-    find "$d" -atime +$ATIME $cond -print $action
-    find "$d" -atime +1 -name '*[0-9].bak' $cond -print $action
-    find "$d" -atime +1 -name '*[0-9].tmp' $cond -print $action
-    set +x
+
+    if ((ATIME)); then
+        echo "$SRC: del_old_files ${ANSI_INVERSE} $d  ATIME=$ATIME$ANSI_RESET" >&2
+        [[ ${d%/*} != */zipsfs ]] && echo "$SRC: d='${d%/*}' ${ANSI_FG_RED}This script is in the wrong directory. Abort"$ANSI_RESET >&2 && return
+        set -x
+        find "$d" -atime +$ATIME $cond -print $action
+        set +x
+    else
+        set -x
+        find "$d" -atime +1 -name '*[0-9].bak' $cond -print $action
+        find "$d" -atime +1 -name '*[0-9].tmp' $cond -print $action
+        set +x
+    fi
 }
 
-readonly SRC=${BASH_SOURCE[0]}
 CD_TO_SCRIPT_PARENT=1
 DRYRUN=0
 while getopts 'tn' o; do
@@ -51,22 +67,28 @@ while getopts 'tn' o; do
     esac
 done
 shift $((OPTIND-1))
-
-
 main(){
-    echo "$ANSI_MAGENTA$SRC$ANSI_RESET" >&2
-    ((CD_TO_SCRIPT_PARENT)) &&cd ${SRC%/*} || return # We are in the parent of this script
-    echo "$ANSI_FG_MAGENTA$PWD$ANSI_RESET" >&2
-    call_df
-    ((WANT_FREE_GIGABYTE>CAPACITY)) && echo "$ANSI_FG_RED WANT_FREE_GIGABYTE ($WANT_FREE_GIGABYTE) > CAPACITY ($CAPACITY)$ANSI_RESET" >&2 && ((DRYRUN==0 && CD_TO_SCRIPT_PARENT)) && return
+    if ((CD_TO_SCRIPT_PARENT)); then
+        cd ${BASH_SOURCE%/*} || return
+        date > $BASH_SOURCE.lastRun
+    fi
+    SRC=${BASH_SOURCE[0]}
+    SRC=${SRC##*/}
+    ATIME=0
+    del_old_files $PWD/preloaded
+    del_old_files $PWD/converted
     for ((ATIME=DAYS_MAX; ATIME>=DAYS_MIN; ATIME=2*ATIME/3)); do
-        ((WANT_FREE_GIGABYTE<AVAILABLE)) && echo "${ANSI_FG_GREEN}WANT_FREE_GIGABYTE<CAPACITY  $WANT_FREE_GIGABYTE<$CAPACITY$ANSI_RESET" >&2
-        del_old_files $PWD "-perm -1000"
-        # Those files are reconginzed by sticky flag S_ISVTX
-        del_old_files $PWD/ZIPsFS/c  # fileconversion
+        call_df
+        echo "$SRC: ATIME=$ATIME  ${ANSI_FG_MAGENTA}PWD=$PWD$ANSI_RESET WANT_FREE_GIGABYTE=$WANT_FREE_GIGABYTE AVAILABLE=$AVAILABLE  Enough=$((AVAILABLE>WANT_FREE_GIGABYTE))" >&2
+        ((AVAILABLE>WANT_FREE_GIGABYTE)) && break
+###        del_old_files $PWD/preloaded "-perm -1000" # Those files are reconginzed by sticky flag S_ISVTX
+        del_old_files $PWD/preloaded
+        del_old_files $PWD/converted
     done
 }
 
 
 
 main
+
+# cp /home/cgille/git_projects/ZIPsFS/src/ZIPsFS_cleanup.sh  /home/_cache/rawfile/ZIPsFS/modifications/zipsfs/

@@ -2,7 +2,7 @@ Set-PsDebug -strict
 $DIR=$PSScriptRoot
 . $PSScriptRoot\include_net_fetch_common.ps1 #FILTER_OUT
 $DIR='\\s-mcpb-ms03\union\test\is\ZIPsFS\n'  #FILTER_OUT
-$cc=@($c0,$c1,$c2,$c3)
+$cc=@($c0,$c1,$c2,$c3,$c4)
 For(;;){
     $url=''
     do{
@@ -23,20 +23,20 @@ For(;;){
 
     "`nurl=$url`n"
     $path=(($url -replace ':',',') -replace '/',',')
-    $path="$DIR\"+($path -replace '.*/','')
+    $path=("$DIR/"+($path -replace '.*/','')).replace('\','/')
     if(!$path){
         Write-Host "Failed. $XRST" -ForegroundColor red
         read-host
     }else{
         ls -l $path
-        get-content -head 10  $path  | findstr '.'
+        get-content -head 10  $path  | select-string '\.'
         Set-Clipboard "$path"
         "Clibboard:"
         Write-Host $path  -ForegroundColor White -BackgroundColor DarkGreen
     }
-    $choice=read-host -Prompt "`nIf you prefere forward slashes, type /. Or press ENTER to start over..."
-    if ($choice.trim() -eq '/'){
-        $path=$path -replace '\\','/'
+    $choice=(read-host -Prompt "`nIf you prefere backward slashes, type /. Or press ENTER to start over...").trim()
+    if (($choice -eq '/') -or ($choice -eq '\')){
+        $path=$path.replace('/','\')
         Write-Host $path  -ForegroundColor White -BackgroundColor DarkGreen
         Set-Clipboard "$path"
     }
