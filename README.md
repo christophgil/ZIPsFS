@@ -100,7 +100,7 @@ To get the real storage place of the file, append ``@SOURCE.TXT``
 
     cat ~/test/ZIPsFS/mnt/my_file.txt@SOURCE.TXT
 
-More information is available with suffix ``@PROPERTIES.TXT``
+More information is available with suffix ``@PROPERTIES.TXT``.
 
     cat ~/test/ZIPsFS/mnt/my_file.txt@PROPERTIES.TXT
 
@@ -152,7 +152,8 @@ The expression ``$(...)`` denotes [Command substitution](https://en.wikipedia.or
 
     ZIPsFS   $b1 $b2 $b3 $b4  $(./ZIPsFS_prepare_branch_for_ftp.sh)   : -o allow_other  ~/test/ZIPsFS/mnt
 
-In case of success, there will be a directory:
+The script will use ``rclone`` or ``Curlftpfs`` to mount some FTP sites.
+The mount points will act as source trees in ZIPsFS (nesting). In case of success, the FTP sites can be browsed:
 
     ls ~/test/ZIPsFS/mnt/db
 

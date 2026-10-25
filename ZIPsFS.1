@@ -135,7 +135,7 @@ cat \[ti]/test/ZIPsFS/mnt/my_file.txt\[at]SOURCE.TXT
 \f[R]
 .fi
 .PP
-More information is available with suffix \f[V]\[at]PROPERTIES.TXT\f[R]
+More information is available with suffix \f[V]\[at]PROPERTIES.TXT\f[R].
 .IP
 .nf
 \f[C]
@@ -219,7 +219,10 @@ ZIPsFS   $b1 $b2 $b3 $b4  $(./ZIPsFS_prepare_branch_for_ftp.sh)   : -o allow_oth
 \f[R]
 .fi
 .PP
-In case of success, there will be a directory:
+The script will use \f[V]rclone\f[R] or \f[V]Curlftpfs\f[R] to mount
+some FTP sites.
+The mount points will act as source trees in ZIPsFS (nesting).
+In case of success, the FTP sites can be browsed:
 .IP
 .nf
 \f[C]
